@@ -841,3 +841,831 @@ body{
   text-align: center;
   padding: 14px 10px;
 }
+/* =========================================================
+   MOBILE ONLY — Hero overlay + layout fixes (NO rompe desktop)
+   PEGAR AL FINAL
+   ========================================================= */
+html, body { overflow-x: hidden; }
+
+@media (max-width: 980px){
+  /* HERO: 1 columna + foto arriba full */
+  .hero{
+    padding: 0 14px 16px;
+    border-bottom: 0;
+  }
+
+  .hero__grid{
+    grid-template-columns: 1fr;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  /* Ocultamos el bloque desktop */
+  .hero__info{ display: none; }
+
+  .hero__photoWrap{
+    min-height: 220px;
+    border-radius: 14px;
+  }
+
+  /* Gradiente más fuerte abajo para que el overlay “pegue” */
+  .hero__photoWrap::after{
+    background: linear-gradient(
+      to bottom,
+      rgba(33,54,109,.10),
+      rgba(33,54,109,.55)
+    );
+  }
+
+  /* Card overlay abajo */
+  .hero__overlayCard{
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+
+    background: rgba(0, 0, 0, 0.445);
+    border-radius: 14px;
+    padding: 12px
+;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 16px 34px rgba(0,0,0,.28);
+  }
+
+  .hero__overlayRow{
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+  }
+
+  .hero__overlayRank{
+    font-size: 44px;
+    font-weight: 900;
+    line-height: 1;
+    color: rgba(255,255,255,.96);
+    letter-spacing: -1px;
+  }
+
+  .hero__overlayMain{ min-width: 0; }
+
+  .hero__overlayName{
+    font-size: 18px;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: .02em;
+    line-height: 1.05;
+  }
+
+  /* 1 línea (si no entra, wrap prolijo) */
+  .hero__overlayLine{
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    font-weight: 900;
+    font-size: 12px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.92);
+  }
+
+  .hero__overlaySep{ opacity: .8; }
+
+  /* Partner abajo a la izquierda con margen */
+  .hero__partner--desktop{ display: none; }
+  .hero__partner--mobile{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    margin-top: 10px;
+    margin-bottom: 10px; /* margen inferior del transparente */
+    padding: 10px 12px;
+
+    background: rgba(33,54,109,.18);
+    border: 2px solid rgba(255,255,255,.18);
+  }
+
+  .hero__avatar{
+    width: 46px;
+    height: 46px;
+  }
+
+  .hero__partnerLabel{ font-size: 11px; }
+  .hero__partnerName{ font-size: 16px; }
+
+  /* META ROW: de 4 a 2 columnas */
+  .metaRow{
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .metaCell{
+    border-right: 2px solid var(--line);
+    border-bottom: 2px solid var(--line);
+  }
+  .metaCell:nth-child(2n){
+    border-right: 0;
+  }
+}
+/* =========================================================
+   MOBILE NAV — Drawer hamburguesa (NO rompe desktop)
+   PEGAR AL FINAL
+   ========================================================= */
+.px-mobileOnly{ display: none; }
+.px-desktopOnly{ display: block; }
+
+@media (max-width: 980px){
+  .px-desktopOnly{ display: none !important; }
+  .px-mobileOnly{ display: flex !important; }
+
+  .px-navgrid{
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .px-burgerBtn{
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+
+    border: 2px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.08);
+    color: rgba(255,255,255,.92);
+    border-radius: 12px;
+    cursor: pointer;
+  }
+
+  .px-clubMini{
+    margin-left: 10px;
+    display: grid;
+    place-items: center;
+  }
+
+  .px-clubLogo--mini{
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Drawer */
+  .px-drawerBackdrop{
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 99999;
+  }
+
+  .px-drawer{
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: min(86vw, 360px);
+
+    background: rgba(33,54,109,.98);
+    border-right: 2px solid rgba(255,255,255,.16);
+    box-shadow: 0 22px 50px rgba(0,0,0,.40);
+
+    padding: 14px 12px;
+    overflow: auto;
+  }
+
+  .px-drawerTop{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 4px 12px;
+    border-bottom: 1px solid rgba(255,255,255,.14);
+    margin-bottom: 10px;
+  }
+
+  .px-drawerTitle{
+    color: rgba(255,255,255,.92);
+    font-weight: 900;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    font-size: 12px;
+  }
+
+  .px-drawerClose{
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border: 2px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.08);
+    color: rgba(255,255,255,.92);
+    border-radius: 12px;
+    cursor: pointer;
+  }
+
+  .px-drawerSection{
+    padding: 10px 4px;
+    border-bottom: 1px solid rgba(255,255,255,.12);
+  }
+
+  .px-drawerSectionTitle{
+    padding: 4px 6px 10px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: rgb(87, 216, 255);
+  }
+
+  .px-drawerSubTitle{
+    padding: 10px 6px 6px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.80);
+  }
+
+  .px-drawerItem{
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 12px 10px;
+    border: 0;
+    background: transparent;
+    color: rgba(255,255,255,.92);
+
+    font-weight: 800;
+    letter-spacing: .02em;
+    cursor: pointer;
+    text-align: left;
+    position: relative;
+  }
+
+  .px-drawerItem:hover{
+    background: rgba(255,255,255,.08);
+  }
+
+  .px-drawerItem--active{
+    background: rgba(255,255,255,.06);
+    outline: 2px solid rgba(255,255,255,.14);
+    outline-offset: -2px;
+  }
+
+  .px-drawerItem--danger:hover{
+    background: rgba(255, 78, 114, .22);
+  }
+
+  .px-drawerUser{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    margin: 6px 0 10px;
+    background: rgba(255,255,255,.06);
+    border: 2px solid rgba(255,255,255,.14);
+  }
+
+  .px-drawerUserText{ min-width: 0; }
+  .px-drawerUserMail{
+    margin-top: 2px;
+    font-size: 12px;
+    color: rgba(255,255,255,.70);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+/* =========================================================
+   MOBILE ONLY (NO rompe desktop)
+   ========================================================= */
+.px-mobileOnly{ display: none; }
+.px-desktopOnly{ display: block; }
+
+@media (max-width: 980px){
+  /* swap desktop/mobile nav */
+  .px-mobileOnly{ display: block; }
+  .px-desktopOnly{ display: none; }
+
+  /* evitar scroll horizontal global */
+  html, body { overflow-x: hidden; }
+  .home-shell{ padding: 14px 0 28px; }
+  .home-panel{ padding: 0 14px; max-width: 100%; }
+
+  /* ===== HERO: foto arriba + overlay card ===== */
+  .hero{ padding: 0 0 18px; border-bottom-width: 6px; }
+  .hero__grid{
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .hero__photoWrap{
+    min-height: 220px;
+    border-radius: 18px;
+  }
+
+  /* oculta el bloque desktop dentro del hero (solo mobile) */
+  .hero__desktopInfo{ display: none !important; }
+
+  /* overlay */
+  .hero__overlay{
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    padding: 12px 12px 10px;
+    background: rgba(33,54,109,.72);
+    border: 2px solid rgba(255,255,255,.18);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 18px 40px rgba(0,0,0,.28);
+  }
+
+  .hero__overlayTop{
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: end;
+  }
+
+  .hero__rankBig{ font-size: 44px !important; line-height: .95; }
+  .hero__name{ font-size: 18px !important; margin-top: 0 !important; letter-spacing: -.02em; }
+
+  /* "Santa Rosa · Points 19800" en 1 línea */
+  .hero__bar{
+    margin-top: 8px !important;
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .hero__code, .hero__points{ white-space: nowrap; }
+  .hero__points{ border-left: 2px solid var(--line); padding-left: 10px; }
+
+  /* Paired with abajo a la izquierda con margen */
+  .hero__partner{
+    margin-top: 10px !important;
+    grid-template-columns: 34px 1fr !important;
+    gap: 10px !important;
+    padding-bottom: 6px;
+  }
+  .hero__avatar{
+    width: 34px !important;
+    height: 34px !important;
+  }
+  .hero__partnerName{ font-size: 14px !important; }
+
+  /* ===== META ROW: 2 columnas ===== */
+  .metaRow{
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .metaCell{ border-right: 2px solid var(--line); }
+  .metaCell:nth-child(2n){ border-right: 0; }
+
+  /* ===== STATS: 2 columnas ===== */
+  .statsGrid{
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .statsV{ font-size: 32px !important; }
+
+  /* ===== TABLAS: scroll horizontal sin romper márgenes ===== */
+  .tableWrap{
+    padding: 14px !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table{
+    min-width: 720px; /* evita apretar columnas y que “reviente” */
+  }
+
+  /* ===== NAVBAR MOBILE ===== */
+  .px-mnav{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .px-mleft, .px-mright{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .px-mbrand{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .px-mclub{
+    color: rgba(255,255,255,.92);
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Drawer */
+  .px-drawerOverlay{
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 9998;
+  }
+
+  .px-drawer{
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100dvh;
+    width: min(88vw, 340px);
+    background: rgba(33,54,109,.98);
+    border-right: 2px solid rgba(255,255,255,.16);
+    z-index: 9999;
+    padding: 14px 12px;
+    overflow: auto;
+  }
+
+  .px-drawerHead{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,.14);
+    margin-bottom: 10px;
+  }
+
+  .px-drawerTitle{
+    font-weight: 900;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.92);
+    font-size: 12px;
+  }
+
+  .px-drawerSection{
+    margin-top: 12px;
+  }
+
+  .px-drawerSectionTitle{
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: rgb(87, 216, 255);
+    margin: 10px 6px 6px;
+  }
+
+  .px-drawerItem{
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 10px;
+    border: 0;
+    background: transparent;
+    color: rgba(255,255,255,.92);
+    font-weight: 700;
+    font-size: 13px;
+    text-align: left;
+    position: relative;
+  }
+
+  .px-drawerItem:hover{ background: rgba(255,255,255,.08); }
+  .px-drawerItem::before{
+    content:"";
+    position:absolute;
+    left:0; top:10px; bottom:10px;
+    width:0;
+    background: var(--color-accent);
+    transition: width 140ms ease;
+  }
+  .px-drawerItem:hover::before{ width:3px; }
+
+  .px-drawerDanger:hover{ background: rgba(255, 78, 114, .22); }
+}
+/* =========================
+   Mobile helpers
+   ========================= */
+.px-mobileOnly{ display: none; }
+.px-desktopOnly{ display: block; }
+
+@media (max-width: 980px){
+  .px-mobileOnly{ display: block; }
+  .px-desktopOnly{ display: none; }
+
+  /* navbar grid en mobile: 2 columnas (izq / der) */
+  .px-navgrid{
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+  }
+
+  /* burger */
+  .px-burgerBtn{
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    border: 2px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.08);
+    color: rgba(255,255,255,.92);
+    cursor: pointer;
+  }
+
+  .px-left{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .px-clubMini{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .px-clubLogo--mini{
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+  }
+
+  .px-clubMiniName{
+    font-weight: 900;
+    font-size: 12px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.92);
+    max-width: 165px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Drawer */
+  .px-drawerBackdrop{
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 9998;
+  }
+
+  .px-drawer{
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100dvh;
+    width: min(88vw, 360px);
+    background: rgba(33,54,109,.98);
+    border-right: 2px solid rgba(255,255,255,.16);
+    box-shadow: 0 22px 46px rgba(0,0,0,.30);
+    z-index: 9999;
+    padding: 14px 12px 18px;
+    overflow: auto;
+  }
+
+  .px-drawerTop{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,.14);
+    margin-bottom: 10px;
+  }
+
+  .px-drawerTitle{
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.92);
+    font-size: 12px;
+  }
+
+  .px-drawerClose{
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    border: 2px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.08);
+    color: rgba(255,255,255,.92);
+    cursor: pointer;
+  }
+
+  .px-drawerSection{ margin-top: 14px; }
+
+  .px-drawerSectionTitle{
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: rgb(87, 216, 255);
+    margin: 10px 6px 6px;
+  }
+
+  .px-drawerSubTitle{
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.75);
+    margin: 10px 6px 6px;
+  }
+
+  .px-drawerItem{
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 10px;
+    border: 0;
+    background: transparent;
+    color: rgba(255,255,255,.92);
+    font-weight: 700;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .px-drawerItem:hover{ background: rgba(255,255,255,.08); }
+
+  .px-drawerItem::before{
+    content:"";
+    position:absolute;
+    left:0; top:10px; bottom:10px;
+    width:0;
+    background: var(--color-accent);
+    transition: width 140ms ease;
+  }
+  .px-drawerItem:hover::before{ width:3px; }
+
+  .px-drawerItem--active{
+    background: rgba(255,255,255,.06);
+  }
+
+  .px-drawerItem--danger:hover{
+    background: rgba(255, 78, 114, .22);
+  }
+
+  .px-drawerUser{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 8px 6px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.06);
+    margin: 6px 0 10px;
+  }
+
+  .px-drawerUserText{ min-width: 0; }
+  .px-drawerUserMail{
+    font-size: 12px;
+    color: rgba(255,255,255,.72);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 260px;
+  }
+}
+/* =========================
+   HERO: fixes DESKTOP
+   - No mostrar overlay mobile en desktop
+   - No duplicar partner
+   ========================= */
+
+/* por defecto (desktop) */
+.hero__overlayCard { display: none; }
+.hero__partner--mobile { display: none; }
+
+/* mobile */
+@media (max-width: 980px){
+  .hero__overlayCard { display: block; }
+  .hero__partner--mobile { display: flex; }
+  .hero__partner--desktop { display: none; }
+}
+/* =========================
+   NAVBAR: parche FINAL anti-roturas
+   (pegar al final del CSS)
+   ========================= */
+
+/* helpers consistentes */
+.px-mobileOnly{ display: none; }
+.px-desktopOnly{ display: block; }
+
+@media (max-width: 980px){
+  .px-mobileOnly{ display: inline-flex !important; }
+  .px-desktopOnly{ display: none !important; }
+}
+
+/* desktop: que nada se apile */
+.px-right{
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: nowrap;
+}
+.px-icons{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+.px-icons .px-icoBtn{ flex: 0 0 auto; }
+
+/* mobile: navbar más compacto y con burger a la izquierda */
+@media (max-width: 980px){
+  .px-navgrid{
+    grid-template-columns: 1fr auto; /* izq (burger+club) | der (user) */
+    gap: 10px;
+  }
+
+  .px-left{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  /* compactar club */
+  .px-clubWrap{ padding: 4px 6px; }
+  .px-clubLogo{ width: 34px; height: 34px; border-radius: 10px; }
+  .px-clubName{ font-size: 12px; max-width: 140px; }
+
+  /* compactar user */
+  .px-userWrap{ margin-left: 0; }
+  .px-userBtn{ padding: 6px 8px; max-width: 160px; }
+  .px-userName{ font-size: 12px; max-width: 90px; }
+
+  /* el dropdown que salga bien en mobile */
+  .px-menu{
+    width: min(86vw, 320px);
+  }
+}
+
+/* =========================
+   DESKTOP FIX — nav centrado + separación
+   (NO afecta mobile)
+   ========================= */
+@media (min-width: 981px){
+  /* el contenedor del nav del medio */
+  .px-navlinks.px-navlinks--center{
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+
+    gap: 18px !important;         /* separación entre items */
+    column-gap: 18px !important;  /* backup por si algún reset pisa gap */
+  }
+
+  /* cada link */
+  .px-navlink{
+    display: inline-flex !important;
+    align-items: center !important;
+
+    white-space: nowrap;
+    padding: 10px 6px !important;
+  }
+}
+/* =========================
+   MOBILE FIX — dropdown Club/User prolijo (NO rompe desktop)
+   ========================= */
+@media (max-width: 980px){
+  /* El wrapper necesita ser referencia del menú */
+  .px-clubWrap,
+  .px-userWrap{
+    position: relative;
+  }
+
+  /* Menú: que no use right:0 “de desktop” */
+  .px-clubWrap .px-menu,
+  .px-userWrap .px-menu{
+    left: 0 !important;
+    right: auto !important;
+
+    width: min(92vw, 360px) !important;
+    max-height: min(70vh, 520px);
+    overflow: auto;
+
+    border-radius: 14px;
+  }
+
+  /* Si el user está a la derecha, conviene abrirlo hacia la derecha */
+  .px-right .px-userWrap .px-menu{
+    left: auto !important;
+    right: 0 !important;
+    width: min(92vw, 320px) !important;
+  }
+}
