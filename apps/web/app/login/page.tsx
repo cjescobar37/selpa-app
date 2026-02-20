@@ -1,76 +1,134 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import AuthAlert from '@/components/AuthAlert'
+
+type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string } | null
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [msg, setMsg] = useState('')
+  const [alert, setAlert] = useState<AlertState>(null)
+  const [loading, setLoading] = useState(false)
 
-  // Si ya está logueado y entra a /login, lo mandamos al inicio
+  const redirectTo = useMemo(() => {
+    if (typeof window === 'undefined') return ''
+    return `${window.location.origin}/`
+  }, [])
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) router.replace('/')
     })
   }, [router])
 
-  async function signUp() {
-    setMsg('Registrando...')
-    const { error } = await supabase.auth.signUp({ email, password })
-    setMsg(error ? error.message : 'Registrado OK. Ahora hacé Login.')
-  }
+  async function signInWithGoogle() {
+    setAlert({ variant: 'info', title: 'Redirigiendo a Google...' })
+    setLoading(true)
 
-  async function signIn() {
-    setMsg('Logueando...')
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    })
 
     if (error) {
-      setMsg(error.message)
+      setAlert({ variant: 'error', title: 'No se pudo iniciar sesión', message: error.message })
+      setLoading(false)
+    }
+  }
+
+  async function signInWithEmail() {
+    if (!email || !password) {
+      setAlert({ variant: 'warning', title: 'Faltan datos', message: 'Completá email y contraseña.' })
       return
     }
 
-    if (data?.session) {
-      setMsg('Logueado OK. Entrando...')
-      router.replace('/') // ✅ acá está la clave
-    } else {
-      setMsg('Logueado, pero sin sesión (raro). Probá refrescar.')
-    }
-  }
+    setLoading(true)
+    setAlert({ variant: 'info', title: 'Ingresando...' })
 
-  async function signOut() {
-    await supabase.auth.signOut()
-    setMsg('Sesión cerrada.')
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      setAlert({ variant: 'error', title: 'Credenciales inválidas', message: error.message })
+      setLoading(false)
+      return
+    }
+
+    setAlert({ variant: 'success', title: '¡Listo! Entraste correctamente.' })
+    router.replace('/')
   }
 
   return (
-    <div style={{ maxWidth: 420, margin: '40px auto', fontFamily: 'system-ui' }}>
-      <h1>Login</h1>
+    <div className="px-auth">
+      <div className="px-authCard">
+        <div className="px-authTop">
+          <div className="px-authBrand">
+            <div className="px-authLogo">PX</div>
+            <div className="px-authBrandText">
+              <h1 className="px-authTitle">Ingresar</h1>
+              <p className="px-authSub">Ranking • Torneos • Clubes</p>
+            </div>
+          </div>
+        </div>
 
-      <input
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        style={{ width: '100%', padding: 10, marginTop: 10 }}
-      />
+        <div className="px-authBody">
+          <button className="px-btn px-btn--ghost" onClick={signInWithGoogle} disabled={loading}>
+            {loading ? (
+              <>
+                <span className="px-spinner" />&nbsp;Conectando...
+              </>
+            ) : (
+              'Continuar con Google'
+            )}
+          </button>
 
-      <input
-        placeholder="Password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        style={{ width: '100%', padding: 10, marginTop: 10 }}
-      />
+          <div className="px-sepRow">o</div>
 
-      <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-        <button onClick={signUp}>Registrarse</button>
-        <button onClick={signIn}>Login</button>
-        <button onClick={signOut}>Salir</button>
+          <div className="px-field">
+            <label className="px-label">Email</label>
+            <input
+              className="px-input"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="tu@email.com"
+              autoComplete="email"
+            />
+          </div>
+
+          <div className="px-field">
+            <label className="px-label">Contraseña</label>
+            <input
+              className="px-input"
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+            />
+          </div>
+
+          <button className="px-btn" onClick={signInWithEmail} disabled={loading}>
+            {loading ? (
+              <>
+                <span className="px-spinner" />&nbsp;Entrando...
+              </>
+            ) : (
+              'Entrar'
+            )}
+          </button>
+
+          {alert ? <AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /> : null}
+
+          <div className="px-authRow">
+            <Link className="px-link" href="/register">Crear cuenta</Link>
+            <Link className="px-link" href="/reset-password">Olvidé mi contraseña</Link>
+          </div>
+        </div>
       </div>
-
-      <p style={{ marginTop: 12 }}>{msg}</p>
     </div>
   )
 }

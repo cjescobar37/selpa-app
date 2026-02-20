@@ -1669,3 +1669,728 @@ html, body { overflow-x: hidden; }
     width: min(92vw, 320px) !important;
   }
 }
+/* =========================
+   FIX DEFINITIVO: overlayCard arriba del velo (::after)
+   ========================= */
+@media (max-width: 980px){
+  .hero__photoWrap{
+    position: relative;
+  }
+
+  /* el velo/gradiente ATRÁS */
+  .hero__photoWrap::after{
+    z-index: 1 !important;
+  }
+
+  /* el overlay (rank + nombre) ADELANTE */
+  .hero__overlayCard{
+    position: absolute;
+    z-index: 2 !important;
+  }
+
+  /* texto bien blanco */
+  .hero__overlayRank,
+  .hero__overlayName{
+    color: #fff !important;
+    opacity: 1 !important;
+    -webkit-text-fill-color: #fff !important;
+    text-shadow: 0 2px 10px rgba(0,0,0,.6) !important;
+  }
+}
+@media (max-width: 980px){
+
+  /* 1) HERO / header: más aire sin afectar desktop */
+  .px-hero{
+    padding: 16px !important;
+  }
+  .px-hero-grid{
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Imagen: que no aplaste ni tape */
+  .px-hero-media{
+    width: 100% !important;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .px-hero-media img{
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* 2) Stats: 2 columnas en mobile en vez de todo apretado */
+  .px-stats{
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+    gap: 12px !important;
+  }
+
+  /* 3) Tipografías: evita cortes feos */
+  .px-h1{
+    font-size: 36px !important;
+    line-height: 1.05 !important;
+  }
+  .px-h2{
+    font-size: 18px !important;
+  }
+}
+
+/* =========================
+   AUTH PAGES (login/register/reset)
+   Mantiene paleta sólida y estilo px-*
+   ========================= */
+.px-auth{
+  min-height: calc(100vh - 80px);
+  display: grid;
+  place-items: center;
+  padding: 28px 16px;
+}
+
+.px-authCard{
+  width: min(430px, 100%);
+  background: var(--color-panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  box-shadow: 0 16px 48px rgba(0,0,0,.18);
+  padding: 18px;
+  color: var(--color-text-primary);
+}
+
+.px-authTitle{
+  margin: 0 0 6px;
+  font-size: 22px;
+  letter-spacing: .02em;
+}
+
+.px-authSub{
+  margin: 0 0 14px;
+  color: rgba(255,255,255,.78);
+  font-size: 13px;
+}
+
+.px-field{
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.px-label{
+  font-size: 12px;
+  color: rgba(255,255,255,.82);
+}
+
+.px-input{
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  padding: 11px 12px;
+  outline: none;
+}
+
+.px-input:focus{
+  border-color: var(--color-accent);
+}
+
+.px-btn{
+  width: 100%;
+  margin-top: 14px;
+  border-radius: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--line-soft);
+  background: var(--color-panel-2);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.px-btn--ghost{
+  background: transparent;
+  border-color: var(--line);
+}
+
+.px-btn:disabled{
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.px-sep{
+  margin: 12px 0;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+.px-authRow{
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: rgba(255,255,255,.82);
+}
+
+.px-link{
+  color: #fff;
+  text-decoration: none;
+  position: relative;
+}
+
+.px-link::after{
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -6px;
+  height: 2px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .2s ease;
+}
+.px-link:hover::after{ transform: scaleX(1); }
+
+.px-help{
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(255,255,255,.82);
+  min-height: 16px;
+}
+
+@media (max-width: 980px){
+  .px-auth{ padding: 18px 14px; }
+  .px-authCard{ padding: 16px; border-radius: 16px; }
+}
+/* AUTH PRO */
+.px-authCard{
+  padding: 0; /* lo manejamos por secciones */
+  overflow: hidden;
+}
+
+.px-authGrid{
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  min-height: 360px;
+}
+
+.px-authSide{
+  background: rgba(255,255,255,.04);
+  border-right: 1px solid var(--line-soft);
+  padding: 18px;
+}
+
+.px-authBrand{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.px-authLogo{
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--color-menu);
+  color: #fff;
+  font-weight: 900;
+}
+
+.px-authSideTitle{
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: .02em;
+}
+
+.px-authSideList{
+  margin: 12px 0 0;
+  padding: 0 0 0 14px;
+  color: rgba(255,255,255,.78);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.px-authForm{
+  padding: 18px;
+}
+
+.px-sepRow{
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255,255,255,.65);
+  font-size: 12px;
+  margin: 12px 0;
+}
+.px-sepRow::before,
+.px-sepRow::after{
+  content:"";
+  height: 1px;
+  background: var(--line-soft);
+}
+
+@media (max-width: 980px){
+  .px-authGrid{ grid-template-columns: 1fr; }
+  .px-authSide{ border-right: 0; border-bottom: 1px solid var(--line-soft); }
+}
+/* =========================
+   AUTH v2 — compacto + fondo sólido (sin blanco)
+   ========================= */
+
+.px-auth{
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 18px 14px;
+
+  /* fondo sólido con “profundidad” sin degradé */
+  background: var(--color-navbar);
+}
+
+.px-authCard{
+  width: min(380px, 100%);
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 22px 70px rgba(0,0,0,.35);
+  background: rgba(255,255,255,.06); /* glass solid */
+  backdrop-filter: blur(10px);
+}
+
+/* header compacto con marca */
+.px-authTop{
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.px-authBrand{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.px-authLogo{
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--color-menu);
+  color: #fff;
+  font-weight: 900;
+}
+
+.px-authBrandText{
+  min-width: 0;
+}
+.px-authTitle{
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: .02em;
+  color: #fff;
+}
+.px-authSub{
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: rgba(255,255,255,.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.px-authBody{
+  padding: 14px 16px 16px;
+}
+
+.px-field{ display: grid; gap: 6px; margin-top: 10px; }
+.px-label{ font-size: 12px; color: rgba(255,255,255,.78); }
+
+.px-input{
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.18);
+  color: #fff;
+  padding: 10px 12px;
+  outline: none;
+}
+.px-input:focus{ border-color: var(--color-accent); }
+
+.px-btn{
+  width: 100%;
+  margin-top: 12px;
+  border-radius: 12px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: var(--color-panel-2);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+.px-btn--ghost{
+  background: rgba(255,255,255,.06);
+}
+
+.px-btn:disabled{ opacity:.6; cursor:not-allowed; }
+
+.px-sepRow{
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255,255,255,.55);
+  font-size: 12px;
+  margin: 12px 0;
+}
+.px-sepRow::before,
+.px-sepRow::after{
+  content:"";
+  height: 1px;
+  background: rgba(255,255,255,.14);
+}
+
+.px-authRow{
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: rgba(255,255,255,.82);
+}
+
+.px-link{
+  color: #fff;
+  text-decoration: none;
+  position: relative;
+}
+.px-link::after{
+  content:"";
+  position:absolute;
+  left:0; right:0; bottom:-6px;
+  height:2px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin:left;
+  transition: transform .2s ease;
+}
+.px-link:hover::after{ transform: scaleX(1); }
+
+.px-help{
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(255,255,255,.78);
+  min-height: 16px;
+}
+
+/* mobile */
+@media (max-width: 980px){
+  .px-authCard{ width: min(360px, 100%); }
+}
+
+/* =========================
+   AUTH v3 — polish final
+   padding + tipografía + magenta sutil
+   ========================= */
+
+/* tipografía más pro para formularios */
+.px-auth, .px-authCard, .px-authCard input, .px-authCard button {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+  letter-spacing: .01em;
+}
+
+/* card más “respirable” */
+.px-authCard{
+  border: 1px solid rgba(255,255,255,.16);
+}
+
+/* header con acento magenta MUY sutil */
+.px-authTop{
+  padding: 16px 18px 14px;
+  position: relative;
+}
+.px-authTop::after{
+  content:"";
+  position:absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 0;
+  height: 2px;
+  background: var(--color-accent);
+  opacity: .35;
+}
+
+/* body con padding real */
+.px-authBody{
+  padding: 16px 18px 18px;
+}
+
+/* labels y inputs más prolijos */
+.px-label{
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: .02em;
+}
+
+.px-input{
+  padding: 11px 12px;
+  border-radius: 14px;
+  background: rgba(0,0,0,.20);
+  border: 1px solid rgba(255,255,255,.14);
+}
+.px-input::placeholder{
+  color: rgba(255,255,255,.45);
+}
+.px-input:focus{
+  border-color: rgba(255,78,114,.9);
+  box-shadow: 0 0 0 3px rgba(255,78,114,.18);
+}
+
+/* botones más premium */
+.px-btn{
+  border-radius: 14px;
+  padding: 12px 12px;
+  font-size: 14px;
+}
+.px-btn--ghost{
+  background: rgba(255,255,255,.08);
+}
+
+/* separador más prolijo */
+.px-sepRow{
+  margin: 14px 0;
+}
+.px-sepRow::before,
+.px-sepRow::after{
+  background: rgba(255,255,255,.12);
+}
+
+/* mensaje de estado */
+.px-help{
+  margin-top: 10px;
+  padding-left: 2px;
+}
+
+/* footer link row: más claro y no “confuso” */
+.px-authRow{
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,.10);
+  align-items: center;
+  font-size: 13px;
+}
+
+.px-authRow .px-muted{
+  color: rgba(255,255,255,.70);
+}
+
+/* link con underline magenta ya lo tenías; reforzamos un poquito */
+.px-link::after{
+  opacity: .9;
+}
+
+/* mobile */
+@media (max-width: 980px){
+  .px-authTop{ padding: 14px 16px 12px; }
+  .px-authTop::after{ left: 16px; right: 16px; }
+  .px-authBody{ padding: 14px 16px 16px; }
+}
+
+/* detalle magenta: “tick” en esquina del card */
+.px-authCard{
+  position: relative;
+}
+.px-authCard::before{
+  content:"";
+  position:absolute;
+  top: 10px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--color-accent);
+  opacity: .35;
+}
+
+/* pequeño acento magenta en el borde izquierdo del botón principal */
+.px-btn{
+  position: relative;
+}
+.px-btn::before{
+  content:"";
+  position:absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  opacity: .45;
+}
+
+/* =========================
+   AUTH ANIM + ALERTS
+   ========================= */
+
+/* entrada suave del card */
+.px-authCard{
+  animation: pxFadeUp .28s ease-out both;
+}
+@keyframes pxFadeUp{
+  from { opacity: 0; transform: translateY(10px) scale(.99); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+/* micro-interacción */
+.px-btn{ transition: transform .08s ease, filter .12s ease, border-color .12s ease; }
+.px-btn:hover{ filter: brightness(1.05); }
+.px-btn:active{ transform: translateY(1px); }
+
+.px-input{ transition: box-shadow .12s ease, border-color .12s ease; }
+
+/* “spinner” simple para loading */
+.px-spinner{
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,.35);
+  border-top-color: var(--color-accent);
+  display: inline-block;
+  animation: pxSpin .7s linear infinite;
+  vertical-align: -2px;
+}
+@keyframes pxSpin{ to { transform: rotate(360deg); } }
+
+/* ALERT moderno inline */
+.px-alert{
+  margin-top: 10px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.18);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  animation: pxPop .18s ease-out both;
+}
+@keyframes pxPop{
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.px-alertDot{
+  width: 10px;
+  height: 10px;
+  border-radius: 4px;
+  margin-top: 4px;
+  background: var(--color-accent);
+  opacity: .95;
+}
+
+.px-alertTitle{
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1.2;
+  margin: 0;
+  color: #fff;
+}
+.px-alertText{
+  font-size: 12px;
+  color: rgba(255,255,255,.78);
+  margin: 2px 0 0;
+}
+
+.px-alert--success .px-alertDot{ background: #2de38f; } /* verde suave */
+.px-alert--warning .px-alertDot{ background: #eaf956; } /* tu amarillo */
+.px-alert--error .px-alertDot{ background: var(--color-accent); } /* magenta */
+
+/* =========================
+   AUTH — Alerts + Spinner + polish
+   ========================= */
+
+.px-authCard{ animation: pxFadeUp .26s ease-out both; }
+@keyframes pxFadeUp{
+  from{ opacity:0; transform: translateY(10px) scale(.99); }
+  to{ opacity:1; transform: translateY(0) scale(1); }
+}
+
+.px-btn{ transition: transform .08s ease, filter .12s ease; }
+.px-btn:hover{ filter: brightness(1.05); }
+.px-btn:active{ transform: translateY(1px); }
+
+.px-spinner{
+  width: 14px; height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,.35);
+  border-top-color: var(--color-accent);
+  display: inline-block;
+  animation: pxSpin .7s linear infinite;
+  vertical-align: -2px;
+}
+@keyframes pxSpin{ to { transform: rotate(360deg); } }
+
+/* Alert moderno inline */
+.px-alert{
+  margin-top: 10px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.18);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  animation: pxPop .16s ease-out both;
+}
+@keyframes pxPop{
+  from{ opacity:0; transform: translateY(6px); }
+  to{ opacity:1; transform: translateY(0); }
+}
+
+.px-alertDot{
+  width: 10px; height: 10px;
+  border-radius: 4px;
+  margin-top: 4px;
+  background: var(--color-accent);
+  opacity: .95;
+}
+
+.px-alertTitle{
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1.2;
+  margin: 0;
+  color: #fff;
+}
+.px-alertText{
+  font-size: 12px;
+  color: rgba(255,255,255,.78);
+  margin: 2px 0 0;
+}
+
+.px-alert--success .px-alertDot{ background: #2de38f; }
+.px-alert--warning .px-alertDot{ background: #eaf956; }
+.px-alert--error .px-alertDot{ background: var(--color-accent); }
+
+:root{
+  --font-main: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+}
+
+body{
+  font-family: var(--font-main);
+}
+
+.px-authTitle{ font-weight: 700; letter-spacing: .01em; }
+.px-label{ font-weight: 500; }
+.px-btn{ font-weight: 700; }
+.px-alertTitle{ font-weight: 700; }
+.px-input{ font-weight: 500; }
+.px-authSub, .px-alertText{ font-weight: 500; }
