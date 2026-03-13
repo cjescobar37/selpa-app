@@ -14,7 +14,7 @@ export default function ResetPasswordPage() {
 
   const redirectTo = useMemo(() => {
     if (typeof window === 'undefined') return ''
-    return `${window.location.origin}/update-password`
+    return `${window.location.origin}/auth/callback?next=/update-password&recovered=1`
   }, [])
 
   async function sendReset() {
@@ -24,7 +24,7 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true)
-    setAlert({ variant: 'info', title: 'Enviando link...' })
+    setAlert({ variant: 'info', title: 'Enviando link…' })
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
 
@@ -37,7 +37,7 @@ export default function ResetPasswordPage() {
     setAlert({
       variant: 'success',
       title: 'Email enviado',
-      message: 'Revisá tu bandeja (y spam). Abrí el link para crear una contraseña nueva.',
+      message: 'Revisá tu bandeja y abrí el link para crear una contraseña nueva.',
     })
     setLoading(false)
   }

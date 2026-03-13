@@ -1,22 +1,8 @@
-import type { ReactNode } from 'react'
-import AppNavbarClient from './AppNavbarClient'
-import Footer from '@/components/Footer'
 import RoleGate from './RoleGate'
+import type { ReactNode } from 'react'
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="app-shell">
-      <AppNavbarClient />
-
-      <main className="px-main">
-        <div className="px-wrap">
-          <RoleGate>
-            {children}
-          </RoleGate>
-        </div>
-      </main>
-
-      <Footer />
-    </div>
-  )
+  // Layout lógico: acá solo protegemos rutas del Route Group (app).
+  // El layout visual (Navbar/Footer) vive en app/layout.tsx → AppShellClient.
+  return <RoleGate>{children}</RoleGate>
 }

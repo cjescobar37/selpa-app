@@ -5,31 +5,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { useActiveClub } from '@/lib/useActiveClub'
-
-type Tournament = {
-  id: string
-  club_id: string
-  name: string
-  status: string
-  type: string
-  format: string
-  gender: string
-  category_id: number
-  start_date: string
-  end_date: string | null
-  registration_deadline: string | null
-  min_pairs: number | null
-  max_pairs: number | null
-  price_per_player: number | null
-  points_total: number | null
-  rules: any | null
-  created_at: string
-  updated_at: string
-}
+import { TOURNAMENT_SELECT, toTournamentView, type TournamentView } from '@/lib/tournamentHelpers'
 
 function fmtDate(d: string | null | undefined) {
   if (!d) return '—'
-  // Si viene timestamp, cortamos
   const datePart = d.includes('T') ? d.split('T')[0] : d
   const [y, m, dd] = datePart.split('-')
   if (!y || !m || !dd) return d
@@ -43,7 +22,7 @@ export default function TorneoDetallePage() {
 
   const { activeClub, loading: clubLoading } = useActiveClub()
 
-  const [t, setT] = useState<Tournament | null>(null)
+  const [t, setT] = useState<TournamentView | null>(null)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -54,13 +33,7 @@ export default function TorneoDetallePage() {
     setLoading(true)
     setMsg('')
 
-    const { data, error } = await supabase
-      .from('tournaments')
-      .select(
-        'id, club_id, name, status, type, format, gender, category_id, start_date, end_date, registration_deadline, min_pairs, max_pairs, price_per_player, points_total, rules, created_at, updated_at'
-      )
-      .eq('id', id)
-      .single()
+    const { data, error } = await supabase.from('tournaments').select(TOURNAMENT_SELECT).eq('id', id).single()
 
     setLoading(false)
 
@@ -70,15 +43,13 @@ export default function TorneoDetallePage() {
       return
     }
 
-    setT(data as any)
+    setT(toTournamentView(data as any))
   }
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // protección: si el torneo no es del club activo, avisamos
   const clubMismatch = useMemo(() => {
     if (!t || !activeClub) return false
     return t.club_id !== activeClub.id
@@ -112,7 +83,7 @@ export default function TorneoDetallePage() {
 
           {t ? (
             <div style={{ opacity: 0.8, marginTop: 8 }}>
-              {t.type} • {t.gender} • Cat {t.category_id} • {t.format}
+              {t.type} • {t.gender} • Cat {t.category ?? '—'} • {t.format}
             </div>
           ) : null}
         </div>
@@ -132,13 +103,13 @@ export default function TorneoDetallePage() {
             Editar (próximo)
           </button>
           <button
-  onClick={() => router.push(`/torneos/${id}/inscripcion`)}
-  style={btn}
-  disabled={!t || clubMismatch}
-  title={!t ? 'Cargando...' : clubMismatch ? 'Cambiar club activo' : 'Inscribirse'}
->
-  Inscribirse
-</button>
+            onClick={() => router.push(`/torneos/${id}/inscripcion`)}
+            style={btn}
+            disabled={!t || clubMismatch}
+            title={!t ? 'Cargando...' : clubMismatch ? 'Cambiar club activo' : 'Inscribirse'}
+          >
+            Inscribirse
+          </button>
         </div>
       </div>
 
@@ -157,15 +128,15 @@ export default function TorneoDetallePage() {
             <div style={grid2}>
               <div>
                 <div style={k}>Inicio</div>
-                <div style={v}>{fmtDate(t.start_date)}</div>
+                <div style={v}>{fmtDate(t.startDate)}</div>
               </div>
               <div>
                 <div style={k}>Fin</div>
-                <div style={v}>{fmtDate(t.end_date)}</div>
+                <div style={v}>{fmtDate(t.endDate)}</div>
               </div>
               <div>
                 <div style={k}>Cierre inscripción</div>
-                <div style={v}>{fmtDate(t.registration_deadline)}</div>
+                <div style={v}>{fmtDate(t.registrationDeadline)}</div>
               </div>
               <div>
                 <div style={k}>Estado</div>
@@ -179,19 +150,19 @@ export default function TorneoDetallePage() {
             <div style={grid2}>
               <div>
                 <div style={k}>Mín. parejas</div>
-                <div style={v}>{t.min_pairs ?? '—'}</div>
+                <div style={v}>{t.minPairs ?? '—'}</div>
               </div>
               <div>
                 <div style={k}>Máx. parejas</div>
-                <div style={v}>{t.max_pairs ?? '—'}</div>
+                <div style={v}>{t.maxPairs ?? '—'}</div>
               </div>
               <div>
                 <div style={k}>Precio por jugador</div>
-                <div style={v}>$ {t.price_per_player ?? 0}</div>
+                <div style={v}>$ {t.pricePerPlayer ?? 0}</div>
               </div>
               <div>
                 <div style={k}>Puntos totales</div>
-                <div style={v}>{t.points_total ?? 0}</div>
+                <div style={v}>{t.pointsTotal ?? 0}</div>
               </div>
             </div>
           </div>
@@ -212,19 +183,6 @@ export default function TorneoDetallePage() {
             >
               {JSON.stringify(t.rules ?? {}, null, 2)}
             </pre>
-          </div>
-
-          <div style={card}>
-            <div style={cardTitle}>Próximo paso</div>
-            <div style={{ opacity: 0.85 }}>
-              Ahora vamos a implementar <b>Inscripción de parejas</b> para este torneo:
-              <ul style={{ marginTop: 8 }}>
-                <li>Crear pareja (2 usuarios) y registrarla en el torneo</li>
-                <li>Validar categoría (no puede anotarse a menor nivel)</li>
-                <li>Cupos + deadline</li>
-                <li>Vista de inscriptos para admin</li>
-              </ul>
-            </div>
           </div>
         </div>
       ) : null}
@@ -257,7 +215,6 @@ const cardTitle: React.CSSProperties = { fontWeight: 900, marginBottom: 10 }
 const grid2: React.CSSProperties = { display: 'grid', gap: 10, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }
 const k: React.CSSProperties = { fontSize: 12, opacity: 0.7 }
 const v: React.CSSProperties = { fontSize: 15, fontWeight: 700 }
-
 const warnBox: React.CSSProperties = {
   marginTop: 12,
   padding: 12,

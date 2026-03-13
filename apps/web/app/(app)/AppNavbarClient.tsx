@@ -1,409 +1,278 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Bell,
-  Mail,
-  Search,
-  ChevronDown,
-  User,
-  Activity,
-  Settings,
-  LogOut,
-  Shield,
-  Menu,
-  X,
-} from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
+import { usePathname } from 'next/navigation'
+import React, { useEffect, useMemo, useState } from 'react'
 
-type Club = { id: string; name: string; logoUrl?: string }
-type UserMini = { name: string; email?: string; avatarUrl?: string }
+// Si ya tenés lucide, perfecto. Si no, reemplazalos por texto simple o tus íconos.
+import { ChevronDown, Search, Bell, Mail } from 'lucide-react'
 
-// IMPORTANTE: (app) es un Route Group -> NO va en la URL real
-const ROUTES = {
-  home: '/',
-  torneos: '/torneos',
-  ranking: '/ranking',
-  envivo: '/envivo',
-  noticias: '/notificaciones',
-  perfil: '/perfil',
+// 🔁 AJUSTÁ ESTO a tu proyecto:
+// - Si ya tenés SessionProvider, importá el hook real.
+// - Si tu hook tiene otro nombre/shape, adaptá abajo donde lo uso.
+import { useSession } from '@/components/session/SessionProvider'
+
+// 🔁 AJUSTÁ ESTO a tu proyecto:
+// import { NAV_CONFIG } from '@/components/nav/navConfig'
+import { NAV_CONFIG } from '@/lib/navConfig'
+
+type Role = 'guest' | 'player' | 'club' | 'platform'
+
+type NavChild = { label: string; href: string }
+type NavItem = { label: string; href: string; dot?: boolean; exact?: boolean; children?: NavChild[] }
+
+type RightConfig = {
+  search?: boolean
+  notifications?: boolean
+  messages?: boolean
+  userMenu?: boolean
 }
 
-function initials(text?: string) {
-  if (!text) return 'U'
-  const parts = text.trim().split(/\s+/).slice(0, 2)
-  return parts.map(p => p[0]?.toUpperCase()).join('') || 'U'
+type NavConfig = {
+  leftMode: 'brand' | 'club'
+  main: NavItem[]
+  right: RightConfig
+}
+
+function normalizePath(p?: string) {
+  if (!p) return '/'
+  return p.length > 1 ? p.replace(/\/+$/, '') : p
+}
+
+function isActiveHref(pathname: string | null, href: string, exact?: boolean) {
+  const p = normalizePath(pathname || '/')
+  const h = normalizePath(href)
+  if (exact) return p === h
+  return p === h || p.startsWith(h + '/')
+}
+
+function isActiveItem(pathname: string | null, item: NavItem) {
+  if (isActiveHref(pathname, item.href, item.exact)) return true
+  if (item.children?.length) {
+    return item.children.some((c) => isActiveHref(pathname, c.href))
+  }
+  return false
 }
 
 export default function AppNavbarClient() {
   const pathname = usePathname()
-  const router = useRouter()
 
-  const user: UserMini = {
-    name: 'Cristian',
-    email: 'cjescobar37@gmail.com',
-    avatarUrl: '',
-  }
+  // ---- Session / Role ----
+  const { role, user, activeClub, signOut } = useSession() as any
+  const safeRole: Role = (role as Role) || 'guest'
 
-  const clubs: Club[] = useMemo(
-    () => [
-      { id: 'la33', name: 'Complejo LA33', logoUrl: '' },
-      { id: 'padelix', name: 'Club Padelix', logoUrl: '' },
-    ],
-    []
-  )
-  const [activeClub, setActiveClub] = useState<Club>(clubs[0])
+  const cfg: NavConfig = useMemo(() => {
+    const c = (NAV_CONFIG as any)[safeRole] as NavConfig
+    return c
+  }, [safeRole])
 
-  const notifCount = 1
-  const mailCount = 3
-  const liveDot = true
+  const nav = cfg.main
 
-  const [clubOpen, setClubOpen] = useState(false)
+  // ---- Dropdown open states ----
+  const [navOpenIndex, setNavOpenIndex] = useState<number | null>(null)
   const [userOpen, setUserOpen] = useState(false)
+  const [clubOpen, setClubOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const rootRef = useRef<HTMLDivElement | null>(null)
-
+  // Cerrar dropdowns al navegar
   useEffect(() => {
-    const onScroll = () => {
-      const scrolled = window.scrollY > 8
-      document.querySelector('.px-navbar')?.classList.toggle('px-navbar--scrolled', scrolled)
-    }
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node
-      if (!rootRef.current) return
-      if (!rootRef.current.contains(target)) {
-        setClubOpen(false)
-        setUserOpen(false)
-      }
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setClubOpen(false)
-        setUserOpen(false)
-        setMobileOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDown)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [])
-
-  useEffect(() => {
-    // al cambiar de ruta, cerramos todo
-    setMobileOpen(false)
-    setClubOpen(false)
+    setNavOpenIndex(null)
     setUserOpen(false)
+    setClubOpen(false)
+    setMobileOpen(false)
   }, [pathname])
 
-  const nav = [
-    { href: ROUTES.home, label: 'Inicio' },
-    { href: ROUTES.torneos, label: 'Torneos' },
-    { href: ROUTES.ranking, label: 'Ranking' },
-    { href: ROUTES.envivo, label: 'En vivo', dot: liveDot },
-    { href: ROUTES.noticias, label: 'Noticias' },
-  ]
+  // ---- Helpers ----
+  const showRight = cfg.right || {}
+  const isAuthed = safeRole !== 'guest'
 
-  const isActive = (href: string) =>
-    pathname === href || (href !== ROUTES.home && pathname?.startsWith(href))
-
-  const onLogout = async () => {
-    try {
-      await supabase.auth.signOut()
-    } finally {
-      router.replace('/login')
-      router.refresh()
-    }
-  }
-
-  return (
-    <header className="px-navbar" ref={rootRef}>
-      <div className="px-navbar-inner px-navgrid">
-        {/* ======================
-            LEFT (mobile: burger + club) | (desktop: club)
-           ====================== */}
+  // ---- Render helpers (Left) ----
+  const LeftBlock = () => {
+    if (cfg.leftMode === 'club') {
+      return (
         <div className="px-left">
-          {/* BURGER SOLO MOBILE (izquierda) */}
           <button
-            className="px-burgerBtn px-mobileOnly"
             type="button"
-            aria-label="Abrir menú"
-            onClick={() => setMobileOpen(true)}
+            className="px-clubBtn"
+            onClick={() => setClubOpen((v) => !v)}
+            onMouseEnter={() => setClubOpen(true)}
+            onMouseLeave={() => setClubOpen(false)}
           >
-            <Menu size={18} />
+            <span className="px-clubLogo" aria-hidden="true">
+              {/* si tenés logo real, acá va */}
+              {activeClub?.logo ? <img src={activeClub.logo} alt="" /> : null}
+            </span>
+            <span className="px-clubName">{activeClub?.name || 'Mi Club'}</span>
+            <ChevronDown size={14} className="px-caret" />
           </button>
 
-          {/* CLUB (se ve en ambos, pero en mobile lo compactamos por CSS) */}
-          <div className="px-dd px-glass px-clubWrap">
-            <button
-              className="px-clubBtn"
-              type="button"
-              onClick={() => {
-                setClubOpen(v => !v)
-                setUserOpen(false)
-              }}
-              aria-expanded={clubOpen}
-              aria-haspopup="menu"
-              title={activeClub.name}
-            >
-              <span className="px-clubLogo">
-                {activeClub.logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={activeClub.logoUrl} alt="" />
-                ) : (
-                  <span>{initials(activeClub.name)}</span>
-                )}
-              </span>
-
-              <span className="px-clubText">
-                <span className="px-clubName">{activeClub.name}</span>
-              </span>
-
-              <ChevronDown size={16} className={clubOpen ? 'px-rot' : ''} />
-            </button>
-
-            {clubOpen ? (
-              <div className="px-menu" role="menu">
-                <button
-                  className="px-menuItem"
-                  role="menuitem"
-                  type="button"
-                  onClick={() => {
-                    setClubOpen(false)
-                    router.push('/clubs')
-                  }}
-                >
-                  <Shield size={16} />
-                  Ver club
-                </button>
-
-                <div className="px-menuSep" />
-
-                <div className="px-menuGroupTitle">Cambiar club</div>
-                {clubs.map(c => (
-                  <button
-                    key={c.id}
-                    className={[
-                      'px-menuItem',
-                      c.id === activeClub.id ? 'px-menuItem--active' : '',
-                    ].join(' ')}
-                    role="menuitem"
-                    type="button"
-                    onClick={() => {
-                      setActiveClub(c)
-                      setClubOpen(false)
-                    }}
-                  >
-                    {c.name}
-                    {c.id === activeClub.id ? <span className="px-pill">Activo</span> : null}
-                  </button>
-                ))}
-
-                <div className="px-menuSep" />
-
-                <button
-                  className="px-menuItem"
-                  role="menuitem"
-                  type="button"
-                  onClick={() => {
-                    setClubOpen(false)
-                    router.push('/clubs')
-                  }}
-                >
-                  <Settings size={16} />
-                  Info del club
-                </button>
-              </div>
-            ) : null}
-          </div>
+          {clubOpen ? (
+            <div className="px-navDropdown" role="menu">
+              {/* Ajustá rutas según tu app */}
+              <Link className="px-ddItem" href="/club/ver">Ver club</Link>
+              <Link className="px-ddItem" href="/player/club">Cambiar club</Link>
+              <Link className="px-ddItem" href="/club/info">Info del club</Link>
+            </div>
+          ) : null}
         </div>
+      )
+    }
 
-        {/* ======================
-            DESKTOP nav links
-           ====================== */}
-        <nav className="px-navlinks px-navlinks--center px-desktopOnly" aria-label="Primary">
-          {nav.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={['px-navlink', isActive(item.href) ? 'px-navlink--active' : ''].join(' ')}
-            >
-              {item.label}
-              {item.dot ? <span className="px-dot" aria-hidden="true" /> : null}
-            </Link>
-          ))}
-        </nav>
+    // brand
+    return (
+      <div className="px-left">
+        <Link href="/" className="px-brand">
+          <span className="px-brandLogo" aria-hidden="true" />
+          <span className="px-brandText">PAMPRAX</span>
+        </Link>
+      </div>
+    )
+  }
 
-        {/* ======================
-            RIGHT
-           ====================== */}
-        <div className="px-right">
-          {/* ICONOS SOLO DESKTOP */}
-          <div className="px-icons px-desktopOnly">
-            <button className="px-icoBtn" type="button" aria-label="Buscar">
-              <Search size={18} />
-            </button>
-            <button className="px-icoBtn" type="button" aria-label="Notificaciones">
-              <Bell size={18} />
-              {notifCount > 0 ? <span className="px-badge">{notifCount}</span> : null}
-            </button>
-            <button className="px-icoBtn" type="button" aria-label="Mensajes">
-              <Mail size={18} />
-              {mailCount > 0 ? <span className="px-badge">{mailCount}</span> : null}
-            </button>
-          </div>
+  // ---- Render helpers (Right) ----
+  const RightBlock = () => {
+    return (
+      <div className="px-right">
+        {showRight.search ? (
+          <Link className="px-iconBtn" href="/buscar" aria-label="Buscar">
+            <Search size={18} />
+          </Link>
+        ) : null}
 
-          {/* USER (en mobile queda compacto por CSS) */}
-          <div className="px-dd px-glass px-userWrap">
-            <button
-              className="px-userBtn"
-              type="button"
-              onClick={() => {
-                setUserOpen(v => !v)
-                setClubOpen(false)
-              }}
-              aria-expanded={userOpen}
-              aria-haspopup="menu"
-              title={user.name}
-            >
-              <span className="px-avatar">
-                {user.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.avatarUrl} alt="" />
-                ) : (
-                  <span>{initials(user.name)}</span>
-                )}
+        {showRight.notifications ? (
+          <Link className="px-iconBtn" href={isAuthed ? `/${safeRole}/notificaciones` : '/auth/login'} aria-label="Notificaciones">
+            <Bell size={18} />
+          </Link>
+        ) : null}
+
+        {showRight.messages ? (
+          <Link className="px-iconBtn" href={isAuthed ? `/${safeRole}/mensajes` : '/auth/login'} aria-label="Mensajes">
+            <Mail size={18} />
+          </Link>
+        ) : null}
+
+        {!isAuthed ? (
+          <Link className="px-loginBtn" href="/auth/login">
+            LOGIN
+          </Link>
+        ) : (
+          <div
+            className="px-userWrap"
+            onMouseEnter={() => setUserOpen(true)}
+            onMouseLeave={() => setUserOpen(false)}
+          >
+            <button type="button" className="px-userBtn" onClick={() => setUserOpen((v) => !v)}>
+              <span className="px-avatar" aria-hidden="true">
+                {user?.avatar ? <img src={user.avatar} alt="" /> : null}
               </span>
-
-              <span className="px-userText">
-                <span className="px-userName">{user.name}</span>
-              </span>
-
-              <ChevronDown size={16} className={userOpen ? 'px-rot' : ''} />
+              <span className="px-userName">{user?.name || 'Usuario'}</span>
+              <ChevronDown size={14} className="px-caret" />
             </button>
 
             {userOpen ? (
-              <div className="px-menu" role="menu">
-                <button
-                  className="px-menuItem"
-                  role="menuitem"
-                  type="button"
-                  onClick={() => {
-                    setUserOpen(false)
-                    router.push(ROUTES.perfil)
-                  }}
-                >
-                  <User size={16} />
-                  Mi perfil
-                </button>
-
-                <button
-                  className="px-menuItem"
-                  role="menuitem"
-                  type="button"
-                  onClick={() => {
-                    setUserOpen(false)
-                    router.push('/actividad')
-                  }}
-                >
-                  <Activity size={16} />
-                  Mi actividad
-                </button>
-
-                <button
-                  className="px-menuItem"
-                  role="menuitem"
-                  type="button"
-                  onClick={() => {
-                    setUserOpen(false)
-                    router.push('/ajustes')
-                  }}
-                >
-                  <Settings size={16} />
-                  Preferencias
-                </button>
-
-                <div className="px-menuSep" />
-
-                <button
-                  className="px-menuItem px-menuItem--danger"
-                  role="menuitem"
-                  type="button"
-                  onClick={onLogout}
-                >
-                  <LogOut size={16} />
+              <div className="px-navDropdown px-navDropdown--right" role="menu">
+                <Link className="px-ddItem" href={`/${safeRole}/perfil`}>Mi perfil</Link>
+                <Link className="px-ddItem" href={`/${safeRole}/actividad`}>Mi actividad</Link>
+                <Link className="px-ddItem" href={`/${safeRole}/preferencias`}>Preferencias</Link>
+                <button className="px-ddItem px-ddItem--danger" onClick={signOut}>
                   Cerrar sesión
                 </button>
               </div>
             ) : null}
           </div>
-        </div>
+        )}
+
+        <button
+          type="button"
+          className="px-burger px-mobileOnly"
+          onClick={() => setMobileOpen((v) => !v)}
+          aria-label="Menú"
+        >
+          ☰
+        </button>
       </div>
+    )
+  }
 
-      {/* DRAWER MOBILE */}
-      {mobileOpen ? (
-        <div className="px-drawerBackdrop" role="presentation" onClick={() => setMobileOpen(false)}>
-          <aside
-            className="px-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menú"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="px-drawerTop">
-              <div className="px-drawerTitle">Menú</div>
-              <button
-                className="px-drawerClose"
-                type="button"
-                aria-label="Cerrar"
-                onClick={() => setMobileOpen(false)}
+  return (
+    <header className="px-nav">
+      <div className="px-navgrid">
+        <LeftBlock />
+
+        {/* CENTER NAV (desktop) */}
+        <nav className="px-navlinks px-navlinks--center px-desktopOnly" aria-label="Primary">
+          {nav.map((item, i) => {
+            const active = isActiveItem(pathname, item)
+            const hasChildren = !!item.children?.length
+
+            return (
+              <div
+                key={item.href}
+                className="px-navItem"
+                onMouseEnter={() => { if (hasChildren) setNavOpenIndex(i) }}
+                onMouseLeave={() => { if (hasChildren) setNavOpenIndex((cur) => (cur === i ? null : cur)) }}
               >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="px-drawerSection">
-              <div className="px-drawerSectionTitle">Navegación</div>
-              {nav.map(item => (
-                <button
-                  key={item.href}
-                  className={['px-drawerItem', isActive(item.href) ? 'px-drawerItem--active' : ''].join(' ')}
-                  type="button"
-                  onClick={() => router.push(item.href)}
+                <Link
+                  href={item.href}
+                  className={['px-navlink', active ? 'px-navlink--active' : ''].join(' ')}
                 >
                   {item.label}
+                  {hasChildren ? <ChevronDown size={14} className="px-caret" /> : null}
                   {item.dot ? <span className="px-dot" aria-hidden="true" /> : null}
-                </button>
-              ))}
-            </div>
+                </Link>
 
-            <div className="px-drawerSection">
-              <div className="px-drawerSectionTitle">Acciones</div>
-              <button className="px-drawerItem" type="button">
-                <Bell size={16} />
-                Notificaciones {notifCount > 0 ? <span className="px-pill">{notifCount}</span> : null}
-              </button>
-              <button className="px-drawerItem" type="button">
-                <Mail size={16} />
-                Mensajes {mailCount > 0 ? <span className="px-pill">{mailCount}</span> : null}
-              </button>
-              <button className="px-drawerItem" type="button">
-                <Search size={16} />
-                Buscar
-              </button>
-            </div>
-          </aside>
+                {hasChildren && navOpenIndex === i ? (
+                  <div className="px-navDropdown" role="menu">
+                    {item.children!.map((c) => (
+                      <Link
+                        key={c.href}
+                        href={c.href}
+                        className={[
+                          'px-ddItem',
+                          isActiveHref(pathname, c.href) ? 'is-active' : '',
+                        ].join(' ')}
+                        onClick={() => setNavOpenIndex(null)}
+                      >
+                        {c.label}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </nav>
+
+        <RightBlock />
+      </div>
+
+      {/* MOBILE NAV */}
+      {mobileOpen ? (
+        <div className="px-mobileMenu px-mobileOnly">
+          {nav.map((item) => {
+            const active = isActiveItem(pathname, item)
+            return (
+              <div key={item.href} className="px-mobileRow">
+                <Link className={['px-mobileLink', active ? 'is-active' : ''].join(' ')} href={item.href}>
+                  {item.label}
+                </Link>
+
+                {item.children?.length ? (
+                  <div className="px-mobileChildren">
+                    {item.children.map((c) => (
+                      <Link
+                        key={c.href}
+                        className={['px-mobileChild', isActiveHref(pathname, c.href) ? 'is-active' : ''].join(' ')}
+                        href={c.href}
+                      >
+                        {c.label}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       ) : null}
     </header>

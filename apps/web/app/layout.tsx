@@ -1,6 +1,7 @@
 // app/layout.tsx
 import './globals.css'
 import { Inter } from 'next/font/google'
+import AppShellClient from '@/components/AppShellClient'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -23,7 +24,10 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={inter.variable}>
-      <body>{children}</body>
+      <body>
+        {/* Único layout visual para TODA la app (Navbar + Footer consistentes). */}
+        <AppShellClient>{children}</AppShellClient>
+      </body>
     </html>
   )
 }

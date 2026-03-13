@@ -24,36 +24,33 @@ export default function NuevoTorneoPage() {
   const router = useRouter()
   const { activeClub, loading: clubLoading } = useActiveClub()
 
-  // -------- form state
   const [name, setName] = useState('')
-  const [type, setType] = useState<string>('OPEN') // enum USER-DEFINED en DB
-  const [format, setFormat] = useState<string>('GROUPS_ELIMINATION') // ✅ válido por check
-  const [gender, setGender] = useState<string>('MALE') // text
+  const [type, setType] = useState<string>('OPEN')
+  const [format, setFormat] = useState<string>('GROUPS_ELIMINATION')
+  const [gender, setGender] = useState<string>('MALE')
 
   const [categories, setCategories] = useState<Category[]>([])
   const [categoryId, setCategoryId] = useState<number>(0)
 
-  const [startDate, setStartDate] = useState<string>('') // YYYY-MM-DD (obligatorio)
-  const [endDate, setEndDate] = useState<string>('') // opcional
-  const [registrationDeadline, setRegistrationDeadline] = useState<string>('') // opcional (datetime-local)
+  const [startDate, setStartDate] = useState<string>('')
+  const [endDate, setEndDate] = useState<string>('')
+  const [registrationDeadline, setRegistrationDeadline] = useState<string>('')
 
   const [pricePerPlayer, setPricePerPlayer] = useState<string>('0')
   const [minPairs, setMinPairs] = useState<string>('6')
-  const [maxPairs, setMaxPairs] = useState<string>('') // opcional
+  const [maxPairs, setMaxPairs] = useState<string>('')
   const [pointsTotal, setPointsTotal] = useState<string>('0')
 
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<string>('')
 
-  // -------- load categories
   useEffect(() => {
     ;(async () => {
       const { data, error } = await supabase.from('categories').select('id, name').order('id', { ascending: false })
       if (error) return
       const rows = (data ?? []) as any as Category[]
       setCategories(rows)
-      // default
       if (rows.find((c) => c.id === 7)) setCategoryId(7)
       else if (rows[0]) setCategoryId(rows[0].id)
       else setCategoryId(0)
@@ -69,24 +66,18 @@ export default function NuevoTorneoPage() {
     return Number.isFinite(n) ? n : fallback
   }
 
-  // -------- validations (en vivo)
   const errors: Errors = useMemo(() => {
     const e: Errors = {}
 
     if (!activeClub?.id) e.form = 'Seleccioná un club en el selector de arriba.'
-
     if (!name.trim()) e.name = 'El nombre es obligatorio.'
-
     if (!startDate) e.startDate = 'La fecha de inicio es obligatoria.'
-
     if (!categoryId) e.categoryId = 'Seleccioná una categoría.'
 
-    // minPairs
     const minP = Math.trunc(toNumberSafe(minPairs, NaN))
     if (!Number.isFinite(minP)) e.minPairs = 'Mín. parejas debe ser un número.'
     else if (minP < 2) e.minPairs = 'Mín. parejas debe ser al menos 2.'
 
-    // maxPairs (opcional pero si viene tiene que ser >= minPairs)
     if (maxPairs.trim() !== '') {
       const maxP = Math.trunc(toNumberSafe(maxPairs, NaN))
       if (!Number.isFinite(maxP)) e.maxPairs = 'Máx. parejas debe ser un número.'
@@ -94,20 +85,16 @@ export default function NuevoTorneoPage() {
       else if (Number.isFinite(minP) && maxP < minP) e.maxPairs = 'Máx. parejas no puede ser menor que Mín. parejas.'
     }
 
-    // price
     const price = toNumberSafe(pricePerPlayer, NaN)
     if (!Number.isFinite(price)) e.pricePerPlayer = 'Precio debe ser un número.'
     else if (price < 0) e.pricePerPlayer = 'Precio no puede ser negativo.'
 
-    // points
     const pts = Math.trunc(toNumberSafe(pointsTotal, NaN))
     if (!Number.isFinite(pts)) e.pointsTotal = 'Puntos debe ser un número.'
     else if (pts < 0) e.pointsTotal = 'Puntos no puede ser negativo.'
 
-    // endDate opcional pero si viene no puede ser antes del startDate
     if (endDate && startDate && endDate < startDate) e.endDate = 'La fecha fin no puede ser anterior al inicio.'
 
-    // deadline opcional: si viene, no debe ser antes del inicio (regla simple)
     if (registrationDeadline && startDate) {
       const dlDate = registrationDeadline.split('T')[0]
       if (dlDate < startDate) e.registrationDeadline = 'El cierre no puede ser antes del inicio.'
@@ -132,7 +119,6 @@ export default function NuevoTorneoPage() {
   async function crearTorneo() {
     setMsg('')
 
-    // marcar todo como tocado para mostrar errores si falta algo
     setTouched({
       name: true,
       startDate: true,
@@ -158,26 +144,38 @@ export default function NuevoTorneoPage() {
     setSaving(true)
     setMsg('Creando...')
 
+    const rulesPayload = {
+      wo_tolerance_minutes: 10,
+      wo_score: '6-0 6-0',
+    }
+
     const payload: any = {
       club_id: activeClub.id,
       name: name.trim(),
       type,
-      format, // ✅ GROUPS_ELIMINATION / ELIMINATION / GROUPS
+      tournament_type: type,
+      format,
       gender,
       category_id: categoryId,
+      category: categoryId,
       start_date: startDate,
+      starts_on: startDate,
       status: 'DRAFT',
       price_per_player: toNumberSafe(pricePerPlayer, 0),
       min_pairs: Math.max(2, Math.trunc(toNumberSafe(minPairs, 6))),
       points_total: Math.max(0, Math.trunc(toNumberSafe(pointsTotal, 0))),
-      rules: {
-        wo_tolerance_minutes: 10,
-        wo_score: '6-0 6-0',
-      },
+      rules: rulesPayload,
+      rules_json: rulesPayload,
     }
 
-    if (endDate) payload.end_date = endDate
-    if (registrationDeadline) payload.registration_deadline = registrationDeadline
+    if (endDate) {
+      payload.end_date = endDate
+      payload.ends_on = endDate
+    }
+    if (registrationDeadline) {
+      payload.registration_deadline = registrationDeadline
+      payload.signup_deadline = registrationDeadline
+    }
     if (maxPairs.trim() !== '') payload.max_pairs = Math.max(2, Math.trunc(toNumberSafe(maxPairs, 0)))
 
     const { data, error } = await supabase.from('tournaments').insert(payload).select('id').single()
@@ -357,10 +355,9 @@ export default function NuevoTorneoPage() {
           </label>
 
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-<button onClick={crearTorneo} style={btn}>
-  Crear Torneo
-</button>
-
+            <button onClick={crearTorneo} style={btn} disabled={saving}>
+              {saving ? 'Creando…' : 'Crear Torneo'}
+            </button>
           </div>
         </div>
 

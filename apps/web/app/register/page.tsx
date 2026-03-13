@@ -27,7 +27,9 @@ export default function RegisterPage() {
   }, [router])
 
   async function signUp() {
-    if (!email || !password) {
+    const cleanEmail = email.trim().toLowerCase()
+
+    if (!cleanEmail || !password) {
       setAlert({ variant: 'warning', title: 'Faltan datos', message: 'Completá email y contraseña.' })
       return
     }
@@ -43,10 +45,13 @@ export default function RegisterPage() {
     setLoading(true)
     setAlert({ variant: 'info', title: 'Creando cuenta...' })
 
+    const emailRedirectTo = `${window.location.origin}/auth/confirm?next=${encodeURIComponent('/login?confirmed=1')}`
+
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: cleanEmail,
       password,
       options: {
+        emailRedirectTo,
         data: {
           first_name: firstName || null,
           last_name: lastName || null,
@@ -69,21 +74,14 @@ export default function RegisterPage() {
           first_name: firstName || null,
           last_name: lastName || null,
           display_name: displayName || null,
-          email: email || null,
+          email: cleanEmail || null,
         })
         .eq('user_id', userId)
     }
 
-    // Si tu proyecto exige confirmar email, esto es útil
-    setAlert({
-      variant: 'success',
-      title: 'Cuenta creada',
-      message: 'Si te llega un email de confirmación, confirmalo y luego ingresá.',
-    })
     setLoading(false)
 
-    // opcional: llevar a login luego de 1s
-    setTimeout(() => router.replace('/login'), 900)
+    router.replace(`/register/success?email=${encodeURIComponent(cleanEmail)}`)
   }
 
   return (

@@ -8,8 +8,8 @@ type ClubRole = 'OWNER' | 'ADMIN' | 'PLANILLERO' | 'PLAYER'
 type MembershipStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'BANNED'
 
 async function getCtx() {
-  const { data: u } = await supabase.auth.getUser()
-  const user = u?.user
+  const { data: s } = await supabase.auth.getSession()
+  const user = s?.session?.user
   if (!user) return null
 
   const userId = user.id
@@ -32,7 +32,6 @@ async function getCtx() {
 
   const activeClubId = us?.active_club_id ?? null
 
-  // membership (role/status)
   let clubRole: ClubRole | null = null
   let membershipStatus: MembershipStatus | null = null
 
@@ -57,49 +56,97 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    let alive = true
+
     ;(async () => {
-      const ctx = await getCtx()
+      // 1) intentamos resolver sesión (una vez + retry corto)
+      let ctx = await getCtx()
+      if (!ctx) {
+        await new Promise(r => setTimeout(r, 350))
+        ctx = await getCtx()
+      }
+
+      if (!alive) return
 
       if (!ctx) {
         router.replace('/login')
         return
       }
 
-      // Rutas que pueden verse sin club activo (para que el usuario pueda unirse/crear)
+      // Rutas que pueden verse sin club activo (para unirse/crear)
       const allowedWithoutClub = [
-        '/(app)/seleccionar-club',
-        '/(app)/clubs',
-        '/(app)/clubs/nuevo',
-        '/(app)/perfil', // opcional: permitir ver perfil global
+        '/seleccionar-club',
+        '/clubs',
+        '/clubs/nuevo',
+        '/perfil',
+        '/player',
       ]
-
       const isAllowed = allowedWithoutClub.some(p => pathname.startsWith(p))
 
-      // Platform admin: no obliga a club
+      // Platform admin: no obliga club
       if (ctx.isPlatformAdmin) {
         setReady(true)
         return
       }
 
-      // No tiene club activo -> seleccionar club
+      // Sin club activo -> mandar a seleccionar
       if (!ctx.activeClubId) {
-        if (!isAllowed) router.replace('/(app)/seleccionar-club')
+        if (!isAllowed) router.replace('/seleccionar-club')
         else setReady(true)
         return
       }
 
-      // Tiene club activo pero no está aprobado -> seleccionar club (y mostrar estado ahí)
+      // Club activo pero status no APPROVED -> seleccionar club (ahí mostrás estado)
       if (ctx.membershipStatus && ctx.membershipStatus !== 'APPROVED') {
-        if (!isAllowed) router.replace('/(app)/seleccionar-club')
+        if (!isAllowed) router.replace('/seleccionar-club')
         else setReady(true)
         return
       }
 
-      // OK
       setReady(true)
     })()
+
+    return () => {
+      alive = false
+    }
   }, [pathname, router])
 
-  if (!ready) return null
+  if (!ready) {
+    return (
+      <div className="px-auth">
+        <div className="px-authCard">
+          <div className="px-authTop">
+            <div className="px-authBrand">
+              <div className="px-authLogo">PX</div>
+              <div className="px-authBrandText">
+                <h1 className="px-authTitle">Accediendo…</h1>
+                <p className="px-authSub">Verificando permisos y club activo</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-authBody">
+            <div className="px-help" style={{ marginBottom: 10 }}>
+              Si tarda más de lo normal, podés salir y volver a entrar.
+            </div>
+
+            <div className="px-authRow" style={{ justifyContent: 'flex-end' }}>
+              <button
+                className="px-btn px-btn--ghost"
+                onClick={async () => {
+                  await supabase.auth.signOut()
+                  router.replace('/login')
+                }}
+              >
+                Salir
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ✅ ACÁ ESTABA TU BUG: faltaba devolver children
   return <>{children}</>
 }

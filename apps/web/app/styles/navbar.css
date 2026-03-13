@@ -1,0 +1,426 @@
+/* =========================
+   NAVBAR — cleaned + responsive + active underline
+   ========================= */
+
+:root{
+  --px-nav-bg: #2e5493;
+  --px-nav-accent: #ff4e72;
+  --px-nav-text: rgba(255,255,255,.92);
+  --px-nav-text-soft: rgba(255,255,255,.82);
+  --px-nav-stroke: rgba(255,255,255,.16);
+}
+
+.px-nav{
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--px-nav-bg);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+  transition: background .18s ease, backdrop-filter .18s ease;
+}
+.px-nav--scrolled{
+  background: rgba(46,84,147,.90);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.px-navgrid{
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 10px 28px;
+  display: grid;
+  grid-template-columns: minmax(220px,300px) 1fr minmax(220px,320px);
+  align-items: center;
+  gap: 18px;
+}
+@media (max-width: 1180px){
+  .px-navgrid{
+    grid-template-columns: minmax(190px,260px) 1fr minmax(190px,280px);
+    padding-left: 18px;
+    padding-right: 18px;
+    gap: 14px;
+  }
+}
+@media (max-width: 980px){
+  .px-navgrid{
+    grid-template-columns: auto 1fr auto;
+    padding-left: 14px;
+    padding-right: 14px;
+    gap: 10px;
+  }
+}
+
+.px-left,
+.px-right{
+  display:flex;
+  align-items:center;
+  min-width:0;
+}
+.px-left{ justify-content:flex-start; gap: 12px; }
+.px-right{ justify-content:flex-end; gap: 14px; }
+
+.px-brand,
+.px-clubBtn,
+.px-userBtn,
+.px-loginBtn,
+.px-iconBtn,
+.px-burger{
+  font-family: Inter, "Inter Fallback", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+.px-brand,
+.px-clubBtn,
+.px-userBtn{
+  display:inline-flex;
+  align-items:center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid var(--px-nav-stroke);
+  color: var(--px-nav-text);
+  text-decoration:none;
+  cursor:pointer;
+}
+.px-clubBtn:hover,
+.px-userBtn:hover,
+.px-brand:hover,
+.px-loginBtn:hover,
+.px-iconBtn:hover{
+  background: rgba(255,45,109,.16);
+  border-color: rgba(255,45,109,.28);
+}
+
+.px-brandLogo,
+.px-clubLogo,
+.px-avatar{
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+.px-brandLogo,
+.px-clubLogo{ background: rgba(81,211,225,.22); }
+.px-brandLogo img,
+.px-clubLogo img,
+.px-avatar img{ width:100%; height:100%; object-fit:cover; }
+
+.px-brandText,
+.px-clubName,
+.px-userName{
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--px-nav-text);
+}
+.px-userName,
+.px-clubName{ overflow:hidden; text-overflow:ellipsis; }
+
+.px-navlinks{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap: 26px;
+  min-width:0;
+}
+.px-navlinks > *,
+.px-navDropWrap{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+}
+
+.px-navItem{ position:relative; }
+.px-navlink{
+  position: relative;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap: 8px;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 6px !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+  text-decoration:none;
+  white-space:nowrap;
+  box-sizing: border-box !important;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+
+  color: var(--px-nav-text);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor:pointer;
+}
+.px-navlink::after{
+  content:"";
+  position:absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--px-nav-accent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform .16s ease;
+}
+.px-navlink:hover::after,
+.px-navlink.active::after,
+.px-navlink.px-navlink--active::after{ transform: scaleX(1); }
+
+.px-dot{
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--px-nav-accent);
+  display:inline-block;
+}
+
+.px-icons{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  margin-right: 6px;
+}
+.px-iconBtn,
+.px-loginBtn,
+.px-burger{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid var(--px-nav-stroke);
+  color: var(--px-nav-text);
+  text-decoration:none;
+  cursor:pointer;
+  position: relative;
+}
+.px-loginBtn{
+  width:auto;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.px-iconBadge{
+  position:absolute;
+  top:-6px;
+  right:-6px;
+  min-width:18px;
+  height:18px;
+  padding: 0 6px;
+  border-radius:999px;
+  background: var(--px-nav-accent);
+  color: #fff;
+  font-size:11px;
+  font-weight: 800;
+  display:grid;
+  place-items:center;
+  border: 2px solid var(--px-nav-bg);
+}
+
+.px-caret{ opacity: .9; }
+
+.px-dd{ position: relative; }
+.px-navDropdown{
+  position:absolute;
+  top: calc(100% - 2px);
+  min-width: 220px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(16,26,49,.94);
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 18px 44px rgba(0,0,0,.22);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 1200;
+}
+.px-navDropdown::before{
+  content:"";
+  position:absolute;
+  top:-12px;
+  left:0;
+  right:0;
+  height:12px;
+}
+/* nav menus centered under item */
+.px-navItem > .px-navDropdown{
+  left: 50%;
+  transform: translateX(-50%);
+}
+/* club menu opens to the right */
+.px-clubWrap > .px-navDropdown,
+.px-navDropdown--club{
+  left: 0;
+  right: auto;
+  transform: none;
+}
+/* user menu to the left */
+.px-navDropdown--right{
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.px-ddItem{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding: 10px 10px;
+  border-radius: 10px;
+  background: transparent;
+  border: 0;
+  color: rgba(255,255,255,.92);
+  text-decoration:none;
+  cursor:pointer;
+  font-size: 13px;
+  font-weight: 700;
+  text-align:left;
+}
+.px-ddItem:hover{ background: rgba(255,255,255,.08); }
+.px-ddItem.is-active{ background: rgba(255,45,109,.16); outline: 1px solid rgba(255,45,109,.22); }
+.px-ddItem--danger{ color: #ffdbe5; }
+.px-ddSep{ height:1px; margin:8px 0; background: rgba(255,255,255,.10); }
+
+.px-mobileOnly{ display:none; }
+.px-desktopOnly{ display:flex; }
+.px-mobileMenu{ display:none; }
+
+@media (max-width: 980px){
+  .px-desktopOnly{ display:none !important; }
+  .px-mobileOnly{ display:inline-flex !important; }
+  .px-mobileMenu{ display:block; }
+  .px-navgrid{ grid-template-columns: auto 1fr auto; }
+  .px-mobileMenu{
+    padding: 10px 14px 14px;
+    background: rgba(16,26,49,.95);
+    border-top: 1px solid rgba(255,255,255,.10);
+  }
+  .px-mobileRow + .px-mobileRow{ margin-top: 8px; }
+  .px-mobileLink,
+  .px-mobileChild{
+    display:block;
+    padding: 12px 10px;
+    border-radius: 12px;
+    color: rgba(255,255,255,.92);
+    text-decoration:none;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .px-mobileLink.is-active,
+  .px-mobileChild.is-active{ background: rgba(255,45,109,.18); }
+  .px-mobileChildren{ padding-left: 8px; }
+}
+
+/* =========================
+   FIX FINAL DROPDOWNS CLUB / USER
+   ========================= */
+
+/* base dropdown */
+.px-menu{
+  position: absolute;
+  top: calc(100% + 6px);
+  min-width: 220px;
+  z-index: 9999;
+}
+
+/* CLUB: abre hacia la derecha, sin irse afuera */
+.px-clubWrap .px-menu{
+  left: 0;
+  right: auto;
+  transform: none;
+}
+
+/* USER: más metido hacia adentro, no pegado al borde derecho */
+.px-userWrap .px-menu{
+  right: 0;
+  left: auto;
+  transform: translateX(-14px);
+}
+
+/* si lo querés aún más adentro, subí este valor a -18px / -24px */
+@media (max-width: 900px){
+  .px-userWrap .px-menu,
+  .px-clubWrap .px-menu{
+    transform: none;
+    left: 0;
+    right: auto;
+    width: min(280px, 90vw);
+  }
+}
+
+/* ===== dropdown usuario: corregir posición ===== */
+.px-userWrap{
+  position: relative;
+}
+
+.px-userWrap .px-menu{
+  right: 0 !important;
+  left: auto !important;
+  transform: translateX(-10px) !important;
+  top: calc(100% + 6px) !important;
+  min-width: 220px;
+}
+
+/* si querés meterlo más hacia adentro, aumentá el -10px a -14px o -18px */
+@media (max-width: 900px){
+  .px-userWrap .px-menu{
+    right: 0 !important;
+    left: auto !important;
+    transform: none !important;
+    width: min(280px, 90vw);
+  }
+}
+
+.px-clubWrap{
+  position: relative;
+  padding-bottom: -10px; /* agranda el área hover */
+}
+
+.px-clubWrap .px-menu{
+  top: calc(100% - 10px) !important; /* lo pega al botón */
+}
+
+
+
+.px-navgrid--4col{
+  grid-template-columns: 260px minmax(0,1fr) max-content max-content;
+}
+@media (max-width: 1280px){
+  .px-navgrid--4col{ grid-template-columns: 220px minmax(0,1fr) max-content max-content; }
+}
+@media (max-width: 980px){
+  .px-navgrid--4col{ grid-template-columns: auto 1fr auto; }
+}
+.px-navlinks--center{ padding-inline: 16px; gap: 18px; }
+.px-icons{ min-width: max-content; }
+.px-right{ min-width: max-content; }
+.px-navDropdown--right{ right: 0; left: auto; }
