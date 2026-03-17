@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Bell, Mail, Search, ChevronDown } from 'lucide-react'
+import { Bell, Mail, Search, ChevronDown, Menu, X } from 'lucide-react'
 
 import { NAV_CONFIG, type NavItem } from '@/lib/navConfig'
 import { useSession } from '@/components/session/SessionProvider'
@@ -39,6 +39,7 @@ function isActiveItem(pathname: string | null, item: NavItem) {
 
 export default function AppNavbarClient() {
   const pathname = usePathname()
+  const router = useRouter()
   const rootRef = useRef<HTMLDivElement | null>(null)
 
   const { role, user, activeClub, clubs, setActiveClub, signOut } = useSession()
@@ -48,6 +49,7 @@ export default function AppNavbarClient() {
   const [navOpenIndex, setNavOpenIndex] = useState<number | null>(null)
   const [userOpen, setUserOpen] = useState(false)
   const [clubOpen, setClubOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
 
@@ -64,6 +66,7 @@ export default function AppNavbarClient() {
         setNavOpenIndex(null)
         setUserOpen(false)
         setClubOpen(false)
+        setMobileMenuOpen(false)
       }
     }
 
@@ -72,6 +75,7 @@ export default function AppNavbarClient() {
         setNavOpenIndex(null)
         setUserOpen(false)
         setClubOpen(false)
+        setMobileMenuOpen(false)
       }
     }
 
@@ -88,6 +92,7 @@ export default function AppNavbarClient() {
     setNavOpenIndex(null)
     setUserOpen(false)
     setClubOpen(false)
+    setMobileMenuOpen(false)
   }, [pathname])
 
   useEffect(() => {
@@ -123,6 +128,13 @@ export default function AppNavbarClient() {
     }
   }, [isAuthed, pathname, user?.id])
 
+  function closeAllMenus() {
+    setNavOpenIndex(null)
+    setUserOpen(false)
+    setClubOpen(false)
+    setMobileMenuOpen(false)
+  }
+
   function ClubLogo() {
     const [broken, setBroken] = useState(false)
     if (displayClub?.logoUrl && !broken) {
@@ -155,10 +167,9 @@ export default function AppNavbarClient() {
     if (role === 'platform') {
       return (
         <div className="px-navDropdown px-navDropdown--right" role="menu">
-          <Link className="px-ddItem" href="/perfil">Mi perfil</Link>
-          <Link className="px-ddItem" href="/actividad">Mi actividad</Link>
           <Link className="px-ddItem" href="/platform/configuracion">Configuración plataforma</Link>
-          <Link className="px-ddItem" href="/ajustes">Preferencias</Link>
+          <Link className="px-ddItem" href="/platform/analytics">Analytics</Link>
+          <Link className="px-ddItem" href="/platform/logs">Logs</Link>
           <button className="px-ddItem px-ddItem--danger" onClick={signOut}>Cerrar sesión</button>
         </div>
       )
@@ -174,48 +185,46 @@ export default function AppNavbarClient() {
     )
   }
 
-  function LeftBlock() {
-    if (cfg.leftMode === 'club') {
+  function renderClubMenu() {
+    if (!clubOpen) return null
+
+    return (
+      <div className="px-navDropdown px-navDropdown--club" role="menu">
+        <Link className="px-ddItem" href="/club">Info del club</Link>
+        <Link className="px-ddItem" href="/seleccionar-club">Cambiar club</Link>
+        {clubs.length > 0 ? <div className="px-ddSep" /> : null}
+        {clubs.map((club) => (
+          <button
+            key={club.id}
+            className={`px-ddItem ${club.id === displayClub?.id ? 'is-active' : ''}`}
+            onClick={async () => {
+              await setActiveClub(club.id)
+              setClubOpen(false)
+            }}
+          >
+            {club.name}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  function renderDesktopLeft() {
+    if (cfg.leftMode === 'club' || cfg.leftMode === 'club-static') {
       return (
         <div className="px-left">
           <div className="px-dd px-clubWrap">
-            <button type="button" className="px-clubBtn" onClick={() => setClubOpen((v) => !v)}>
+            <button
+              type="button"
+              className="px-clubBtn"
+              onClick={cfg.leftMode === 'club' ? () => setClubOpen((v) => !v) : undefined}
+              style={cfg.leftMode === 'club-static' ? { cursor: 'default' } : undefined}
+            >
               <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
               <span className="px-clubName">{shorten(displayClubName, 16)}</span>
-              <ChevronDown size={16} className="px-caret" />
+              {cfg.leftMode === 'club' ? <ChevronDown size={16} className="px-caret" /> : null}
             </button>
-
-            {clubOpen ? (
-              <div className="px-navDropdown px-navDropdown--club" role="menu">
-                <Link className="px-ddItem" href="/club">Ver club</Link>
-                <Link className="px-ddItem" href="/seleccionar-club">Cambiar club</Link>
-                <Link className="px-ddItem" href="/club">Info del club</Link>
-                {clubs.length > 0 ? <div className="px-ddSep" /> : null}
-                {clubs.map((club) => (
-                  <button
-                    key={club.id}
-                    className={`px-ddItem ${club.id === displayClub?.id ? 'is-active' : ''}`}
-                    onClick={async () => {
-                      await setActiveClub(club.id)
-                      setClubOpen(false)
-                    }}
-                  >
-                    {club.name}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      )
-    }
-
-    if (cfg.leftMode === 'club-static') {
-      return (
-        <div className="px-left">
-          <div className="px-clubBtn" style={{ cursor: 'default', minWidth: 0 }}>
-            <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
-            <span className="px-clubName">{shorten(displayClubName, 16)}</span>
+            {cfg.leftMode === 'club' ? renderClubMenu() : null}
           </div>
         </div>
       )
@@ -231,9 +240,9 @@ export default function AppNavbarClient() {
     )
   }
 
-  function CenterBlock() {
+  function renderDesktopCenter() {
     return (
-      <nav className="px-navlinks px-navlinks--center px-desktopOnly" aria-label="Primary">
+      <nav className="px-navlinks" aria-label="Primary">
         {nav.map((item, i) => {
           const active = isActiveItem(pathname, item)
           const hasChildren = !!item.children?.length
@@ -280,35 +289,31 @@ export default function AppNavbarClient() {
     )
   }
 
-  function IconsBlock() {
-    return (
-      <div className="px-icons px-desktopOnly">
-        {showRight.search ? (
-          <Link className="px-iconBtn" href="/buscar" aria-label="Buscar"><Search size={18} /></Link>
-        ) : null}
-        {showRight.notifications ? (
-          <Link className="px-iconBtn" href="/notificaciones" aria-label="Notificaciones">
-            <Bell size={18} />
-            {unreadNotifications > 0 ? <span className="px-iconBadge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span> : null}
-          </Link>
-        ) : null}
-        {showRight.messages ? (
-          <Link className="px-iconBtn" href="/mensajes" aria-label="Mensajes">
-            <Mail size={18} />
-            {unreadMessages > 0 ? <span className="px-iconBadge">{unreadMessages > 99 ? '99+' : unreadMessages}</span> : null}
-          </Link>
-        ) : null}
-      </div>
-    )
-  }
-
-  function UserBlock() {
+  function renderDesktopRight() {
     return (
       <div className="px-right">
+        <div className="px-icons">
+          {showRight.search ? (
+            <button className="px-iconBtn" aria-label="Buscar" onClick={() => router.push('/buscar')}><Search size={18} /></button>
+          ) : null}
+          {showRight.notifications ? (
+            <Link className="px-iconBtn" href="/notificaciones" aria-label="Notificaciones">
+              <Bell size={18} />
+              {unreadNotifications > 0 ? <span className="px-iconBadge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span> : null}
+            </Link>
+          ) : null}
+          {showRight.messages ? (
+            <Link className="px-iconBtn" href="/mensajes" aria-label="Mensajes">
+              <Mail size={18} />
+              {unreadMessages > 0 ? <span className="px-iconBadge">{unreadMessages > 99 ? '99+' : unreadMessages}</span> : null}
+            </Link>
+          ) : null}
+        </div>
+
         {!isAuthed ? (
           <Link className="px-loginBtn" href="/login">Login</Link>
         ) : (
-          <div className="px-userWrap">
+          <div className="px-userWrap px-dd">
             <button type="button" className="px-userBtn" onClick={() => setUserOpen((v) => !v)}>
               <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
               <span className="px-userName">{shorten(user?.name || 'Usuario', 14)}</span>
@@ -321,14 +326,147 @@ export default function AppNavbarClient() {
     )
   }
 
+  function renderMobileLeft() {
+    if (role === 'guest') {
+      return (
+        <Link href="/" className="px-mobileBrand" aria-label="PAMPRAX">
+          <span className="px-brandLogo" aria-hidden="true">PX</span>
+        </Link>
+      )
+    }
+
+    if (role === 'platform') {
+      return <div className="px-mobileBadge">Platform</div>
+    }
+
+    return (
+      <div className="px-dd px-clubWrap px-mobileClubWrap">
+        <button type="button" className="px-mobileClubBtn" onClick={() => setClubOpen((v) => !v)} aria-label="Club activo">
+          <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
+          <ChevronDown size={14} className="px-caret" />
+        </button>
+        {renderClubMenu()}
+      </div>
+    )
+  }
+
+  function renderMobileCenter() {
+    if (role === 'guest') {
+      return <Link className="px-loginBtn px-mobileLogin" href="/login">Login</Link>
+    }
+
+    return (
+      <button
+        type="button"
+        className="px-burger"
+        onClick={() => {
+          setMobileMenuOpen((v) => !v)
+          setUserOpen(false)
+          setClubOpen(false)
+        }}
+        aria-label="Abrir menú"
+        aria-expanded={mobileMenuOpen}
+      >
+        {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+      </button>
+    )
+  }
+
+  function renderMobileRight() {
+    if (role === 'guest') {
+      return (
+        <div className="px-mobileActions">
+          <button className="px-iconBtn" aria-label="Buscar" onClick={() => router.push('/buscar')}><Search size={17} /></button>
+          <button
+            type="button"
+            className="px-burger"
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            aria-label="Abrir menú"
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
+      )
+    }
+
+    return (
+      <div className="px-mobileActions">
+        {showRight.messages ? (
+          <Link className="px-iconBtn" href="/mensajes" aria-label="Mensajes">
+            <Mail size={17} />
+            {unreadMessages > 0 ? <span className="px-iconBadge">{unreadMessages > 99 ? '99+' : unreadMessages}</span> : null}
+          </Link>
+        ) : null}
+        {showRight.notifications ? (
+          <Link className="px-iconBtn" href="/notificaciones" aria-label="Notificaciones">
+            <Bell size={17} />
+            {unreadNotifications > 0 ? <span className="px-iconBadge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span> : null}
+          </Link>
+        ) : null}
+        <div className="px-userWrap px-dd">
+          <button type="button" className="px-mobileUserBtn" onClick={() => setUserOpen((v) => !v)} aria-label="Mi cuenta">
+            <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
+            <ChevronDown size={14} className="px-caret" />
+          </button>
+          {renderUserMenu()}
+        </div>
+      </div>
+    )
+  }
+
+  function renderMobileMenu() {
+    if (!mobileMenuOpen) return null
+
+    const items = nav
+    return (
+      <div className="px-mobileMenu" role="dialog" aria-label="Menú móvil">
+        {role !== 'guest' ? (
+          <button className="px-mobileLink" type="button" onClick={() => { closeAllMenus(); router.push('/buscar') }}>
+            Buscar
+          </button>
+        ) : null}
+
+        {items.map((item) => (
+          <div key={item.href} className="px-mobileRow">
+            <Link className={`px-mobileLink ${isActiveItem(pathname, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}>
+              {item.label}
+            </Link>
+            {item.children?.length ? (
+              <div className="px-mobileChildren">
+                {item.children.map((child) => (
+                  <Link
+                    key={child.href}
+                    className={`px-mobileChild ${isActiveHref(pathname, child.href, true) ? 'is-active' : ''}`}
+                    href={child.href}
+                    onClick={closeAllMenus}
+                  >
+                    {child.label}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <header className="px-nav" ref={rootRef}>
-      <div className="px-navgrid px-navgrid--4col">
-        <LeftBlock />
-        <CenterBlock />
-        <IconsBlock />
-        <UserBlock />
+      <div className="px-navgrid px-desktopBar">
+        {renderDesktopLeft()}
+        {renderDesktopCenter()}
+        {renderDesktopRight()}
       </div>
+
+      <div className="px-mobileBar">
+        <div className="px-mobileBar__left">{renderMobileLeft()}</div>
+        <div className="px-mobileBar__center">{renderMobileCenter()}</div>
+        <div className="px-mobileBar__right">{renderMobileRight()}</div>
+      </div>
+
+      {renderMobileMenu()}
     </header>
   )
 }

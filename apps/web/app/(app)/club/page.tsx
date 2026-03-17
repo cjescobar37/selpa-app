@@ -64,8 +64,8 @@ export default function ClubPage() {
           <h1 className="club-title">Ver club</h1>
           <p className="club-sub">Información pública del club activo.</p>
 
-          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '240px 1fr', gap: 18 }}>
-            <div className="px-card px-card--flat" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+          <div className="clubInfoLayout">
+            <div className="px-card px-card--flat clubInfoLogoCard">
               {club.logo_url ? (
                 <img
                   src={club.logo_url}
@@ -77,7 +77,7 @@ export default function ClubPage() {
               )}
             </div>
 
-            <div className="px-card px-card--flat" style={{ display: 'grid', gap: 10 }}>
+            <div className="px-card px-card--flat clubInfoDataCard">
               <div style={{ fontSize: 28, fontWeight: 900 }}>{club.name}</div>
               <div><b>Ubicación:</b> {[club.city, club.province, club.country].filter(Boolean).join(' · ') || 'Sin datos'}</div>
               <div><b>Dirección:</b> {club.address || 'Sin datos'}</div>
@@ -98,7 +98,7 @@ export default function ClubPage() {
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+              <div className="clubInfoActions">
                 <Link href="/mensajes?to=club" className="px-btn">
                   Enviar mensaje al club
                 </Link>
@@ -109,6 +109,44 @@ export default function ClubPage() {
             </div>
           </div>
         </div>
+        <style jsx>{`
+          .clubInfoLayout {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: 240px minmax(0, 1fr);
+            gap: 18px;
+            align-items: start;
+          }
+          .clubInfoLogoCard {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 180px;
+          }
+          .clubInfoDataCard {
+            display: grid;
+            gap: 10px;
+            min-width: 0;
+          }
+          .clubInfoActions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+          }
+          @media (max-width: 760px) {
+            .clubInfoLayout {
+              grid-template-columns: 1fr;
+            }
+            .clubInfoLogoCard {
+              min-height: 150px;
+            }
+            .clubInfoActions {
+              display: grid;
+              grid-template-columns: 1fr;
+            }
+          }
+        `}</style>
       </div>
     )
   }
