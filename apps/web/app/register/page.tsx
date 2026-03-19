@@ -114,7 +114,7 @@ export default function RegisterPage() {
               className="px-input"
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
-              placeholder="Ej: Cristian Escobar"
+              placeholder="Ej: Juan Perez"
             />
           </div>
 

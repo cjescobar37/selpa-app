@@ -42,6 +42,32 @@ export default function AppNavbarClient() {
   const router = useRouter()
   const rootRef = useRef<HTMLDivElement | null>(null)
 
+const navCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+function clearNavCloseTimeout() {
+  if (navCloseTimeoutRef.current) {
+    clearTimeout(navCloseTimeoutRef.current)
+    navCloseTimeoutRef.current = null
+  }
+}
+
+function openDesktopMenu(index: number) {
+  clearNavCloseTimeout()
+  setNavOpenIndex(index)
+}
+
+function closeDesktopMenuDelayed(index?: number) {
+  clearNavCloseTimeout()
+  navCloseTimeoutRef.current = setTimeout(() => {
+    setNavOpenIndex((cur) => {
+      if (typeof index === 'number') {
+        return cur === index ? null : cur
+      }
+      return null
+    })
+  }, 180)
+}
+
   const { role, user, activeClub, clubs, setActiveClub, signOut } = useSession()
   const cfg = useMemo(() => NAV_CONFIG[role || 'guest'], [role])
   const nav = cfg.main as NavItem[]
@@ -82,18 +108,20 @@ export default function AppNavbarClient() {
     document.addEventListener('mousedown', onDown)
     window.addEventListener('keydown', onKey)
 
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      window.removeEventListener('keydown', onKey)
-    }
+return () => {
+  clearNavCloseTimeout()
+  document.removeEventListener('mousedown', onDown)
+  window.removeEventListener('keydown', onKey)
+}
   }, [])
 
-  useEffect(() => {
-    setNavOpenIndex(null)
-    setUserOpen(false)
-    setClubOpen(false)
-    setMobileMenuOpen(false)
-  }, [pathname])
+useEffect(() => {
+  clearNavCloseTimeout()
+  setNavOpenIndex(null)
+  setUserOpen(false)
+  setClubOpen(false)
+  setMobileMenuOpen(false)
+}, [pathname])
 
   useEffect(() => {
     let alive = true
@@ -167,9 +195,8 @@ export default function AppNavbarClient() {
     if (role === 'platform') {
       return (
         <div className="px-navDropdown px-navDropdown--right" role="menu">
-          <Link className="px-ddItem" href="/platform/configuracion">Configuración plataforma</Link>
-          <Link className="px-ddItem" href="/platform/analytics">Analytics</Link>
-          <Link className="px-ddItem" href="/platform/logs">Logs</Link>
+          <Link className="px-ddItem" href="/platform/configuracion">Configuración de la plataforma</Link>
+          <Link className="px-ddItem" href="/platform/logs">Auditoría</Link>
           <button className="px-ddItem px-ddItem--danger" onClick={signOut}>Cerrar sesión</button>
         </div>
       )
@@ -240,54 +267,69 @@ export default function AppNavbarClient() {
     )
   }
 
-  function renderDesktopCenter() {
-    return (
-      <nav className="px-navlinks" aria-label="Primary">
-        {nav.map((item, i) => {
-          const active = isActiveItem(pathname, item)
-          const hasChildren = !!item.children?.length
+function renderDesktopCenter() {
+  return (
+    <nav className="px-navlinks" aria-label="Primary">
+      {nav.map((item, i) => {
+        const active = isActiveItem(pathname, item)
+        const hasChildren = !!item.children?.length
 
-          if (!hasChildren) {
-            return (
-              <Link key={item.href} href={item.href} className={`px-navlink ${active ? 'active' : ''}`}>
-                {item.label}
-                {item.dot ? <span className="px-dot" aria-hidden="true" /> : null}
-              </Link>
-            )
-          }
-
+        if (!hasChildren) {
           return (
-            <div
-              key={item.href}
-              className="px-navItem"
-              onMouseEnter={() => setNavOpenIndex(i)}
-              onMouseLeave={() => setNavOpenIndex((cur) => (cur === i ? null : cur))}
-            >
-              <button type="button" className={`px-navlink ${active ? 'active' : ''}`} aria-expanded={navOpenIndex === i}>
-                {item.label}
-                <ChevronDown size={14} className="px-caret" />
-              </button>
-
-              {navOpenIndex === i ? (
-                <div className="px-navDropdown" role="menu">
-                  {item.children!.map((c) => (
-                    <Link
-                      key={c.href}
-                      href={c.href}
-                      className={`px-ddItem ${isActiveHref(pathname, c.href) ? 'is-active' : ''}`}
-                      onClick={() => setNavOpenIndex(null)}
-                    >
-                      {c.label}
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <Link key={item.href} href={item.href} className={`px-navlink ${active ? 'active' : ''}`}>
+              {item.label}
+              {item.dot ? <span className="px-dot" aria-hidden="true" /> : null}
+            </Link>
           )
-        })}
-      </nav>
-    )
-  }
+        }
+
+        const isOpen = navOpenIndex === i
+
+        return (
+          <div
+            key={item.href}
+            className={`px-navItem px-navItem--hasDropdown ${isOpen ? 'is-open' : ''}`}
+            onMouseEnter={() => openDesktopMenu(i)}
+            onMouseLeave={() => closeDesktopMenuDelayed(i)}
+            onFocus={() => openDesktopMenu(i)}
+            onBlur={() => closeDesktopMenuDelayed(i)}
+            data-open={isOpen ? 'true' : 'false'}
+          >
+            <button
+              type="button"
+              className={`px-navlink ${active ? 'active' : ''}`}
+              aria-expanded={isOpen}
+            >
+              {item.label}
+              <ChevronDown size={14} className="px-caret" />
+            </button>
+
+            <div
+              className="px-navDropdown"
+              role="menu"
+              onMouseEnter={() => openDesktopMenu(i)}
+              onMouseLeave={() => closeDesktopMenuDelayed(i)}
+            >
+              {item.children!.map((c) => (
+                <Link
+                  key={c.href}
+                  href={c.href}
+                  className={`px-ddItem ${isActiveHref(pathname, c.href) ? 'is-active' : ''}`}
+                  onClick={() => {
+                    clearNavCloseTimeout()
+                    setNavOpenIndex(null)
+                  }}
+                >
+                  {c.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </nav>
+  )
+}
 
   function renderDesktopRight() {
     return (

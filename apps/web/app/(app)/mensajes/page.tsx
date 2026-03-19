@@ -245,8 +245,8 @@ export default function MensajesPage() {
 
       {msg ? <div className="px-card px-card--flat" style={{ marginBottom: 14 }}>{msg}</div> : null}
 
-      <div className="messagesLayout">
-        <div className="px-card px-card--flat messagesContacts">
+      <div style={{ display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr)', gap: 18, alignItems: 'start' }}>
+        <div className="px-card px-card--flat" style={{ display: 'grid', gap: 12 }}>
           <div className="px-h2">Contactos frecuentes</div>
           {frequentContacts.length === 0 ? (
             <div className="px-help">Todavía no hay contactos frecuentes.</div>
@@ -275,8 +275,8 @@ export default function MensajesPage() {
           )}
         </div>
 
-        <div className="messagesMain">
-          <div className="px-card px-card--flat messagesComposer">
+        <div style={{ display: 'grid', gap: 18 }}>
+          <div className="px-card px-card--flat" style={{ display: 'grid', gap: 12 }}>
             <div className="px-h2">Nuevo mensaje</div>
             <div className="px-field" style={{ marginTop: 0, position: 'relative' }}>
               <div className="px-label">Destinatario</div>
@@ -311,13 +311,13 @@ export default function MensajesPage() {
               <div className="px-label">Mensaje</div>
               <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} className="px-input" placeholder={recipient ? `Escribile a ${recipient.name}...` : 'Escribí tu mensaje...'} />
             </div>
-            <div className="messagesComposerFooter">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
               <div className="px-help">{recipient ? `Destinatario: ${recipient.name}` : 'Seleccioná un destinatario.'}</div>
-              <button type="button" onClick={sendMessage} disabled={sending || !recipientUserId} className="px-btn messagesSendBtn">{sending ? 'Enviando…' : 'Enviar mensaje'}</button>
+              <button type="button" onClick={sendMessage} disabled={sending || !recipientUserId} className="px-btn">{sending ? 'Enviando…' : 'Enviar mensaje'}</button>
             </div>
           </div>
 
-          <div className="px-card px-card--flat messagesMailbox">
+          <div className="px-card px-card--flat" style={{ display: 'grid', gap: 12 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <div className="px-h2" style={{ marginRight: 'auto' }}>{detailOpen && selectedMessage ? 'Detalle del mensaje' : 'Bandejas'}</div>
               {detailOpen && selectedMessage ? (
@@ -381,49 +381,6 @@ export default function MensajesPage() {
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        .messagesLayout {
-          display: grid;
-          grid-template-columns: 280px minmax(0, 1fr);
-          gap: 18px;
-          align-items: start;
-        }
-        .messagesContacts,
-        .messagesComposer,
-        .messagesMailbox {
-          display: grid;
-          gap: 12px;
-        }
-        .messagesMain {
-          display: grid;
-          gap: 18px;
-          min-width: 0;
-        }
-        .messagesComposerFooter {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 12px;
-        }
-        .messagesSendBtn {
-          flex: 0 0 auto;
-        }
-        @media (max-width: 900px) {
-          .messagesLayout {
-            grid-template-columns: 1fr;
-          }
-        }
-        @media (max-width: 640px) {
-          .messagesComposerFooter {
-            flex-direction: column;
-            align-items: stretch;
-          }
-          .messagesSendBtn {
-            width: 100%;
-          }
-        }
-      `}</style>
     </div>
   )
 }

@@ -124,14 +124,29 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
   platform: {
     leftMode: 'brand',
     main: [
-      { label: 'Dashboard', href: '/platform', exact: true },
       {
         label: 'Gestión',
-        href: '/platform/clubs',
+        href: '/platform/solicitudes',
         children: [
           { label: 'Solicitudes', href: '/platform/solicitudes' },
-          { label: 'Clubs', href: '/platform/clubs' },
-          { label: 'Usuarios', href: '/platform/usuarios' },
+          { label: 'Admin Clubs', href: '/platform/clubs' },
+          { label: 'Admin Jugadores', href: '/platform/usuarios' },
+        ],
+      },
+      {
+        label: 'Finanzas',
+        href: '/platform/pagos',
+        children: [
+          { label: 'Pagos / comisiones', href: '/platform/pagos' },
+          { label: 'Liquidaciones', href: '/platform/liquidaciones' },
+        ],
+      },
+      {
+        label: 'Moderación',
+        href: '/platform/noticias',
+        children: [
+          { label: 'Noticias Platform', href: '/platform/noticias' },
+          { label: 'Publicidad y Sponsors Platform', href: '/platform/publicidad' },
         ],
       },
       { label: 'Analytics', href: '/platform/analytics' },
