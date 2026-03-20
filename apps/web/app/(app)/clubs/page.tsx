@@ -68,7 +68,7 @@ export default function ClubsPage() {
 
     const res = await fetch('/api/clubs/request-join', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ accessToken: token, clubId }),
     })
 
@@ -88,9 +88,9 @@ export default function ClubsPage() {
     <div style={{ maxWidth: 980 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 30, fontWeight: 900, marginBottom: 6 }}>Clubes disponibles</h1>
+          <h1 style={{ fontSize: 30, fontWeight: 900, marginBottom: 6 }}>Clubes activos</h1>
           <p style={{ opacity: 0.8 }}>
-            Explorá clubes y solicitá unirte como jugador.
+            Explorá todos los clubes activos de PAMPRAX y solicitá tu alta como jugador en el que quieras.
           </p>
         </div>
 

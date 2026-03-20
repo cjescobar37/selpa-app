@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     const { data: clubs, error: clubsError } = await supabaseAdmin
       .from('clubs')
       .select('id, name, city, province, logo_url, created_at')
+      .eq('is_active', true)
       .order('name', { ascending: true })
 
     if (clubsError) {

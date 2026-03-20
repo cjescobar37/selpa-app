@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import HomeHero from '@/components/HomeHero'
 import StatsRow from '@/components/StatsRow'
 import RankingTable from '@/components/RankingTable'
@@ -27,6 +28,16 @@ export default function PlayerHomePage() {
   return (
     <div className="home-shell">
       <div className="home-panel">
+        <div className="px-card px-card--flat" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div>
+            <div className="px-h2">Sumarte a un club</div>
+            <div className="px-muted" style={{ marginTop: 6 }}>Podés ver todos los clubes activos, pedir tu alta como jugador y después elegir tu club activo.</div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Link href="/clubs" className="px-btn">Ver clubes activos</Link>
+            <Link href="/seleccionar-club" className="px-btn px-btn--ghost">Seleccionar club</Link>
+          </div>
+        </div>
         <HomeHero player={player} />
         <StatsRow stats={stats} />
         <RankingTable rows={rows} />

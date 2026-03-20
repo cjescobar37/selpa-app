@@ -21,7 +21,7 @@ export default function LoginPageClient() {
 
   const redirectTo = useMemo(() => {
     if (typeof window === 'undefined') return ''
-    return `${window.location.origin}/auth/post-login`
+    return `${window.location.origin}/auth/callback`
   }, [])
 
   useEffect(() => {

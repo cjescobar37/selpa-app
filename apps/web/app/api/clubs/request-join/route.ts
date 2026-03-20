@@ -4,7 +4,9 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const accessToken = String(body?.accessToken ?? '')
+    const authHeader = req.headers.get('authorization') || ''
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+    const accessToken = String(body?.accessToken ?? bearerToken ?? '')
     const clubId = String(body?.clubId ?? '')
 
     if (!accessToken || !clubId) {
@@ -70,6 +72,39 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: updateError.message }, { status: 500 })
       }
 
+      const { data: adminRows } = await supabaseAdmin
+        .from('club_memberships')
+        .select('user_id')
+        .eq('club_id', clubId)
+        .eq('status', 'APPROVED')
+        .in('role', ['OWNER', 'ADMIN', 'PLANILLERO'])
+
+      const adminIds = Array.from(new Set((adminRows ?? []).map((row: any) => row.user_id).filter(Boolean)))
+      if (adminIds.length > 0) {
+        const { data: requesterProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('display_name, first_name, last_name, email')
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        const requesterName = requesterProfile?.display_name || [requesterProfile?.first_name, requesterProfile?.last_name].filter(Boolean).join(' ').trim() || requesterProfile?.email || 'Un jugador'
+
+        await supabaseAdmin.from('notifications').insert(
+          adminIds.map((adminId) => ({
+            user_id: adminId,
+            type: 'club_membership_requested',
+            title: 'Nueva solicitud de jugador',
+            message: `${requesterName} quiere sumarse a ${club.name}. Revisá la solicitud desde Usuarios del club.`,
+            link: '/club/usuarios',
+            metadata: {
+              club_id: clubId,
+              requester_user_id: userId,
+              requester_name: requesterName,
+            },
+          }))
+        )
+      }
+
       return NextResponse.json({
         ok: true,
         status: 'PENDING',
@@ -77,7 +112,7 @@ export async function POST(req: Request) {
       })
     }
 
-    const { error: insertError } = await supabaseAdmin
+    const { data: insertedMembership, error: insertError } = await supabaseAdmin
       .from('club_memberships')
       .insert({
         club_id: clubId,
@@ -85,9 +120,45 @@ export async function POST(req: Request) {
         role: 'PLAYER',
         status: 'PENDING',
       })
+      .select('id')
+      .single()
 
     if (insertError) {
       return NextResponse.json({ error: insertError.message }, { status: 500 })
+    }
+
+    const { data: adminRows } = await supabaseAdmin
+      .from('club_memberships')
+      .select('user_id')
+      .eq('club_id', clubId)
+      .eq('status', 'APPROVED')
+      .in('role', ['OWNER', 'ADMIN', 'PLANILLERO'])
+
+    const adminIds = Array.from(new Set((adminRows ?? []).map((row: any) => row.user_id).filter(Boolean)))
+    if (adminIds.length > 0) {
+      const { data: requesterProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('display_name, first_name, last_name, email')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      const requesterName = requesterProfile?.display_name || [requesterProfile?.first_name, requesterProfile?.last_name].filter(Boolean).join(' ').trim() || requesterProfile?.email || 'Un jugador'
+
+      await supabaseAdmin.from('notifications').insert(
+        adminIds.map((adminId) => ({
+          user_id: adminId,
+          type: 'club_membership_requested',
+          title: 'Nueva solicitud de jugador',
+          message: `${requesterName} quiere sumarse a ${club.name}. Revisá la solicitud desde Usuarios del club.`,
+          link: '/club/usuarios',
+          metadata: {
+            club_id: clubId,
+            membership_id: insertedMembership?.id ?? null,
+            requester_user_id: userId,
+            requester_name: requesterName,
+          },
+        }))
+      )
     }
 
     return NextResponse.json({

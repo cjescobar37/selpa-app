@@ -260,19 +260,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
 
-    await supabaseAdmin.from('notifications').insert({
-      user_id: recipientUserId,
-      sender_user_id: user.id,
-      type: 'message',
-      title: subject,
-      message,
-      link: '/mensajes',
-      metadata: {
-        message_id: inserted.id,
-        kind,
-      },
-    })
-
     return NextResponse.json({ ok: true, id: inserted.id })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Error enviando mensaje' }, { status: 500 })

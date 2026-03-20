@@ -168,3 +168,54 @@ a{ color: inherit; }
 
 /* Footer base helpers if needed */
 .px-footerSpacer{ height: 1px; }
+/* Shared overlay / modal */
+.px-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(9, 15, 27, 0.42);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.px-modalCard{
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  background: #fff;
+  border: 1px solid rgba(23,37,63,.12);
+  border-radius: 20px;
+  box-shadow: 0 30px 80px rgba(17,24,39,.24);
+  padding: 18px;
+}
+
+.px-modalHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.px-modalTitle{
+  margin:0;
+  color: var(--text);
+  font-size: 30px;
+  line-height: 1.04;
+  font-weight: 1000;
+}
+
+.px-modalSub{
+  color: rgba(23,37,63,.62);
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+.px-modalBodyText{
+  color: var(--text);
+  line-height: 1.7;
+  font-size: 15px;
+}

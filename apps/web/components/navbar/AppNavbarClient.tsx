@@ -10,6 +10,17 @@ import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
 import { supabase } from '@/lib/supabaseClient'
 
+type PreviewNotification = {
+  id: string
+  type: string
+  title: string
+  message: string
+  read: boolean
+  link: string | null
+  created_at: string
+  metadata?: Record<string, any> | null
+}
+
 function shorten(text?: string, max = 16) {
   const value = (text || '').trim()
   if (!value) return ''
@@ -37,36 +48,55 @@ function isActiveItem(pathname: string | null, item: NavItem) {
   return false
 }
 
+function formatDate(value: string) {
+  try {
+    return new Date(value).toLocaleString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return value
+  }
+}
+
+function previewText(value: string, max = 78) {
+  const clean = (value || '').replace(/\s+/g, ' ').trim()
+  if (clean.length <= max) return clean
+  return `${clean.slice(0, max - 1)}…`
+}
+
 export default function AppNavbarClient() {
   const pathname = usePathname()
   const router = useRouter()
   const rootRef = useRef<HTMLDivElement | null>(null)
 
-const navCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const navCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-function clearNavCloseTimeout() {
-  if (navCloseTimeoutRef.current) {
-    clearTimeout(navCloseTimeoutRef.current)
-    navCloseTimeoutRef.current = null
+  function clearNavCloseTimeout() {
+    if (navCloseTimeoutRef.current) {
+      clearTimeout(navCloseTimeoutRef.current)
+      navCloseTimeoutRef.current = null
+    }
   }
-}
 
-function openDesktopMenu(index: number) {
-  clearNavCloseTimeout()
-  setNavOpenIndex(index)
-}
+  function openDesktopMenu(index: number) {
+    clearNavCloseTimeout()
+    setNavOpenIndex(index)
+  }
 
-function closeDesktopMenuDelayed(index?: number) {
-  clearNavCloseTimeout()
-  navCloseTimeoutRef.current = setTimeout(() => {
-    setNavOpenIndex((cur) => {
-      if (typeof index === 'number') {
-        return cur === index ? null : cur
-      }
-      return null
-    })
-  }, 180)
-}
+  function closeDesktopMenuDelayed(index?: number) {
+    clearNavCloseTimeout()
+    navCloseTimeoutRef.current = setTimeout(() => {
+      setNavOpenIndex((cur) => {
+        if (typeof index === 'number') {
+          return cur === index ? null : cur
+        }
+        return null
+      })
+    }, 180)
+  }
 
   const { role, user, activeClub, clubs, setActiveClub, signOut } = useSession()
   const cfg = useMemo(() => NAV_CONFIG[role || 'guest'], [role])
@@ -76,6 +106,9 @@ function closeDesktopMenuDelayed(index?: number) {
   const [userOpen, setUserOpen] = useState(false)
   const [clubOpen, setClubOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notificationPreview, setNotificationPreview] = useState<PreviewNotification[]>([])
+  const [previewModal, setPreviewModal] = useState<PreviewNotification | null>(null)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
 
@@ -93,6 +126,7 @@ function closeDesktopMenuDelayed(index?: number) {
         setUserOpen(false)
         setClubOpen(false)
         setMobileMenuOpen(false)
+        setNotificationsOpen(false)
       }
     }
 
@@ -102,55 +136,73 @@ function closeDesktopMenuDelayed(index?: number) {
         setUserOpen(false)
         setClubOpen(false)
         setMobileMenuOpen(false)
+        setNotificationsOpen(false)
+        setPreviewModal(null)
       }
     }
 
     document.addEventListener('mousedown', onDown)
     window.addEventListener('keydown', onKey)
 
-return () => {
-  clearNavCloseTimeout()
-  document.removeEventListener('mousedown', onDown)
-  window.removeEventListener('keydown', onKey)
-}
+    return () => {
+      clearNavCloseTimeout()
+      document.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
   }, [])
 
-useEffect(() => {
-  clearNavCloseTimeout()
-  setNavOpenIndex(null)
-  setUserOpen(false)
-  setClubOpen(false)
-  setMobileMenuOpen(false)
-}, [pathname])
+  useEffect(() => {
+    clearNavCloseTimeout()
+    setNavOpenIndex(null)
+    setUserOpen(false)
+    setClubOpen(false)
+    setMobileMenuOpen(false)
+    setNotificationsOpen(false)
+    setPreviewModal(null)
+  }, [pathname])
+
+  async function loadPreviewData() {
+    if (!isAuthed || !user?.id) {
+      setUnreadNotifications(0)
+      setUnreadMessages(0)
+      setNotificationPreview([])
+      return
+    }
+
+    const [{ count: nCount }, { count: mCount }, previewRes] = await Promise.all([
+      supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .neq('type', 'message')
+        .eq('read', false),
+      supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('recipient_user_id', user.id)
+        .eq('read', false),
+      supabase
+        .from('notifications')
+        .select('id, type, title, message, read, link, created_at, metadata')
+        .eq('user_id', user.id)
+        .neq('type', 'message')
+        .order('created_at', { ascending: false })
+        .limit(3),
+    ])
+
+    setUnreadNotifications(nCount ?? 0)
+    setUnreadMessages(mCount ?? 0)
+    if (!previewRes.error) {
+      setNotificationPreview((previewRes.data ?? []) as PreviewNotification[])
+    }
+  }
 
   useEffect(() => {
     let alive = true
-
     ;(async () => {
-      if (!isAuthed || !user?.id) {
-        setUnreadNotifications(0)
-        setUnreadMessages(0)
-        return
-      }
-
-      const [{ count: nCount }, { count: mCount }] = await Promise.all([
-        supabase
-          .from('notifications')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('read', false),
-        supabase
-          .from('messages')
-          .select('id', { count: 'exact', head: true })
-          .eq('recipient_user_id', user.id)
-          .eq('read', false),
-      ])
-
       if (!alive) return
-      setUnreadNotifications(nCount ?? 0)
-      setUnreadMessages(mCount ?? 0)
+      await loadPreviewData()
     })()
-
     return () => {
       alive = false
     }
@@ -161,6 +213,24 @@ useEffect(() => {
     setUserOpen(false)
     setClubOpen(false)
     setMobileMenuOpen(false)
+    setNotificationsOpen(false)
+  }
+
+  async function openNotification(item: PreviewNotification) {
+    if (!item.read) {
+      await supabase.from('notifications').update({ read: true }).eq('id', item.id)
+      setNotificationPreview((cur) => cur.map((n) => (n.id === item.id ? { ...n, read: true } : n)))
+      setUnreadNotifications((cur) => Math.max(0, cur - 1))
+    }
+
+    setNotificationsOpen(false)
+
+    if (item.link) {
+      router.push(item.link)
+      return
+    }
+
+    setPreviewModal(item)
   }
 
   function ClubLogo() {
@@ -215,10 +285,21 @@ useEffect(() => {
   function renderClubMenu() {
     if (!clubOpen) return null
 
+    const isPlayer = role === 'player'
+
     return (
       <div className="px-navDropdown px-navDropdown--club" role="menu">
-        <Link className="px-ddItem" href="/club">Info del club</Link>
-        <Link className="px-ddItem" href="/seleccionar-club">Cambiar club</Link>
+        {isPlayer ? (
+          <>
+            <Link className="px-ddItem" href="/clubs">Ver clubes activos</Link>
+            <Link className="px-ddItem" href="/seleccionar-club">Seleccionar club</Link>
+          </>
+        ) : (
+          <>
+            <Link className="px-ddItem" href="/club">Info del club</Link>
+            <Link className="px-ddItem" href="/seleccionar-club">Cambiar club</Link>
+          </>
+        )}
         {clubs.length > 0 ? <div className="px-ddSep" /> : null}
         {clubs.map((club) => (
           <button
@@ -267,69 +348,101 @@ useEffect(() => {
     )
   }
 
-function renderDesktopCenter() {
-  return (
-    <nav className="px-navlinks" aria-label="Primary">
-      {nav.map((item, i) => {
-        const active = isActiveItem(pathname, item)
-        const hasChildren = !!item.children?.length
+  function renderDesktopCenter() {
+    return (
+      <nav className="px-navlinks" aria-label="Primary">
+        {nav.map((item, i) => {
+          const active = isActiveItem(pathname, item)
+          const hasChildren = !!item.children?.length
 
-        if (!hasChildren) {
+          if (!hasChildren) {
+            return (
+              <Link key={item.href} href={item.href} className={`px-navlink ${active ? 'active' : ''}`}>
+                {item.label}
+                {item.dot ? <span className="px-dot" aria-hidden="true" /> : null}
+              </Link>
+            )
+          }
+
+          const isOpen = navOpenIndex === i
+
           return (
-            <Link key={item.href} href={item.href} className={`px-navlink ${active ? 'active' : ''}`}>
-              {item.label}
-              {item.dot ? <span className="px-dot" aria-hidden="true" /> : null}
-            </Link>
-          )
-        }
-
-        const isOpen = navOpenIndex === i
-
-        return (
-          <div
-            key={item.href}
-            className={`px-navItem px-navItem--hasDropdown ${isOpen ? 'is-open' : ''}`}
-            onMouseEnter={() => openDesktopMenu(i)}
-            onMouseLeave={() => closeDesktopMenuDelayed(i)}
-            onFocus={() => openDesktopMenu(i)}
-            onBlur={() => closeDesktopMenuDelayed(i)}
-            data-open={isOpen ? 'true' : 'false'}
-          >
-            <button
-              type="button"
-              className={`px-navlink ${active ? 'active' : ''}`}
-              aria-expanded={isOpen}
-            >
-              {item.label}
-              <ChevronDown size={14} className="px-caret" />
-            </button>
-
             <div
-              className="px-navDropdown"
-              role="menu"
+              key={item.href}
+              className={`px-navItem px-navItem--hasDropdown ${isOpen ? 'is-open' : ''}`}
               onMouseEnter={() => openDesktopMenu(i)}
               onMouseLeave={() => closeDesktopMenuDelayed(i)}
+              onFocus={() => openDesktopMenu(i)}
+              onBlur={() => closeDesktopMenuDelayed(i)}
+              data-open={isOpen ? 'true' : 'false'}
             >
-              {item.children!.map((c) => (
-                <Link
-                  key={c.href}
-                  href={c.href}
-                  className={`px-ddItem ${isActiveHref(pathname, c.href) ? 'is-active' : ''}`}
-                  onClick={() => {
-                    clearNavCloseTimeout()
-                    setNavOpenIndex(null)
-                  }}
-                >
-                  {c.label}
-                </Link>
-              ))}
+              <button
+                type="button"
+                className={`px-navlink ${active ? 'active' : ''}`}
+                aria-expanded={isOpen}
+              >
+                {item.label}
+                <ChevronDown size={14} className="px-caret" />
+              </button>
+
+              <div
+                className="px-navDropdown"
+                role="menu"
+                onMouseEnter={() => openDesktopMenu(i)}
+                onMouseLeave={() => closeDesktopMenuDelayed(i)}
+              >
+                {item.children!.map((c) => (
+                  <Link
+                    key={c.href}
+                    href={c.href}
+                    className={`px-ddItem ${isActiveHref(pathname, c.href) ? 'is-active' : ''}`}
+                    onClick={() => {
+                      clearNavCloseTimeout()
+                      setNavOpenIndex(null)
+                    }}
+                  >
+                    {c.label}
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
-        )
-      })}
-    </nav>
-  )
-}
+          )
+        })}
+      </nav>
+    )
+  }
+
+  function renderNotificationsDropdown() {
+    if (!notificationsOpen) return null
+
+    return (
+      <div className="px-navDropdown px-navDropdown--right px-notifPreview" role="menu">
+        <div className="px-notifPreview__head">
+          <strong>Notificaciones</strong>
+          <Link href="/notificaciones" className="px-link" onClick={() => setNotificationsOpen(false)}>Ver todas</Link>
+        </div>
+
+        {notificationPreview.length === 0 ? (
+          <div className="px-notifPreview__empty">No tenés notificaciones nuevas.</div>
+        ) : (
+          notificationPreview.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`px-notifPreview__item ${item.read ? 'is-read' : 'is-unread'}`}
+              onClick={() => openNotification(item)}
+            >
+              <div className="px-notifPreview__row">
+                <div className="px-notifPreview__title">{item.title}</div>
+                <div className="px-notifPreview__date">{formatDate(item.created_at)}</div>
+              </div>
+              <div className="px-notifPreview__msg">{previewText(item.message)}</div>
+            </button>
+          ))
+        )}
+      </div>
+    )
+  }
 
   function renderDesktopRight() {
     return (
@@ -339,10 +452,13 @@ function renderDesktopCenter() {
             <button className="px-iconBtn" aria-label="Buscar" onClick={() => router.push('/buscar')}><Search size={18} /></button>
           ) : null}
           {showRight.notifications ? (
-            <Link className="px-iconBtn" href="/notificaciones" aria-label="Notificaciones">
-              <Bell size={18} />
-              {unreadNotifications > 0 ? <span className="px-iconBadge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span> : null}
-            </Link>
+            <div className="px-dd" style={{ position: 'relative' }}>
+              <button className="px-iconBtn" aria-label="Notificaciones" onClick={async () => { await loadPreviewData(); setNotificationsOpen((v) => !v) }}>
+                <Bell size={18} />
+                {unreadNotifications > 0 ? <span className="px-iconBadge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span> : null}
+              </button>
+              {renderNotificationsDropdown()}
+            </div>
           ) : null}
           {showRight.messages ? (
             <Link className="px-iconBtn" href="/mensajes" aria-label="Mensajes">
@@ -405,6 +521,7 @@ function renderDesktopCenter() {
           setMobileMenuOpen((v) => !v)
           setUserOpen(false)
           setClubOpen(false)
+          setNotificationsOpen(false)
         }}
         aria-label="Abrir menú"
         aria-expanded={mobileMenuOpen}
@@ -495,20 +612,37 @@ function renderDesktopCenter() {
   }
 
   return (
-    <header className="px-nav" ref={rootRef}>
-      <div className="px-navgrid px-desktopBar">
-        {renderDesktopLeft()}
-        {renderDesktopCenter()}
-        {renderDesktopRight()}
-      </div>
+    <>
+      <header className="px-nav" ref={rootRef}>
+        <div className="px-navgrid px-desktopBar">
+          {renderDesktopLeft()}
+          {renderDesktopCenter()}
+          {renderDesktopRight()}
+        </div>
 
-      <div className="px-mobileBar">
-        <div className="px-mobileBar__left">{renderMobileLeft()}</div>
-        <div className="px-mobileBar__center">{renderMobileCenter()}</div>
-        <div className="px-mobileBar__right">{renderMobileRight()}</div>
-      </div>
+        <div className="px-mobileBar">
+          <div className="px-mobileBar__left">{renderMobileLeft()}</div>
+          <div className="px-mobileBar__center">{renderMobileCenter()}</div>
+          <div className="px-mobileBar__right">{renderMobileRight()}</div>
+        </div>
 
-      {renderMobileMenu()}
-    </header>
+        {renderMobileMenu()}
+      </header>
+
+      {previewModal ? (
+        <div className="px-overlay" onClick={() => setPreviewModal(null)}>
+          <div className="px-modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="px-modalHead">
+              <div>
+                <h3 className="px-modalTitle">{previewModal.title}</h3>
+                <div className="px-modalSub">{formatDate(previewModal.created_at)}</div>
+              </div>
+              <button type="button" className="px-btn px-btn--ghost" onClick={() => setPreviewModal(null)}>Cerrar</button>
+            </div>
+            <div className="px-modalBodyText">{previewModal.message}</div>
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }
