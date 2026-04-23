@@ -142,7 +142,7 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
         ],
       },
       {
-        label: 'Moderación',
+        label: 'Contenido',
         href: '/platform/noticias',
         children: [
           { label: 'Noticias Platform', href: '/platform/noticias' },

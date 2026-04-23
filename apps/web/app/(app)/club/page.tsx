@@ -6,106 +6,257 @@ import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import { resolveStorageUrl } from '@/lib/clubAssets'
 
+type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
+
 type ClubData = {
   id: string
   name: string
+  status: ClubStatus
   city: string | null
   province: string | null
   country: string | null
-  address: string | null
-  phone: string | null
-  contact_email: string | null
-  website: string | null
-  instagram: string | null
-  courts_count: number | null
-  opening_hours: string | null
+  address?: string | null
+  phone?: string | null
+  contact_email?: string | null
+  website?: string | null
+  instagram?: string | null
+  courts_count?: number | null
+  opening_hours?: string | null
   rules_pdf_url: string | null
   logo_url: string | null
-  notes: string | null
+  rejected_at: string | null
+  rejection_reason: string | null
+  correction_requested_at: string | null
+  correction_reason: string | null
+  suspended_at: string | null
+  suspension_reason: string | null
+}
+
+type ClubSummary = {
+  club: ClubData
+  counts: {
+    active_players: number
+    pending_player_requests: number
+    internal_staff: number
+    active_or_upcoming_tournaments: number
+  }
+  tournaments: Array<{
+    id: string
+    name: string
+    status: string | null
+    date: string | null
+    registration_deadline: string | null
+  }>
+}
+
+const statusCopy: Record<ClubStatus, {
+  label: string
+  tone: 'info' | 'success' | 'warning' | 'danger'
+  title: string
+  body: string
+  ownerCan: string[]
+  locked: string[]
+}> = {
+  PENDING_APPROVAL: {
+    label: 'Pendiente de aprobación',
+    tone: 'info',
+    title: 'El club está en revisión',
+    body: 'Podés completar datos y preparar la operación. La visibilidad pública y las funciones sensibles se habilitan al aprobarse.',
+    ownerCan: ['Completar datos del club.', 'Cargar logo y reglamento.', 'Contactar al superadmin.'],
+    locked: ['No aparece en listados públicos.', 'No acepta solicitudes públicas.', 'Las funciones públicas quedan pausadas.'],
+  },
+  ACTIVE: {
+    label: 'Activo',
+    tone: 'success',
+    title: 'El club está activo',
+    body: 'El club ya puede operar normalmente dentro de Pamprax.',
+    ownerCan: ['Gestionar jugadores.', 'Administrar torneos.', 'Actualizar datos del club.'],
+    locked: [],
+  },
+  REJECTED: {
+    label: 'Rechazado',
+    tone: 'danger',
+    title: 'El alta fue rechazada',
+    body: 'Revisá el motivo, corregí los datos necesarios y contactá a plataforma para continuar.',
+    ownerCan: ['Corregir datos del club.', 'Actualizar documentación.', 'Pedir nueva revisión.'],
+    locked: ['No aparece públicamente.', 'No acepta solicitudes de jugadores.', 'No opera funciones públicas.'],
+  },
+  SUSPENDED: {
+    label: 'Suspendido',
+    tone: 'warning',
+    title: 'El club está suspendido',
+    body: 'La operación pública queda detenida hasta que plataforma levante la suspensión.',
+    ownerCan: ['Ver el motivo.', 'Mantener datos actualizados.', 'Contactar al superadmin.'],
+    locked: ['No aparece públicamente.', 'No acepta nuevas solicitudes.', 'Funciones sensibles pausadas.'],
+  },
+}
+
+function statusLabel(status?: ClubStatus | null) {
+  if (!status) return 'Sin estado'
+  return statusCopy[status]?.label ?? status
+}
+
+function getReviewReason(club: ClubData) {
+  if (club.status === 'REJECTED') return club.rejection_reason
+  if (club.status === 'SUSPENDED') return club.suspension_reason
+  if (club.status === 'PENDING_APPROVAL') return club.correction_reason
+  return null
+}
+
+function getReviewDate(club: ClubData) {
+  if (club.status === 'REJECTED') return club.rejected_at
+  if (club.status === 'SUSPENDED') return club.suspended_at
+  if (club.status === 'PENDING_APPROVAL') return club.correction_requested_at
+  return null
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return null
+  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value))
+}
+
+function StatusPanel({ club }: { club: ClubData }) {
+  const copy = statusCopy[club.status]
+  const reason = getReviewReason(club)
+  const reviewDate = formatDate(getReviewDate(club))
+
+  return (
+    <section className={`club-statusPanel club-statusPanel--${copy.tone}`}>
+      <div className="club-statusPanelHead">
+        <div className="club-minBlock">
+          <span className="club-kicker">Estado del club</span>
+          <strong>{copy.title}</strong>
+          <p>{copy.body}</p>
+        </div>
+        <span className="club-statusBadge">{copy.label}</span>
+      </div>
+
+      {reason ? (
+        <div className="club-reviewReason">
+          <b>{club.status === 'PENDING_APPROVAL' ? 'Corrección solicitada' : 'Motivo'}:</b> {reason}
+          {reviewDate ? <span> · {reviewDate}</span> : null}
+        </div>
+      ) : null}
+
+      <div className="club-statusLists">
+        <div>
+          <b>Qué podés hacer</b>
+          <ul>{copy.ownerCan.map((item) => <li key={item}>{item}</li>)}</ul>
+        </div>
+        {copy.locked.length ? (
+          <div>
+            <b>Todavía no habilitado</b>
+            <ul>{copy.locked.map((item) => <li key={item}>{item}</li>)}</ul>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+function MetricCard({ label, value, href }: { label: string; value: number | string; href?: string }) {
+  const content = (
+    <>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </>
+  )
+
+  if (href) {
+    return <Link href={href} className="club-metric">{content}</Link>
+  }
+
+  return <div className="club-metric">{content}</div>
 }
 
 export default function ClubPage() {
   const { role, activeClub } = useSession()
-  const [club, setClub] = useState<ClubData | null>(null)
+  const [summary, setSummary] = useState<ClubSummary | null>(null)
+  const [clubForPlayer, setClubForPlayer] = useState<ClubData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let alive = true
+
     ;(async () => {
       if (!activeClub?.id) {
         setLoading(false)
         return
       }
 
-      const { data } = await supabase
-        .from('clubs')
-        .select('id, name, city, province, country, address, phone, contact_email, website, instagram, courts_count, opening_hours, rules_pdf_url, logo_url, notes')
-        .eq('id', activeClub.id)
-        .maybeSingle()
+      setLoading(true)
+      setError(null)
 
-      if (data?.logo_url) {
-        data.logo_url = await resolveStorageUrl(data.logo_url)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) {
+        if (alive) {
+          setError('Sesión expirada.')
+          setLoading(false)
+        }
+        return
       }
 
-      setClub((data as ClubData) ?? null)
+      const endpoint = role === 'player'
+        ? `/api/clubs/${activeClub.id}`
+        : `/api/clubs/${activeClub.id}/summary`
+
+      const response = await fetch(endpoint, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      })
+      const json = await response.json().catch(() => ({}))
+
+      if (!alive) return
+
+      if (!response.ok) {
+        setError(json?.error ?? 'No pude cargar el club.')
+        setLoading(false)
+        return
+      }
+
+      if (role === 'player') {
+        const data = json?.club as ClubData | undefined
+        if (data?.logo_url) data.logo_url = await resolveStorageUrl(data.logo_url)
+        if (!alive) return
+        setClubForPlayer(data ?? null)
+        setSummary(null)
+      } else {
+        setSummary(json as ClubSummary)
+        setClubForPlayer(null)
+      }
+
       setLoading(false)
     })()
-  }, [activeClub?.id])
 
-  if (loading) return <div className="px-wrap"><div className="px-help">Cargando club…</div></div>
+    return () => {
+      alive = false
+    }
+  }, [activeClub?.id, role])
 
-  if (!club) {
-    return <div className="px-wrap"><div className="px-help">No hay club activo seleccionado.</div></div>
-  }
+  if (loading) return <div className="px-wrap"><div className="px-help">Cargando club...</div></div>
+  if (error) return <div className="px-wrap"><div className="px-help">{error}</div></div>
 
   if (role === 'player') {
+    if (!clubForPlayer) return <div className="px-wrap"><div className="px-help">No hay club activo seleccionado.</div></div>
+
     return (
       <div className="px-wrap">
         <div className="club-panel">
           <h1 className="club-title">Ver club</h1>
-          <p className="club-sub">Información pública del club activo.</p>
-
-          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '240px 1fr', gap: 18 }}>
-            <div className="px-card px-card--flat" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
-              {club.logo_url ? (
-                <img
-                  src={club.logo_url}
-                  alt={club.name}
-                  style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain' }}
-                />
-              ) : (
-                <div className="px-help">Sin logo</div>
-              )}
+          <p className="club-sub">{clubForPlayer.name} · {[clubForPlayer.city, clubForPlayer.province].filter(Boolean).join(' · ')}</p>
+          <div className="px-pill" style={{ width: 'fit-content', marginTop: 10 }}>Estado: {statusLabel(clubForPlayer.status)}</div>
+          <div className="club-publicGrid">
+            <div className="px-card px-card--flat club-logoBox">
+              {clubForPlayer.logo_url ? <img src={clubForPlayer.logo_url} alt={clubForPlayer.name} /> : <span className="px-help">Sin logo</span>}
             </div>
-
-            <div className="px-card px-card--flat" style={{ display: 'grid', gap: 10 }}>
-              <div style={{ fontSize: 28, fontWeight: 900 }}>{club.name}</div>
-              <div><b>Ubicación:</b> {[club.city, club.province, club.country].filter(Boolean).join(' · ') || 'Sin datos'}</div>
-              <div><b>Dirección:</b> {club.address || 'Sin datos'}</div>
-              <div><b>Teléfono:</b> {club.phone || 'Sin datos'}</div>
-              <div><b>Email:</b> {club.contact_email || 'Sin datos'}</div>
-              <div><b>Website:</b> {club.website || 'Sin datos'}</div>
-              <div><b>Instagram:</b> {club.instagram || 'Sin datos'}</div>
-              <div><b>Canchas:</b> {club.courts_count ?? 'Sin dato'}</div>
-              <div><b>Horarios:</b> {club.opening_hours || 'Sin datos'}</div>
-              <div>
-                <b>Reglamento:</b>{' '}
-                {club.rules_pdf_url ? (
-                  <a href={club.rules_pdf_url} target="_blank" rel="noreferrer" className="px-link">
-                    Abrir PDF
-                  </a>
-                ) : (
-                  'No cargado'
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
-                <Link href="/mensajes?to=club" className="px-btn">
-                  Enviar mensaje al club
-                </Link>
-                <Link href="/mensajes?to=platform" className="px-btn px-btn--ghost">
-                  Reportar problema al superadmin
-                </Link>
-              </div>
+            <div className="px-card px-card--flat club-publicInfo">
+              <div><b>Ubicación:</b> {[clubForPlayer.city, clubForPlayer.province, clubForPlayer.country].filter(Boolean).join(' · ') || 'Sin datos'}</div>
+              <div><b>Dirección:</b> {clubForPlayer.address || 'Sin datos'}</div>
+              <div><b>Teléfono:</b> {clubForPlayer.phone || 'Sin datos'}</div>
+              <div><b>Email:</b> {clubForPlayer.contact_email || 'Sin datos'}</div>
+              <div><b>Reglamento:</b> {clubForPlayer.rules_pdf_url ? <a className="px-link" href={clubForPlayer.rules_pdf_url} target="_blank" rel="noreferrer">Abrir PDF</a> : 'No cargado'}</div>
             </div>
           </div>
         </div>
@@ -113,44 +264,157 @@ export default function ClubPage() {
     )
   }
 
+  if (!summary?.club) {
+    return <div className="px-wrap"><div className="px-help">No hay club activo seleccionado.</div></div>
+  }
+
+  const club = summary.club
+  const isActive = club.status === 'ACTIVE'
+
   return (
     <div className="px-wrap">
-      <div className="club-panel">
-        <h1 className="club-title">Dashboard del club</h1>
-        <p className="club-sub">
-          {club.name} · {[club.city, club.province].filter(Boolean).join(' · ')}
-        </p>
-
-        <div className="club-kpis">
-          <div className="club-kpi"><b>Club activo</b><br />{club.name}</div>
-          <div className="club-kpi"><b>Canchas</b><br />{club.courts_count ?? 0}</div>
-          <div className="club-kpi"><b>Email contacto</b><br />{club.contact_email || 'Sin dato'}</div>
-          <div className="club-kpi"><b>Reglamento PDF</b><br />{club.rules_pdf_url ? 'Sí' : 'No cargado'}</div>
+      <div className="club-panel club-dashboard">
+        <div className="club-dashboardHead">
+          <div>
+            <h1 className="club-title">Dashboard del club</h1>
+            <p className="club-sub">{club.name} · {[club.city, club.province].filter(Boolean).join(' · ') || 'Sin ubicación cargada'}</p>
+          </div>
+          <span className={`club-mainBadge club-mainBadge--${statusCopy[club.status].tone}`}>{statusLabel(club.status)}</span>
         </div>
 
-        <div className="club-grid">
+        <StatusPanel club={club} />
+
+        <section className="club-metricsGrid" aria-label="Resumen operativo">
+          <MetricCard label="Jugadores activos" value={summary.counts.active_players} href="/club/jugadores" />
+          <MetricCard label="Solicitudes pendientes" value={summary.counts.pending_player_requests} href="/club/jugadores" />
+          <MetricCard label="Staff interno" value={summary.counts.internal_staff} href="/club/usuarios" />
+          <MetricCard label="Torneos activos o próximos" value={summary.counts.active_or_upcoming_tournaments} href="/club/torneos" />
+        </section>
+
+        <section className="club-dashboardGrid">
           <div className="club-card">
-            <div style={{ fontWeight: 900, marginBottom: 10 }}>Acciones rápidas</div>
-            <div style={{ display: 'grid', gap: 10 }}>
-              <Link href="/club/inscripciones" className="px-link">Inscripciones</Link>
-              <Link href="/club/partidos" className="px-link">Partidos / resultados</Link>
-              <Link href="/club/usuarios" className="px-link">Usuarios del club</Link>
-              <Link href="/mensajes?to=platform" className="px-link">Contactar superadmin</Link>
+            <div className="club-cardHead">
+              <div>
+                <span className="club-kicker">Operación</span>
+                <h2>Torneos activos o próximos</h2>
+              </div>
+              <Link href="/club/torneos" className="club-cardLink">Ver torneos</Link>
             </div>
+
+            {summary.tournaments.length ? (
+              <div className="club-list">
+                {summary.tournaments.map((tournament) => (
+                  <div key={tournament.id} className="club-listRow">
+                    <div className="club-listMain">
+                      <strong>{tournament.name}</strong>
+                      <span>{tournament.date ? formatDate(tournament.date) : 'Sin fecha'} · {tournament.status ?? 'Sin estado'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-empty">Todavía no hay torneos activos o próximos.</div>
+            )}
           </div>
 
           <div className="club-card">
-            <div style={{ fontWeight: 900, marginBottom: 10 }}>Estado del club</div>
-            <div>Logo: {club.logo_url ? 'configurado' : 'pendiente'}</div>
-            <div>Reglamento: {club.rules_pdf_url ? 'cargado' : 'pendiente'}</div>
-            <div style={{ marginTop: 14 }}>
-              <Link href="/club/configuracion" className="px-btn">
-                Ir a configuración
-              </Link>
+            <div className="club-cardHead">
+              <div>
+                <span className="club-kicker">Accesos rápidos</span>
+                <h2>{isActive ? 'Gestionar club' : 'Preparar aprobación'}</h2>
+              </div>
+            </div>
+            <div className="club-actionsGrid">
+              <Link href="/club/jugadores" className="club-action">Jugadores y solicitudes</Link>
+              <Link href="/club/configuracion" className="club-action">Configuración del club</Link>
+              <Link href="/club/torneos" className={`club-action ${!isActive ? 'is-muted' : ''}`}>Torneos</Link>
+              <Link href="/mensajes?to=platform" className="club-action">Contactar superadmin</Link>
             </div>
           </div>
-        </div>
+        </section>
       </div>
+
+      <style>{`
+        .club-dashboard { overflow: hidden; }
+        .club-dashboardHead { align-items: flex-start; display: flex; gap: 14px; justify-content: space-between; }
+        .club-mainBadge, .club-statusBadge {
+          border: 1px solid rgba(15, 23, 42, 0.10);
+          border-radius: 999px;
+          color: #17253f;
+          font-size: 13px;
+          font-weight: 900;
+          padding: 8px 10px;
+          white-space: nowrap;
+        }
+        .club-mainBadge--success { background: #ecfdf3; }
+        .club-mainBadge--info { background: #eef8ff; }
+        .club-mainBadge--warning { background: #fff7df; }
+        .club-mainBadge--danger { background: #fff0f0; }
+        .club-statusPanel {
+          border: 1px solid rgba(15, 23, 42, 0.10);
+          border-radius: 16px;
+          display: grid;
+          gap: 12px;
+          margin-top: 16px;
+          padding: 14px;
+        }
+        .club-statusPanel--info { background: rgba(239, 246, 255, 0.88); border-color: rgba(37, 99, 235, 0.18); }
+        .club-statusPanel--success { background: rgba(240, 253, 244, 0.88); border-color: rgba(22, 163, 74, 0.18); }
+        .club-statusPanel--warning { background: rgba(255, 251, 235, 0.88); border-color: rgba(217, 119, 6, 0.22); }
+        .club-statusPanel--danger { background: rgba(254, 242, 242, 0.88); border-color: rgba(220, 38, 38, 0.20); }
+        .club-statusPanelHead { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
+        .club-minBlock { display: grid; gap: 5px; min-width: 0; }
+        .club-minBlock strong { color: #17253f; font-size: 18px; font-weight: 950; line-height: 1.15; }
+        .club-minBlock p { color: #334155; line-height: 1.4; margin: 0; }
+        .club-kicker { color: #64748b; font-size: 11px; font-weight: 950; letter-spacing: 0; text-transform: uppercase; }
+        .club-reviewReason { background: rgba(255,255,255,.72); border: 1px solid rgba(15,23,42,.08); border-radius: 12px; color: #17253f; line-height: 1.4; padding: 10px; }
+        .club-statusLists { display: grid; gap: 10px; }
+        .club-statusLists b { color: #17253f; }
+        .club-statusLists ul { color: #334155; display: grid; gap: 4px; margin: 6px 0 0; padding-left: 18px; }
+        .club-metricsGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }
+        .club-metric {
+          background: #fff;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 12px;
+          color: #17253f;
+          display: grid;
+          gap: 4px;
+          min-width: 0;
+          padding: 12px;
+          text-decoration: none;
+        }
+        .club-metric span { color: #64748b; font-size: 12px; font-weight: 800; }
+        .club-metric strong { font-size: 26px; font-weight: 950; line-height: 1; }
+        .club-dashboardGrid { display: grid; gap: 14px; margin-top: 14px; }
+        .club-card { background: rgba(255,255,255,.92); border: 1px solid rgba(15,23,42,.08); border-radius: 16px; display: grid; gap: 12px; min-width: 0; padding: 14px; }
+        .club-cardHead { align-items: flex-start; display: flex; gap: 10px; justify-content: space-between; }
+        .club-cardHead h2 { color: #17253f; font-size: 18px; line-height: 1.15; margin: 2px 0 0; }
+        .club-cardLink { color: #0f8ea0; font-size: 13px; font-weight: 900; text-decoration: none; white-space: nowrap; }
+        .club-list { display: grid; gap: 8px; min-width: 0; }
+        .club-listRow { border: 1px solid rgba(15,23,42,.07); border-radius: 12px; padding: 10px; min-width: 0; }
+        .club-listMain { display: grid; gap: 3px; min-width: 0; }
+        .club-listMain strong { color: #17253f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .club-listMain span { color: #64748b; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .club-actionsGrid { display: grid; gap: 8px; grid-template-columns: 1fr; }
+        .club-action { border: 1px solid rgba(83,199,217,.36); border-radius: 10px; color: #0f8ea0; font-weight: 900; padding: 10px 12px; text-decoration: none; }
+        .club-action.is-muted { opacity: .62; }
+        .club-publicGrid { display: grid; gap: 14px; margin-top: 16px; }
+        .club-logoBox { align-items: center; display: flex; justify-content: center; min-height: 150px; }
+        .club-logoBox img { max-height: 110px; max-width: 100%; object-fit: contain; }
+        .club-publicInfo { display: grid; gap: 8px; min-width: 0; }
+        @media (min-width: 760px) {
+          .club-statusPanel { padding: 16px; }
+          .club-statusLists { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .club-metricsGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+          .club-dashboardGrid { grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); }
+          .club-actionsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .club-publicGrid { grid-template-columns: 220px minmax(0, 1fr); }
+        }
+        @media (max-width: 620px) {
+          .club-dashboardHead, .club-statusPanelHead, .club-cardHead { display: grid; }
+          .club-metricsGrid { grid-template-columns: 1fr; }
+        }
+      `}</style>
     </div>
   )
 }

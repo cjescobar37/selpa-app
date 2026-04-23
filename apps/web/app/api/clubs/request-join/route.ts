@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { ensureValidActiveClubForUser } from '@/lib/clubMembershipServer'
+import { isApprovedMembership } from '@/lib/clubMembershipRules'
+import { withNotificationScope } from '@/lib/notificationScope'
 
 export async function POST(req: Request) {
   try {
@@ -22,7 +25,7 @@ export async function POST(req: Request) {
 
     const { data: club, error: clubError } = await supabaseAdmin
       .from('clubs')
-      .select('id, name')
+      .select('id, name, status')
       .eq('id', clubId)
       .maybeSingle()
 
@@ -34,9 +37,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Club no encontrado.' }, { status: 404 })
     }
 
+    if (club.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'Este club todavía no acepta solicitudes públicas.' }, { status: 403 })
+    }
+
     const { data: existing, error: existingError } = await supabaseAdmin
       .from('club_memberships')
-      .select('id, status, role')
+      .select('id, status, role, approved_at')
       .eq('club_id', clubId)
       .eq('user_id', userId)
       .maybeSingle()
@@ -45,7 +52,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: existingError.message }, { status: 500 })
     }
 
-    if (existing?.status === 'APPROVED') {
+    if (isApprovedMembership(existing)) {
       return NextResponse.json({ error: 'Ya pertenecés a este club.' }, { status: 400 })
     }
 
@@ -72,11 +79,18 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: updateError.message }, { status: 500 })
       }
 
+      try {
+        await ensureValidActiveClubForUser(userId, null)
+      } catch (settingsError: any) {
+        return NextResponse.json({ error: settingsError?.message ?? 'No pude actualizar club activo.' }, { status: 500 })
+      }
+
       const { data: adminRows } = await supabaseAdmin
         .from('club_memberships')
-        .select('user_id')
+        .select('user_id, approved_at')
         .eq('club_id', clubId)
         .eq('status', 'APPROVED')
+        .not('approved_at', 'is', null)
         .in('role', ['OWNER', 'ADMIN', 'PLANILLERO'])
 
       const adminIds = Array.from(new Set((adminRows ?? []).map((row: any) => row.user_id).filter(Boolean)))
@@ -96,11 +110,14 @@ export async function POST(req: Request) {
             title: 'Nueva solicitud de jugador',
             message: `${requesterName} quiere sumarse a ${club.name}. Revisá la solicitud desde Usuarios del club.`,
             link: '/club/usuarios',
-            metadata: {
-              club_id: clubId,
-              requester_user_id: userId,
-              requester_name: requesterName,
-            },
+            metadata: withNotificationScope(
+              {
+                club_id: clubId,
+                requester_user_id: userId,
+                requester_name: requesterName,
+              },
+              'club'
+            ),
           }))
         )
       }
@@ -129,9 +146,10 @@ export async function POST(req: Request) {
 
     const { data: adminRows } = await supabaseAdmin
       .from('club_memberships')
-      .select('user_id')
+      .select('user_id, approved_at')
       .eq('club_id', clubId)
       .eq('status', 'APPROVED')
+      .not('approved_at', 'is', null)
       .in('role', ['OWNER', 'ADMIN', 'PLANILLERO'])
 
     const adminIds = Array.from(new Set((adminRows ?? []).map((row: any) => row.user_id).filter(Boolean)))
@@ -151,12 +169,15 @@ export async function POST(req: Request) {
           title: 'Nueva solicitud de jugador',
           message: `${requesterName} quiere sumarse a ${club.name}. Revisá la solicitud desde Usuarios del club.`,
           link: '/club/usuarios',
-          metadata: {
-            club_id: clubId,
-            membership_id: insertedMembership?.id ?? null,
-            requester_user_id: userId,
-            requester_name: requesterName,
-          },
+          metadata: withNotificationScope(
+            {
+              club_id: clubId,
+              membership_id: insertedMembership?.id ?? null,
+              requester_user_id: userId,
+              requester_name: requesterName,
+            },
+            'club'
+          ),
         }))
       )
     }

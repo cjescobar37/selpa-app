@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { assertPlatformAdmin } from '@/lib/platformApiAuth'
 import { platformContentSetupMessage, uploadPlatformAsset } from '@/lib/platformContent'
+import { logPlatformAction } from '@/lib/platformAudit'
 
 function isMissingRelation(error?: { message?: string } | null) {
   const msg = String(error?.message || '').toLowerCase()
@@ -42,6 +43,19 @@ export async function POST(req: NextRequest) {
       if (isMissingRelation(error)) return setupResponse('sponsors')
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+    await logPlatformAction({
+      actorUserId: auth.user!.id,
+      action: 'sponsor.create',
+      entityType: 'platform_sponsor',
+      entityId: data?.id ?? null,
+      entityLabel: data?.name ?? name,
+      metadata: {
+        tier,
+        status,
+        sort_order: sortOrder,
+      },
+      req,
+    })
     return NextResponse.json({ ok: true, row: data })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message ?? 'No pude crear el sponsor.' }, { status: 500 })

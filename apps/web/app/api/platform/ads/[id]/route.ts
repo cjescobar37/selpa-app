@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { assertPlatformAdmin } from '@/lib/platformApiAuth'
 import { platformContentSetupMessage, uploadPlatformAsset } from '@/lib/platformContent'
+import { logPlatformAction } from '@/lib/platformAudit'
 
 function isMissingRelation(error?: { message?: string } | null) {
   const msg = String(error?.message || '').toLowerCase()
@@ -36,6 +37,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (isMissingRelation(error)) return setupResponse('campañas')
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+    await logPlatformAction({
+      actorUserId: auth.user!.id,
+      action: 'ad.update',
+      entityType: 'platform_ad_campaign',
+      entityId: data?.id ?? id,
+      entityLabel: data?.title ?? title,
+      metadata: {
+        slot,
+        status,
+        sort_order: sortOrder,
+      },
+      req,
+    })
     return NextResponse.json({ ok: true, row: data })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message ?? 'No pude actualizar la campaña.' }, { status: 500 })
@@ -46,10 +60,29 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const auth = await assertPlatformAdmin(req)
   if (auth.error) return auth.error
   const { id } = await params
+  const { data: existing } = await supabaseAdmin
+    .from('platform_ad_campaigns')
+    .select('id,title,slot,status,sort_order')
+    .eq('id', id)
+    .maybeSingle()
+
   const { error } = await supabaseAdmin.from('platform_ad_campaigns').delete().eq('id', id)
   if (error) {
     if (isMissingRelation(error)) return setupResponse('campañas')
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+  await logPlatformAction({
+    actorUserId: auth.user!.id,
+    action: 'ad.delete',
+    entityType: 'platform_ad_campaign',
+    entityId: id,
+    entityLabel: existing?.title ?? null,
+    metadata: {
+      slot: existing?.slot ?? null,
+      status: existing?.status ?? null,
+      sort_order: existing?.sort_order ?? null,
+    },
+    req,
+  })
   return NextResponse.json({ ok: true })
 }

@@ -1,11 +1,402 @@
+'use client'
+
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '@/lib/supabaseClient'
+import { useSession } from '@/components/session/SessionProvider'
+import { defaultFlyerConfig, getTournamentFlyerSurfaceStyle, readFlyerConfigFromRules } from './_components/TournamentFlyerConfigurator'
+import {
+  getTournamentDisplayStatus,
+  getTournamentDisplayStatusTone,
+  type OperationalStage,
+} from '@/lib/tournamentDisplayStatus'
+
+type Tournament = {
+  id: string
+  name: string
+  status: string
+  type: string | null
+  format: string | null
+  gender: string | null
+  category_id: number | null
+  category_name: string | null
+  start_date: string | null
+  end_date: string | null
+  registration_deadline: string | null
+  min_pairs: number | null
+  max_pairs: number | null
+  price_per_player: number | null
+  rules_json?: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+const genderLabels: Record<string, string> = {
+  MALE: 'Masculino',
+  FEMALE: 'Femenino',
+  MIXED: 'Mixto',
+}
+const historyStatuses = new Set([
+  'FINISHED',
+  'FINALIZED',
+  'FINALIZADO',
+  'COMPLETED',
+  'CLOSED',
+  'CANCELLED',
+  'CANCELED',
+  'ARCHIVED',
+])
+type TournamentTab = 'recent' | 'drafts' | 'history'
+
+function formatDate(value?: string | null) {
+  if (!value) return 'Sin fecha'
+  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value))
+}
+
+function money(value?: number | null) {
+  if (!value) return 'Sin costo'
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value)
+}
+
+function isHistoryTournament(tournament: Tournament, operationalStage?: OperationalStage) {
+  if (operationalStage === 'FINALIZADO') return true
+  return historyStatuses.has(tournament.status?.toUpperCase())
+}
+
+function isUpcomingOrActive(tournament: Tournament, operationalStage?: OperationalStage) {
+  const today = new Date().toISOString().slice(0, 10)
+  const normalized = tournament.status?.toUpperCase()
+  if (isHistoryTournament(tournament, operationalStage)) return false
+  if (['ACTIVE', 'OPEN', 'PUBLISHED', 'REGISTRATION_OPEN', 'IN_PROGRESS'].includes(normalized)) return true
+  if (normalized === 'DRAFT') return true
+  return Boolean(tournament.start_date && tournament.start_date >= today)
+}
+
 export default function ClubTorneosPage() {
+  const router = useRouter()
+  const { activeClub } = useSession()
+  const [loading, setLoading] = useState(true)
+  const [message, setMessage] = useState('')
+  const [tournaments, setTournaments] = useState<Tournament[]>([])
+  const [stagesByTournamentId, setStagesByTournamentId] = useState<Record<string, OperationalStage>>({})
+  const [activeTab, setActiveTab] = useState<TournamentTab>('recent')
+
+  const activeOrUpcoming = useMemo(
+    () => tournaments.filter((tournament) => isUpcomingOrActive(tournament, stagesByTournamentId[tournament.id])).length,
+    [stagesByTournamentId, tournaments]
+  )
+  const latestTournaments = useMemo(
+    () => tournaments.slice(0, 5),
+    [tournaments]
+  )
+  const draftTournaments = useMemo(
+    () => tournaments.filter((tournament) => tournament.status?.toUpperCase() === 'DRAFT'),
+    [tournaments]
+  )
+  const historicalTournaments = useMemo(() => {
+    return tournaments.filter((tournament) => isHistoryTournament(tournament, stagesByTournamentId[tournament.id]))
+  }, [stagesByTournamentId, tournaments])
+  const visibleTournaments =
+    activeTab === 'recent'
+      ? latestTournaments
+      : activeTab === 'drafts'
+        ? draftTournaments
+        : historicalTournaments
+  const visibleEmptyMessage =
+    activeTab === 'recent'
+      ? 'Todavía no hay torneos recientes.'
+      : activeTab === 'drafts'
+        ? 'No hay torneos en borrador.'
+        : 'Todavía no hay torneos finalizados, cerrados o antiguos en el historial.'
+
+  async function getToken() {
+    const { data } = await supabase.auth.getSession()
+    return data?.session?.access_token ?? null
+  }
+
+  async function loadTournaments() {
+    if (!activeClub?.id) {
+      setTournaments([])
+      setStagesByTournamentId({})
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    setMessage('')
+
+    const token = await getToken()
+    if (!token) {
+      setMessage('Sesión inválida.')
+      setLoading(false)
+      return
+    }
+
+    const res = await fetch(`/api/clubs/${activeClub.id}/tournaments`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+    const json = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      setMessage(json?.error ?? 'No pude cargar torneos.')
+      setLoading(false)
+      return
+    }
+
+    const rows = (json?.tournaments ?? []) as Tournament[]
+    setTournaments(rows)
+    setLoading(false)
+    void loadTournamentStages(rows, token)
+  }
+
+  async function loadTournamentStages(rows: Tournament[], token: string) {
+    if (!activeClub?.id || rows.length === 0) {
+      setStagesByTournamentId({})
+      return
+    }
+
+    const summaries = await Promise.allSettled(
+      rows.map(async (tournament) => {
+        const res = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournament.id}/summary`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || !json?.operationalStage) return null
+        return [tournament.id, json.operationalStage as OperationalStage] as const
+      })
+    )
+
+    const nextStages: Record<string, OperationalStage> = {}
+    summaries.forEach((result) => {
+      if (result.status === 'fulfilled' && result.value) {
+        nextStages[result.value[0]] = result.value[1]
+      }
+    })
+    setStagesByTournamentId(nextStages)
+  }
+
+  useEffect(() => {
+    void Promise.resolve().then(() => loadTournaments())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClub?.id])
+
+  function renderTournamentRow(tournament: Tournament, compact = false) {
+    const isHistorical = isHistoryTournament(tournament, stagesByTournamentId[tournament.id])
+    const flyerConfig = readFlyerConfigFromRules(tournament.rules_json) ?? defaultFlyerConfig
+    return (
+      <article
+        key={tournament.id}
+        className={`club-tournamentRow ${isHistorical ? 'club-tournamentRow--history' : 'club-tournamentRow--active'}${compact ? ' club-tournamentRow--compact' : ''}`}
+        onClick={() => router.push(`/club/torneos/${tournament.id}`)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            router.push(`/club/torneos/${tournament.id}`)
+          }
+        }}
+        role="link"
+        tabIndex={0}
+      >
+        <Link
+          href={`/club/torneos/${tournament.id}`}
+          className="club-tournamentOverlayLink"
+          aria-label={`Ver detalle de ${tournament.name}`}
+        />
+        <div className="club-tournamentMain">
+          <div className="club-titleLine">
+            <strong>{tournament.name}</strong>
+            <span className={`club-statusBadge club-statusBadge--${getTournamentDisplayStatusTone({ operationalStage: stagesByTournamentId[tournament.id], status: tournament.status })}`}>
+              {getTournamentDisplayStatus({ operationalStage: stagesByTournamentId[tournament.id], status: tournament.status })}
+            </span>
+          </div>
+          <div className="club-metaLine">
+            <span>{formatDate(tournament.start_date)}{tournament.end_date ? ` - ${formatDate(tournament.end_date)}` : ''}</span>
+            <span>{tournament.category_name ?? 'Sin categoría'}</span>
+            <span>{tournament.type ?? 'Sin tipo'}</span>
+            <span>{tournament.gender ? genderLabels[tournament.gender] ?? tournament.gender : 'Sin género'}</span>
+          </div>
+        </div>
+
+        <div className="club-tournamentBackdrop" style={getTournamentFlyerSurfaceStyle(flyerConfig)}>
+          <span className="club-tournamentBackdropGlow" />
+        </div>
+
+        <div className="club-tournamentDetails">
+          <span>Inscripción: {formatDate(tournament.registration_deadline)}</span>
+          <span>Parejas: {tournament.min_pairs ?? '-'}{tournament.max_pairs ? `/${tournament.max_pairs}` : ''}</span>
+          <span>{money(tournament.price_per_player)}</span>
+        </div>
+
+        <div className="club-rowActions">
+          <Link href={`/club/torneos/${tournament.id}`} className="club-secondaryBtn">Ver</Link>
+        </div>
+      </article>
+    )
+  }
+
   return (
-    <div className="club-shell">
-      <div className="club-panel">
-        <h1 className="club-title">Torneos</h1>
-        <p className="club-sub">Gestión completa de torneos del club (alta, edición, baja).</p>
-        <div style={{ marginTop: 14 }} className="px-empty">Pendiente: CRUD torneos + inscripciones.</div>
+    <div className="px-wrap">
+      <div className="club-panel club-tournaments">
+        <div className="club-tournamentsHead">
+          <div>
+            <h1 className="club-title">Torneos</h1>
+            <p className="club-sub">Torneos creados por {activeClub?.name ?? 'tu club'} y próximos pasos operativos.</p>
+          </div>
+          <div className="club-headActions">
+            <Link href="/club/torneos/nuevo" className="club-primaryBtn">Crear torneo</Link>
+          </div>
+        </div>
+
+        {message ? <div className="club-message">{message}</div> : null}
+
+        {!activeClub?.id ? (
+          <div className="px-empty">Primero seleccioná un club activo.</div>
+        ) : loading ? (
+          <div className="px-empty">Cargando torneos...</div>
+        ) : (
+          <>
+            <section className="club-metrics">
+              <div className="club-metric"><span>Total</span><strong>{tournaments.length}</strong></div>
+              <div className="club-metric"><span>Activos o próximos</span><strong>{activeOrUpcoming}</strong></div>
+              <div className="club-metric"><span>Borradores</span><strong>{tournaments.filter((t) => t.status?.toUpperCase() === 'DRAFT').length}</strong></div>
+            </section>
+
+            <section className="club-card">
+              <div className="club-cardHead club-cardHead--tabs">
+                <div>
+                  <span className="club-kicker">Listado</span>
+                  <h2>Torneos del club</h2>
+                  <p>Usá las pestañas para separar operación actual e historial.</p>
+                </div>
+                <div className="club-tabs" role="tablist" aria-label="Filtro de torneos">
+                  <button
+                    type="button"
+                    className={`club-tab ${activeTab === 'recent' ? 'club-tab--active' : ''}`}
+                    role="tab"
+                    aria-selected={activeTab === 'recent'}
+                    onClick={() => setActiveTab('recent')}
+                  >
+                    Últimos torneos
+                    <span>{latestTournaments.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`club-tab ${activeTab === 'drafts' ? 'club-tab--active' : ''}`}
+                    role="tab"
+                    aria-selected={activeTab === 'drafts'}
+                    onClick={() => setActiveTab('drafts')}
+                  >
+                    Borradores
+                    <span>{draftTournaments.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`club-tab ${activeTab === 'history' ? 'club-tab--active' : ''}`}
+                    role="tab"
+                    aria-selected={activeTab === 'history'}
+                    onClick={() => setActiveTab('history')}
+                  >
+                    Historial de torneos
+                    <span>{historicalTournaments.length}</span>
+                  </button>
+                </div>
+              </div>
+
+              {tournaments.length === 0 ? (
+                <div className="club-emptyAction">
+                  <div className="px-empty">Todavía no hay torneos creados.</div>
+                  <Link href="/club/torneos/nuevo" className="club-secondaryBtn">Crear primer torneo</Link>
+                </div>
+              ) : visibleTournaments.length === 0 ? (
+                <div className="px-empty">{visibleEmptyMessage}</div>
+              ) : (
+                <div className={`club-tournamentList ${activeTab === 'history' ? 'club-tournamentList--history' : ''}`}>
+                  {visibleTournaments.map((tournament) => renderTournamentRow(tournament, activeTab === 'history'))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </div>
+
+      <style>{`
+        .club-tournaments { overflow: hidden; }
+        .club-tournamentsHead { align-items: flex-start; display: flex; gap: 14px; justify-content: space-between; }
+        .club-headActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+        .club-message { background: #eef8ff; border: 1px solid #b8dff1; border-radius: 12px; color: #164e63; font-weight: 800; margin-top: 12px; padding: 10px 12px; }
+        .club-primaryBtn, .club-secondaryBtn { align-items: center; border-radius: 8px; display: inline-flex; font-weight: 950; justify-content: center; min-height: 36px; padding: 8px 12px; text-decoration: none; white-space: nowrap; }
+        .club-primaryBtn { background: #69dfe3; border: 1px solid rgba(15,23,42,.10); color: #102538; }
+        .club-secondaryBtn { background: #fff; border: 1px solid rgba(83,199,217,.36); color: #0f8ea0; }
+        .club-metrics { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 14px; }
+        .club-metric { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 12px; display: grid; gap: 4px; min-width: 0; padding: 12px; }
+        .club-metric span { color: #64748b; font-size: 12px; font-weight: 800; }
+        .club-metric strong { color: #17253f; font-size: 24px; font-weight: 950; line-height: 1; }
+        .club-card { background: rgba(255,255,255,.94); border: 1px solid rgba(15,23,42,.08); border-radius: 16px; display: grid; gap: 12px; margin-top: 14px; min-width: 0; padding: 14px; }
+        .club-cardHead { align-items: flex-start; display: flex; gap: 10px; justify-content: space-between; }
+        .club-cardHead--tabs { align-items: center; }
+        .club-cardHead h2 { color: #17253f; font-size: 18px; line-height: 1.15; margin: 2px 0 0; }
+        .club-cardHead p { color: #64748b; font-size: 12px; font-weight: 800; margin: 5px 0 0; }
+        .club-kicker { color: #64748b; font-size: 11px; font-weight: 950; letter-spacing: 0; text-transform: uppercase; }
+        .club-tabs { align-items: center; background: #f8fafc; border: 1px solid rgba(15,23,42,.08); border-radius: 10px; display: flex; flex: 0 0 auto; gap: 3px; padding: 3px; }
+        .club-tab { align-items: center; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #64748b; cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 950; gap: 7px; min-height: 34px; padding: 7px 10px; transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease; white-space: nowrap; }
+        .club-tab span { align-items: center; background: rgba(100,116,139,.10); border-radius: 999px; color: inherit; display: inline-flex; font-size: 11px; justify-content: center; min-width: 22px; padding: 2px 6px; }
+        .club-tab:hover { background: #fff; border-color: rgba(83,199,217,.22); color: #0f8ea0; }
+        .club-tab--active { background: #fff; border-color: rgba(83,199,217,.42); box-shadow: 0 8px 18px rgba(15,23,42,.06); color: #0f8ea0; }
+        .club-tab--active span { background: #e9fbff; color: #0f7180; }
+        .club-emptyAction { display: grid; gap: 10px; justify-items: start; }
+        .club-tournamentList { display: grid; gap: 8px; min-width: 0; }
+        .club-tournamentList--history { gap: 6px; }
+        .club-tournamentRow { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 12px; cursor: pointer; display: grid; gap: 10px; min-width: 0; overflow: hidden; padding: 12px 12px 12px 20px; position: relative; transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+        .club-tournamentRow:focus-visible { outline: 2px solid #53c7d9; outline-offset: 2px; }
+        .club-tournamentRow::before { border-radius: 12px 0 0 12px; bottom: 0; content: ''; left: 0; position: absolute; top: 0; transition: background .16s ease, box-shadow .16s ease; width: 8px; }
+        .club-tournamentRow::after { background: linear-gradient(102deg, rgba(255,255,255,.76) 0%, rgba(255,255,255,.64) 22%, rgba(255,255,255,.4) 54%, rgba(255,255,255,.15) 100%); content: ''; inset: 0; position: absolute; transition: background .16s ease, opacity .16s ease; z-index: 1; }
+        .club-tournamentRow--active::before { background: #69dfe3; box-shadow: 0 0 0 1px rgba(83,199,217,.12); }
+        .club-tournamentRow--history::before { background: #cbd5e1; }
+        .club-tournamentRow:hover { background: #fbfdff; border-color: rgba(83,199,217,.30); box-shadow: 0 16px 30px rgba(15,23,42,.1); transform: translateY(-2px); }
+        .club-tournamentRow:hover::after { background: linear-gradient(102deg, rgba(255,255,255,.64) 0%, rgba(255,255,255,.5) 20%, rgba(255,255,255,.22) 54%, rgba(255,255,255,.04) 100%); }
+        .club-tournamentRow--active:hover::before { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.10); }
+        .club-tournamentRow--history:hover { border-color: rgba(100,116,139,.24); }
+        .club-tournamentRow--history:hover::before { background: #94a3b8; }
+        .club-tournamentRow--compact { background: rgba(255,255,255,.74); padding: 8px 10px 8px 20px; }
+        .club-tournamentOverlayLink { border-radius: 12px; inset: 0; position: absolute; z-index: 1; }
+        .club-tournamentOverlayLink:focus-visible { outline: 2px solid #53c7d9; outline-offset: -3px; }
+        .club-tournamentBackdrop { border-radius: 12px; inset: 0; opacity: 1; pointer-events: none; position: absolute; transition: transform .22s ease, opacity .18s ease; z-index: 0; }
+        .club-tournamentBackdrop::after { background: linear-gradient(116deg, rgba(255,255,255,.7) 0%, rgba(255,255,255,.52) 26%, rgba(255,255,255,.2) 58%, rgba(255,255,255,.02) 100%); content: ''; inset: 0; position: absolute; }
+        .club-tournamentBackdropGlow { background: radial-gradient(circle at 82% 28%, rgba(255,255,255,.22), transparent 38%), linear-gradient(135deg, rgba(15,23,42,.015), transparent 52%); inset: 0; pointer-events: none; position: absolute; transition: opacity .18s ease; }
+        .club-tournamentRow:hover .club-tournamentBackdrop { opacity: 1; transform: scale(1.02); }
+        .club-tournamentRow:hover .club-tournamentBackdropGlow { opacity: .92; }
+        .club-tournamentMain, .club-tournamentDetails { display: grid; gap: 5px; min-width: 0; pointer-events: none; position: relative; z-index: 2; }
+        .club-titleLine { align-items: center; display: flex; gap: 8px; min-width: 0; }
+        .club-titleLine strong { color: #17253f; font-size: 14px; font-weight: 950; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .club-metaLine { color: #64748b; display: flex; flex-wrap: wrap; font-size: 12px; gap: 6px 10px; min-width: 0; }
+        .club-metaLine span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .club-tournamentDetails { color: #475569; font-size: 12px; }
+        .club-tournamentDetails span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .club-rowActions { display: flex; justify-content: flex-start; pointer-events: none; position: relative; z-index: 3; }
+        .club-rowActions .club-secondaryBtn { pointer-events: auto; }
+        .club-statusBadge { border-radius: 999px; flex: 0 0 auto; font-size: 11px; font-weight: 950; padding: 5px 7px; white-space: nowrap; }
+        .club-statusBadge--active { background: #ecfdf3; color: #166534; }
+        .club-statusBadge--ready { background: #fff7df; color: #854d0e; }
+        .club-statusBadge--done { background: #eef8ff; color: #164e63; }
+        .club-statusBadge--muted { background: #f1f5f9; color: #475569; }
+        .club-statusBadge--draft { background: #fff7df; color: #854d0e; }
+        @media (min-width: 960px) {
+          .club-tournamentRow { grid-template-columns: minmax(0, 1.28fr) minmax(220px, .72fr) auto; }
+          .club-rowActions { justify-content: flex-end; }
+        }
+        @media (max-width: 720px) {
+          .club-tournamentsHead { display: grid; }
+          .club-headActions { justify-content: flex-start; }
+          .club-cardHead--tabs { align-items: flex-start; flex-direction: column; }
+          .club-tabs { align-items: stretch; flex-direction: column; width: 100%; }
+          .club-tab { justify-content: space-between; width: 100%; }
+          .club-metrics { grid-template-columns: 1fr; }
+          .club-titleLine { align-items: flex-start; flex-direction: column; }
+        }
+      `}</style>
     </div>
   )
 }

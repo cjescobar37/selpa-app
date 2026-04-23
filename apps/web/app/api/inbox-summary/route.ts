@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { PLATFORM_NOTIFICATION_TYPES } from '@/lib/notificationScope'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 async function getUserFromRequest(req: NextRequest) {
@@ -15,13 +16,29 @@ export async function GET(req: NextRequest) {
     const user = await getUserFromRequest(req)
     if (!user) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
 
+    const { data: platformAdminRow, error: platformAdminError } = await supabaseAdmin
+      .from('platform_admins')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (platformAdminError) {
+      return NextResponse.json({ error: platformAdminError.message }, { status: 500 })
+    }
+
+    let notificationsQuery = supabaseAdmin
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('read', false)
+
+    if (platformAdminRow?.user_id) {
+      notificationsQuery = notificationsQuery.in('type', PLATFORM_NOTIFICATION_TYPES as unknown as string[])
+    }
+
     const [{ count: notificationsCount, error: nErr }, { count: messagesCount, error: mErr }] =
       await Promise.all([
-        supabaseAdmin
-          .from('notifications')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('read', false),
+        notificationsQuery,
         supabaseAdmin
           .from('messages')
           .select('id', { count: 'exact', head: true })

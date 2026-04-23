@@ -22,9 +22,9 @@ export async function POST(req: Request) {
     // 1) exact email matches first
     const { data: byEmail } = await supabaseAdmin
       .from('clubs')
-      .select('owner_email, contact_email, slug, cuit, is_active')
+      .select('owner_email, contact_email, slug, cuit, is_active, status')
       .or(`owner_email.eq.${identifier},contact_email.eq.${identifier}`)
-      .eq('is_active', true)
+      .eq('status', 'ACTIVE')
       .limit(1)
 
     const emailRow = byEmail?.[0]
@@ -41,9 +41,9 @@ export async function POST(req: Request) {
 
     const { data: byKeys, error } = await supabaseAdmin
       .from('clubs')
-      .select('owner_email, contact_email, slug, cuit, is_active')
+      .select('owner_email, contact_email, slug, cuit, is_active, status')
       .or(filters.join(','))
-      .eq('is_active', true)
+      .eq('status', 'ACTIVE')
       .limit(1)
 
     if (error) {

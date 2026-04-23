@@ -12,14 +12,27 @@ export type SponsorStatus = 'ACTIVE' | 'PAUSED'
 export async function ensurePlatformAssetsBucket() {
   const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets()
   if (listError) throw listError
-  const found = (buckets ?? []).find((bucket) => bucket.name === PLATFORM_ASSETS_BUCKET)
+  const found = (buckets ?? []).find((bucket) => bucket.name === PLATFORM_ASSETS_BUCKET) as
+    | { name: string; public?: boolean }
+    | undefined
+
   if (!found) {
     const { error: createError } = await supabaseAdmin.storage.createBucket(PLATFORM_ASSETS_BUCKET, {
-      public: false,
-      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
-      fileSizeLimit: 5 * 1024 * 1024,
+      public: true,
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+      fileSizeLimit: 10 * 1024 * 1024,
     })
     if (createError) throw createError
+    return
+  }
+
+  if (!found.public) {
+    const { error: updateError } = await supabaseAdmin.storage.updateBucket(PLATFORM_ASSETS_BUCKET, {
+      public: true,
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+      fileSizeLimit: 10 * 1024 * 1024,
+    })
+    if (updateError) throw updateError
   }
 }
 
@@ -36,6 +49,14 @@ export async function uploadPlatformAsset(file: File, folder: string) {
   if (error) throw error
   const { data } = supabaseAdmin.storage.from(PLATFORM_ASSETS_BUCKET).getPublicUrl(path)
   return data.publicUrl
+}
+
+export async function uploadPlatformAssets(files: File[], folder: string) {
+  const uploads = files
+    .filter((file) => file instanceof File && file.size > 0)
+    .map((file) => uploadPlatformAsset(file, folder))
+
+  return Promise.all(uploads)
 }
 
 export function slugify(input: string) {

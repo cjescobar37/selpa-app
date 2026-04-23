@@ -14,6 +14,7 @@ type ClubPlayer = {
   display_name: string | null
   category: number
   gender: string | null
+  user_status?: string
 }
 
 function isPastDeadline(deadline: string | null) {
@@ -30,6 +31,24 @@ function normalizeGender(g: string | null) {
   return x
 }
 
+async function getGlobalUserStatus(userId: string) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('status')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) {
+    const message = String(error.message || '').toLowerCase()
+    if (message.includes('status') && (message.includes('profiles') || message.includes('schema cache') || message.includes('column'))) {
+      return 'ACTIVE'
+    }
+    throw error
+  }
+
+  return String((data as any)?.status || 'ACTIVE')
+}
+
 export default function TorneoInscripcionPage() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
@@ -38,7 +57,7 @@ export default function TorneoInscripcionPage() {
   const { activeClub, loading: clubLoading } = useActiveClub()
 
   const [t, setT] = useState<TournamentView | null>(null)
-  const [me, setMe] = useState<{ userId: string; email: string | null } | null>(null)
+  const [me, setMe] = useState<{ userId: string; email: string | null; status: string } | null>(null)
   const [clubMe, setClubMe] = useState<ClubPlayer | null>(null)
   const [partnerUserId, setPartnerUserId] = useState<string>('')
   const [clubPartner, setClubPartner] = useState<ClubPlayer | null>(null)
@@ -56,7 +75,11 @@ export default function TorneoInscripcionPage() {
         router.replace('/login')
         return
       }
-      setMe({ userId: u.id, email: u.email ?? null })
+      const userStatus = await getGlobalUserStatus(u.id)
+      setMe({ userId: u.id, email: u.email ?? null, status: userStatus })
+      if (userStatus === 'SUSPENDED') {
+        setMsg('❌ Tu usuario está suspendido y no puede interactuar como jugador.')
+      }
 
       const { data: tour, error: tourErr } = await supabase.from('tournaments').select(TOURNAMENT_SELECT).eq('id', tournamentId).single()
       if (tourErr) {
@@ -90,9 +113,9 @@ export default function TorneoInscripcionPage() {
         return
       }
 
-      setClubMe((data as any) ?? null)
+      setClubMe(data ? { ...(data as any), user_status: me.status } : null)
     })()
-  }, [activeClub?.id, me?.userId])
+  }, [activeClub?.id, me?.userId, me?.status])
 
   const clubMismatch = useMemo(() => {
     if (!t || !activeClub) return false
@@ -105,6 +128,10 @@ export default function TorneoInscripcionPage() {
 
     if (!activeClub?.id) {
       setMsg('❌ Seleccioná un club.')
+      return
+    }
+    if (me?.status === 'SUSPENDED') {
+      setMsg('❌ Tu usuario está suspendido y no puede interactuar como jugador.')
       return
     }
     if (!partnerUserId.trim()) {
@@ -132,23 +159,38 @@ export default function TorneoInscripcionPage() {
       return
     }
 
-    setClubPartner(data as any)
+    let partnerStatus = 'ACTIVE'
+    try {
+      partnerStatus = await getGlobalUserStatus(partnerUserId.trim())
+    } catch (statusError: any) {
+      setMsg(`❌ ${statusError?.message ?? 'No pude validar el estado global del compañero.'}`)
+      return
+    }
+    if (partnerStatus === 'SUSPENDED') {
+      setMsg('❌ Ese usuario está suspendido y no puede interactuar como jugador.')
+      return
+    }
+
+    setClubPartner({ ...(data as any), user_status: partnerStatus })
     setMsg('✅ Compañero cargado.')
   }
 
   const canRegister = useMemo(() => {
     if (!t || !activeClub?.id || clubMismatch || !me?.userId || !clubMe || !clubPartner) return false
+    if (me.status === 'SUSPENDED' || clubMe.user_status === 'SUSPENDED' || clubPartner.user_status === 'SUSPENDED') return false
     if (isPastDeadline(t.registrationDeadline)) return false
     return true
-  }, [t, activeClub?.id, clubMismatch, me?.userId, clubMe, clubPartner])
+  }, [t, activeClub?.id, clubMismatch, me?.userId, me?.status, clubMe, clubPartner])
 
   async function register() {
     setMsg('')
     if (!t || !activeClub?.id || !me?.userId) return
 
     if (clubMismatch) return setMsg('❌ Este torneo es de otro club. Cambiá el club activo.')
+    if (me.status === 'SUSPENDED') return setMsg('❌ Tu usuario está suspendido y no puede inscribirse a torneos.')
     if (!clubMe) return setMsg('❌ No tenés perfil de jugador en este club.')
     if (!clubPartner) return setMsg('❌ Cargá primero a tu compañero/a.')
+    if (clubPartner.user_status === 'SUSPENDED') return setMsg('❌ Tu compañero/a está suspendido y no puede participar.')
     if (isPastDeadline(t.registrationDeadline)) return setMsg('❌ La inscripción ya cerró.')
 
     const tournamentCategory = t.category ?? 0

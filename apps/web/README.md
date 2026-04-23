@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PAMPrax Web
+
+Esta es la app canónica de PAMPrax.
+
+PAMPrax esta hecho con Next.js App Router + Supabase. Todo cambio funcional nuevo debe hacerse en `apps/web`, no en las copias paralelas `apps/web2` o `apps/web3`, salvo pedido explícito de comparación o migración.
+
+## Contexto obligatorio
+
+Antes de tocar auth, perfiles, clubes, membresías, jugadores, torneos, platform admin, mensajes, notificaciones o integración con Supabase, revisar:
+
+- `../../AGENTS.md`
+- `../../supabase_full.sql`
+- `../../docs/schema-summary.md`
+- `../../docs/pamprax-db-rules.md`
+
+No asumir estructura de Supabase sin revisar esos archivos. El schema `public` es el modelo de negocio de Pamprax; los schemas internos de Supabase deben tratarse como infraestructura.
+
+## App canónica
+
+- Usar `apps/web` como base única de desarrollo.
+- No implementar cambios nuevos en `apps/web2` ni `apps/web3`.
+- Si aparece una diferencia útil en `web2` o `web3`, migrarla manualmente a `apps/web` después de revisar que respete el schema real.
+- No resolver bugs copiando carpetas completas entre apps.
+
+## Puntos sensibles
+
+- Auth y post-login: `app/auth/*`, `components/session/SessionProvider.tsx`, `app/(app)/RoleGate.tsx`.
+- Navbar compartida: `components/navbar/AppNavbarClient.tsx`, `lib/navConfig.ts`.
+- Supabase client/admin: `lib/supabaseClient.ts`, `lib/supabaseAdmin.ts`, `lib/platformApiAuth.ts`.
+- Clubes y membresías: `clubs`, `club_memberships`, `club_players`, `club_player_private`, `user_settings`.
+- Torneos: `tournaments`, `tournament_teams`, `tournament_registrations`.
+- Platform admin: `platform_admins`, `platform_news`, `platform_sponsors`, `platform_ad_campaigns`.
+
+Prestar especial atención a duplicaciones legacy, triggers redundantes, problemas de RLS y campos que convendría unificar.
 
 ## Getting Started
 
-First, run the development server:
+Desde `apps/web`, correr:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Checks recomendados
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run build
+```
 
-## Learn More
+## Nota de fase
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Fase 1 del plan de ejecución: `apps/web` queda congelada como app canónica. Las próximas fases deben partir de esta carpeta.

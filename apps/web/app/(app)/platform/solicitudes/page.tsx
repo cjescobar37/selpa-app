@@ -1,18 +1,20 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import { clubStatusBadgeClass, clubStatusLabel } from '@/lib/platformStatus'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
   | null
 
-type ClubRequestRow = {
+type PendingClubRow = {
   id: string
   created_at: string
-  club_name: string
+  status: 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
+  name: string
   brand_name: string | null
   legal_name: string | null
   cuit: string | null
@@ -48,14 +50,14 @@ function formatDate(value: string) {
   }
 }
 
-function VisualCard({ row, onClose }: { row: ClubRequestRow; onClose: () => void }) {
+function VisualCard({ row, onClose }: { row: PendingClubRow; onClose: () => void }) {
   return (
     <div className="px-modalOverlay" onClick={onClose}>
       <div className="px-modalCard px-platformRequestModal" onClick={(e) => e.stopPropagation()}>
         <div className="px-modalHead">
           <div>
             <div className="px-platformMiniTag">Solicitud de alta</div>
-            <h2 className="px-modalTitle">{row.club_name}</h2>
+            <h2 className="px-modalTitle">{row.name}</h2>
             <div className="px-modalSub">Creada el {formatDate(row.created_at)}</div>
           </div>
           <button className="px-btn px-btn--ghost" type="button" onClick={onClose}>Cerrar</button>
@@ -63,11 +65,16 @@ function VisualCard({ row, onClose }: { row: ClubRequestRow; onClose: () => void
 
         <div className="px-platformRequestHero">
           <div className="px-platformRequestLogo">
-            {row.logo_url ? <img src={row.logo_url} alt="Logo club" /> : <span>{row.club_name.slice(0, 2).toUpperCase()}</span>}
+            {row.logo_url ? <img src={row.logo_url} alt="Logo club" /> : <span>{row.name.slice(0, 2).toUpperCase()}</span>}
           </div>
           <div className="px-platformRequestHeroText">
-            <div className="px-platformRequestName">{row.brand_name || row.club_name}</div>
+            <div className="px-platformRequestName">{row.brand_name || row.name}</div>
             <div className="px-platformRequestSub">{[row.city, row.province, row.country].filter(Boolean).join(' · ') || 'Ubicación sin completar'}</div>
+            <div>
+              <span className={`px-statusBadge ${clubStatusBadgeClass(row.status)}`}>
+                {clubStatusLabel(row.status)}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -108,14 +115,13 @@ function VisualCard({ row, onClose }: { row: ClubRequestRow; onClose: () => void
 }
 
 export default function PlatformSolicitudesPage() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const focusId = searchParams.get('focus')
 
   const [loading, setLoading] = useState(true)
-  const [rows, setRows] = useState<ClubRequestRow[]>([])
+  const [rows, setRows] = useState<PendingClubRow[]>([])
   const [alert, setAlert] = useState<AlertState>(null)
-  const [selected, setSelected] = useState<ClubRequestRow | null>(null)
+  const [selected, setSelected] = useState<PendingClubRow | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
 
@@ -131,7 +137,7 @@ export default function PlatformSolicitudesPage() {
       return
     }
 
-    const res = await fetch('/api/club-requests', {
+    const res = await fetch('/api/platform/clubs-admin?status=PENDING_APPROVAL', {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     })
@@ -143,7 +149,7 @@ export default function PlatformSolicitudesPage() {
       return
     }
 
-    const nextRows = (json?.rows ?? []) as ClubRequestRow[]
+    const nextRows = (json?.rows ?? []) as PendingClubRow[]
     setRows(nextRows)
 
     const focused = focusId ? nextRows.find((row) => row.id === focusId) ?? null : null
@@ -159,8 +165,9 @@ export default function PlatformSolicitudesPage() {
 
   const pendingCount = rows.length
   const latestThree = rows.slice(0, 3)
+  const selectedId = selected?.id ?? focusId
 
-  async function applyAction(row: ClubRequestRow, action: 'approve' | 'reject') {
+  async function applyAction(row: PendingClubRow, action: 'approve' | 'reject') {
     const { data: sess } = await supabase.auth.getSession()
     const token = sess?.session?.access_token
     if (!token) {
@@ -174,13 +181,17 @@ export default function PlatformSolicitudesPage() {
     }
 
     setBusyId(row.id)
-    const res = await fetch(`/api/club-requests/${row.id}`, {
+    const res = await fetch('/api/platform/clubs-admin', {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ action, rejectionReason: rejectionReason.trim() || undefined }),
+      body: JSON.stringify({
+        clubId: row.id,
+        action,
+        reason: action === 'reject' ? rejectionReason.trim() || undefined : undefined,
+      }),
     })
 
     const json = await res.json().catch(() => ({}))
@@ -195,8 +206,8 @@ export default function PlatformSolicitudesPage() {
       variant: 'success',
       title: action === 'approve' ? 'Solicitud aprobada' : 'Solicitud rechazada',
       message: action === 'approve'
-        ? 'El club ya quedó habilitado y el responsable recibió una notificación.'
-        : 'Se rechazó la solicitud y se notificó al responsable.',
+        ? 'El club ya quedó habilitado y visible para la operación pública.'
+        : 'Se rechazó la solicitud del club y se actualizó su estado.',
     })
     setSelected(null)
     setRejectionReason('')
@@ -220,7 +231,7 @@ export default function PlatformSolicitudesPage() {
 
           <div className="px-kpis px-kpis--platformAdmin" style={{ marginTop: 16 }}>
             <div className="px-platformMetricCard"><span>Pendientes</span><strong>{pendingCount}</strong></div>
-            <div className="px-platformMetricCard"><span>Últimas revisiones</span><strong>{latestThree.length}</strong></div>
+            <div className="px-platformMetricCard"><span>Últimas ingresadas</span><strong>{latestThree.length}</strong></div>
             <div className="px-platformMetricCard"><span>Modalidad</span><strong>Alta club</strong></div>
             <div className="px-platformMetricCard"><span>Acción sugerida</span><strong>Revisar hoy</strong></div>
           </div>
@@ -239,14 +250,17 @@ export default function PlatformSolicitudesPage() {
                 <div className="px-platformRequestList">
                   {rows.map((row) => {
                     const isBusy = busyId === row.id
+                    const isSelected = selectedId === row.id
                     return (
-                      <article key={row.id} className={`px-platformRequestItem ${focusId === row.id ? 'is-focused' : ''}`}>
+                      <article key={row.id} className={`px-platformRequestItem ${isSelected ? 'is-focused' : ''}`}>
                         <div className="px-platformRequestItemHead">
                           <div>
-                            <div className="px-platformRequestTitle">{row.club_name}</div>
+                            <div className="px-platformRequestTitle">{row.name}</div>
                             <div className="px-platformRequestMeta">{[row.city, row.province].filter(Boolean).join(' · ') || 'Ubicación sin completar'} · {formatDate(row.created_at)}</div>
                           </div>
-                          <span className="px-platformRequestBadge">Alta club</span>
+                          <span className={`px-statusBadge ${clubStatusBadgeClass(row.status)}`}>
+                            {clubStatusLabel(row.status)}
+                          </span>
                         </div>
 
                         <div className="px-platformRequestOwner">Responsable: <strong>{row.owner_name || row.owner_email || '—'}</strong></div>
@@ -277,9 +291,15 @@ export default function PlatformSolicitudesPage() {
                   {latestThree.length === 0 ? (
                     <div className="px-empty">Sin movimientos recientes.</div>
                   ) : latestThree.map((row) => (
-                    <button key={row.id} className="px-platformMiniItem" type="button" onClick={() => setSelected(row)}>
-                      <strong>{row.club_name}</strong>
+                    <button
+                      key={row.id}
+                      className={`px-platformMiniItem${selectedId === row.id ? ' is-selected' : ''}`}
+                      type="button"
+                      onClick={() => setSelected(row)}
+                    >
+                      <strong>{row.name}</strong>
                       <span>{row.owner_name || row.owner_email || 'Sin responsable'}</span>
+                      <span>{[row.city, row.province].filter(Boolean).join(' · ') || 'Ubicación sin completar'}</span>
                     </button>
                   ))}
                 </div>
@@ -327,6 +347,387 @@ export default function PlatformSolicitudesPage() {
           </div>
         </div>
       ) : null}
+
+      <style jsx>{`
+        .px-platformHead,
+        .px-platformChecklist,
+        .px-platformMiniStack {
+          gap: 14px;
+        }
+
+        .px-platformGrid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 320px;
+          gap: 16px;
+          align-items: start;
+        }
+
+        .px-platformGrid > *,
+        .px-platformAsideStack,
+        .px-platformCard {
+          min-width: 0;
+        }
+
+        .px-platformCard {
+          border-radius: 8px;
+          padding: 18px;
+        }
+
+        .px-sectionTitle {
+          margin-bottom: 14px;
+        }
+
+        .px-platformRequestList {
+          display: grid;
+          gap: 12px;
+        }
+
+        .px-platformRequestItem {
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          border-radius: 8px;
+          padding: 14px;
+          background: #fff;
+          display: grid;
+          gap: 10px;
+          transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+        }
+
+        .px-platformRequestItem:hover {
+          border-color: rgba(14, 116, 144, 0.34);
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .px-platformRequestItem.is-focused {
+          border-color: rgba(14, 116, 144, 0.62);
+          background: rgba(14, 116, 144, 0.04);
+          box-shadow: inset 3px 0 0 rgba(14, 116, 144, 0.85);
+        }
+
+        .px-platformRequestItemHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+        }
+
+        .px-platformRequestItemHead > div {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .px-platformRequestTitle,
+        .px-platformRequestMeta,
+        .px-platformRequestOwner,
+        .px-platformRequestText,
+        .px-platformMiniItem strong,
+        .px-platformMiniItem span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .px-platformRequestTitle {
+          color: #0f172a;
+          font-size: 1rem;
+          font-weight: 800;
+        }
+
+        .px-platformRequestMeta,
+        .px-platformRequestText,
+        .px-platformMiniItem span {
+          color: #64748b;
+          font-size: 0.88rem;
+        }
+
+        .px-platformRequestOwner {
+          color: #334155;
+          font-size: 0.92rem;
+        }
+
+        .px-platformRequestOwner strong {
+          color: #0f172a;
+        }
+
+        :global(.px-statusBadge) {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 28px;
+          padding: 0 10px;
+          border-radius: 999px;
+          font-size: 0.78rem;
+          font-weight: 700;
+          line-height: 1;
+          white-space: nowrap;
+          border: 1px solid transparent;
+        }
+
+        :global(.px-statusBadge.is-success) {
+          background: rgba(22, 163, 74, 0.12);
+          color: #166534;
+          border-color: rgba(22, 163, 74, 0.18);
+        }
+
+        :global(.px-statusBadge.is-warning) {
+          background: rgba(245, 158, 11, 0.14);
+          color: #92400e;
+          border-color: rgba(245, 158, 11, 0.2);
+        }
+
+        :global(.px-statusBadge.is-danger) {
+          background: rgba(239, 68, 68, 0.12);
+          color: #b91c1c;
+          border-color: rgba(239, 68, 68, 0.18);
+        }
+
+        :global(.px-statusBadge.is-neutral) {
+          background: rgba(71, 85, 105, 0.14);
+          color: #334155;
+          border-color: rgba(71, 85, 105, 0.16);
+        }
+
+        .px-platformRequestActions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .px-platformMiniStack {
+          display: grid;
+        }
+
+        .px-platformMiniItem {
+          width: 100%;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 8px;
+          background: #fff;
+          text-align: left;
+          padding: 12px;
+          display: grid;
+          gap: 4px;
+          transition: border-color 0.18s ease, background-color 0.18s ease;
+        }
+
+        .px-platformMiniItem:hover,
+        .px-platformMiniItem:focus-visible {
+          border-color: rgba(14, 116, 144, 0.34);
+          background: rgba(248, 250, 252, 0.96);
+          outline: none;
+        }
+
+        .px-platformMiniItem.is-selected {
+          border-color: rgba(14, 116, 144, 0.62);
+          background: rgba(14, 116, 144, 0.04);
+          box-shadow: inset 3px 0 0 rgba(14, 116, 144, 0.85);
+        }
+
+        .px-platformMiniItem strong {
+          color: #0f172a;
+          font-size: 0.94rem;
+        }
+
+        .px-platformRequestModal {
+          width: min(980px, calc(100vw - 24px));
+          max-height: calc(100vh - 24px);
+          overflow: auto;
+          border-radius: 8px;
+        }
+
+        .px-platformRequestHero {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          margin: 18px 0;
+          padding: 14px;
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 8px;
+          background: rgba(248, 250, 252, 0.92);
+        }
+
+        .px-platformRequestLogo {
+          width: 64px;
+          height: 64px;
+          border-radius: 8px;
+          overflow: hidden;
+          background: rgba(15, 23, 42, 0.06);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+          color: #0f172a;
+          font-weight: 800;
+        }
+
+        .px-platformRequestLogo img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .px-platformRequestHeroText {
+          min-width: 0;
+          display: grid;
+          gap: 4px;
+        }
+
+        .px-platformRequestName,
+        .px-platformRequestSub {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .px-platformRequestName {
+          color: #0f172a;
+          font-size: 1.08rem;
+          font-weight: 800;
+        }
+
+        .px-platformRequestSub {
+          color: #64748b;
+          font-size: 0.92rem;
+        }
+
+        .px-platformRequestGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+        }
+
+        .px-platformInfoCard {
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 8px;
+          padding: 16px;
+          background: #fff;
+          min-width: 0;
+        }
+
+        .px-platformInfoCard h3 {
+          margin: 0 0 12px;
+          color: #0f172a;
+          font-size: 0.96rem;
+          font-weight: 800;
+        }
+
+        .px-platformInfoRows {
+          display: grid;
+        }
+
+        .px-platformInfoRows > div {
+          display: grid;
+          gap: 4px;
+          padding: 10px 0;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+        }
+
+        .px-platformInfoRows > div:last-child {
+          border-bottom: 0;
+        }
+
+        .px-platformInfoRows span {
+          color: #64748b;
+          font-size: 0.82rem;
+        }
+
+        .px-platformInfoRows strong {
+          color: #0f172a;
+          font-size: 0.94rem;
+          line-height: 1.35;
+          word-break: break-word;
+        }
+
+        .px-platformNoteBox {
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 8px;
+          padding: 12px;
+          background: rgba(248, 250, 252, 0.92);
+          color: #334155;
+          line-height: 1.5;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+
+        .px-platformMiniTag {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 26px;
+          padding: 0 9px;
+          border-radius: 999px;
+          font-size: 0.76rem;
+          font-weight: 700;
+          background: rgba(14, 116, 144, 0.1);
+          color: #155e75;
+          border: 1px solid rgba(14, 116, 144, 0.16);
+          margin-bottom: 8px;
+        }
+
+        .px-platformDecisionBar {
+          position: sticky;
+          bottom: 12px;
+          z-index: 10;
+          width: min(1040px, calc(100vw - 24px));
+          margin: 16px auto 0;
+          padding: 14px;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.98);
+          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+          display: grid;
+          gap: 12px;
+        }
+
+        .px-platformDecisionActions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          justify-content: flex-end;
+        }
+
+        @media (max-width: 960px) {
+          .px-platformGrid {
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .px-platformRequestGrid {
+            grid-template-columns: minmax(0, 1fr);
+          }
+        }
+
+        @media (max-width: 640px) {
+          .px-platformCard {
+            padding: 16px;
+          }
+
+          .px-platformRequestItemHead,
+          .px-platformRequestHero,
+          .px-platformDecisionActions {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .px-platformRequestBadge,
+          .px-platformMiniTag {
+            align-self: flex-start;
+          }
+
+          .px-platformRequestName,
+          .px-platformRequestSub,
+          .px-platformRequestTitle,
+          .px-platformRequestMeta,
+          .px-platformRequestOwner,
+          .px-platformRequestText,
+          .px-platformMiniItem strong,
+          .px-platformMiniItem span {
+            white-space: normal;
+          }
+
+          .px-platformDecisionBar {
+            width: calc(100vw - 24px);
+            bottom: 8px;
+          }
+        }
+      `}</style>
     </div>
   )
 }

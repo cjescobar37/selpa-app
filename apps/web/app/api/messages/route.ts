@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { ensureValidActiveClubForUser, getApprovedMembership } from '@/lib/clubMembershipServer'
+import { isClubStaffRole, isApprovedMembership } from '@/lib/clubMembershipRules'
 
 type Contact = {
   user_id: string
@@ -31,13 +33,7 @@ function fullName(profile: any) {
 }
 
 async function getActiveClubId(userId: string) {
-  const { data } = await supabaseAdmin
-    .from('user_settings')
-    .select('active_club_id')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  return data?.active_club_id ?? null
+  return ensureValidActiveClubForUser(userId, null)
 }
 
 async function getRole(userId: string, activeClubId: string | null) {
@@ -50,17 +46,9 @@ async function getRole(userId: string, activeClubId: string | null) {
   if (pa?.user_id) return 'platform' as const
 
   if (activeClubId) {
-    const { data: membership } = await supabaseAdmin
-      .from('club_memberships')
-      .select('role, status')
-      .eq('user_id', userId)
-      .eq('club_id', activeClubId)
-      .maybeSingle()
+    const membership = await getApprovedMembership(userId, activeClubId)
 
-    if (
-      membership?.status === 'APPROVED' &&
-      ['OWNER', 'ADMIN', 'PLANILLERO'].includes(membership.role)
-    ) {
+    if (membership && isClubStaffRole(membership.role)) {
       return 'club' as const
     }
   }
@@ -85,12 +73,12 @@ async function getContactsForPlayer(activeClubId: string | null) {
   if (activeClubId) {
     const { data: clubAdmins } = await supabaseAdmin
       .from('club_memberships')
-      .select('user_id, role, status')
+      .select('user_id, role, status, approved_at')
       .eq('club_id', activeClubId)
       .eq('status', 'APPROVED')
 
     const adminIds = (clubAdmins ?? [])
-      .filter((m: any) => ['OWNER', 'ADMIN', 'PLANILLERO'].includes(m.role))
+      .filter((m: any) => isApprovedMembership(m) && isClubStaffRole(m.role))
       .map((m: any) => m.user_id)
 
     const adminProfiles = await getProfilesMap(adminIds)
@@ -134,12 +122,12 @@ async function getContactsForClub(activeClubId: string | null) {
   if (activeClubId) {
     const { data: members } = await supabaseAdmin
       .from('club_memberships')
-      .select('user_id, role, status')
+      .select('user_id, role, status, approved_at')
       .eq('club_id', activeClubId)
       .eq('status', 'APPROVED')
 
     const playerIds = (members ?? [])
-      .filter((m: any) => m.role === 'PLAYER')
+      .filter((m: any) => isApprovedMembership(m) && m.role === 'PLAYER')
       .map((m: any) => m.user_id)
 
     const playerProfiles = await getProfilesMap(playerIds)

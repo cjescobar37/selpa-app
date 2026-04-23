@@ -233,6 +233,8 @@
   width: 38px;
   min-width: 38px;
   padding: 0;
+  position: relative;
+  overflow: visible;
 }
 
 .px-loginBtn {
@@ -364,30 +366,39 @@
 
   .px-mobileBar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: auto auto minmax(0, 1fr);
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     min-height: 58px;
+    padding-left: 14px;
+    padding-right: 14px;
+    overflow: visible;
   }
 
   .px-mobileBar__left {
     justify-content: flex-start;
     min-width: 0;
+    flex: 0 0 auto;
   }
 
   .px-mobileBar__center {
     justify-content: center;
+    flex: 0 0 auto;
   }
 
   .px-mobileBar__right {
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
+    overflow: visible;
   }
 
   .px-mobileActions {
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow: visible;
   }
 
   .px-mobileBadge {
@@ -411,6 +422,28 @@
     padding: 0 6px 0 0;
   }
 
+  .px-iconBtn,
+  .px-burger,
+  .px-mobileBrand {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+  }
+
+  .px-mobileUserBtn,
+  .px-mobileClubBtn {
+    min-height: 36px;
+  }
+
+  .px-iconBadge {
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    height: 16px;
+    font-size: 10px;
+    padding: 0 3px;
+  }
+
   .px-mobileUserBtn .px-avatar,
   .px-mobileClubBtn .px-clubLogo,
   .px-mobileBrand .px-brandLogo {
@@ -420,8 +453,8 @@
   }
 
   .px-mobileBrand {
-    width: 38px;
-    min-width: 38px;
+    width: 36px;
+    min-width: 36px;
     padding: 0;
   }
 
@@ -473,6 +506,25 @@
     right: 0;
     left: auto;
     width: min(260px, calc(100vw - 32px));
+  }
+}
+
+@media (max-width: 640px) {
+  .px-mobileBar {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .px-mobileBar__right,
+  .px-mobileActions {
+    gap: 4px;
+  }
+
+  .px-mobileBadge {
+    padding: 0 8px;
+    font-size: 10px;
   }
 }
 

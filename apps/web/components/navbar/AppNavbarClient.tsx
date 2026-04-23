@@ -8,6 +8,7 @@ import { Bell, Mail, Search, ChevronDown, Menu, X } from 'lucide-react'
 import { NAV_CONFIG, type NavItem } from '@/lib/navConfig'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
+import { PLATFORM_NOTIFICATION_TYPES } from '@/lib/notificationScope'
 import { supabase } from '@/lib/supabaseClient'
 
 type PreviewNotification = {
@@ -169,25 +170,34 @@ export default function AppNavbarClient() {
       return
     }
 
+    let unreadNotificationsQuery = supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .neq('type', 'message')
+      .eq('read', false)
+
+    let previewNotificationsQuery = supabase
+      .from('notifications')
+      .select('id, type, title, message, read, link, created_at, metadata')
+      .eq('user_id', user.id)
+      .neq('type', 'message')
+      .order('created_at', { ascending: false })
+      .limit(3)
+
+    if (role === 'platform') {
+      unreadNotificationsQuery = unreadNotificationsQuery.in('type', PLATFORM_NOTIFICATION_TYPES as unknown as string[])
+      previewNotificationsQuery = previewNotificationsQuery.in('type', PLATFORM_NOTIFICATION_TYPES as unknown as string[])
+    }
+
     const [{ count: nCount }, { count: mCount }, previewRes] = await Promise.all([
-      supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .neq('type', 'message')
-        .eq('read', false),
+      unreadNotificationsQuery,
       supabase
         .from('messages')
         .select('id', { count: 'exact', head: true })
         .eq('recipient_user_id', user.id)
         .eq('read', false),
-      supabase
-        .from('notifications')
-        .select('id, type, title, message, read, link, created_at, metadata')
-        .eq('user_id', user.id)
-        .neq('type', 'message')
-        .order('created_at', { ascending: false })
-        .limit(3),
+      previewNotificationsQuery,
     ])
 
     setUnreadNotifications(nCount ?? 0)
@@ -206,7 +216,7 @@ export default function AppNavbarClient() {
     return () => {
       alive = false
     }
-  }, [isAuthed, pathname, user?.id])
+  }, [isAuthed, pathname, role, user?.id])
 
   function closeAllMenus() {
     setNavOpenIndex(null)

@@ -7,7 +7,10 @@
   --navy: #2e5493;
   --navy-2: #273965;
   --cyan: #53c7d9;
+  --cyan-soft: rgba(83, 199, 217, .14);
+  --cyan-border: rgba(83, 199, 217, .62);
   --magenta: #ff4e72;
+  --magenta-deep: #b81e52;
 
   --bg: #f4f7fb;
   --text: #17253f;
@@ -70,7 +73,7 @@ a{ color: inherit; }
   top:0;
   height:3px;
   border-radius: 999px;
-  background: var(--magenta);     /* <- sólido */
+  background: linear-gradient(90deg, rgba(255,78,114,.9), rgba(83,199,217,.9));
   opacity:.75;
 }
 
@@ -113,25 +116,47 @@ a{ color: inherit; }
   height: 42px;
   padding: 0 14px;
   border-radius: 12px;
-  border: 1px solid rgba(23,37,63,.14);
+  border: 1px solid rgba(83,199,217,.72);
   background: var(--cyan);
   color: #0b1b2b;
   font-weight: 900;
   cursor: pointer;
   text-decoration: none;
+  box-shadow: 0 8px 18px rgba(83,199,217,.14);
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease, border-color .16s ease, color .16s ease, filter .16s ease;
 }
-.px-btn:hover{ filter: brightness(1.02); }
+.px-btn:hover{ filter: brightness(1.02); box-shadow: 0 10px 22px rgba(83,199,217,.2); }
 .px-btn:active{ transform: translateY(1px); }
+.px-btn:disabled{ opacity: .55; cursor: not-allowed; box-shadow: none; }
+
+.px-btn--primary{
+  background: var(--cyan);
+  border-color: rgba(83,199,217,.78);
+  color: #0b1b2b;
+}
 
 .px-btn--ghost{
-  background: rgba(255,255,255,.60);
-  border: 1px solid rgba(23,37,63,.14);
-  color: var(--text);
+  background: rgba(255,255,255,.92);
+  border: 1px solid var(--cyan-border);
+  color: #168da0;
+  box-shadow: 0 6px 16px rgba(83,199,217,.08);
+}
+.px-btn--soft{
+  background: rgba(255,255,255,.92);
+  border-color: var(--cyan-border);
+  color: #168da0;
+}
+.px-btn--danger{
+  background: linear-gradient(180deg, #d82b68, var(--magenta-deep));
+  border-color: rgba(184,30,82,.28);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(184,30,82,.16);
 }
 .px-btn--magenta{
-  background: var(--magenta);
-  border-color: rgba(255,78,114,.35);
+  background: linear-gradient(180deg, #ff5a82, #c92462);
+  border-color: rgba(201,36,98,.28);
   color: #fff;
+  box-shadow: 0 10px 22px rgba(201,36,98,.16);
 }
 
 /* Links */

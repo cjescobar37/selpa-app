@@ -27,8 +27,31 @@ type Sponsor = {
 }
 
 type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string } | null
-const emptyCampaign = { title: '', description: '', linkUrl: '', slot: 'HOME_GRID', status: 'ACTIVE', sortOrder: '100' }
-const emptySponsor = { name: '', websiteUrl: '', tier: 'SPONSOR', status: 'ACTIVE', sortOrder: '100' }
+
+const emptyCampaign = { title: '', description: '', linkUrl: '', slot: 'HOME_GRID' as Campaign['slot'], status: 'ACTIVE' as Campaign['status'], sortOrder: '100' }
+const emptySponsor = { name: '', websiteUrl: '', tier: 'SPONSOR' as Sponsor['tier'], status: 'ACTIVE' as Sponsor['status'], sortOrder: '100' }
+
+function slotLabel(slot: Campaign['slot']) {
+  if (slot === 'HOME_HERO') return 'Hero principal'
+  if (slot === 'HOME_INLINE') return 'Debajo de noticias'
+  return 'Home grid'
+}
+
+function slotBadgeClass(slot: Campaign['slot']) {
+  if (slot === 'HOME_HERO') return 'px-slotBadge px-slotBadge--hero'
+  if (slot === 'HOME_INLINE') return 'px-slotBadge px-slotBadge--inline'
+  return 'px-slotBadge px-slotBadge--grid'
+}
+
+function statusBadgeClass(status: 'ACTIVE' | 'PAUSED') {
+  return status === 'ACTIVE' ? 'px-entityBadge px-entityBadge--active' : 'px-entityBadge px-entityBadge--paused'
+}
+
+function tierBadgeClass(tier: Sponsor['tier']) {
+  if (tier === 'PARTNER') return 'px-slotBadge px-slotBadge--partner'
+  if (tier === 'LOCAL') return 'px-slotBadge px-slotBadge--local'
+  return 'px-slotBadge px-slotBadge--sponsor'
+}
 
 export default function PlatformPublicidadPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
@@ -45,6 +68,8 @@ export default function PlatformPublicidadPage() {
   const [sponsorFile, setSponsorFile] = useState<File | null>(null)
   const [keepImage, setKeepImage] = useState(true)
   const [keepLogo, setKeepLogo] = useState(true)
+  const [campaignPreviewUrl, setCampaignPreviewUrl] = useState<string | null>(null)
+  const [sponsorPreviewUrl, setSponsorPreviewUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [setupRequired, setSetupRequired] = useState<string | null>(null)
@@ -87,6 +112,26 @@ export default function PlatformPublicidadPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    if (!campaignFile) {
+      setCampaignPreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(campaignFile)
+    setCampaignPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [campaignFile])
+
+  useEffect(() => {
+    if (!sponsorFile) {
+      setSponsorPreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(sponsorFile)
+    setSponsorPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [sponsorFile])
 
   const selectedCampaign = useMemo(() => campaigns.find((row) => row.id === selectedCampaignId) ?? null, [campaigns, selectedCampaignId])
   const selectedSponsor = useMemo(() => sponsors.find((row) => row.id === selectedSponsorId) ?? null, [sponsors, selectedSponsorId])
@@ -207,132 +252,298 @@ export default function PlatformPublicidadPage() {
     { label: 'Pausadas', value: String(campaigns.filter((item) => item.status === 'PAUSED').length + sponsors.filter((item) => item.status === 'PAUSED').length) },
   ]
 
+  const campaignPreviewImage = campaignPreviewUrl || (editingCampaignId && keepImage ? selectedCampaign?.image_url || null : null)
+  const sponsorPreviewImage = sponsorPreviewUrl || (editingSponsorId && keepLogo ? selectedSponsor?.logo_url || null : null)
+
   return (
     <PlatformModuleShell
       title="Publicidad y sponsors"
-      subtitle="Gestioná banners, sponsors y piezas reales que se muestran en el index invitado."
+      subtitle="Organizá campañas, posiciones y logos con una lectura clara de qué sale y dónde."
       metrics={metrics}
-      actions={<><button className="px-btn" type="button" onClick={openNewCampaign}>Nueva campaña</button><button className="px-btn px-btn--soft" type="button" onClick={load}>Recargar</button></>}
-      quickActions={[
-        { title: 'Banners del home', description: 'Campañas con imagen, link y slot visible para invitados.', tag: 'Ads' },
-        { title: 'Sponsors oficiales', description: 'Logos, sitio web y orden de aparición debajo de noticias.', tag: 'Branding' },
-      ]}
-      aside={
-        <div className="px-platformCard">
-          <div className="px-sectionTitle">Regla operativa</div>
-          <div className="px-platformChecklist">
-            <div>HOME_HERO se usa para un banner principal grande.</div>
-            <div>HOME_GRID sirve para piezas más chicas o promociones.</div>
-            <div>Los sponsors activos se muestran en bloque fijo del index.</div>
-          </div>
-        </div>
-      }
+      actions={<div className="px-mediaActions"><button className="px-btn px-btn--ghost" type="button" onClick={load}>Actualizar</button><button className="px-btn" type="button" onClick={openNewCampaign}>Nueva campaña</button></div>}
+      aside={<div className="px-platformCard px-mediaAside"><div className="px-mediaAsideHead"><h3>Impacto actual</h3></div><div className="px-mediaRuleList"><div><span>Hero principal</span><strong>{campaigns.find((item) => item.slot === 'HOME_HERO' && item.status === 'ACTIVE')?.title || 'Vacante'}</strong></div><div><span>Grilla home</span><strong>{campaigns.filter((item) => item.slot === 'HOME_GRID' && item.status === 'ACTIVE').length} activa(s)</strong></div><div><span>Debajo de noticias</span><strong>{campaigns.filter((item) => item.slot === 'HOME_INLINE' && item.status === 'ACTIVE').length} activa(s)</strong></div><div><span>Sponsors visibles</span><strong>{sponsors.filter((item) => item.status === 'ACTIVE').length}</strong></div></div></div>}
     >
       {alert ? <AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /> : null}
       {setupRequired ? <AuthAlert variant="warning" title="Contenido no inicializado" message={setupRequired} /> : null}
-      <div className="px-contentAdminGrid px-contentAdminGrid--editor" style={{ marginTop: 14 }}>
-        <div className="px-platformCard">
-          <div className="px-sectionTitle">Campañas publicitarias</div>
-          <div className="px-contentList px-contentList--compact">
+
+      <div className="px-mediaBoard">
+        <section className="px-platformCard px-mediaSection">
+          <div className="px-mediaSectionHead">
+            <div><h3>Campañas</h3><p>Hero, grilla y posiciones secundarias.</p></div>
+            <button className="px-btn px-btn--soft" type="button" onClick={openNewCampaign}>Cargar campaña</button>
+          </div>
+          <div className="px-mediaList">
             {loading ? <div className="px-empty">Cargando campañas…</div> : null}
             {!loading && !campaigns.length ? <div className="px-empty">Todavía no hay campañas cargadas.</div> : null}
             {campaigns.map((row) => (
-              <div key={row.id} className={`px-contentItem ${selectedCampaignId === row.id ? 'is-selected' : ''}`}>
-                <div className="px-contentItemHead">
-                  <div onClick={() => setSelectedCampaignId(row.id)} style={{ cursor: 'pointer', flex: 1 }}>
-                    <div className="px-contentItemTitle">{row.title}</div>
-                    <div className="px-contentMeta"><span>{row.slot}</span><span>{row.status}</span><span>Orden {row.sort_order}</span></div>
+              <article key={row.id} className={`px-mediaRow ${selectedCampaignId === row.id ? 'is-active' : ''}`} onClick={() => setSelectedCampaignId(row.id)}>
+                <div className="px-mediaThumb">{row.image_url ? <img src={row.image_url} alt={row.title} /> : <span>Sin pieza</span>}</div>
+                <div className="px-mediaMain">
+                  <div className="px-mediaTop">
+                    <strong>{row.title}</strong>
+                    <div className="px-mediaBadges"><span className={slotBadgeClass(row.slot)}>{slotLabel(row.slot)}</span><span className={statusBadgeClass(row.status)}>{row.status === 'ACTIVE' ? 'Activa' : 'Pausada'}</span></div>
                   </div>
-                  <div className="px-contentActions">
-                    <button className="px-btn px-btn--soft px-btn--xs" type="button" onClick={() => openEditCampaign(row)}>Editar</button>
-                    <button className="px-btn px-btn--danger px-btn--xs" type="button" onClick={() => removeCampaign(row)}>Eliminar</button>
-                  </div>
+                  <div className="px-mediaMeta"><span>Orden {row.sort_order}</span>{row.link_url ? <span>{row.link_url}</span> : null}</div>
                 </div>
-                {row.description ? <div className="px-platformSub">{row.description}</div> : null}
-              </div>
+                <div className="px-mediaRowActions">
+                  <button className="px-btn px-btn--ghost" type="button" onClick={(event) => { event.stopPropagation(); openEditCampaign(row) }}>Editar</button>
+                  <button className="px-btn px-btn--dangerGhost" type="button" onClick={(event) => { event.stopPropagation(); void removeCampaign(row) }}>Eliminar</button>
+                </div>
+              </article>
             ))}
           </div>
-        </div>
+        </section>
 
-        <div className="px-platformCard">
-          <div className="px-sectionTitle">Sponsors</div>
-          <div style={{ marginBottom: 10 }}>
-            <button className="px-btn px-btn--soft" type="button" onClick={openNewSponsor}>Nuevo sponsor</button>
+        <section className="px-platformCard px-mediaSection">
+          <div className="px-mediaSectionHead">
+            <div><h3>Sponsors</h3><p>Bloque de aliados y marcas visibles en home.</p></div>
+            <button className="px-btn px-btn--soft" type="button" onClick={openNewSponsor}>Cargar sponsor</button>
           </div>
-          <div className="px-contentList px-contentList--compact">
+          <div className="px-mediaList">
             {!loading && !sponsors.length ? <div className="px-empty">Todavía no hay sponsors cargados.</div> : null}
             {sponsors.map((row) => (
-              <div key={row.id} className={`px-contentItem ${selectedSponsorId === row.id ? 'is-selected' : ''}`}>
-                <div className="px-contentItemHead">
-                  <div onClick={() => setSelectedSponsorId(row.id)} style={{ cursor: 'pointer', flex: 1 }}>
-                    <div className="px-contentItemTitle">{row.name}</div>
-                    <div className="px-contentMeta"><span>{row.tier}</span><span>{row.status}</span><span>Orden {row.sort_order}</span></div>
+              <article key={row.id} className={`px-mediaRow ${selectedSponsorId === row.id ? 'is-active' : ''}`} onClick={() => setSelectedSponsorId(row.id)}>
+                <div className="px-mediaThumb px-mediaThumb--logo">{row.logo_url ? <img src={row.logo_url} alt={row.name} /> : <span>{row.name.slice(0, 2).toUpperCase()}</span>}</div>
+                <div className="px-mediaMain">
+                  <div className="px-mediaTop">
+                    <strong>{row.name}</strong>
+                    <div className="px-mediaBadges"><span className={tierBadgeClass(row.tier)}>{row.tier}</span><span className={statusBadgeClass(row.status)}>{row.status === 'ACTIVE' ? 'Activo' : 'Pausado'}</span></div>
                   </div>
-                  <div className="px-contentActions">
-                    <button className="px-btn px-btn--soft px-btn--xs" type="button" onClick={() => openEditSponsor(row)}>Editar</button>
-                    <button className="px-btn px-btn--danger px-btn--xs" type="button" onClick={() => removeSponsor(row)}>Eliminar</button>
-                  </div>
+                  <div className="px-mediaMeta"><span>Orden {row.sort_order}</span>{row.website_url ? <span>{row.website_url}</span> : null}</div>
                 </div>
-              </div>
+                <div className="px-mediaRowActions">
+                  <button className="px-btn px-btn--ghost" type="button" onClick={(event) => { event.stopPropagation(); openEditSponsor(row) }}>Editar</button>
+                  <button className="px-btn px-btn--dangerGhost" type="button" onClick={(event) => { event.stopPropagation(); void removeSponsor(row) }}>Eliminar</button>
+                </div>
+              </article>
             ))}
           </div>
-        </div>
+        </section>
+
+        <section className="px-platformCard px-mediaSection px-mediaSection--preview">
+          <div className="px-mediaSectionHead">
+            <div><h3>Preview real</h3><p>Cómo impactan las piezas activas dentro del sitio.</p></div>
+          </div>
+          <div className="px-mediaPreviewGrid">
+            <article className="px-mediaPreviewCard px-mediaPreviewCard--hero">
+              <span className="px-slotBadge px-slotBadge--hero">HOME_HERO</span>
+              {selectedCampaign?.slot === 'HOME_HERO' && selectedCampaign?.image_url ? <img src={selectedCampaign.image_url} alt={selectedCampaign.title} className="px-mediaPreviewImage" /> : null}
+              <div className="px-mediaPreviewBody"><strong>{selectedCampaign?.slot === 'HOME_HERO' ? selectedCampaign.title : 'Hero principal'}</strong><p>{selectedCampaign?.slot === 'HOME_HERO' ? (selectedCampaign.description || 'Campaña principal del home.') : 'La pieza principal del home aparece acá con mayor protagonismo.'}</p></div>
+            </article>
+            <article className="px-mediaPreviewCard">
+              <span className="px-slotBadge px-slotBadge--grid">HOME_GRID</span>
+              <div className="px-mediaMiniPreviewList">
+                {campaigns.filter((item) => item.slot === 'HOME_GRID').slice(0, 3).map((item) => (
+                  <div key={item.id} className="px-mediaMiniPreview">{item.image_url ? <img src={item.image_url} alt={item.title} /> : <div />}<strong>{item.title}</strong></div>
+                ))}
+              </div>
+            </article>
+            <article className="px-mediaPreviewCard">
+              <span className="px-slotBadge px-slotBadge--inline">Debajo de noticias</span>
+              <div className="px-mediaInlinePreview">
+                {campaigns.filter((item) => item.slot === 'HOME_INLINE').slice(0, 2).map((item) => (
+                  <div key={item.id} className="px-mediaInlineItem"><strong>{item.title}</strong><span>{item.status === 'ACTIVE' ? 'Visible' : 'Pausada'}</span></div>
+                ))}
+                {!campaigns.some((item) => item.slot === 'HOME_INLINE') ? <span className="px-muted">Sin campañas en esta posición.</span> : null}
+              </div>
+            </article>
+            <article className="px-mediaPreviewCard px-mediaPreviewCard--sponsors">
+              <span className="px-slotBadge px-slotBadge--sponsor">Sponsors</span>
+              <div className="px-mediaSponsorPreview">
+                {sponsors.slice(0, 4).map((item) => (
+                  <div key={item.id} className="px-mediaSponsorLogo">{item.logo_url ? <img src={item.logo_url} alt={item.name} /> : <span>{item.name.slice(0, 2).toUpperCase()}</span>}</div>
+                ))}
+              </div>
+            </article>
+          </div>
+        </section>
       </div>
 
       {campaignOpen ? (
-        <div className="px-overlay" onClick={() => !saving && setCampaignOpen(false)}>
-          <div className="px-modalCard px-contentModal" onClick={(e) => e.stopPropagation()}>
-            <div className="px-modalHead">
-              <div>
-                <h3 className="px-modalTitle">{editingCampaignId ? 'Editar campaña' : 'Nueva campaña'}</h3>
-                <div className="px-modalSub">Alta con modal, misma lógica visual que el resto.</div>
+        <div className="px-mediaOverlay" onClick={() => !saving && setCampaignOpen(false)}>
+          <div className="px-mediaModal" onClick={(event) => event.stopPropagation()}>
+            <div className="px-mediaModalHead">
+              <div><h3>{editingCampaignId ? 'Editar campaña' : 'Nueva campaña'}</h3><p>Definí pieza, ubicación y prioridad visual.</p></div>
+              <button className="px-btn px-btn--ghost" type="button" onClick={() => setCampaignOpen(false)}>Cerrar</button>
+            </div>
+            <div className="px-mediaModalGrid">
+              <div className="px-mediaFormStack">
+                <section className="px-mediaFormBlock">
+                  <h4>Datos principales</h4>
+                  <label><span>Nombre de campaña</span><input value={campaignForm.title} onChange={(event) => setCampaignForm((state) => ({ ...state, title: event.target.value }))} /></label>
+                  <label><span>Link</span><input value={campaignForm.linkUrl} onChange={(event) => setCampaignForm((state) => ({ ...state, linkUrl: event.target.value }))} /></label>
+                  <label><span>Descripción</span><textarea rows={4} value={campaignForm.description} onChange={(event) => setCampaignForm((state) => ({ ...state, description: event.target.value }))} /></label>
+                </section>
+                <section className="px-mediaFormBlock">
+                  <h4>Ubicación y estado</h4>
+                  <div className="px-mediaSplit">
+                    <label><span>Placement</span><select value={campaignForm.slot} onChange={(event) => setCampaignForm((state) => ({ ...state, slot: event.target.value as Campaign['slot'] }))}><option value="HOME_HERO">Hero principal</option><option value="HOME_GRID">Home grid</option><option value="HOME_INLINE">Debajo de noticias</option></select></label>
+                    <label><span>Estado</span><select value={campaignForm.status} onChange={(event) => setCampaignForm((state) => ({ ...state, status: event.target.value as Campaign['status'] }))}><option value="ACTIVE">Activa</option><option value="PAUSED">Pausada</option></select></label>
+                    <label><span>Orden</span><input value={campaignForm.sortOrder} onChange={(event) => setCampaignForm((state) => ({ ...state, sortOrder: event.target.value }))} /></label>
+                  </div>
+                </section>
+                <section className="px-mediaFormBlock">
+                  <h4>Imagen</h4>
+                  <label className="px-mediaUpload"><span>{campaignForm.slot === 'HOME_HERO' ? 'Banner hero 16:8' : campaignForm.slot === 'HOME_GRID' ? 'Banner grid 4:3' : 'Pieza inline horizontal'}</span><input type="file" accept="image/*" onChange={(event) => setCampaignFile(event.target.files?.[0] || null)} /></label>
+                  {editingCampaignId ? <label className="px-mediaCheckbox"><input type="checkbox" checked={keepImage} onChange={(event) => setKeepImage(event.target.checked)} />Mantener imagen actual si no subo otra.</label> : null}
+                </section>
               </div>
-              <button className="px-btn px-btn--soft px-btn--xs" type="button" onClick={() => setCampaignOpen(false)}>Cerrar</button>
+              <aside className="px-mediaFormPreview">
+                <div className="px-mediaFormPreviewHead"><h4>Preview</h4><span className={slotBadgeClass(campaignForm.slot)}>{slotLabel(campaignForm.slot)}</span></div>
+                <div className={`px-mediaLiveCard ${campaignForm.slot === 'HOME_HERO' ? 'is-hero' : campaignForm.slot === 'HOME_INLINE' ? 'is-inline' : 'is-grid'}`}>
+                  {campaignPreviewImage ? <img src={campaignPreviewImage} alt={campaignForm.title || 'Preview campaña'} /> : <div className="px-mediaLiveFallback">Sin imagen</div>}
+                  <div className="px-mediaLiveCopy"><strong>{campaignForm.title || 'Nombre de campaña'}</strong><p>{campaignForm.description || 'La pieza seleccionada se va a ver acá con el ratio y jerarquía de su posición.'}</p></div>
+                </div>
+              </aside>
             </div>
-            <div className="px-formGrid">
-              <label className="px-field px-formGridSpan2"><span>Título</span><input className="px-input" value={campaignForm.title} onChange={(e) => setCampaignForm((s) => ({ ...s, title: e.target.value }))} /></label>
-              <label className="px-field px-formGridSpan2"><span>Link</span><input className="px-input" value={campaignForm.linkUrl} onChange={(e) => setCampaignForm((s) => ({ ...s, linkUrl: e.target.value }))} /></label>
-              <label className="px-field px-formGridSpan2"><span>Descripción</span><textarea className="px-input px-textarea" value={campaignForm.description} onChange={(e) => setCampaignForm((s) => ({ ...s, description: e.target.value }))} /></label>
-              <label className="px-field"><span>Slot</span><select className="px-select" value={campaignForm.slot} onChange={(e) => setCampaignForm((s) => ({ ...s, slot: e.target.value as any }))}><option value="HOME_HERO">Home hero</option><option value="HOME_GRID">Home grid</option><option value="HOME_INLINE">Home inline</option></select></label>
-              <label className="px-field"><span>Estado</span><select className="px-select" value={campaignForm.status} onChange={(e) => setCampaignForm((s) => ({ ...s, status: e.target.value as any }))}><option value="ACTIVE">Activa</option><option value="PAUSED">Pausada</option></select></label>
-              <label className="px-field"><span>Orden</span><input className="px-input" value={campaignForm.sortOrder} onChange={(e) => setCampaignForm((s) => ({ ...s, sortOrder: e.target.value }))} /></label>
-              <label className="px-field"><span>Imagen</span><input type="file" accept="image/*" onChange={(e) => setCampaignFile(e.target.files?.[0] || null)} /></label>
-              {editingCampaignId ? <label className="px-checkboxLine px-formGridSpan2"><input type="checkbox" checked={keepImage} onChange={(e) => setKeepImage(e.target.checked)} />Mantener imagen actual si no subo otra.</label> : null}
-            </div>
-            <div className="px-platformDecisionActions" style={{ marginTop: 18 }}>
-              <button className="px-btn px-btn--soft" type="button" onClick={() => setCampaignOpen(false)}>Cancelar</button>
-              <button className="px-btn" type="button" onClick={saveCampaign} disabled={saving}>{saving ? 'Guardando…' : editingCampaignId ? 'Guardar cambios' : 'Crear campaña'}</button>
-            </div>
+            <div className="px-mediaModalActions"><button className="px-btn px-btn--ghost" type="button" onClick={() => setCampaignOpen(false)}>Cancelar</button><button className="px-btn" type="button" onClick={saveCampaign} disabled={saving}>{saving ? 'Guardando…' : editingCampaignId ? 'Guardar cambios' : 'Crear campaña'}</button></div>
           </div>
         </div>
       ) : null}
 
       {sponsorOpen ? (
-        <div className="px-overlay" onClick={() => !saving && setSponsorOpen(false)}>
-          <div className="px-modalCard px-contentModal" onClick={(e) => e.stopPropagation()}>
-            <div className="px-modalHead">
-              <div>
-                <h3 className="px-modalTitle">{editingSponsorId ? 'Editar sponsor' : 'Nuevo sponsor'}</h3>
-                <div className="px-modalSub">Mismo sistema de altas con modal.</div>
+        <div className="px-mediaOverlay" onClick={() => !saving && setSponsorOpen(false)}>
+          <div className="px-mediaModal" onClick={(event) => event.stopPropagation()}>
+            <div className="px-mediaModalHead">
+              <div><h3>{editingSponsorId ? 'Editar sponsor' : 'Nuevo sponsor'}</h3><p>Logo, nivel y posición visual dentro del home.</p></div>
+              <button className="px-btn px-btn--ghost" type="button" onClick={() => setSponsorOpen(false)}>Cerrar</button>
+            </div>
+            <div className="px-mediaModalGrid">
+              <div className="px-mediaFormStack">
+                <section className="px-mediaFormBlock">
+                  <h4>Datos principales</h4>
+                  <label><span>Nombre</span><input value={sponsorForm.name} onChange={(event) => setSponsorForm((state) => ({ ...state, name: event.target.value }))} /></label>
+                  <label><span>Website</span><input value={sponsorForm.websiteUrl} onChange={(event) => setSponsorForm((state) => ({ ...state, websiteUrl: event.target.value }))} /></label>
+                </section>
+                <section className="px-mediaFormBlock">
+                  <h4>Jerarquía</h4>
+                  <div className="px-mediaSplit">
+                    <label><span>Nivel</span><select value={sponsorForm.tier} onChange={(event) => setSponsorForm((state) => ({ ...state, tier: event.target.value as Sponsor['tier'] }))}><option value="SPONSOR">Sponsor fijo</option><option value="PARTNER">Destacado</option><option value="LOCAL">Secundario</option></select></label>
+                    <label><span>Estado</span><select value={sponsorForm.status} onChange={(event) => setSponsorForm((state) => ({ ...state, status: event.target.value as Sponsor['status'] }))}><option value="ACTIVE">Activo</option><option value="PAUSED">Pausado</option></select></label>
+                    <label><span>Orden</span><input value={sponsorForm.sortOrder} onChange={(event) => setSponsorForm((state) => ({ ...state, sortOrder: event.target.value }))} /></label>
+                  </div>
+                </section>
+                <section className="px-mediaFormBlock">
+                  <h4>Logo</h4>
+                  <label className="px-mediaUpload"><span>Logo cuadrado o horizontal limpio</span><input type="file" accept="image/*" onChange={(event) => setSponsorFile(event.target.files?.[0] || null)} /></label>
+                  {editingSponsorId ? <label className="px-mediaCheckbox"><input type="checkbox" checked={keepLogo} onChange={(event) => setKeepLogo(event.target.checked)} />Mantener logo actual si no subo otro.</label> : null}
+                </section>
               </div>
-              <button className="px-btn px-btn--soft px-btn--xs" type="button" onClick={() => setSponsorOpen(false)}>Cerrar</button>
+              <aside className="px-mediaFormPreview">
+                <div className="px-mediaFormPreviewHead"><h4>Preview</h4><span className={tierBadgeClass(sponsorForm.tier)}>{sponsorForm.tier}</span></div>
+                <div className="px-mediaSponsorLive">
+                  <div className="px-mediaSponsorLogoLarge">{sponsorPreviewImage ? <img src={sponsorPreviewImage} alt={sponsorForm.name || 'Preview sponsor'} /> : <span>{(sponsorForm.name || 'SP').slice(0, 2).toUpperCase()}</span>}</div>
+                  <strong>{sponsorForm.name || 'Nombre del sponsor'}</strong>
+                  <p>{sponsorForm.websiteUrl || 'El bloque de sponsors del home se va a ver así de limpio y directo.'}</p>
+                </div>
+              </aside>
             </div>
-            <div className="px-formGrid">
-              <label className="px-field px-formGridSpan2"><span>Nombre</span><input className="px-input" value={sponsorForm.name} onChange={(e) => setSponsorForm((s) => ({ ...s, name: e.target.value }))} /></label>
-              <label className="px-field px-formGridSpan2"><span>Web</span><input className="px-input" value={sponsorForm.websiteUrl} onChange={(e) => setSponsorForm((s) => ({ ...s, websiteUrl: e.target.value }))} /></label>
-              <label className="px-field"><span>Tier</span><select className="px-select" value={sponsorForm.tier} onChange={(e) => setSponsorForm((s) => ({ ...s, tier: e.target.value as any }))}><option value="SPONSOR">Sponsor</option><option value="PARTNER">Partner</option><option value="LOCAL">Local</option></select></label>
-              <label className="px-field"><span>Estado</span><select className="px-select" value={sponsorForm.status} onChange={(e) => setSponsorForm((s) => ({ ...s, status: e.target.value as any }))}><option value="ACTIVE">Activo</option><option value="PAUSED">Pausado</option></select></label>
-              <label className="px-field"><span>Orden</span><input className="px-input" value={sponsorForm.sortOrder} onChange={(e) => setSponsorForm((s) => ({ ...s, sortOrder: e.target.value }))} /></label>
-              <label className="px-field"><span>Logo</span><input type="file" accept="image/*" onChange={(e) => setSponsorFile(e.target.files?.[0] || null)} /></label>
-              {editingSponsorId ? <label className="px-checkboxLine px-formGridSpan2"><input type="checkbox" checked={keepLogo} onChange={(e) => setKeepLogo(e.target.checked)} />Mantener logo actual si no subo otro.</label> : null}
-            </div>
-            <div className="px-platformDecisionActions" style={{ marginTop: 18 }}>
-              <button className="px-btn px-btn--soft" type="button" onClick={() => setSponsorOpen(false)}>Cancelar</button>
-              <button className="px-btn" type="button" onClick={saveSponsor} disabled={saving}>{saving ? 'Guardando…' : editingSponsorId ? 'Guardar cambios' : 'Crear sponsor'}</button>
-            </div>
+            <div className="px-mediaModalActions"><button className="px-btn px-btn--ghost" type="button" onClick={() => setSponsorOpen(false)}>Cancelar</button><button className="px-btn" type="button" onClick={saveSponsor} disabled={saving}>{saving ? 'Guardando…' : editingSponsorId ? 'Guardar cambios' : 'Crear sponsor'}</button></div>
           </div>
         </div>
       ) : null}
+
+      <style jsx>{`
+        .px-mediaActions { display: flex; gap: 8px; }
+        .px-mediaBoard { display: grid; gap: 16px; }
+        .px-mediaSection { display: grid; gap: 12px; }
+        .px-mediaSectionHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .px-mediaSectionHead h3 { margin: 0; font-size: 18px; }
+        .px-mediaSectionHead p { margin: 2px 0 0; font-size: 13px; color: rgba(23,37,63,.62); }
+        .px-mediaList { display: grid; gap: 8px; }
+        .px-mediaRow { display: flex; gap: 10px; align-items: center; border: 1px solid rgba(15,23,42,.08); border-radius: 8px; padding: 10px; cursor: pointer; transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
+        .px-mediaRow:hover, .px-mediaRow.is-active { transform: translateY(-1px); border-color: rgba(16,185,129,.28); box-shadow: 0 14px 28px rgba(15,23,42,.08); }
+        .px-mediaThumb { width: 82px; min-width: 82px; height: 58px; border-radius: 8px; background: rgba(148,163,184,.16); display: grid; place-items: center; overflow: hidden; color: rgba(23,37,63,.62); font-size: 11px; }
+        .px-mediaThumb--logo { width: 70px; min-width: 70px; height: 70px; }
+        .px-mediaThumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .px-mediaMain { flex: 1; min-width: 0; display: grid; gap: 6px; }
+        .px-mediaTop { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+        .px-mediaTop strong { font-size: 14px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .px-mediaBadges { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .px-mediaMeta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: rgba(23,37,63,.62); }
+        .px-mediaMeta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
+        .px-mediaRowActions { display: flex; flex-direction: column; gap: 6px; }
+        .px-mediaRowActions :global(.px-btn) { min-height: 28px; padding: 0 9px; font-size: 11px; }
+        .px-slotBadge, .px-entityBadge { display: inline-flex; align-items: center; justify-content: center; min-height: 24px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+        .px-slotBadge--hero { background: rgba(236,72,153,.14); color: #be185d; }
+        .px-slotBadge--grid { background: rgba(59,130,246,.12); color: #1d4ed8; }
+        .px-slotBadge--inline { background: rgba(245,158,11,.16); color: #b45309; }
+        .px-slotBadge--sponsor { background: rgba(16,185,129,.16); color: #047857; }
+        .px-slotBadge--partner { background: rgba(124,58,237,.16); color: #6d28d9; }
+        .px-slotBadge--local { background: rgba(100,116,139,.16); color: #475569; }
+        .px-entityBadge--active { background: rgba(16,185,129,.16); color: #047857; }
+        .px-entityBadge--paused { background: rgba(148,163,184,.16); color: #475569; }
+        .px-mediaSection--preview { gap: 14px; }
+        .px-mediaPreviewGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .px-mediaPreviewCard { border: 1px solid rgba(15,23,42,.08); border-radius: 10px; background: #fff; padding: 12px; display: grid; gap: 10px; min-height: 180px; }
+        .px-mediaPreviewCard--hero, .px-mediaPreviewCard--sponsors { grid-column: span 2; }
+        .px-mediaPreviewImage { width: 100%; height: 180px; object-fit: cover; display: block; border-radius: 10px; }
+        .px-mediaPreviewBody { display: grid; gap: 6px; }
+        .px-mediaPreviewBody strong { font-size: 16px; }
+        .px-mediaPreviewBody p { margin: 0; color: rgba(23,37,63,.66); font-size: 13px; line-height: 1.45; }
+        .px-mediaMiniPreviewList { display: grid; gap: 8px; }
+        .px-mediaMiniPreview { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 8px; align-items: center; }
+        .px-mediaMiniPreview div, .px-mediaMiniPreview img { width: 64px; height: 46px; border-radius: 8px; background: rgba(148,163,184,.16); object-fit: cover; display: block; }
+        .px-mediaMiniPreview strong { font-size: 13px; line-height: 1.2; }
+        .px-mediaInlinePreview { display: grid; gap: 8px; }
+        .px-mediaInlineItem { display: flex; justify-content: space-between; gap: 10px; border: 1px solid rgba(15,23,42,.06); border-radius: 8px; padding: 10px; }
+        .px-mediaInlineItem strong { font-size: 13px; }
+        .px-mediaInlineItem span { font-size: 12px; color: rgba(23,37,63,.62); }
+        .px-mediaSponsorPreview { display: flex; gap: 10px; flex-wrap: wrap; }
+        .px-mediaSponsorLogo { width: 92px; height: 56px; border: 1px solid rgba(15,23,42,.08); border-radius: 8px; display: grid; place-items: center; background: #fff; overflow: hidden; }
+        .px-mediaSponsorLogo img { width: 100%; height: 100%; object-fit: contain; display: block; padding: 8px; }
+        .px-mediaAside { display: grid; gap: 12px; }
+        .px-mediaAsideHead h3 { margin: 0; }
+        .px-mediaRuleList { display: grid; gap: 10px; }
+        .px-mediaRuleList div { display: grid; gap: 4px; }
+        .px-mediaRuleList span { font-size: 12px; color: rgba(23,37,63,.56); }
+        .px-mediaRuleList strong { font-size: 14px; line-height: 1.3; }
+        .px-mediaOverlay { position: fixed; inset: 72px 0 0 0; background: rgba(15,23,42,.66); padding: 16px; z-index: 70; overflow-y: auto; }
+        .px-mediaModal { width: min(1160px, 100%); margin: 0 auto; background: #f8fafc; border-radius: 10px; padding: 16px; display: grid; gap: 16px; }
+        .px-mediaModalHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .px-mediaModalHead h3 { margin: 0; font-size: 22px; }
+        .px-mediaModalHead p { margin: 3px 0 0; font-size: 13px; color: rgba(23,37,63,.62); }
+        .px-mediaModalGrid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+        .px-mediaFormStack, .px-mediaFormPreview { display: grid; gap: 12px; }
+        .px-mediaFormBlock { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 8px; padding: 14px; display: grid; gap: 10px; }
+        .px-mediaFormBlock h4, .px-mediaFormPreview h4 { margin: 0; font-size: 14px; }
+        .px-mediaFormBlock label { display: grid; gap: 6px; font-size: 13px; color: rgba(23,37,63,.84); }
+        .px-mediaFormBlock input, .px-mediaFormBlock select, .px-mediaFormBlock textarea { width: 100%; border: 1px solid rgba(15,23,42,.14); border-radius: 8px; padding: 9px 10px; background: #fff; color: #0f172a; font-size: 13px; }
+        .px-mediaSplit { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .px-mediaUpload input { padding: 8px; }
+        .px-mediaCheckbox { display: flex !important; align-items: center; gap: 8px; }
+        .px-mediaCheckbox input { width: auto !important; }
+        .px-mediaFormPreview { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 8px; padding: 14px; }
+        .px-mediaFormPreviewHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .px-mediaLiveCard { display: grid; gap: 10px; }
+        .px-mediaLiveCard img, .px-mediaSponsorLogoLarge img { width: 100%; display: block; object-fit: cover; border-radius: 10px; }
+        .px-mediaLiveCard.is-hero img { height: 220px; }
+        .px-mediaLiveCard.is-grid img { height: 180px; }
+        .px-mediaLiveCard.is-inline img { height: 120px; }
+        .px-mediaLiveFallback { height: 180px; border-radius: 10px; display: grid; place-items: center; background: rgba(148,163,184,.16); color: rgba(23,37,63,.62); }
+        .px-mediaLiveCopy { display: grid; gap: 6px; }
+        .px-mediaLiveCopy strong { font-size: 16px; }
+        .px-mediaLiveCopy p, .px-mediaSponsorLive p { margin: 0; font-size: 13px; color: rgba(23,37,63,.66); line-height: 1.45; }
+        .px-mediaSponsorLive { display: grid; gap: 10px; place-items: start; }
+        .px-mediaSponsorLogoLarge { width: 180px; height: 108px; border-radius: 10px; border: 1px solid rgba(15,23,42,.08); background: #fff; display: grid; place-items: center; overflow: hidden; }
+        .px-mediaSponsorLogoLarge span { font-size: 28px; font-weight: 700; color: rgba(23,37,63,.46); }
+        .px-mediaModalActions { display: flex; justify-content: flex-end; gap: 8px; }
+        @media (max-width: 980px) {
+          .px-mediaPreviewGrid { grid-template-columns: 1fr; }
+          .px-mediaPreviewCard--hero, .px-mediaPreviewCard--sponsors { grid-column: span 1; }
+          .px-mediaModalGrid { grid-template-columns: 1fr; }
+          .px-mediaSplit { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 720px) {
+          .px-mediaActions, .px-mediaSectionHead, .px-mediaModalHead, .px-mediaModalActions, .px-mediaTop { flex-direction: column; align-items: stretch; }
+          .px-mediaRow { align-items: stretch; }
+          .px-mediaThumb, .px-mediaThumb--logo { width: 100%; min-width: 0; height: 180px; }
+          .px-mediaRowActions { flex-direction: row; width: 100%; }
+          .px-mediaMeta span { max-width: 100%; }
+          .px-mediaOverlay { inset: 64px 0 0 0; padding: 0; }
+          .px-mediaModal { border-radius: 0; min-height: calc(100vh - 64px); }
+        }
+      `}</style>
     </PlatformModuleShell>
   )
 }

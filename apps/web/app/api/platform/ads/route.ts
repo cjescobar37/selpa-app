@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { assertPlatformAdmin } from '@/lib/platformApiAuth'
 import { platformContentSetupMessage, uploadPlatformAsset } from '@/lib/platformContent'
+import { logPlatformAction } from '@/lib/platformAudit'
 
 function isMissingRelation(error?: { message?: string } | null) {
   const msg = String(error?.message || '').toLowerCase()
@@ -43,6 +44,19 @@ export async function POST(req: NextRequest) {
       if (isMissingRelation(error)) return setupResponse('campañas')
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+    await logPlatformAction({
+      actorUserId: auth.user!.id,
+      action: 'ad.create',
+      entityType: 'platform_ad_campaign',
+      entityId: data?.id ?? null,
+      entityLabel: data?.title ?? title,
+      metadata: {
+        slot,
+        status,
+        sort_order: sortOrder,
+      },
+      req,
+    })
     return NextResponse.json({ ok: true, row: data })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message ?? 'No pude crear la campaña.' }, { status: 500 })

@@ -1,203 +1,210 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import { clubStatusBadgeClass, clubStatusLabel, type PlatformClubStatus } from '@/lib/platformStatus'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
   | null
 
-type Stat = { label: string; value: string; hint?: string }
-type ClubRow = { id: string; name: string; city: string | null; is_active: boolean | null; created_at: string }
+type Summary = {
+  clubs: {
+    total: number
+    active: number
+    pending: number
+    rejected: number
+    suspended: number
+    recent: Array<{ id: string; name: string; city: string | null; status: PlatformClubStatus; created_at: string }>
+  }
+  users: {
+    total_profiles: number
+    memberships_total: number
+    memberships_pending: number
+    memberships_approved: number
+  }
+  content: {
+    news_total: number
+    news_published: number
+    ads_active: number
+    sponsors_active: number
+  }
+  finance: {
+    available: boolean
+    recent_payments: Array<{ id: string; status: string; amount: number; currency: string; created_at: string; paid_at: string | null }>
+    payments_paid_count: number
+    payments_total_collected: number
+    commissions_total: number
+    settlements_pending: number
+    settlements_approved: number
+    settlements_paid: number
+  }
+}
+
+const emptySummary: Summary = {
+  clubs: { total: 0, active: 0, pending: 0, rejected: 0, suspended: 0, recent: [] },
+  users: { total_profiles: 0, memberships_total: 0, memberships_pending: 0, memberships_approved: 0 },
+  content: { news_total: 0, news_published: 0, ads_active: 0, sponsors_active: 0 },
+  finance: { available: true, recent_payments: [], payments_paid_count: 0, payments_total_collected: 0, commissions_total: 0, settlements_pending: 0, settlements_approved: 0, settlements_paid: 0 },
+}
+
+function money(value: number, currency = 'ARS') {
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(value || 0))
+}
+
+function formatDate(value: string | null) {
+  if (!value) return '—'
+  return new Date(value).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+}
 
 export default function PlatformPage() {
-  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [alert, setAlert] = useState<AlertState>(null)
-
-  const [clubs, setClubs] = useState<ClubRow[]>([])
-  const [clubsCount, setClubsCount] = useState<number | null>(null)
-
-  const stats: Stat[] = useMemo(() => {
-    return [
-      { label: 'Clubes activos', value: clubsCount === null ? '—' : String(clubsCount), hint: 'Total en plataforma' },
-      { label: 'Pagos hoy', value: '—', hint: 'Pendiente integrar MP' },
-      { label: 'Comisión hoy', value: '—', hint: 'Snapshot por pago' },
-      { label: 'Alertas', value: '0', hint: 'Webhooks / fallos' },
-    ]
-  }, [clubsCount])
+  const [summary, setSummary] = useState<Summary>(emptySummary)
 
   async function load() {
     setLoading(true)
     setAlert(null)
 
-    const { data: s } = await supabase.auth.getSession()
-    if (!s?.session?.user) {
+    const { data: sess } = await supabase.auth.getSession()
+    const token = sess?.session?.access_token
+    if (!token) {
       setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
       setLoading(false)
       return
     }
 
-    // (Opcional) Si querés asegurar superadmin acá, lo chequeás:
-    const userId = s.session.user.id
-    const { data: pa, error: paErr } = await supabase
-      .from('platform_admins')
-      .select('user_id')
-      .eq('user_id', userId)
-      .maybeSingle()
+    const res = await fetch('/api/platform/summary', {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+    const json = await res.json().catch(() => ({}))
 
-    if (paErr) {
-      setAlert({ variant: 'error', title: 'Error verificando permisos', message: paErr.message })
+    if (!res.ok) {
+      setAlert({ variant: 'error', title: 'No pude cargar el dashboard', message: json?.error ?? 'Error inesperado.' })
       setLoading(false)
       return
     }
 
-    if (!pa?.user_id) {
-      // si no es superadmin, lo mandamos a post-login y que resuelva
-      router.replace('/auth/post-login')
-      return
-    }
-
-    const { data: rows, error } = await supabase
-      .from('clubs')
-      .select('id,name,city,is_active,created_at')
-      .order('created_at', { ascending: false })
-      .limit(6)
-
-    if (error) {
-      setAlert({ variant: 'error', title: 'No pude traer clubes', message: error.message })
-      setLoading(false)
-      return
-    }
-
-    setClubs(rows ?? [])
-    setClubsCount((rows ?? []).filter(r => r.is_active !== false).length) // placeholder
+    setSummary(json as Summary)
     setLoading(false)
   }
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const mainMetrics = useMemo(() => [
+    { label: 'Clubes activos', value: String(summary.clubs.active), hint: `${summary.clubs.pending} pendientes` },
+    { label: 'Usuarios', value: String(summary.users.total_profiles), hint: `${summary.users.memberships_pending} membresías pendientes` },
+    { label: 'Cobrado 30d', value: money(summary.finance.payments_total_collected), hint: `${summary.finance.payments_paid_count} pagos paid` },
+    { label: 'Comisiones 30d', value: money(summary.finance.commissions_total), hint: 'Calculadas por pago' },
+  ], [summary])
 
   return (
     <div className="platform-shell">
-      <div className="platform-panel">
-        <div className="px-platform">
-      <div className="px-platformHead">
-        <div>
-          <h1 className="px-platformTitle">Plataforma</h1>
-          <div className="px-platformSub">Panel global • comisiones • clubes • auditoría</div>
-        </div>
-
-        <div className="px-toolbar">
-          <button className="px-btn px-btn--soft" onClick={() => setAlert({ variant: 'info', title: 'Próximo paso', message: 'Acá abrimos modal de reglas / % variable.' })}>
-            Configurar comisión
-          </button>
-          <button className="px-btn" onClick={load} disabled={loading}>
-            {loading ? (
-              <>
-                <span className="px-spinner" />&nbsp;Cargando…
-              </>
-            ) : (
-              'Recargar'
-            )}
-          </button>
-        </div>
-      </div>
-
-      {alert ? <AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /> : null}
-
-      <div className="px-kpis" style={{ marginTop: 14 }}>
-        {stats.map(s => (
-          <div key={s.label} className="px-kpi">
-            <div className="px-kpiLabel">{s.label}</div>
-            <div className="px-kpiValue">{s.value}</div>
-            {s.hint ? <div className="px-kpiHint">{s.hint}</div> : null}
+      <div className="px-platform">
+        <div className="px-platformHead">
+          <div>
+            <h1 className="px-platformTitle">Plataforma</h1>
+            <div className="px-platformSub">Resumen operativo de clubes, usuarios, contenido y finanzas.</div>
           </div>
-        ))}
-      </div>
-
-      <div className="px-platformGrid" style={{ marginTop: 14 }}>
-        <div className="px-platformCard">
-          <div className="px-sectionTitle">Acciones rápidas</div>
-
-          <div className="px-actions">
-            <div className="px-action" onClick={() => setAlert({ variant: 'info', title: 'Comisiones', message: 'Abrimos pantalla: reglas, % por club, vigencia, historial.' })}>
-              <div className="px-actionLeft">
-                <p className="px-actionTitle">Comisiones</p>
-                <p className="px-actionSub">Cambiar % default y reglas</p>
-              </div>
-              <span className="px-pill"><span className="px-dot" /> Config</span>
-            </div>
-
-            <div className="px-action" onClick={() => setAlert({ variant: 'info', title: 'Pagos', message: 'Vista global: estados, conciliación MP, devoluciones, chargebacks.' })}>
-              <div className="px-actionLeft">
-                <p className="px-actionTitle">Pagos</p>
-                <p className="px-actionSub">Ver estados / chargebacks</p>
-              </div>
-              <span className="px-pill"><span className="px-dot" /> Monitor</span>
-            </div>
-
-            <div className="px-action" onClick={() => setAlert({ variant: 'info', title: 'Auditoría', message: 'Logs: altas/bajas, cambios de comisión, roles, acciones sensibles.' })}>
-              <div className="px-actionLeft">
-                <p className="px-actionTitle">Auditoría</p>
-                <p className="px-actionSub">Logs de acciones sensibles</p>
-              </div>
-              <span className="px-pill"><span className="px-dot" /> Logs</span>
-            </div>
-
-            <div className="px-action" onClick={() => setAlert({ variant: 'info', title: 'Usuarios', message: 'Panel de usuarios: roles extra, bloqueos, reportes, merges.' })}>
-              <div className="px-actionLeft">
-                <p className="px-actionTitle">Usuarios</p>
-                <p className="px-actionSub">Roles extra / bloqueos</p>
-              </div>
-              <span className="px-pill"><span className="px-dot" /> Admin</span>
-            </div>
+          <div className="px-toolbar">
+            <button className="px-btn px-btn--ghost" onClick={load} disabled={loading}>
+              {loading ? (<><span className="px-spinner" /> Recargando…</>) : 'Recargar'}
+            </button>
           </div>
         </div>
 
-        <div className="px-platformAsideStack">
-          <div className="px-platformCard">
-            <div className="px-sectionTitle">Clubes recientes</div>
+        {alert ? <div style={{ marginTop: 14 }}><AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /></div> : null}
+        {!summary.finance.available ? <div style={{ marginTop: 14 }}><AuthAlert variant="warning" title="Finanzas no disponible" message="Aplicá la migración financiera para ver pagos, comisiones y liquidaciones." /></div> : null}
 
-            {clubs.length ? (
-              <table className="px-table">
-                <thead>
-                  <tr>
-                    <th>Club</th>
-                    <th>Ciudad</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clubs.map(c => (
-                    <tr key={c.id}>
-                      <td style={{ fontWeight: 800 }}>{c.name}</td>
-                      <td style={{ opacity: 0.8 }}>{c.city ?? '—'}</td>
-                      <td style={{ opacity: 0.8 }}>{c.is_active === false ? 'Inactivo' : 'Activo'}</td>
-                    </tr>
+        <div className="px-kpis px-kpis--platformAdmin" style={{ marginTop: 16 }}>
+          {mainMetrics.map((metric) => (
+            <div key={metric.label} className="px-platformMetricCard">
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+              <small>{metric.hint}</small>
+            </div>
+          ))}
+        </div>
+
+        <div className="px-platformGrid" style={{ marginTop: 14 }}>
+          <section className="px-platformCard">
+            <div className="px-sectionTitle">Operación</div>
+            <div className="px-actions">
+              <Link className="px-action" href="/platform/solicitudes">
+                <div className="px-actionLeft">
+                  <p className="px-actionTitle">Clubes por revisar</p>
+                  <p className="px-actionSub">Altas pendientes y correcciones</p>
+                </div>
+                <span className="px-pill">{summary.clubs.pending}</span>
+              </Link>
+              <Link className="px-action" href="/platform/usuarios">
+                <div className="px-actionLeft">
+                  <p className="px-actionTitle">Usuarios pendientes</p>
+                  <p className="px-actionSub">Membresías que requieren acción</p>
+                </div>
+                <span className="px-pill">{summary.users.memberships_pending}</span>
+              </Link>
+              <Link className="px-action" href="/platform/noticias">
+                <div className="px-actionLeft">
+                  <p className="px-actionTitle">Contenido publicado</p>
+                  <p className="px-actionSub">Noticias, campañas y sponsors activos</p>
+                </div>
+                <span className="px-pill">{summary.content.news_published}</span>
+              </Link>
+              <Link className="px-action" href="/platform/liquidaciones">
+                <div className="px-actionLeft">
+                  <p className="px-actionTitle">Liquidaciones</p>
+                  <p className="px-actionSub">Pendientes, aprobadas y pagadas</p>
+                </div>
+                <span className="px-pill">{summary.finance.settlements_pending}/{summary.finance.settlements_approved}/{summary.finance.settlements_paid}</span>
+              </Link>
+            </div>
+          </section>
+
+          <aside className="px-platformAsideStack">
+            <div className="px-platformCard">
+              <div className="px-sectionTitle">Clubes recientes</div>
+              {summary.clubs.recent.length ? (
+                <div className="px-actions">
+                  {summary.clubs.recent.map((club) => (
+                    <Link key={club.id} className="px-action" href={`/platform/clubs?focus=${club.id}`}>
+                      <div className="px-actionLeft">
+                        <p className="px-actionTitle">{club.name}</p>
+                        <p className="px-actionSub">{club.city || 'Sin ciudad'} · {formatDate(club.created_at)}</p>
+                      </div>
+                      <span className={`px-statusBadge ${clubStatusBadgeClass(club.status)}`}>{clubStatusLabel(club.status)}</span>
+                    </Link>
                   ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="px-empty">No hay datos todavía.</div>
-            )}
-          </div>
+                </div>
+              ) : (
+                <div className="px-empty">Sin clubes recientes.</div>
+              )}
+            </div>
 
-          <div className="px-platformCard">
-            <div className="px-sectionTitle">Salud del sistema</div>
-            <div className="px-pill" style={{ width: 'fit-content' }}>
-              <span className="px-dot" /> Webhooks OK
+            <div className="px-platformCard">
+              <div className="px-sectionTitle">Finanzas recientes</div>
+              <div className="px-platformMiniStats">
+                <div><span>Pending</span><strong>{summary.finance.settlements_pending}</strong></div>
+                <div><span>Approved</span><strong>{summary.finance.settlements_approved}</strong></div>
+                <div><span>Paid</span><strong>{summary.finance.settlements_paid}</strong></div>
+              </div>
+              <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+                {summary.finance.recent_payments.slice(0, 4).map((payment) => (
+                  <div key={payment.id} className="px-platformMiniRow">
+                    <span>{formatDate(payment.paid_at || payment.created_at)}</span>
+                    <strong>{money(payment.amount, payment.currency || 'ARS')}</strong>
+                    <em>{payment.status}</em>
+                  </div>
+                ))}
+                {!summary.finance.recent_payments.length ? <div className="px-empty">Sin pagos recientes.</div> : null}
+              </div>
             </div>
-            <div style={{ marginTop: 10, opacity: 0.78, fontSize: 13.5 }}>
-              Próximo: tablero de eventos MP, reintentos y errores por club.
-            </div>
-          </div>
-        </div>
-      </div>
+          </aside>
         </div>
       </div>
     </div>

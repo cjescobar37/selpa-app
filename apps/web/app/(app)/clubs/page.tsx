@@ -13,6 +13,7 @@ type Club = {
   logo_url: string | null
   membership_status: string | null
   membership_role: string | null
+  membership_approved: boolean
 }
 
 export default function ClubsPage() {
@@ -96,7 +97,7 @@ export default function ClubsPage() {
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <Link href="/seleccionar-club" style={linkBtn}>Seleccionar club</Link>
-          <Link href="/unir-mi-club" style={linkBtn}>Dar de alta mi club</Link>
+          <Link href="/clubs/nuevo" style={linkBtn}>Dar de alta mi club</Link>
         </div>
       </div>
 
@@ -128,7 +129,7 @@ export default function ClubsPage() {
           const status = club.membership_status
           const canRequest = !status || status === 'REJECTED'
           const isPending = status === 'PENDING'
-          const isApproved = status === 'APPROVED'
+          const isApproved = club.membership_approved
           const isBusy = requestingId === club.id
 
           return (

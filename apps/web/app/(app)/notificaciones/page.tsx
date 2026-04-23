@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from '@/components/session/SessionProvider'
+import { PLATFORM_NOTIFICATION_TYPES } from '@/lib/notificationScope'
+import { platformNotificationBadgeClass, platformNotificationTypeLabel } from '@/lib/platformStatus'
 import { supabase } from '@/lib/supabaseClient'
 
 type NotificationRow = {
@@ -36,6 +39,7 @@ function previewText(value: string, max = 120) {
 
 export default function NotificacionesPage() {
   const router = useRouter()
+  const { role } = useSession()
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<NotificationRow[]>([])
   const [msg, setMsg] = useState('')
@@ -56,13 +60,19 @@ export default function NotificacionesPage() {
 
     setCurrentUserId(me.id)
 
-    const { data, error } = await supabase
+    let notificationsQuery = supabase
       .from('notifications')
       .select('id, type, title, message, read, link, created_at, metadata')
       .eq('user_id', me.id)
       .neq('type', 'message')
       .order('created_at', { ascending: false })
       .limit(100)
+
+    if (role === 'platform') {
+      notificationsQuery = notificationsQuery.in('type', PLATFORM_NOTIFICATION_TYPES as unknown as string[])
+    }
+
+    const { data, error } = await notificationsQuery
 
     if (error) {
       setMsg(error.message)
@@ -80,7 +90,18 @@ export default function NotificacionesPage() {
   }
 
   async function markAllRead() {
-    await supabase.from('notifications').update({ read: true }).eq('user_id', currentUserId).eq('read', false).neq('type', 'message')
+    let markAllQuery = supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', currentUserId)
+      .eq('read', false)
+      .neq('type', 'message')
+
+    if (role === 'platform') {
+      markAllQuery = markAllQuery.in('type', PLATFORM_NOTIFICATION_TYPES as unknown as string[])
+    }
+
+    await markAllQuery
     setRows((cur) => cur.map((row) => ({ ...row, read: true })))
   }
 
@@ -99,19 +120,24 @@ export default function NotificacionesPage() {
 
   useEffect(() => {
     load()
-  }, [])
+  }, [role])
 
   const unread = rows.filter((r) => !r.read).length
+  const pageTitle = role === 'platform' ? 'Notificaciones platform' : 'Notificaciones'
+  const pageSub = role === 'platform'
+    ? 'Altas de clubes, revisiones pendientes y alertas administrativas globales.'
+    : 'Aprobaciones, rechazos, avisos del sistema y novedades generales.'
 
   return (
-    <div className="px-wrap">
-      <div className="px-pageHead" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div className="platform-shell">
+      <div className="px-platform px-platform--notifications">
+      <div className="px-platformHead">
         <div>
-          <h1 className="px-pageTitle">Notificaciones</h1>
-          <p className="px-pageSub">Aprobaciones, rechazos, avisos del sistema y novedades generales.</p>
+          <h1 className="px-platformTitle">{pageTitle}</h1>
+          <div className="px-platformSub">{pageSub}</div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div className="px-toolbar">
           <span className="px-pill">{unread} sin leer</span>
           <button type="button" onClick={markAllRead} className="px-btn px-btn--ghost">
             Marcar todo leído
@@ -120,12 +146,12 @@ export default function NotificacionesPage() {
       </div>
 
       {msg ? (
-        <div className="px-card px-card--flat" style={{ marginBottom: 14 }}>
+        <div className="px-help" style={{ marginTop: 14 }}>
           {msg}
         </div>
       ) : null}
 
-      <div style={{ display: 'grid', gap: 10 }}>
+      <div className="px-platformNotificationList">
         {loading ? (
           <div className="px-help">Cargando notificaciones…</div>
         ) : rows.length === 0 ? (
@@ -136,34 +162,21 @@ export default function NotificacionesPage() {
               key={n.id}
               type="button"
               onClick={() => openNotification(n)}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: 16,
-                border: '1px solid rgba(23,37,63,.08)',
-                borderRadius: 16,
-                background: n.read ? 'rgba(255,255,255,.96)' : 'rgba(235,239,245,.98)',
-                cursor: 'pointer',
-                color: '#17253f',
-                transition: 'transform .16s ease, box-shadow .16s ease, background .16s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-1px)'
-                e.currentTarget.style.boxShadow = '0 8px 22px rgba(17,24,39,.08)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)'
-                e.currentTarget.style.boxShadow = 'none'
-              }}
+              className={`px-platformNotificationCard${n.read ? '' : ' is-unread'}`}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 900, fontSize: 21, lineHeight: 1.1 }}>{n.title}</div>
-                  <div style={{ fontSize: 14, color: 'rgba(23,37,63,.72)', marginTop: 8 }}>{previewText(n.message)}</div>
+              <div className="px-platformNotificationHead">
+                <div className="px-platformNotificationMain">
+                  <div className="px-platformNotificationMeta">
+                    <span className={`px-statusBadge ${platformNotificationBadgeClass(n.type)}`}>
+                      {platformNotificationTypeLabel(n.type)}
+                    </span>
+                    <span className="px-platformNotificationDate">{formatDate(n.created_at)}</span>
+                  </div>
+                  <div className="px-platformNotificationTitle">{n.title}</div>
+                  <div className="px-platformNotificationText">{previewText(n.message)}</div>
                 </div>
-                <div style={{ display: 'grid', justifyItems: 'end', gap: 8, flex: '0 0 auto' }}>
-                  <div style={{ fontSize: 12, color: 'rgba(23,37,63,.60)' }}>{formatDate(n.created_at)}</div>
-                  {!n.read ? <span style={{ width: 10, height: 10, borderRadius: 999, background: '#ff4e72', display: 'inline-block' }} /> : null}
+                <div className="px-platformNotificationAside">
+                  {!n.read ? <span className="px-platformUnreadDot" /> : null}
                 </div>
               </div>
             </button>
@@ -185,6 +198,151 @@ export default function NotificacionesPage() {
           </div>
         </div>
       ) : null}
+
+      <style jsx>{`
+        .px-platformHead {
+          gap: 14px;
+        }
+
+        .px-platformNotificationList {
+          display: grid;
+          gap: 12px;
+          margin-top: 16px;
+        }
+
+        .px-platformNotificationCard {
+          width: 100%;
+          text-align: left;
+          padding: 16px;
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.98);
+          cursor: pointer;
+          color: #17253f;
+          transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+        }
+
+        .px-platformNotificationCard:hover,
+        .px-platformNotificationCard:focus-visible {
+          transform: translateY(-1px);
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+          border-color: rgba(14, 116, 144, 0.32);
+          outline: none;
+        }
+
+        .px-platformNotificationCard.is-unread {
+          background: rgba(248, 250, 252, 0.98);
+          border-color: rgba(14, 116, 144, 0.22);
+        }
+
+        .px-platformNotificationHead {
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+          align-items: flex-start;
+        }
+
+        .px-platformNotificationMain,
+        .px-platformNotificationAside {
+          min-width: 0;
+        }
+
+        .px-platformNotificationMain {
+          display: grid;
+          gap: 8px;
+          flex: 1;
+        }
+
+        .px-platformNotificationMeta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          align-items: center;
+        }
+
+        .px-platformNotificationDate {
+          color: #64748b;
+          font-size: 0.82rem;
+        }
+
+        .px-platformNotificationTitle {
+          color: #0f172a;
+          font-size: 1rem;
+          font-weight: 800;
+          line-height: 1.2;
+        }
+
+        .px-platformNotificationText {
+          color: #475569;
+          font-size: 0.92rem;
+          line-height: 1.45;
+        }
+
+        .px-platformNotificationAside {
+          display: flex;
+          justify-content: flex-end;
+          flex: 0 0 auto;
+          padding-top: 4px;
+        }
+
+        .px-platformUnreadDot {
+          width: 10px;
+          height: 10px;
+          border-radius: 999px;
+          background: #e11d48;
+          display: inline-block;
+        }
+
+        :global(.px-statusBadge) {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 28px;
+          padding: 0 10px;
+          border-radius: 999px;
+          font-size: 0.78rem;
+          font-weight: 700;
+          line-height: 1;
+          white-space: nowrap;
+          border: 1px solid transparent;
+        }
+
+        :global(.px-statusBadge.is-success) {
+          background: rgba(22, 163, 74, 0.12);
+          color: #166534;
+          border-color: rgba(22, 163, 74, 0.18);
+        }
+
+        :global(.px-statusBadge.is-warning) {
+          background: rgba(245, 158, 11, 0.14);
+          color: #92400e;
+          border-color: rgba(245, 158, 11, 0.2);
+        }
+
+        :global(.px-statusBadge.is-danger) {
+          background: rgba(239, 68, 68, 0.12);
+          color: #b91c1c;
+          border-color: rgba(239, 68, 68, 0.18);
+        }
+
+        :global(.px-statusBadge.is-neutral) {
+          background: rgba(71, 85, 105, 0.14);
+          color: #334155;
+          border-color: rgba(71, 85, 105, 0.16);
+        }
+
+        @media (max-width: 640px) {
+          .px-platformNotificationHead {
+            flex-direction: column;
+          }
+
+          .px-platformNotificationAside {
+            justify-content: flex-start;
+            padding-top: 0;
+          }
+        }
+      `}</style>
+      </div>
     </div>
   )
 }

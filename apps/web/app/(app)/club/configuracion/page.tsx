@@ -29,6 +29,20 @@ type ClubForm = {
   notes: string
 }
 
+type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
+
+type ClubReview = {
+  status: ClubStatus
+  rejected_at: string | null
+  rejection_reason: string | null
+  correction_requested_at: string | null
+  correction_reason: string | null
+  suspended_at: string | null
+  suspension_reason: string | null
+}
+
+type ClubApiResponse = ClubForm & ClubReview
+
 const empty: ClubForm = {
   name: '',
   brand_name: '',
@@ -99,6 +113,25 @@ function normalizeUrl(value?: string | null) {
   return isRealUrl(value) ? value!.trim() : ''
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback
+}
+
+function getStatusLabel(status?: ClubStatus | null) {
+  if (status === 'ACTIVE') return 'Activo'
+  if (status === 'REJECTED') return 'Rechazado'
+  if (status === 'SUSPENDED') return 'Suspendido'
+  return 'Pendiente de aprobación'
+}
+
+function getReviewReason(review?: ClubReview | null) {
+  if (!review) return null
+  if (review.status === 'REJECTED') return review.rejection_reason
+  if (review.status === 'SUSPENDED') return review.suspension_reason
+  if (review.status === 'PENDING_APPROVAL') return review.correction_reason
+  return null
+}
+
 export default function ClubConfiguracionPage() {
   const { activeClub, refresh } = useSession()
 
@@ -108,6 +141,7 @@ export default function ClubConfiguracionPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingRules, setUploadingRules] = useState(false)
   const [banner, setBanner] = useState<BannerState>(null)
+  const [review, setReview] = useState<ClubReview | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [selectedRulesName, setSelectedRulesName] = useState<string>('')
 
@@ -118,17 +152,25 @@ export default function ClubConfiguracionPage() {
   }, [logoPreview, v.logo_url])
 
   async function loadClubData(clubId: string) {
-    const { data, error } = await supabase
-      .from('clubs')
-      .select(
-        'name,brand_name,legal_name,cuit,city,province,country,address,phone,contact_email,website,instagram,opening_hours,courts_count,courts_surface,logo_url,rules_pdf_url,notes'
-      )
-      .eq('id', clubId)
-      .maybeSingle()
-
-    if (error) {
-      throw error
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData?.session?.access_token
+    if (!token) {
+      throw new Error('Sesión inválida.')
     }
+
+    const response = await fetch(`/api/clubs/${clubId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    })
+    const json = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      throw new Error(json?.error ?? 'No pude cargar los datos del club.')
+    }
+
+    const data = json?.club as Partial<ClubApiResponse> | undefined
 
     setV({
       name: data?.name ?? '',
@@ -150,6 +192,15 @@ export default function ClubConfiguracionPage() {
       rules_pdf_url: normalizeUrl(data?.rules_pdf_url),
       notes: data?.notes ?? '',
     })
+    setReview({
+      status: (data?.status as ClubStatus | null) ?? 'PENDING_APPROVAL',
+      rejected_at: data?.rejected_at ?? null,
+      rejection_reason: data?.rejection_reason ?? null,
+      correction_requested_at: data?.correction_requested_at ?? null,
+      correction_reason: data?.correction_reason ?? null,
+      suspended_at: data?.suspended_at ?? null,
+      suspension_reason: data?.suspension_reason ?? null,
+    })
   }
 
   useEffect(() => {
@@ -163,9 +214,9 @@ export default function ClubConfiguracionPage() {
 
       try {
         await loadClubData(activeClub.id)
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (alive) {
-          setBanner({ type: 'error', text: error?.message ?? 'No pude cargar los datos del club.' })
+          setBanner({ type: 'error', text: getErrorMessage(error, 'No pude cargar los datos del club.') })
         }
       } finally {
         if (alive) setLoading(false)
@@ -185,19 +236,6 @@ export default function ClubConfiguracionPage() {
     setTimeout(() => {
       window.location.reload()
     }, 120)
-  }
-
-  async function persistSingleField(field: 'logo_url' | 'rules_pdf_url', value: string) {
-    if (!activeClub?.id) return
-
-    const safeValue = normalizeUrl(value)
-
-    const { error } = await supabase
-      .from('clubs')
-      .update({ [field]: safeValue || null })
-      .eq('id', activeClub.id)
-
-    if (error) throw error
   }
 
   async function onLogoFileChange(file: File | null) {
@@ -231,8 +269,8 @@ export default function ClubConfiguracionPage() {
       await loadClubData(activeClub.id)
       setBanner({ type: 'success', text: 'Logo subido y guardado correctamente.' })
       await hardSyncBranding()
-    } catch (err: any) {
-      setBanner({ type: 'error', text: err?.message ?? 'No pude subir el logo.' })
+    } catch (err: unknown) {
+      setBanner({ type: 'error', text: getErrorMessage(err, 'No pude subir el logo.') })
     } finally {
       setUploadingLogo(false)
     }
@@ -267,8 +305,8 @@ export default function ClubConfiguracionPage() {
 
       await loadClubData(activeClub.id)
       setBanner({ type: 'success', text: 'Reglamento PDF subido y guardado correctamente.' })
-    } catch (err: any) {
-      setBanner({ type: 'error', text: err?.message ?? 'No pude subir el PDF.' })
+    } catch (err: unknown) {
+      setBanner({ type: 'error', text: getErrorMessage(err, 'No pude subir el PDF.') })
     } finally {
       setUploadingRules(false)
     }
@@ -301,15 +339,29 @@ export default function ClubConfiguracionPage() {
       notes: v.notes || null,
     }
 
-    const { error } = await supabase
-      .from('clubs')
-      .update(payload)
-      .eq('id', activeClub.id)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData?.session?.access_token
+
+    if (!token) {
+      setSaving(false)
+      setBanner({ type: 'error', text: 'Sesión inválida.' })
+      return
+    }
+
+    const response = await fetch(`/api/clubs/${activeClub.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    })
+    const json = await response.json().catch(() => ({}))
 
     setSaving(false)
 
-    if (error) {
-      setBanner({ type: 'error', text: error.message })
+    if (!response.ok) {
+      setBanner({ type: 'error', text: json?.error ?? 'No pude guardar los cambios.' })
       return
     }
 
@@ -324,6 +376,32 @@ export default function ClubConfiguracionPage() {
       <div className="club-panel">
         <h1 className="club-title">Configuración</h1>
         <p className="club-sub">Datos del club, branding, contacto y reglamento PDF.</p>
+
+        {review ? (
+          <div
+            style={{
+              background: review.status === 'ACTIVE' ? '#ecfdf3' : '#fff7ed',
+              border: review.status === 'ACTIVE' ? '1px solid #b7ebc6' : '1px solid #fed7aa',
+              borderRadius: 14,
+              color: review.status === 'ACTIVE' ? '#166534' : '#9a3412',
+              display: 'grid',
+              gap: 6,
+              marginTop: 14,
+              padding: 12,
+            }}
+          >
+            <div style={{ fontWeight: 900 }}>Estado del club: {getStatusLabel(review.status)}</div>
+            {getReviewReason(review) ? (
+              <div style={{ lineHeight: 1.45 }}>
+                <b>{review.status === 'PENDING_APPROVAL' ? 'Corrección solicitada' : 'Motivo'}:</b> {getReviewReason(review)}
+              </div>
+            ) : review.status !== 'ACTIVE' ? (
+              <div style={{ lineHeight: 1.45 }}>
+                Podés completar datos mientras plataforma revisa el club. La visibilidad pública se habilita después de la aprobación.
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <Banner banner={banner} />
 

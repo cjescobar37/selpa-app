@@ -49,7 +49,7 @@ export default function NuevoTorneoPage() {
     ;(async () => {
       const { data, error } = await supabase.from('categories').select('id, name').order('id', { ascending: false })
       if (error) return
-      const rows = (data ?? []) as any as Category[]
+      const rows = (data ?? []) as Category[]
       setCategories(rows)
       if (rows.find((c) => c.id === 7)) setCategoryId(7)
       else if (rows[0]) setCategoryId(rows[0].id)
@@ -97,7 +97,7 @@ export default function NuevoTorneoPage() {
 
     if (registrationDeadline && startDate) {
       const dlDate = registrationDeadline.split('T')[0]
-      if (dlDate < startDate) e.registrationDeadline = 'El cierre no puede ser antes del inicio.'
+      if (dlDate > startDate) e.registrationDeadline = 'El cierre no puede ser posterior al inicio.'
     }
 
     return e
@@ -149,7 +149,7 @@ export default function NuevoTorneoPage() {
       wo_score: '6-0 6-0',
     }
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       club_id: activeClub.id,
       name: name.trim(),
       type,
@@ -158,6 +158,9 @@ export default function NuevoTorneoPage() {
       gender,
       category_id: categoryId,
       category: categoryId,
+      category_rule: 'FIXED_CATEGORY',
+      fixed_category_id: categoryId,
+      category_sum_target: null,
       start_date: startDate,
       starts_on: startDate,
       status: 'DRAFT',

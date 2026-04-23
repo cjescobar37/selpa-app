@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import {
+  ensureClubPlayerForMembership,
+  ensureValidActiveClubForUser,
+} from '@/lib/clubMembershipServer'
 
 type ActionBody = {
   action?: 'approve' | 'reject'
@@ -133,7 +137,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: 'Ya existe un club con ese nombre o email de contacto.' }, { status: 409 })
     }
 
-    let baseSlug = slugify(request.club_name) || 'club'
+    const baseSlug = slugify(request.club_name) || 'club'
     let slug = baseSlug
     for (let i = 1; i <= 20; i++) {
       const { data: exists } = await supabaseAdmin.from('clubs').select('id').eq('slug', slug).maybeSingle()
@@ -174,6 +178,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         owner_phone: request.owner_phone,
         owner_user_id: requesterProfile?.user_id ?? null,
         is_active: true,
+        status: 'ACTIVE',
       })
       .select('id, name')
       .single()
@@ -181,6 +186,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (clubErr) return NextResponse.json({ error: clubErr.message }, { status: 500 })
 
     if (requesterProfile?.user_id) {
+      const approvedAt = new Date().toISOString()
       const { data: existingMembership } = await supabaseAdmin
         .from('club_memberships')
         .select('id')
@@ -188,14 +194,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         .eq('user_id', requesterProfile.user_id)
         .maybeSingle()
 
-      if (!existingMembership?.id) {
+      if (existingMembership?.id) {
+        const { error: membershipErr } = await supabaseAdmin
+          .from('club_memberships')
+          .update({
+            role: 'OWNER',
+            status: 'APPROVED',
+            approved_by: auth.user!.id,
+            approved_at: approvedAt,
+            rejection_reason: null,
+          })
+          .eq('id', existingMembership.id)
+
+        if (membershipErr) {
+          await supabaseAdmin.from('clubs').delete().eq('id', clubRow.id)
+          return NextResponse.json({ error: membershipErr.message }, { status: 500 })
+        }
+      } else {
         const { error: membershipErr } = await supabaseAdmin.from('club_memberships').insert({
           club_id: clubRow.id,
           user_id: requesterProfile.user_id,
           role: 'OWNER',
           status: 'APPROVED',
           approved_by: auth.user!.id,
-          approved_at: new Date().toISOString(),
+          approved_at: approvedAt,
         })
 
         if (membershipErr) {
@@ -204,16 +226,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
       }
 
-      const { data: settings } = await supabaseAdmin
-        .from('user_settings')
-        .select('user_id, active_club_id')
-        .eq('user_id', requesterProfile.user_id)
-        .maybeSingle()
-
-      if (!settings?.active_club_id) {
-        await supabaseAdmin
-          .from('user_settings')
-          .upsert({ user_id: requesterProfile.user_id, active_club_id: clubRow.id }, { onConflict: 'user_id' })
+      try {
+        await ensureClubPlayerForMembership({
+          clubId: clubRow.id,
+          userId: requesterProfile.user_id,
+          approvedBy: auth.user!.id,
+          approvedAt,
+        })
+        await ensureValidActiveClubForUser(requesterProfile.user_id, clubRow.id)
+      } catch (consistencyError: any) {
+        await supabaseAdmin.from('clubs').delete().eq('id', clubRow.id)
+        return NextResponse.json({ error: consistencyError?.message ?? 'No pude dejar consistente el owner.' }, { status: 500 })
       }
 
       await supabaseAdmin.from('notifications').insert({

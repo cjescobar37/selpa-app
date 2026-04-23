@@ -2,64 +2,38 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import { useSession } from '@/components/session/SessionProvider'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
   | null
 
-type ClubRole = 'OWNER' | 'ADMIN' | 'PLANILLERO' | 'PLAYER'
-type MembershipStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'BANNED'
-
-async function resolveDestination() {
-  const { data: s } = await supabase.auth.getSession()
-  const user = s?.session?.user
-  if (!user) return { dest: '/login' as const, reason: 'no-session' as const }
-
-  const userId = user.id
-
-  const { data: pa } = await supabase
-    .from('platform_admins')
-    .select('user_id')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (pa?.user_id) return { dest: '/platform' as const, reason: 'platform' as const }
-
-  const { data: us } = await supabase
-    .from('user_settings')
-    .select('active_club_id')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  const activeClubId = us?.active_club_id ?? null
-  if (!activeClubId) return { dest: '/seleccionar-club' as const, reason: 'no-active-club' as const }
-
-  const { data: m } = await supabase
-    .from('club_memberships')
-    .select('role,status')
-    .eq('club_id', activeClubId)
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  const role = (m?.role as ClubRole) ?? null
-  const status = (m?.status as MembershipStatus) ?? null
-
-  if (!status || status !== 'APPROVED') return { dest: '/seleccionar-club' as const, reason: 'not-approved' as const }
-
-  if (role === 'OWNER' || role === 'ADMIN' || role === 'PLANILLERO') {
-    return { dest: '/club' as const, reason: 'club-staff' as const }
-  }
-
-  return { dest: '/player' as const, reason: 'player' as const }
-}
-
 export default function PostLoginPage() {
   const router = useRouter()
+  const session = useSession()
   const [t, setT] = useState(0)
-  const [alert, setAlert] = useState<AlertState>({ variant: 'info', title: 'Accediendo…', message: 'Resolviendo tu perfil…' })
   const [stuck, setStuck] = useState(false)
+
+  const alert: AlertState = useMemo(() => {
+    if (stuck) {
+      return {
+        variant: 'warning',
+        title: 'Está tardando más de lo normal',
+        message: 'Podés reintentar, ir a seleccionar club o volver al login.',
+      }
+    }
+
+    if (session.status === 'ready' && !session.user) {
+      return { variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' }
+    }
+
+    if (session.status === 'ready') {
+      return { variant: 'success', title: 'Listo', message: 'Entrando…' }
+    }
+
+    return { variant: 'info', title: 'Accediendo…', message: 'Resolviendo tu perfil…' }
+  }, [session.status, session.user, stuck])
 
   const pct = useMemo(() => {
     // barrita que sube “suave” hasta 90%, y si resolve ok, llega a 100% antes de redirigir
@@ -75,45 +49,36 @@ export default function PostLoginPage() {
   useEffect(() => {
     let alive = true
 
-    ;(async () => {
-      // retry corto de sesión
-      let r = await resolveDestination()
-      if (r.reason === 'no-session') {
-        await new Promise(res => setTimeout(res, 350))
-        r = await resolveDestination()
-      }
+    if (session.status === 'loading') return
 
-      if (!alive) return
-
-      if (r.dest === '/login') {
-        setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
+    if (!session.user) {
+      const retry = setTimeout(() => {
+        if (!alive) return
         setStuck(true)
-        return
-      }
+      }, 350)
 
-      // ok → “100%” y redirige
-      setAlert({ variant: 'success', title: 'Listo', message: 'Entrando…' })
-      setTimeout(() => {
-        router.replace(r.dest)
-      }, 450)
-    })()
+      return () => {
+        alive = false
+        clearTimeout(retry)
+      }
+    }
+
+    const redirect = setTimeout(() => {
+      if (alive) router.replace(session.postLoginDestination)
+    }, 450)
 
     // fallback si tarda
     const slow = setTimeout(() => {
       if (!alive) return
       setStuck(true)
-      setAlert({
-        variant: 'warning',
-        title: 'Está tardando más de lo normal',
-        message: 'Podés reintentar, ir a seleccionar club o volver al login.',
-      })
     }, 9000)
 
     return () => {
       alive = false
+      clearTimeout(redirect)
       clearTimeout(slow)
     }
-  }, [router])
+  }, [router, session.postLoginDestination, session.status, session.user])
 
   return (
     <div className="px-auth">
@@ -167,8 +132,7 @@ export default function PostLoginPage() {
               <button
                 className="px-btn px-btn--ghost"
                 onClick={async () => {
-                  await supabase.auth.signOut()
-                  router.replace('/login')
+                  await session.signOut()
                 }}
               >
                 Volver a login

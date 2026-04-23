@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { isApprovedMembership } from '@/lib/clubMembershipRules'
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,20 +18,20 @@ export async function GET(req: NextRequest) {
 
     const { data: clubs, error: clubsError } = await supabaseAdmin
       .from('clubs')
-      .select('id, name, city, province, logo_url, created_at')
-      .eq('is_active', true)
+      .select('id, name, city, province, logo_url, created_at, status')
+      .eq('status', 'ACTIVE')
       .order('name', { ascending: true })
 
     if (clubsError) {
       return NextResponse.json({ error: clubsError.message }, { status: 500 })
     }
 
-    let membershipMap = new Map<string, { role: string; status: string }>()
+    let membershipMap = new Map<string, { role: string; status: string; approved_at: string | null }>()
 
     if (currentUserId) {
       const { data: memberships, error: membershipsError } = await supabaseAdmin
         .from('club_memberships')
-        .select('club_id, role, status')
+        .select('club_id, role, status, approved_at')
         .eq('user_id', currentUserId)
 
       if (membershipsError) {
@@ -40,7 +41,11 @@ export async function GET(req: NextRequest) {
       membershipMap = new Map(
         (memberships ?? []).map((m: any) => [
           m.club_id,
-          { role: String(m.role), status: String(m.status) },
+          {
+            role: String(m.role),
+            status: String(m.status),
+            approved_at: (m.approved_at as string | null) ?? null,
+          },
         ])
       )
     }
@@ -55,6 +60,7 @@ export async function GET(req: NextRequest) {
         logo_url: club.logo_url ?? null,
         membership_status: membership?.status ?? null,
         membership_role: membership?.role ?? null,
+        membership_approved: isApprovedMembership(membership),
       }
     })
 

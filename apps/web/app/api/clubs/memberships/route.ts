@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import {
+  ensureClubPlayerForMembership,
+  ensureValidActiveClubForUser,
+  isClubAdmin,
+} from '@/lib/clubMembershipServer'
 
 async function getUserFromRequest(req: NextRequest) {
   const authHeader = req.headers.get('authorization') || ''
@@ -11,22 +16,6 @@ async function getUserFromRequest(req: NextRequest) {
   if (error || !data.user) return { user: null, token }
 
   return { user: data.user, token }
-}
-
-async function isClubAdmin(userId: string, clubId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('club_memberships')
-    .select('role, approved_at, status')
-    .eq('user_id', userId)
-    .eq('club_id', clubId)
-    .maybeSingle()
-
-  if (error || !data) return false
-
-  const approved = data.status === 'APPROVED' || !!data.approved_at
-  if (!approved) return false
-
-  return data.role === 'OWNER' || data.role === 'ADMIN' || data.role === 'PLANILLERO'
 }
 
 export async function GET(req: NextRequest) {
@@ -147,6 +136,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: rejectError.message }, { status: 500 })
       }
 
+      try {
+        await ensureValidActiveClubForUser(membership.user_id, null)
+      } catch (settingsError: any) {
+        return NextResponse.json({ error: settingsError?.message ?? 'No pude actualizar club activo.' }, { status: 500 })
+      }
+
       await supabaseAdmin.from('notifications').insert({
         user_id: membership.user_id,
         type: 'club_membership_rejected',
@@ -162,12 +157,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, status: 'REJECTED' })
     }
 
+    const approvedAt = new Date().toISOString()
+
     const { error: approveError } = await supabaseAdmin
       .from('club_memberships')
       .update({
         status: 'APPROVED',
         approved_by: user.id,
-        approved_at: new Date().toISOString(),
+        approved_at: approvedAt,
         rejection_reason: null,
       })
       .eq('id', membershipId)
@@ -176,66 +173,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: approveError.message }, { status: 500 })
     }
 
-    const { data: existingPlayer, error: playerCheckError } = await supabaseAdmin
-      .from('club_players')
-      .select('id')
-      .eq('club_id', membership.club_id)
-      .eq('user_id', membership.user_id)
-      .maybeSingle()
-
-    if (playerCheckError) {
-      return NextResponse.json({ error: playerCheckError.message }, { status: 500 })
-    }
-
-    if (!existingPlayer) {
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('display_name, first_name, last_name')
-        .eq('user_id', membership.user_id)
-        .maybeSingle()
-
-      const displayName =
-        profile?.display_name ||
-        [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
-        null
-
-      const { error: playerInsertError } = await supabaseAdmin
-        .from('club_players')
-        .insert({
-          club_id: membership.club_id,
-          user_id: membership.user_id,
-          display_name: displayName,
-          category: 6,
-          gender: 'M',
-          approved_at: new Date().toISOString(),
-          approved_by: user.id,
-        })
-
-      if (playerInsertError) {
-        return NextResponse.json({ error: playerInsertError.message }, { status: 500 })
-      }
-    }
-
-    const { data: settings } = await supabaseAdmin
-      .from('user_settings')
-      .select('user_id, active_club_id')
-      .eq('user_id', membership.user_id)
-      .maybeSingle()
-
-    if (!settings?.active_club_id) {
-      const { error: settingsError } = await supabaseAdmin
-        .from('user_settings')
-        .upsert(
-          {
-            user_id: membership.user_id,
-            active_club_id: membership.club_id,
-          },
-          { onConflict: 'user_id' }
-        )
-
-      if (settingsError) {
-        return NextResponse.json({ error: settingsError.message }, { status: 500 })
-      }
+    try {
+      await ensureClubPlayerForMembership({
+        clubId: membership.club_id,
+        userId: membership.user_id,
+        approvedBy: user.id,
+        approvedAt,
+      })
+      await ensureValidActiveClubForUser(membership.user_id, membership.club_id)
+    } catch (consistencyError: any) {
+      return NextResponse.json({ error: consistencyError?.message ?? 'No pude dejar consistente la membresía.' }, { status: 500 })
     }
 
     await supabaseAdmin.from('notifications').insert({

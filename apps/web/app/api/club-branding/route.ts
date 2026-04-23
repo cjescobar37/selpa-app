@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { isClubAdmin } from '@/lib/clubMembershipServer'
 
 async function getUserFromRequest(req: NextRequest) {
   const authHeader = req.headers.get('authorization') || ''
@@ -22,17 +23,7 @@ async function canManageClub(userId: string, clubId: string) {
 
   if (platformAdmin?.user_id) return true
 
-  const { data: membership } = await supabaseAdmin
-    .from('club_memberships')
-    .select('role, status')
-    .eq('user_id', userId)
-    .eq('club_id', clubId)
-    .maybeSingle()
-
-  if (!membership) return false
-  if (membership.status !== 'APPROVED') return false
-
-  return ['OWNER', 'ADMIN', 'PLANILLERO'].includes(membership.role)
+  return isClubAdmin(userId, clubId)
 }
 
 function sanitizeFileName(value: string) {

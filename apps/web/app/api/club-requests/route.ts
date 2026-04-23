@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { withNotificationScope } from '@/lib/notificationScope'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type ClubRequestPayload = {
@@ -114,12 +115,15 @@ export async function POST(req: Request) {
         title: 'Nueva solicitud de club',
         message: `${payload.club_name} solicitó alta en la plataforma.`,
         link: `/platform/solicitudes?focus=${inserted.id}`,
-        metadata: {
-          club_request_id: inserted.id,
-          club_name: payload.club_name,
-          owner_name: payload.owner_name,
-          owner_email: payload.owner_email,
-        },
+        metadata: withNotificationScope(
+          {
+            club_request_id: inserted.id,
+            club_name: payload.club_name,
+            owner_name: payload.owner_name,
+            owner_email: payload.owner_email,
+          },
+          'platform'
+        ),
       }))
       await supabaseAdmin.from('notifications').insert(notifications)
     }

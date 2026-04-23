@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubInitials } from '@/lib/clubAssets'
 import { useSession } from '@/components/session/SessionProvider'
+import { isApprovedMembership, isClubStaffRole } from '@/lib/clubMembershipRules'
 
 type AlertType = 'success' | 'warning' | 'error' | 'info'
 
@@ -26,8 +27,11 @@ type MembershipRow = {
   club_id: string
   role: string
   status: string
+  approved_at: string | null
   club: ClubInfo | null
 }
+
+type MembershipQueryRow = Omit<MembershipRow, 'club'>
 
 function AlertBox({ alert }: { alert: AlertState }) {
   if (!alert) return null
@@ -95,29 +99,12 @@ export default function SeleccionarClubPage() {
         return
       }
 
-      const [settingsRes, membershipsRes] = await Promise.all([
-        supabase
-          .from('user_settings')
-          .select('active_club_id')
-          .eq('user_id', user.id)
-          .maybeSingle(),
-        supabase
-          .from('club_memberships')
-          .select('club_id, role, status')
-          .eq('user_id', user.id),
-      ])
+      const membershipsRes = await supabase
+        .from('club_memberships')
+        .select('club_id, role, status, approved_at')
+        .eq('user_id', user.id)
 
       if (cancelled) return
-
-      if (settingsRes.error) {
-        setAlert({
-          type: 'error',
-          title: 'No pude leer tu configuración',
-          message: settingsRes.error.message,
-        })
-        setLoading(false)
-        return
-      }
 
       if (membershipsRes.error) {
         setAlert({
@@ -129,8 +116,8 @@ export default function SeleccionarClubPage() {
         return
       }
 
-      const rawMemberships = membershipsRes.data ?? []
-      const clubIds = Array.from(new Set(rawMemberships.map((m: any) => m.club_id).filter(Boolean)))
+      const rawMemberships = (membershipsRes.data ?? []) as MembershipQueryRow[]
+      const clubIds = Array.from(new Set(rawMemberships.map((m) => m.club_id).filter(Boolean)))
 
       let clubsMap = new Map<string, ClubInfo>()
 
@@ -151,7 +138,7 @@ export default function SeleccionarClubPage() {
         }
 
         clubsMap = new Map(
-          (clubsRes.data ?? []).map((club: any) => [
+          ((clubsRes.data ?? []) as ClubInfo[]).map((club) => [
             club.id,
             {
               id: club.id,
@@ -163,14 +150,15 @@ export default function SeleccionarClubPage() {
         )
       }
 
-      const mergedMemberships: MembershipRow[] = rawMemberships.map((m: any) => ({
+      const mergedMemberships: MembershipRow[] = rawMemberships.map((m) => ({
         club_id: m.club_id,
         role: m.role,
         status: m.status,
+        approved_at: m.approved_at ?? null,
         club: clubsMap.get(m.club_id) ?? null,
       }))
 
-      setActiveClubId(settingsRes.data?.active_club_id ?? null)
+      setActiveClubId(session.activeClubId)
       setMemberships(mergedMemberships)
 
       if (mergedMemberships.length === 0) {
@@ -195,14 +183,14 @@ export default function SeleccionarClubPage() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [router, session.activeClubId])
 
   const approved = useMemo(() => {
-    return memberships.filter((item) => item.status === 'APPROVED' && item.club)
+    return memberships.filter((item) => isApprovedMembership(item) && item.club)
   }, [memberships])
 
   const pending = useMemo(() => {
-    return memberships.filter((item) => item.status !== 'APPROVED' && item.club)
+    return memberships.filter((item) => !isApprovedMembership(item) && item.club)
   }, [memberships])
 
   async function activateClub(clubId: string) {
@@ -217,15 +205,13 @@ export default function SeleccionarClubPage() {
       return
     }
 
-    const { error } = await supabase
-      .from('user_settings')
-      .upsert({ user_id: user.id, active_club_id: clubId }, { onConflict: 'user_id' })
-
-    if (error) {
+    try {
+      await session.setActiveClub(clubId)
+    } catch (error: unknown) {
       setAlert({
         type: 'error',
         title: 'No pude activar el club',
-        message: error.message,
+        message: error instanceof Error ? error.message : 'El club no está aprobado para tu usuario.',
       })
       setSavingClubId(null)
       return
@@ -233,14 +219,10 @@ export default function SeleccionarClubPage() {
 
     setActiveClubId(clubId)
 
-    if (session?.refresh) {
-      await session.refresh()
-    }
-
     const selected = approved.find((item) => item.club_id === clubId)
     const role = selected?.role ?? 'PLAYER'
 
-    if (role === 'OWNER' || role === 'ADMIN' || role === 'PLANILLERO') {
+    if (isClubStaffRole(role)) {
       router.replace('/club')
     } else {
       router.replace('/player')
@@ -424,7 +406,7 @@ export default function SeleccionarClubPage() {
               Ver clubes disponibles
             </Link>
 
-            <Link className="px-link" href="/unir-mi-club">
+            <Link className="px-link" href="/clubs/nuevo">
               Dar de alta mi club
             </Link>
 
