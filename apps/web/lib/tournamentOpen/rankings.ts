@@ -1,8 +1,8 @@
 import type { GroupStandingRow, GroupStandings } from '@/lib/tournamentStandings'
 import type { OpenNormalizedMetrics, OpenRankedTeam } from './types'
 
-function normalizeGroupOrder(value: number | undefined) {
-  return Number.isInteger(value) ? value : 0
+function normalizeGroupOrder(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isInteger(value) ? value : 0
 }
 
 function normalizePlayedCount(row: GroupStandingRow, playedCount = row.played) {

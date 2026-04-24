@@ -71,8 +71,8 @@ function assertNonNegativeInteger(value: number, label: string) {
   }
 }
 
-function normalizeGroupOrder(value: number | undefined) {
-  return Number.isInteger(value) ? value : 0
+function normalizeGroupOrder(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isInteger(value) ? value : 0
 }
 
 function compareQualifiedTeams(a: OpenQualifiedTeam, b: OpenQualifiedTeam) {
