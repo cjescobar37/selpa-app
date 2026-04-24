@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { listPublishedContent } from '@/lib/platformContent'
 import PublicNewsExperience from '@/components/public/PublicNewsExperience'
 
