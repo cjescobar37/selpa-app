@@ -20,6 +20,7 @@ type ClubPlayer = {
   display_name: string | null
   category: number | null
   gender: string | null
+  ranking_points: number | null
   approved_at: string | null
   created_at: string
   profile: Profile | null
@@ -237,6 +238,7 @@ export default function ClubJugadoresPage() {
                     <span>Jugador</span>
                     <span>Categoría</span>
                     <span>Género</span>
+                    <span>Puntos</span>
                     <span>Alta</span>
                   </div>
                   {sortedPlayers.map((player) => (
@@ -252,6 +254,7 @@ export default function ClubJugadoresPage() {
                       </div>
                       <span>{player.category ?? '-'}</span>
                       <span>{player.gender ?? '-'}</span>
+                      <span>{player.ranking_points ?? 0} pts</span>
                       <span>{formatDate(player.approved_at ?? player.created_at)}</span>
                     </div>
                   ))}
@@ -331,7 +334,7 @@ export default function ClubJugadoresPage() {
         .club-btn--danger { background: #fff0f5; border-color: rgba(190,24,93,.22); color: #9d174d; }
         .club-btn--ghost { background: #fff; border-color: rgba(83,199,217,.34); color: #0f8ea0; }
         .club-playerTable { display: grid; gap: 6px; min-width: 0; width: 100%; }
-        .club-playerTableHead, .club-playerTableRow { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(0, 1.6fr) 72px 64px 100px; min-width: 0; }
+        .club-playerTableHead, .club-playerTableRow { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(0, 1.6fr) 72px 64px 80px 100px; min-width: 0; }
         .club-playerTableHead { color: #64748b; font-size: 11px; font-weight: 950; text-transform: uppercase; }
         .club-playerTableRow { border: 1px solid rgba(15,23,42,.07); border-radius: 12px; color: #334155; font-size: 13px; padding: 8px; }
         .club-playerTableRow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

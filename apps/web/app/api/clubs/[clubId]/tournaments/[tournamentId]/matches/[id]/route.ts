@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isClubAdmin } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { updateMatchResult, type MatchScore } from '@/lib/tournamentMatches'
+import { MatchResultUpdateError, updateMatchResult, type MatchScore } from '@/lib/tournamentMatches'
 import { validateStructuredMatchScore } from '@/lib/tournamentScore'
 
 async function getTokenUser(req: NextRequest) {
@@ -76,6 +76,10 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true, match: result.match })
   } catch (error: unknown) {
+    if (error instanceof MatchResultUpdateError) {
+      return NextResponse.json({ code: error.code, error: error.message }, { status: error.status })
+    }
+
     return NextResponse.json({ error: getErrorMessage(error, 'Error cargando resultado del partido.') }, { status: 500 })
   }
 }

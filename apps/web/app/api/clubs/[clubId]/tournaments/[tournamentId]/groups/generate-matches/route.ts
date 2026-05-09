@@ -45,6 +45,8 @@ export async function POST(
         groupsCount: result.groupsCount,
         matchesCreated: result.matchesCreated,
         perGroupCounts: result.perGroupCounts,
+        scheduleApplied: result.scheduleApplied,
+        scheduleCapacity: result.scheduleCapacity,
       },
       { status: 201 }
     )

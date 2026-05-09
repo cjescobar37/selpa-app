@@ -3,6 +3,7 @@ import { isClubAdmin } from '@/lib/clubMembershipServer'
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type ManualPlayerInput = {
+  club_player_id?: string
   user_id?: string
   full_name?: string
 }
@@ -52,9 +53,10 @@ type ResolvedPlayer = {
   userId: string
   fullName: string
   createdAuthUser: boolean
+  clubPlayerId?: string
 }
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const paymentModes = new Set<PaymentMode>(['PAID', 'VENUE', 'NONE'])
 
 async function getTokenUser(req: NextRequest) {
@@ -285,6 +287,65 @@ async function ensureClubPlayer(clubId: string, userId: string, fullName: string
   if (error) throw error
 }
 
+async function resolveExistingClubPlayer(
+  input: ManualPlayerInput,
+  clubId: string,
+  tournament: TournamentRow
+): Promise<ResolvedPlayer> {
+  const clubPlayerId = input.club_player_id?.trim()
+  if (!clubPlayerId || !uuidPattern.test(clubPlayerId)) {
+    throw new Error('INVALID_PLAYER_CLUB_PLAYER_ID')
+  }
+
+  const { data: clubPlayer, error: clubPlayerError } = await supabaseAdmin
+    .from('club_players')
+    .select('id,user_id,display_name,category,gender')
+    .eq('id', clubPlayerId)
+    .eq('club_id', clubId)
+    .not('approved_at', 'is', null)
+    .maybeSingle()
+
+  if (clubPlayerError) throw clubPlayerError
+  if (!clubPlayer) throw new Error('PLAYER_NOT_IN_CLUB')
+
+  const player = clubPlayer as ClubPlayerRow
+  const tournamentCategory = tournament.category_id ?? tournament.category ?? null
+  if (tournamentCategory !== null && player.category !== tournamentCategory) {
+    throw new Error('PLAYER_CATEGORY_MISMATCH')
+  }
+
+  if (!genderMatchesTournament(player.gender, tournament.gender)) {
+    throw new Error('PLAYER_GENDER_MISMATCH')
+  }
+
+  const userId = player.user_id?.trim()
+  if (!userId || !uuidPattern.test(userId)) {
+    throw new Error('PLAYER_AUTH_REQUIRED')
+  }
+
+  const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId)
+  if (authError || !authUser?.user) {
+    throw new Error('PLAYER_AUTH_REQUIRED')
+  }
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .select('user_id,email,first_name,last_name,display_name')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (profileError) throw profileError
+
+  const fullName =
+    normalizeName(input.full_name) ||
+    getFullName(profile as ProfileRow | null, player.display_name) ||
+    normalizeName(authUser.user.user_metadata?.full_name as string | undefined) ||
+    authUser.user.email ||
+    'Jugador'
+
+  return { userId, fullName, createdAuthUser: false, clubPlayerId: player.id }
+}
+
 async function resolveExistingPlayer(input: ManualPlayerInput, clubId: string, actorId: string): Promise<ResolvedPlayer> {
   const userId = input.user_id?.trim()
   if (!userId || !uuidPattern.test(userId)) {
@@ -357,8 +418,16 @@ async function createMinimalPlayer(input: ManualPlayerInput, clubId: string, act
   }
 }
 
-async function resolvePlayer(input: ManualPlayerInput | undefined, clubId: string, actorId: string) {
+async function resolvePlayer(
+  input: ManualPlayerInput | undefined,
+  clubId: string,
+  actorId: string,
+  tournament: TournamentRow
+) {
   if (!input) throw new Error('INVALID_PLAYER')
+  if (input.club_player_id?.trim()) {
+    return resolveExistingClubPlayer(input, clubId, tournament)
+  }
   return input.user_id?.trim()
     ? resolveExistingPlayer(input, clubId, actorId)
     : createMinimalPlayer(input, clubId, actorId)
@@ -391,13 +460,13 @@ export async function POST(
 
     const player1Name = normalizeName(payload.player1?.full_name)
     const player2Name = normalizeName(payload.player2?.full_name)
-    if (!payload.player1?.user_id && !payload.player2?.user_id && player1Name.toLowerCase() === player2Name.toLowerCase()) {
+    if (!payload.player1?.user_id && !payload.player1?.club_player_id && !payload.player2?.user_id && !payload.player2?.club_player_id && player1Name.toLowerCase() === player2Name.toLowerCase()) {
       return NextResponse.json({ error: 'Los jugadores de la pareja deben ser distintos.', code: 'SAME_PLAYER' }, { status: 400 })
     }
 
     const { data: tournament, error: tournamentError } = await supabaseAdmin
       .from('tournaments')
-      .select('id,club_id,status,registration_deadline,signup_deadline')
+      .select('id,club_id,status,category_id,category,gender,registration_deadline,signup_deadline')
       .eq('id', tournamentId)
       .eq('club_id', clubId)
       .maybeSingle()
@@ -414,16 +483,18 @@ export async function POST(
       return NextResponse.json({ error: 'El torneo debe estar abierto para cargar inscripciones manuales.', code: 'TOURNAMENT_NOT_OPEN' }, { status: 409 })
     }
 
-    if (isRegistrationClosed(tournament as TournamentRow)) {
+    const tournamentRow = tournament as TournamentRow
+
+    if (isRegistrationClosed(tournamentRow)) {
       return NextResponse.json({
         error: 'La fecha de cierre de inscripción ya venció.',
         code: 'REGISTRATION_CLOSED',
       }, { status: 409 })
     }
 
-    const player1 = await resolvePlayer(payload.player1, clubId, user.id)
+    const player1 = await resolvePlayer(payload.player1, clubId, user.id, tournamentRow)
     if (player1.createdAuthUser) createdAuthUserIds.push(player1.userId)
-    const player2 = await resolvePlayer(payload.player2, clubId, user.id)
+    const player2 = await resolvePlayer(payload.player2, clubId, user.id, tournamentRow)
     if (player2.createdAuthUser) createdAuthUserIds.push(player2.userId)
 
     if (player1.userId === player2.userId) {
@@ -504,8 +575,8 @@ export async function POST(
       registration,
       team,
       players: [
-        { user_id: player1.userId, full_name: player1.fullName, created: player1.createdAuthUser },
-        { user_id: player2.userId, full_name: player2.fullName, created: player2.createdAuthUser },
+        { club_player_id: player1.clubPlayerId ?? null, user_id: player1.userId, full_name: player1.fullName, created: player1.createdAuthUser },
+        { club_player_id: player2.clubPlayerId ?? null, user_id: player2.userId, full_name: player2.fullName, created: player2.createdAuthUser },
       ],
     })
   } catch (error) {
@@ -517,8 +588,13 @@ export async function POST(
     const message = error instanceof Error ? error.message : 'No pude crear la inscripción manual.'
     const knownErrors: Record<string, string> = {
       INVALID_PLAYER: 'Completá los datos de ambos jugadores.',
+      INVALID_PLAYER_CLUB_PLAYER_ID: 'El club_player_id de jugador no es válido.',
       INVALID_PLAYER_USER_ID: 'El user_id de jugador no es válido.',
       PLAYER_USER_NOT_FOUND: 'No encontré uno de los usuarios indicados.',
+      PLAYER_NOT_IN_CLUB: 'Seleccioná un jugador aprobado del club.',
+      PLAYER_CATEGORY_MISMATCH: 'El jugador seleccionado no corresponde a la categoría del torneo.',
+      PLAYER_GENDER_MISMATCH: 'El jugador seleccionado no corresponde al género del torneo.',
+      PLAYER_AUTH_REQUIRED: 'El jugador seleccionado no tiene un usuario Auth válido. El modelo actual requiere migración para inscribir jugadores sin Auth.',
       INVALID_PLAYER_NAME: 'Completá el nombre del jugador.',
       MANUAL_PLAYER_CREATE_FAILED: 'No pude crear el jugador manual.',
     }

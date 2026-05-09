@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isClubAdmin } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { normalizeScheduleConfig, normalizeTournamentCourts } from '@/lib/tournamentSchedule'
+import { normalizeGroupTiebreakerConfig } from '@/lib/tournamentTiebreakers'
 
 type TournamentRow = {
   id: string
@@ -14,10 +16,19 @@ type TournamentRow = {
 
 type UpdateDraftInput = {
   action?: unknown
+  reason?: unknown
   name?: unknown
   type?: unknown
   gender?: unknown
   category_id?: unknown
+  segment_type?: unknown
+  public_description?: unknown
+  competition_system?: unknown
+  venue_name?: unknown
+  tournament_courts?: unknown
+  schedule_config?: unknown
+  points_config?: unknown
+  group_tiebreakers?: unknown
   start_date?: unknown
   end_date?: unknown
   registration_deadline?: unknown
@@ -29,6 +40,8 @@ type UpdateDraftInput = {
 
 const tournamentTypes = ['OPEN', 'CHALLENGER', 'MASTER', 'MASTER_FINAL'] as const
 const tournamentGenders = ['MALE', 'FEMALE', 'MIXED'] as const
+const tournamentSegments = ['LIBRES', 'MENORES', 'VETERANOS'] as const
+const competitionSystems = ['GROUPS_PLAYOFF', 'ROUND_ROBIN', 'SINGLE_ELIMINATION'] as const
 
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
@@ -78,6 +91,10 @@ function normalizeObject(value: unknown) {
   return value as Record<string, unknown>
 }
 
+function normalizeArray(value: unknown) {
+  return Array.isArray(value) ? value : []
+}
+
 function buildFlyerRules(value: unknown) {
   const flyer = normalizeObject(value)
 
@@ -97,6 +114,49 @@ function buildFlyerRules(value: unknown) {
     flyer_accent_color: flyerAccentColor ?? '#67e8f9',
     flyer_font: flyerFont ?? 'SPORT',
     flyer_style: flyerStyle ?? 'MODERN',
+  }
+}
+
+function buildTournamentConfigRules(value: UpdateDraftInput) {
+  const segmentType = normalizeText(value.segment_type) ?? 'LIBRES'
+  const publicDescription = normalizeText(value.public_description)
+  const competitionSystem = normalizeText(value.competition_system) ?? 'GROUPS_PLAYOFF'
+  const venueName = normalizeText(value.venue_name)
+  const tournamentCourts = normalizeTournamentCourts(value.tournament_courts)
+  const scheduleConfig = normalizeScheduleConfig(value.schedule_config, {
+    startDate: normalizeDate(value.start_date) ?? '',
+    endDate: normalizeDate(value.end_date) ?? normalizeDate(value.start_date) ?? '',
+  })
+  const pointsConfig = normalizeObject(value.points_config)
+  const groupTiebreakers = value.group_tiebreakers === undefined
+    ? null
+    : normalizeGroupTiebreakerConfig(value.group_tiebreakers)
+
+  const normalizedSegment = tournamentSegments.includes(segmentType as typeof tournamentSegments[number])
+    ? segmentType
+    : 'LIBRES'
+  const normalizedCompetitionSystem = competitionSystems.includes(competitionSystem as typeof competitionSystems[number])
+    ? competitionSystem
+    : 'GROUPS_PLAYOFF'
+
+  return {
+    segment_type: normalizedSegment,
+    public_description: publicDescription,
+    competition_system: normalizedCompetitionSystem,
+    venue_name: venueName,
+    tournament_courts: tournamentCourts,
+    schedule_config: scheduleConfig,
+    points_config: {
+      enabled: Boolean(pointsConfig.enabled),
+      editable: Boolean(pointsConfig.editable),
+      winner: normalizeInteger(pointsConfig.winner, 0),
+      finalist: normalizeInteger(pointsConfig.finalist, 0),
+      semifinalist: normalizeInteger(pointsConfig.semifinalist, 0),
+      quarterfinalist: normalizeInteger(pointsConfig.quarterfinalist, 0),
+      eighthFinalist: normalizeInteger(pointsConfig.eighthFinalist, 0),
+      participation: normalizeInteger(pointsConfig.participation, 0),
+    },
+    ...(groupTiebreakers ? { group_tiebreakers: groupTiebreakers } : {}),
   }
 }
 
@@ -141,57 +201,6 @@ function validateDraftPayload(body: UpdateDraftInput) {
   }
 }
 
-async function countRows(table: string, filters: Record<string, string>) {
-  let query = supabaseAdmin
-    .from(table)
-    .select('id', { count: 'exact', head: true })
-
-  Object.entries(filters).forEach(([key, value]) => {
-    query = query.eq(key, value)
-  })
-
-  const { count, error } = await query
-  if (error) throw error
-  return count ?? 0
-}
-
-async function countPlayoffMatches(tournamentId: string, clubId: string) {
-  const { count, error } = await supabaseAdmin
-    .from('tournament_matches')
-    .select('id', { count: 'exact', head: true })
-    .eq('tournament_id', tournamentId)
-    .eq('club_id', clubId)
-    .neq('phase', 'GROUP')
-
-  if (error) throw error
-  return count ?? 0
-}
-
-async function countPlayedFinals(tournamentId: string, clubId: string) {
-  const { count, error } = await supabaseAdmin
-    .from('tournament_matches')
-    .select('id', { count: 'exact', head: true })
-    .eq('tournament_id', tournamentId)
-    .eq('club_id', clubId)
-    .eq('phase', 'FINAL')
-    .eq('status', 'PLAYED')
-
-  if (error) throw error
-  return count ?? 0
-}
-
-async function countGroupMatches(tournamentId: string, clubId: string) {
-  const { count, error } = await supabaseAdmin
-    .from('tournament_matches')
-    .select('id', { count: 'exact', head: true })
-    .eq('tournament_id', tournamentId)
-    .eq('club_id', clubId)
-    .eq('phase', 'GROUP')
-
-  if (error) throw error
-  return count ?? 0
-}
-
 async function getTournamentRegistrationIds(tournamentId: string, clubId: string) {
   const { data, error } = await supabaseAdmin
     .from('tournament_registrations')
@@ -216,7 +225,7 @@ async function deleteRows(table: string, filters: Record<string, string>) {
   if (error) throw error
 }
 
-async function cleanupPrecompetitiveTournamentData(tournamentId: string, clubId: string) {
+async function cleanupTournamentDataForDelete(tournamentId: string, clubId: string) {
   const registrationIds = await getTournamentRegistrationIds(tournamentId, clubId)
 
   if (registrationIds.length > 0) {
@@ -229,31 +238,11 @@ async function cleanupPrecompetitiveTournamentData(tournamentId: string, clubId:
   }
 
   await deleteRows('tournament_team_seed_snapshots', { tournament_id: tournamentId, club_id: clubId })
+  await deleteRows('tournament_group_teams', { tournament_id: tournamentId })
+  await deleteRows('tournament_groups', { tournament_id: tournamentId })
+  await deleteRows('tournament_matches', { tournament_id: tournamentId, club_id: clubId })
   await deleteRows('tournament_registrations', { tournament_id: tournamentId, club_id: clubId })
   await deleteRows('tournament_teams', { tournament_id: tournamentId, club_id: clubId })
-}
-
-async function getTournamentDeleteBlockers(tournamentId: string, clubId: string) {
-  const blockers: string[] = []
-
-  const [
-    groupsCount,
-    groupMatchesCount,
-    playoffMatchesCount,
-    playedFinalsCount,
-  ] = await Promise.all([
-    countRows('tournament_groups', { tournament_id: tournamentId }),
-    countGroupMatches(tournamentId, clubId),
-    countPlayoffMatches(tournamentId, clubId),
-    countPlayedFinals(tournamentId, clubId),
-  ])
-
-  if (groupsCount > 0) blockers.push('grupos')
-  if (groupMatchesCount > 0) blockers.push('partidos_group')
-  if (playoffMatchesCount > 0) blockers.push('playoff')
-  if (playedFinalsCount > 0) blockers.push('final_jugada')
-
-  return blockers
 }
 
 export async function PATCH(
@@ -274,7 +263,13 @@ export async function PATCH(
 
     const body = (await req.json().catch(() => ({}))) as UpdateDraftInput
     const action = String(body.action ?? '').trim()
-    if (action !== 'publish' && action !== 'update_draft' && action !== 'delete_tournament') {
+    if (
+      action !== 'publish' &&
+      action !== 'update_tournament_courts' &&
+      action !== 'update_draft' &&
+      action !== 'delete_tournament' &&
+      action !== 'cancel_tournament'
+    ) {
       return NextResponse.json({ error: 'Acción inválida.', code: 'INVALID_ACTION' }, { status: 400 })
     }
 
@@ -295,16 +290,7 @@ export async function PATCH(
 
     const current = tournament as TournamentRow
     if (action === 'delete_tournament') {
-      const blockers = await getTournamentDeleteBlockers(tournamentId, clubId)
-      if (blockers.length > 0) {
-        return NextResponse.json({
-          error: 'No se puede eliminar este torneo porque ya tiene actividad competitiva.',
-          code: 'TOURNAMENT_DELETE_NOT_ALLOWED',
-          blockers,
-        }, { status: 409 })
-      }
-
-      await cleanupPrecompetitiveTournamentData(tournamentId, clubId)
+      await cleanupTournamentDataForDelete(tournamentId, clubId)
 
       const { error: deleteError } = await supabaseAdmin
         .from('tournaments')
@@ -317,6 +303,85 @@ export async function PATCH(
       }
 
       return NextResponse.json({ ok: true, deleted: true, tournamentId })
+    }
+
+    if (action === 'cancel_tournament') {
+      const reason = normalizeText(body.reason)
+      if (!reason) {
+        return NextResponse.json({
+          error: 'El motivo de cancelación es obligatorio.',
+          code: 'CANCELLATION_REASON_REQUIRED',
+        }, { status: 400 })
+      }
+
+      if (String(current.status ?? '').toUpperCase() === 'CANCELLED') {
+        return NextResponse.json({
+          error: 'Este torneo ya está cancelado.',
+          code: 'INVALID_STATUS_TRANSITION',
+        }, { status: 409 })
+      }
+
+      const updatedAt = new Date().toISOString()
+      const currentRules = normalizeObject(current.rules_json ?? current.rules ?? {})
+      const currentAdminRules = normalizeObject(currentRules.tournament_admin)
+      const nextRules = {
+        ...currentRules,
+        tournament_admin: {
+          ...currentAdminRules,
+          cancellation_reason: reason,
+          cancelled_at: updatedAt,
+          cancelled_by: user.id,
+        },
+      }
+
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from('tournaments')
+        .update({
+          status: 'CANCELLED',
+          rules_json: nextRules,
+          rules: nextRules,
+          updated_at: updatedAt,
+        })
+        .eq('id', tournamentId)
+        .eq('club_id', clubId)
+        .select('id,club_id,name,status,updated_at,rules_json,rules')
+        .maybeSingle()
+
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 })
+      }
+
+      return NextResponse.json({ ok: true, tournament: updated })
+    }
+
+    if (action === 'update_tournament_courts') {
+      const updatedAt = new Date().toISOString()
+      const currentRules = normalizeObject(current.rules_json ?? current.rules ?? {})
+      const tournamentCourts = normalizeTournamentCourts(body.tournament_courts)
+      const venueName = normalizeText(body.venue_name)
+      const nextRules = {
+        ...currentRules,
+        ...(venueName !== null ? { venue_name: venueName } : {}),
+        tournament_courts: tournamentCourts,
+      }
+
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from('tournaments')
+        .update({
+          rules_json: nextRules,
+          rules: nextRules,
+          updated_at: updatedAt,
+        })
+        .eq('id', tournamentId)
+        .eq('club_id', clubId)
+        .select('id,club_id,name,status,updated_at,rules_json,rules')
+        .maybeSingle()
+
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 })
+      }
+
+      return NextResponse.json({ ok: true, tournament: updated })
     }
 
     if (String(current.status ?? '').toUpperCase() !== 'DRAFT') {
@@ -335,6 +400,7 @@ export async function PATCH(
 
       const draft = validation.value
       const flyerRules = buildFlyerRules(body.flyer)
+      const tournamentConfigRules = buildTournamentConfigRules(body)
       const currentRules = normalizeObject(current.rules_json ?? current.rules ?? {})
       const payload: Record<string, unknown> = {
         name: draft.name,
@@ -357,10 +423,12 @@ export async function PATCH(
         max_pairs: draft.maxPairs,
         rules_json: {
           ...currentRules,
+          ...tournamentConfigRules,
           ...flyerRules,
         },
         rules: {
           ...currentRules,
+          ...tournamentConfigRules,
           ...flyerRules,
         },
         updated_at: updatedAt,

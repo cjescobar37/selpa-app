@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isClubAdmin } from '@/lib/clubMembershipServer'
 import { createMatch, listMatchesByTournament, type MatchPhase } from '@/lib/tournamentMatches'
+import { readMatchScheduleAssignments } from '@/lib/tournamentSchedule'
 
 type MatchRow = {
   id: string
@@ -104,7 +105,7 @@ export async function GET(
 
     const { data: tournament, error: tournamentError } = await supabaseAdmin
       .from('tournaments')
-      .select('id,club_id,name,status,start_date,starts_on')
+      .select('id,club_id,name,status,start_date,starts_on,rules_json')
       .eq('id', tournamentId)
       .eq('club_id', clubId)
       .maybeSingle()
@@ -116,6 +117,11 @@ export async function GET(
     if (!tournament) {
       return NextResponse.json({ error: 'Torneo no encontrado para este club.' }, { status: 404 })
     }
+    const matchScheduleAssignments = readMatchScheduleAssignments(
+      tournament && typeof tournament === 'object' && 'rules_json' in tournament
+        ? (tournament.rules_json as Record<string, unknown> | null)?.match_schedule_assignments
+        : null
+    )
 
     const { matches } = await listMatchesByTournament({ clubId, tournamentId })
     const rows = (matches ?? []) as MatchRow[]
@@ -169,6 +175,9 @@ export async function GET(
 
         return {
           ...match,
+          court_name: matchScheduleAssignments[match.id]?.court_name ?? null,
+          court_id: matchScheduleAssignments[match.id]?.court_id ?? null,
+          court_source: matchScheduleAssignments[match.id]?.court_source ?? null,
           team1_name: getTeamName(team1, profiles),
           team2_name: getTeamName(team2, profiles),
           team1: team1

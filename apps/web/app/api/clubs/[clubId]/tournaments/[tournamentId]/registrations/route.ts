@@ -34,6 +34,11 @@ type ProfileRow = {
   avatar_url: string | null
 }
 
+type ClubPlayerRow = {
+  user_id: string
+  ranking_points: number | null
+}
+
 type PaymentStatus = 'SIN_PAGO' | 'PENDIENTE' | 'PAGADO' | 'FALLIDO'
 type AdmissionStatus =
   | 'NONE'
@@ -225,6 +230,21 @@ export async function GET(
       profiles = new Map(((profileRows ?? []) as ProfileRow[]).map((profile) => [profile.user_id, profile]))
     }
 
+    let clubPlayers = new Map<string, ClubPlayerRow>()
+    if (userIds.length > 0) {
+      const { data: clubPlayerRows, error: clubPlayersError } = await supabaseAdmin
+        .from('club_players')
+        .select('user_id,ranking_points')
+        .eq('club_id', clubId)
+        .in('user_id', userIds)
+
+      if (clubPlayersError) {
+        return NextResponse.json({ error: clubPlayersError.message }, { status: 500 })
+      }
+
+      clubPlayers = new Map(((clubPlayerRows ?? []) as ClubPlayerRow[]).map((clubPlayer) => [clubPlayer.user_id, clubPlayer]))
+    }
+
     let paymentsByRegistration = new Map<string, PaymentRow[]>()
     if (registrationIds.length > 0) {
       const { data: paymentRows, error: paymentsError } = await supabaseAdmin
@@ -360,9 +380,13 @@ export async function GET(
         const seedSnapshot = seedsByRegistration.get(registration.id) ?? seedsByTeam.get(registration.team_id) ?? null
         const player1 = team ? profiles.get(team.player1_user_id) ?? null : null
         const player2 = team ? profiles.get(team.player2_user_id) ?? null : null
+        const player1ClubPlayer = team ? clubPlayers.get(team.player1_user_id) ?? null : null
+        const player2ClubPlayer = team ? clubPlayers.get(team.player2_user_id) ?? null : null
         const paymentRows = paymentsByRegistration.get(registration.id) ?? []
         const paymentStatus = derivePaymentStatus(paymentRows)
         const eligible = deriveEligible(registration, paymentStatus)
+        const player1Points = Number.isFinite(player1ClubPlayer?.ranking_points ?? NaN) ? Number(player1ClubPlayer?.ranking_points ?? 0) : 0
+        const player2Points = Number.isFinite(player2ClubPlayer?.ranking_points ?? NaN) ? Number(player2ClubPlayer?.ranking_points ?? 0) : 0
 
         return {
           id: registration.id,
@@ -378,6 +402,7 @@ export async function GET(
           payment_status: paymentStatus,
           eligible,
           alerts: buildEligibilityAlerts(registration, paymentStatus),
+          estimated_team_score: player1Points + player2Points,
           seed_snapshot: seedSnapshot
             ? {
                 seed: seedSnapshot.seed,
@@ -409,12 +434,14 @@ export async function GET(
                     full_name: getFullName(player1),
                     email: player1?.email ?? null,
                     avatar_url: player1?.avatar_url ?? null,
+                    ranking_points: player1Points,
                   },
                   {
                     user_id: team.player2_user_id,
                     full_name: getFullName(player2),
                     email: player2?.email ?? null,
                     avatar_url: player2?.avatar_url ?? null,
+                    ranking_points: player2Points,
                   },
                 ],
               }

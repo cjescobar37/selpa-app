@@ -25,6 +25,11 @@ type TeamRow = {
   player2_user_id: string
 }
 
+type ClubPlayerRankingRow = {
+  user_id: string
+  ranking_points: number | null
+}
+
 type SeedCandidate = {
   tournament_id: string
   club_id: string
@@ -153,6 +158,27 @@ export async function generateTournamentSeedSnapshot(input: {
   if (teamsError) throw new Error(`No pude leer equipos del torneo: ${teamsError.message}`)
 
   const teamsById = new Map(((teams ?? []) as TeamRow[]).map((team) => [team.id, team]))
+  const playerIds = Array.from(
+    new Set(
+      ((teams ?? []) as TeamRow[]).flatMap((team) => [team.player1_user_id, team.player2_user_id]).filter(Boolean)
+    )
+  )
+
+  const { data: clubPlayers, error: clubPlayersError } = await supabaseAdmin
+    .from('club_players')
+    .select('user_id,ranking_points')
+    .eq('club_id', input.clubId)
+    .in('user_id', playerIds)
+
+  if (clubPlayersError) throw new Error(`No pude leer ranking de jugadores del club: ${clubPlayersError.message}`)
+
+  const rankingPointsByUserId = new Map(
+    ((clubPlayers ?? []) as ClubPlayerRankingRow[]).map((clubPlayer) => [
+      clubPlayer.user_id,
+      Number.isFinite(clubPlayer.ranking_points ?? NaN) ? Number(clubPlayer.ranking_points ?? 0) : 0,
+    ])
+  )
+
   const candidates = eligibleRegistrations.map((registration) => {
     const team = teamsById.get(registration.team_id)
     if (!team) {
@@ -163,8 +189,8 @@ export async function generateTournamentSeedSnapshot(input: {
       )
     }
 
-    const player1Points = 0
-    const player2Points = 0
+    const player1Points = rankingPointsByUserId.get(team.player1_user_id) ?? 0
+    const player2Points = rankingPointsByUserId.get(team.player2_user_id) ?? 0
 
     return {
       tournament_id: input.tournamentId,

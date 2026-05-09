@@ -7,8 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { defaultFlyerConfig, getTournamentFlyerSurfaceStyle, readFlyerConfigFromRules } from './_components/TournamentFlyerConfigurator'
 import {
-  getTournamentDisplayStatus,
-  getTournamentDisplayStatusTone,
+  getTournamentOperationalStatus,
   type OperationalStage,
 } from '@/lib/tournamentDisplayStatus'
 
@@ -30,6 +29,31 @@ type Tournament = {
   rules_json?: Record<string, unknown> | null
   created_at: string
   updated_at: string
+}
+
+type TournamentListSummary = {
+  operationalStage: OperationalStage
+  currentPlayoffPhase?: string | null
+  counts?: {
+    registrations?: {
+      total?: number
+      pending?: number
+      confirmed?: number
+      cancelled?: number
+    }
+    groups?: number
+    groupMatches?: {
+      played?: number
+      total?: number
+    }
+    playoffMatches?: number
+  }
+  final?: {
+    status?: string | null
+  } | null
+  champion?: {
+    team_id?: string | null
+  } | null
 }
 
 const genderLabels: Record<string, string> = {
@@ -80,6 +104,7 @@ export default function ClubTorneosPage() {
   const [message, setMessage] = useState('')
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [stagesByTournamentId, setStagesByTournamentId] = useState<Record<string, OperationalStage>>({})
+  const [summariesByTournamentId, setSummariesByTournamentId] = useState<Record<string, TournamentListSummary>>({})
   const [activeTab, setActiveTab] = useState<TournamentTab>('recent')
 
   const activeOrUpcoming = useMemo(
@@ -119,6 +144,7 @@ export default function ClubTorneosPage() {
     if (!activeClub?.id) {
       setTournaments([])
       setStagesByTournamentId({})
+      setSummariesByTournamentId({})
       setLoading(false)
       return
     }
@@ -154,6 +180,7 @@ export default function ClubTorneosPage() {
   async function loadTournamentStages(rows: Tournament[], token: string) {
     if (!activeClub?.id || rows.length === 0) {
       setStagesByTournamentId({})
+      setSummariesByTournamentId({})
       return
     }
 
@@ -165,17 +192,29 @@ export default function ClubTorneosPage() {
         })
         const json = await res.json().catch(() => ({}))
         if (!res.ok || !json?.operationalStage) return null
-        return [tournament.id, json.operationalStage as OperationalStage] as const
+        return [
+          tournament.id,
+          {
+            operationalStage: json.operationalStage as OperationalStage,
+            counts: json.counts,
+            final: json.final,
+            champion: json.champion,
+            currentPlayoffPhase: json.currentPlayoffPhase ?? null,
+          } satisfies TournamentListSummary,
+        ] as const
       })
     )
 
     const nextStages: Record<string, OperationalStage> = {}
+    const nextSummaries: Record<string, TournamentListSummary> = {}
     summaries.forEach((result) => {
       if (result.status === 'fulfilled' && result.value) {
-        nextStages[result.value[0]] = result.value[1]
+        nextSummaries[result.value[0]] = result.value[1]
+        nextStages[result.value[0]] = result.value[1].operationalStage
       }
     })
     setStagesByTournamentId(nextStages)
+    setSummariesByTournamentId(nextSummaries)
   }
 
   useEffect(() => {
@@ -183,9 +222,32 @@ export default function ClubTorneosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClub?.id])
 
+  function getTournamentListBadge(tournament: Tournament) {
+    const summary = summariesByTournamentId[tournament.id]
+    const operationalStage = summary?.operationalStage ?? stagesByTournamentId[tournament.id]
+
+    return getTournamentOperationalStatus({
+      operationalStage,
+      status: tournament.status,
+      registrationDeadline: tournament.registration_deadline,
+      counts: summary?.counts,
+      final: summary?.final,
+      champion: summary?.champion,
+      currentPlayoffPhase: summary?.currentPlayoffPhase,
+    })
+  }
+
+  function getTournamentPairsLabel(tournament: Tournament) {
+    const summary = summariesByTournamentId[tournament.id]
+    const confirmedPairs = summary?.counts?.registrations?.confirmed
+    const confirmedLabel = typeof confirmedPairs === 'number' ? String(confirmedPairs) : '-'
+    return `${confirmedLabel}${tournament.max_pairs ? `/${tournament.max_pairs}` : ''}`
+  }
+
   function renderTournamentRow(tournament: Tournament, compact = false) {
     const isHistorical = isHistoryTournament(tournament, stagesByTournamentId[tournament.id])
     const flyerConfig = readFlyerConfigFromRules(tournament.rules_json) ?? defaultFlyerConfig
+    const statusBadge = getTournamentListBadge(tournament)
     return (
       <article
         key={tournament.id}
@@ -208,8 +270,8 @@ export default function ClubTorneosPage() {
         <div className="club-tournamentMain">
           <div className="club-titleLine">
             <strong>{tournament.name}</strong>
-            <span className={`club-statusBadge club-statusBadge--${getTournamentDisplayStatusTone({ operationalStage: stagesByTournamentId[tournament.id], status: tournament.status })}`}>
-              {getTournamentDisplayStatus({ operationalStage: stagesByTournamentId[tournament.id], status: tournament.status })}
+            <span className={`club-statusBadge club-statusBadge--${statusBadge.tone}`}>
+              {statusBadge.label}
             </span>
           </div>
           <div className="club-metaLine">
@@ -225,9 +287,18 @@ export default function ClubTorneosPage() {
         </div>
 
         <div className="club-tournamentDetails">
-          <span>Inscripción: {formatDate(tournament.registration_deadline)}</span>
-          <span>Parejas: {tournament.min_pairs ?? '-'}{tournament.max_pairs ? `/${tournament.max_pairs}` : ''}</span>
-          <span>{money(tournament.price_per_player)}</span>
+          <span>
+            <small>Inscripción</small>
+            <strong>{formatDate(tournament.registration_deadline)}</strong>
+          </span>
+          <span>
+            <small>Parejas</small>
+            <strong>{getTournamentPairsLabel(tournament)}</strong>
+          </span>
+          <span>
+            <small>Precio</small>
+            <strong>{money(tournament.price_per_player)}</strong>
+          </span>
         </div>
 
         <div className="club-rowActions">
@@ -347,45 +418,79 @@ export default function ClubTorneosPage() {
         .club-tab--active { background: #fff; border-color: rgba(83,199,217,.42); box-shadow: 0 8px 18px rgba(15,23,42,.06); color: #0f8ea0; }
         .club-tab--active span { background: #e9fbff; color: #0f7180; }
         .club-emptyAction { display: grid; gap: 10px; justify-items: start; }
-        .club-tournamentList { display: grid; gap: 8px; min-width: 0; }
-        .club-tournamentList--history { gap: 6px; }
-        .club-tournamentRow { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 12px; cursor: pointer; display: grid; gap: 10px; min-width: 0; overflow: hidden; padding: 12px 12px 12px 20px; position: relative; transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+        .club-tournamentList { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
+        .club-tournamentList--history { gap: 12px; }
+        .club-tournamentRow { align-content: space-between; background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 14px; box-shadow: 0 8px 18px rgba(15,23,42,.04); cursor: pointer; display: grid; gap: 12px; min-height: 178px; min-width: 0; overflow: hidden; padding: 14px; position: relative; transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
         .club-tournamentRow:focus-visible { outline: 2px solid #53c7d9; outline-offset: 2px; }
-        .club-tournamentRow::before { border-radius: 12px 0 0 12px; bottom: 0; content: ''; left: 0; position: absolute; top: 0; transition: background .16s ease, box-shadow .16s ease; width: 8px; }
-        .club-tournamentRow::after { background: linear-gradient(102deg, rgba(255,255,255,.76) 0%, rgba(255,255,255,.64) 22%, rgba(255,255,255,.4) 54%, rgba(255,255,255,.15) 100%); content: ''; inset: 0; position: absolute; transition: background .16s ease, opacity .16s ease; z-index: 1; }
-        .club-tournamentRow--active::before { background: #69dfe3; box-shadow: 0 0 0 1px rgba(83,199,217,.12); }
-        .club-tournamentRow--history::before { background: #cbd5e1; }
-        .club-tournamentRow:hover { background: #fbfdff; border-color: rgba(83,199,217,.30); box-shadow: 0 16px 30px rgba(15,23,42,.1); transform: translateY(-2px); }
-        .club-tournamentRow:hover::after { background: linear-gradient(102deg, rgba(255,255,255,.64) 0%, rgba(255,255,255,.5) 20%, rgba(255,255,255,.22) 54%, rgba(255,255,255,.04) 100%); }
-        .club-tournamentRow--active:hover::before { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.10); }
+        .club-tournamentRow::before { background: linear-gradient(145deg, rgba(255,255,255,.74) 0%, rgba(255,255,255,.62) 48%, rgba(255,255,255,.42) 100%); border-radius: 14px; content: ''; inset: 0; position: absolute; transition: background .16s ease; z-index: 1; }
+        .club-tournamentRow::after { background: linear-gradient(90deg, rgba(83,199,217,.95), rgba(105,223,227,.35)); border-radius: 999px; content: ''; height: 4px; left: 14px; position: absolute; right: 14px; top: 0; transition: background .16s ease, opacity .16s ease; z-index: 2; }
+        .club-tournamentRow--active::before { background: linear-gradient(145deg, rgba(255,255,255,.40) 0%, rgba(255,255,255,.24) 45%, rgba(255,255,255,.08) 100%); }
+        .club-tournamentRow--history::before { background: linear-gradient(145deg, rgba(255,255,255,.82) 0%, rgba(248,250,252,.72) 48%, rgba(241,245,249,.58) 100%); }
+        .club-tournamentRow--history::after { background: linear-gradient(90deg, rgba(148,163,184,.82), rgba(203,213,225,.28)); }
+        .club-tournamentRow:hover { background: #fbfdff; border-color: rgba(83,199,217,.34); box-shadow: 0 18px 34px rgba(15,23,42,.11); transform: translateY(-2px); }
+        .club-tournamentRow:hover::before { background: linear-gradient(145deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.20) 46%, rgba(255,255,255,.06) 100%); }
+        .club-tournamentRow--history:hover::before { background: linear-gradient(145deg, rgba(255,255,255,.78) 0%, rgba(248,250,252,.68) 48%, rgba(241,245,249,.52) 100%); }
+        .club-tournamentRow--active:hover::after { background: linear-gradient(90deg, rgba(34,197,94,.92), rgba(105,223,227,.40)); }
         .club-tournamentRow--history:hover { border-color: rgba(100,116,139,.24); }
-        .club-tournamentRow--history:hover::before { background: #94a3b8; }
-        .club-tournamentRow--compact { background: rgba(255,255,255,.74); padding: 8px 10px 8px 20px; }
-        .club-tournamentOverlayLink { border-radius: 12px; inset: 0; position: absolute; z-index: 1; }
+        .club-tournamentRow--compact { min-height: 160px; }
+        .club-tournamentOverlayLink { border-radius: 14px; inset: 0; position: absolute; z-index: 1; }
         .club-tournamentOverlayLink:focus-visible { outline: 2px solid #53c7d9; outline-offset: -3px; }
-        .club-tournamentBackdrop { border-radius: 12px; inset: 0; opacity: 1; pointer-events: none; position: absolute; transition: transform .22s ease, opacity .18s ease; z-index: 0; }
-        .club-tournamentBackdrop::after { background: linear-gradient(116deg, rgba(255,255,255,.7) 0%, rgba(255,255,255,.52) 26%, rgba(255,255,255,.2) 58%, rgba(255,255,255,.02) 100%); content: ''; inset: 0; position: absolute; }
-        .club-tournamentBackdropGlow { background: radial-gradient(circle at 82% 28%, rgba(255,255,255,.22), transparent 38%), linear-gradient(135deg, rgba(15,23,42,.015), transparent 52%); inset: 0; pointer-events: none; position: absolute; transition: opacity .18s ease; }
-        .club-tournamentRow:hover .club-tournamentBackdrop { opacity: 1; transform: scale(1.02); }
+        .club-tournamentBackdrop { background-color: #17253f; background-position: center top !important; background-repeat: no-repeat !important; background-size: cover !important; border-radius: 14px; filter: saturate(1.46) contrast(1.06); inset: 0; opacity: 1; pointer-events: none; position: absolute; transition: filter .18s ease, transform .22s ease, opacity .18s ease; z-index: 0; }
+        .club-tournamentRow--history .club-tournamentBackdrop { filter: grayscale(1) saturate(.12) contrast(.92); opacity: .72; }
+        .club-tournamentBackdrop::after { background: linear-gradient(145deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 42%, rgba(255,255,255,0) 100%); content: ''; inset: 0; position: absolute; }
+        .club-tournamentRow--history .club-tournamentBackdrop::after { background: linear-gradient(145deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.18) 48%, rgba(255,255,255,.06) 100%); }
+        .club-tournamentBackdropGlow { background: radial-gradient(circle at 86% 22%, rgba(255,255,255,.20), transparent 36%); inset: 0; pointer-events: none; position: absolute; transition: opacity .18s ease; }
+        .club-tournamentRow:hover .club-tournamentBackdrop { filter: saturate(1.58) contrast(1.08); opacity: 1; transform: scale(1.01); }
+        .club-tournamentRow--history:hover .club-tournamentBackdrop { filter: grayscale(1) saturate(.16) contrast(.96); opacity: .82; }
         .club-tournamentRow:hover .club-tournamentBackdropGlow { opacity: .92; }
-        .club-tournamentMain, .club-tournamentDetails { display: grid; gap: 5px; min-width: 0; pointer-events: none; position: relative; z-index: 2; }
-        .club-titleLine { align-items: center; display: flex; gap: 8px; min-width: 0; }
-        .club-titleLine strong { color: #17253f; font-size: 14px; font-weight: 950; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .club-metaLine { color: #64748b; display: flex; flex-wrap: wrap; font-size: 12px; gap: 6px 10px; min-width: 0; }
-        .club-metaLine span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .club-tournamentDetails { color: #475569; font-size: 12px; }
-        .club-tournamentDetails span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .club-rowActions { display: flex; justify-content: flex-start; pointer-events: none; position: relative; z-index: 3; }
+        .club-tournamentMain, .club-tournamentDetails { min-width: 0; pointer-events: none; position: relative; z-index: 3; }
+        .club-tournamentMain { display: grid; gap: 10px; }
+        .club-titleLine { align-items: flex-start; display: flex; gap: 8px; justify-content: space-between; min-width: 0; overflow: visible; }
+        .club-titleLine strong { color: #17253f; display: -webkit-box; font-size: 15px; font-weight: 950; line-height: 1.15; min-width: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        .club-metaLine { color: #475569; display: flex; flex-wrap: wrap; font-size: 11px; gap: 6px; min-width: 0; }
+        .club-metaLine span { background: rgba(255,255,255,.72); border: 1px solid rgba(15,23,42,.06); border-radius: 999px; min-width: 0; overflow: hidden; padding: 4px 7px; text-overflow: ellipsis; white-space: nowrap; }
+        .club-tournamentDetails { display: grid; gap: 7px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .club-tournamentDetails span { background: rgba(248,250,252,.74); border: 1px solid rgba(15,23,42,.06); border-radius: 10px; display: grid; gap: 2px; min-width: 0; padding: 8px; }
+        .club-tournamentDetails small { color: #64748b; font-size: 10px; font-weight: 900; line-height: 1; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+        .club-tournamentDetails strong { color: #17253f; font-size: 12px; font-weight: 950; line-height: 1.15; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .club-rowActions { display: flex; justify-content: flex-end; pointer-events: none; position: relative; z-index: 3; }
         .club-rowActions .club-secondaryBtn { pointer-events: auto; }
-        .club-statusBadge { border-radius: 999px; flex: 0 0 auto; font-size: 11px; font-weight: 950; padding: 5px 7px; white-space: nowrap; }
-        .club-statusBadge--active { background: #ecfdf3; color: #166534; }
+        .club-rowActions .club-secondaryBtn { min-height: 34px; padding: 7px 14px; }
+        .club-statusBadge { align-items: center; border-radius: 999px; display: inline-flex; flex: 0 0 auto; font-size: 10px; font-weight: 950; gap: 5px; isolation: isolate; overflow: visible; padding: 5px 7px; position: relative; white-space: nowrap; z-index: 6; }
+        .club-statusBadge--active,
+        .club-statusBadge--registration { background: #ecfdf3; color: #166534; }
         .club-statusBadge--ready { background: #fff7df; color: #854d0e; }
-        .club-statusBadge--done { background: #eef8ff; color: #164e63; }
-        .club-statusBadge--muted { background: #f1f5f9; color: #475569; }
+        .club-statusBadge--done,
+        .club-statusBadge--finished { background: #eef8ff; color: #164e63; }
+        .club-statusBadge--muted,
+        .club-statusBadge--cancelled { background: #f1f5f9; color: #475569; }
         .club-statusBadge--draft { background: #fff7df; color: #854d0e; }
-        @media (min-width: 960px) {
-          .club-tournamentRow { grid-template-columns: minmax(0, 1.28fr) minmax(220px, .72fr) auto; }
-          .club-rowActions { justify-content: flex-end; }
+        .club-statusBadge--running { animation: clubRunningPulse 1.65s ease-in-out infinite; background: #dff4ff; color: #075985; box-shadow: 0 0 0 1px rgba(14,165,233,.16), 0 8px 18px rgba(14,165,233,.18); }
+        .club-statusBadge--running::after { animation: clubStatusPulseRing 1.65s ease-out infinite; background: rgba(14,165,233,.16); border: 1px solid rgba(14,165,233,.42); border-radius: inherit; content: ''; inset: -4px; pointer-events: none; position: absolute; z-index: -1; }
+        .club-statusBadge--live { animation: clubLivePulse 1.45s ease-in-out infinite; background: #dc2626; color: #fff; box-shadow: 0 0 0 1px rgba(220,38,38,.18), 0 10px 22px rgba(220,38,38,.22); }
+        .club-statusBadge--live::before { animation: clubLiveDot 1s ease-in-out infinite; background: #fff; border-radius: 999px; box-shadow: 0 0 0 2px rgba(255,255,255,.26), 0 0 8px rgba(255,255,255,.65); content: ''; flex: 0 0 auto; height: 6px; width: 6px; }
+        .club-statusBadge--live::after { animation: clubLivePulseRing 1.45s ease-out infinite; background: rgba(220,38,38,.18); border: 1px solid rgba(220,38,38,.52); border-radius: inherit; content: ''; inset: -5px; pointer-events: none; position: absolute; z-index: -1; }
+        @keyframes clubRunningPulse {
+          0%, 100% { filter: saturate(1); }
+          50% { filter: saturate(1.25); }
+        }
+        @keyframes clubStatusPulseRing {
+          0% { opacity: .62; transform: scale(.96); }
+          70% { opacity: 0; transform: scale(1.16); }
+          100% { opacity: 0; transform: scale(1.16); }
+        }
+        @keyframes clubLivePulse {
+          0%, 100% { filter: saturate(1); }
+          50% { filter: saturate(1.35); }
+        }
+        @keyframes clubLivePulseRing {
+          0% { opacity: .72; transform: scale(.95); }
+          72% { opacity: 0; transform: scale(1.2); }
+          100% { opacity: 0; transform: scale(1.2); }
+        }
+        @keyframes clubLiveDot {
+          0%, 100% { opacity: .74; transform: scale(.78); }
+          50% { opacity: 1; transform: scale(1.18); }
         }
         @media (max-width: 720px) {
           .club-tournamentsHead { display: grid; }
@@ -394,7 +499,9 @@ export default function ClubTorneosPage() {
           .club-tabs { align-items: stretch; flex-direction: column; width: 100%; }
           .club-tab { justify-content: space-between; width: 100%; }
           .club-metrics { grid-template-columns: 1fr; }
+          .club-tournamentList { grid-template-columns: 1fr; }
           .club-titleLine { align-items: flex-start; flex-direction: column; }
+          .club-tournamentDetails { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { normalizeScheduleConfig, normalizeTournamentCourts } from '@/lib/tournamentSchedule'
+import { normalizeGroupTiebreakerConfig } from '@/lib/tournamentTiebreakers'
 
 type TournamentRow = {
   id: string
@@ -37,6 +39,14 @@ type CreateTournamentInput = {
   type?: unknown
   gender?: unknown
   category_id?: unknown
+  segment_type?: unknown
+  public_description?: unknown
+  competition_system?: unknown
+  venue_name?: unknown
+  tournament_courts?: unknown
+  schedule_config?: unknown
+  points_config?: unknown
+  group_tiebreakers?: unknown
   start_date?: unknown
   end_date?: unknown
   registration_deadline?: unknown
@@ -48,6 +58,8 @@ type CreateTournamentInput = {
 
 const tournamentTypes = ['OPEN', 'CHALLENGER', 'MASTER', 'MASTER_FINAL'] as const
 const tournamentGenders = ['MALE', 'FEMALE', 'MIXED'] as const
+const tournamentSegments = ['LIBRES', 'MENORES', 'VETERANOS'] as const
+const competitionSystems = ['GROUPS_PLAYOFF', 'ROUND_ROBIN', 'SINGLE_ELIMINATION'] as const
 
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
@@ -113,6 +125,10 @@ function normalizeObject(value: unknown) {
   return value as Record<string, unknown>
 }
 
+function normalizeArray(value: unknown) {
+  return Array.isArray(value) ? value : []
+}
+
 function buildFlyerRules(value: unknown) {
   const flyer = normalizeObject(value)
 
@@ -132,6 +148,49 @@ function buildFlyerRules(value: unknown) {
     flyer_accent_color: flyerAccentColor ?? '#67e8f9',
     flyer_font: flyerFont ?? 'SPORT',
     flyer_style: flyerStyle ?? 'MODERN',
+  }
+}
+
+function buildTournamentConfigRules(value: CreateTournamentInput) {
+  const segmentType = normalizeText(value.segment_type) ?? 'LIBRES'
+  const publicDescription = normalizeText(value.public_description)
+  const competitionSystem = normalizeText(value.competition_system) ?? 'GROUPS_PLAYOFF'
+  const venueName = normalizeText(value.venue_name)
+  const tournamentCourts = normalizeTournamentCourts(value.tournament_courts)
+  const scheduleConfig = normalizeScheduleConfig(value.schedule_config, {
+    startDate: normalizeDate(value.start_date) ?? '',
+    endDate: normalizeDate(value.end_date) ?? normalizeDate(value.start_date) ?? '',
+  })
+  const pointsConfig = normalizeObject(value.points_config)
+  const groupTiebreakers = value.group_tiebreakers === undefined
+    ? null
+    : normalizeGroupTiebreakerConfig(value.group_tiebreakers)
+
+  const normalizedSegment = tournamentSegments.includes(segmentType as typeof tournamentSegments[number])
+    ? segmentType
+    : 'LIBRES'
+  const normalizedCompetitionSystem = competitionSystems.includes(competitionSystem as typeof competitionSystems[number])
+    ? competitionSystem
+    : 'GROUPS_PLAYOFF'
+
+  return {
+    segment_type: normalizedSegment,
+    public_description: publicDescription,
+    competition_system: normalizedCompetitionSystem,
+    venue_name: venueName,
+    tournament_courts: tournamentCourts,
+    schedule_config: scheduleConfig,
+    points_config: {
+      enabled: Boolean(pointsConfig.enabled),
+      editable: Boolean(pointsConfig.editable),
+      winner: normalizeInteger(pointsConfig.winner, 0),
+      finalist: normalizeInteger(pointsConfig.finalist, 0),
+      semifinalist: normalizeInteger(pointsConfig.semifinalist, 0),
+      quarterfinalist: normalizeInteger(pointsConfig.quarterfinalist, 0),
+      eighthFinalist: normalizeInteger(pointsConfig.eighthFinalist, 0),
+      participation: normalizeInteger(pointsConfig.participation, 0),
+    },
+    ...(groupTiebreakers ? { group_tiebreakers: groupTiebreakers } : {}),
   }
 }
 
@@ -232,6 +291,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
       ? null
       : normalizeInteger(body.max_pairs, NaN)
     const flyerRules = buildFlyerRules(body.flyer)
+    const tournamentConfigRules = buildTournamentConfigRules(body)
 
     if (!name) {
       return NextResponse.json({ error: 'El nombre es obligatorio.' }, { status: 400 })
@@ -276,6 +336,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
     const rulesPayload = {
       wo_tolerance_minutes: 10,
       wo_score: '6-0 6-0',
+      ...tournamentConfigRules,
       ...flyerRules,
     }
 

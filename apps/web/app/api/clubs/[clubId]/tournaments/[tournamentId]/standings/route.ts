@@ -15,6 +15,8 @@ type TournamentRow = {
   name: string
   format: string | null
   classification_rules: TournamentClassificationRules | null
+  rules_json?: Record<string, unknown> | null
+  rules?: Record<string, unknown> | null
 }
 
 function isUuid(value: string) {
@@ -35,9 +37,24 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback
 }
 
-function normalizeClassificationRules(value: unknown): TournamentClassificationRules | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  return value as TournamentClassificationRules
+function normalizeObject(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as Record<string, unknown>
+}
+
+function normalizeClassificationRules(value: unknown, tournamentRules?: unknown): TournamentClassificationRules | null {
+  const base = value && typeof value === 'object' && !Array.isArray(value) ? value as TournamentClassificationRules : {}
+  const safeRules = normalizeObject(tournamentRules)
+  const groupTiebreakers = safeRules.group_tiebreakers
+
+  if (groupTiebreakers) {
+    return {
+      ...base,
+      group_tiebreakers: groupTiebreakers as TournamentClassificationRules['group_tiebreakers'],
+    }
+  }
+
+  return Object.keys(base).length > 0 ? base : null
 }
 
 export async function GET(
@@ -64,7 +81,7 @@ export async function GET(
 
     const { data: tournament, error: tournamentError } = await supabaseAdmin
       .from('tournaments')
-      .select('id,club_id,name,format,classification_rules')
+      .select('id,club_id,name,format,classification_rules,rules_json,rules')
       .eq('id', tournamentId)
       .eq('club_id', clubId)
       .maybeSingle()
@@ -120,7 +137,7 @@ export async function GET(
           club_id: row.club_id,
           name: row.name,
           format: row.format,
-          classification_rules: normalizeClassificationRules(row.classification_rules),
+          classification_rules: normalizeClassificationRules(row.classification_rules, row.rules_json ?? row.rules),
         },
         groups: [],
         meta: {
@@ -157,7 +174,7 @@ export async function GET(
     }
 
     const row = tournament as TournamentRow
-    const classificationRules = normalizeClassificationRules(row.classification_rules)
+    const classificationRules = normalizeClassificationRules(row.classification_rules, row.rules_json ?? row.rules)
 
     try {
       const standings = calculateTournamentGroupStandings({

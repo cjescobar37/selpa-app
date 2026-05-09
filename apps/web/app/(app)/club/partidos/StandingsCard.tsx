@@ -8,7 +8,11 @@ export type StandingRow = {
   wins: number
   losses: number
   match_points: number
+  sets_for: number
+  sets_against: number
   set_difference: number
+  games_for: number
+  games_against: number
   game_difference: number
 }
 
@@ -85,8 +89,18 @@ export default function StandingsCard({ loading, error, groups, teamNames }: Sta
                         <span role="cell">{row.wins}</span>
                         <span role="cell">{row.losses}</span>
                         <span role="cell">{row.match_points}</span>
-                        <span role="cell">{row.set_difference}</span>
-                        <span role="cell">{row.game_difference}</span>
+                        <span
+                          role="cell"
+                          title={`Sets: ${row.sets_for} a favor / ${row.sets_against} en contra`}
+                        >
+                          {row.set_difference}
+                        </span>
+                        <span
+                          role="cell"
+                          title={`Games: ${row.games_for} a favor / ${row.games_against} en contra`}
+                        >
+                          {row.game_difference}
+                        </span>
                       </div>
                     )
                   })}

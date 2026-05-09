@@ -111,7 +111,13 @@ export function isValidSuperTiebreak(team1: number, team2: number) {
 
   const winner = Math.max(team1, team2)
   const loser = Math.min(team1, team2)
-  return winner >= 10 && winner - loser >= 2
+  if (winner < 10) return false
+
+  if (loser <= 8) {
+    return winner === 10
+  }
+
+  return winner === loser + 2
 }
 
 export function buildScoreText(score: Pick<StructuredMatchScore, 'sets' | 'super_tiebreak'>) {

@@ -50,6 +50,8 @@ type MatchRow = {
   id: string
   phase: string | null
   status: string | null
+  team1_id: string | null
+  team2_id: string | null
   winner_team_id: string | null
   score: Record<string, unknown> | null
   round: number | null
@@ -63,6 +65,14 @@ type ProfileRow = {
   first_name: string | null
   last_name: string | null
   display_name: string | null
+}
+
+const playoffPhaseOrder = ['ROUND_OF_32', 'ROUND_OF_16', 'EIGHTHS', 'QUARTER', 'SEMI', 'FINAL'] as const
+
+function getPlayoffPhaseIndex(phase?: string | null) {
+  const cleanPhase = String(phase ?? '').trim().toUpperCase()
+  const foundIndex = playoffPhaseOrder.indexOf(cleanPhase as (typeof playoffPhaseOrder)[number])
+  return foundIndex >= 0 ? foundIndex : Number.MAX_SAFE_INTEGER
 }
 
 async function getTokenUser(req: NextRequest) {
@@ -108,10 +118,18 @@ function getFullName(profile?: ProfileRow | null) {
   )
 }
 
+function getTeamUserIds(team?: TeamRow | null) {
+  return [team?.player1_user_id, team?.player2_user_id].filter(Boolean) as string[]
+}
+
+function getTeamName(team: TeamRow | null | undefined, profilesByUserId: Map<string, ProfileRow>) {
+  const userIds = getTeamUserIds(team)
+  if (userIds.length === 0) return null
+  return userIds.map((userId) => getFullName(profilesByUserId.get(userId))).join(' / ')
+}
+
 function deriveOperationalStage(input: {
   status: string
-  confirmedRegistrations: number
-  minPairs: number
   groupCount: number
   groupMatchesTotal: number
   playoffMatchesCount: number
@@ -121,7 +139,6 @@ function deriveOperationalStage(input: {
   if (input.status === 'DRAFT') return 'BORRADOR'
   if (input.playoffMatchesCount > 0) return 'PLAYOFF'
   if (input.groupCount > 0 || input.groupMatchesTotal > 0) return 'GRUPOS'
-  if (isOpenStatus(input.status) && input.confirmedRegistrations >= input.minPairs) return 'LISTO_PARA_INICIAR'
   if (isOpenStatus(input.status)) return 'INSCRIPCIONES'
   return 'INSCRIPCIONES'
 }
@@ -150,6 +167,25 @@ function deriveNextStep(input: {
     return 'Ya podés generar playoff.'
   }
   return 'Torneo finalizado.'
+}
+
+function deriveCurrentPlayoffPhase(matches: MatchRow[]) {
+  const playoffMatches = matches
+    .filter((match) => String(match.phase ?? '').toUpperCase() !== 'GROUP')
+    .filter((match) => getPlayoffPhaseIndex(match.phase) !== Number.MAX_SAFE_INTEGER)
+    .sort((left, right) => {
+      const phaseDiff = getPlayoffPhaseIndex(left.phase) - getPlayoffPhaseIndex(right.phase)
+      if (phaseDiff !== 0) return phaseDiff
+      const roundDiff = (left.round ?? 0) - (right.round ?? 0)
+      if (roundDiff !== 0) return roundDiff
+      const orderDiff = (left.match_order ?? 0) - (right.match_order ?? 0)
+      if (orderDiff !== 0) return orderDiff
+      return String(left.created_at ?? '').localeCompare(String(right.created_at ?? ''))
+    })
+
+  if (playoffMatches.length === 0) return null
+  const pendingMatch = playoffMatches.find((match) => String(match.status ?? '').toUpperCase() !== 'PLAYED')
+  return String((pendingMatch ?? playoffMatches.at(-1))?.phase ?? '').toUpperCase() || null
 }
 
 export async function GET(
@@ -239,7 +275,7 @@ export async function GET(
 
     const { data: matches, error: matchesError } = await supabaseAdmin
       .from('tournament_matches')
-      .select('id,phase,status,winner_team_id,score,round,match_order,created_at')
+      .select('id,phase,status,team1_id,team2_id,winner_team_id,score,round,match_order,created_at')
       .eq('club_id', clubId)
       .eq('tournament_id', tournamentId)
 
@@ -250,6 +286,7 @@ export async function GET(
     const matchRows = (matches ?? []) as MatchRow[]
     const groupMatches = matchRows.filter((match) => String(match.phase ?? '').toUpperCase() === 'GROUP')
     const playoffMatches = matchRows.filter((match) => String(match.phase ?? '').toUpperCase() !== 'GROUP')
+    const currentPlayoffPhase = deriveCurrentPlayoffPhase(matchRows)
     const finalMatch = playoffMatches
       .filter((match) => String(match.phase ?? '').toUpperCase() === 'FINAL')
       .sort((a, b) => {
@@ -263,18 +300,30 @@ export async function GET(
 
     const championTeamId =
       finalMatch?.status === 'PLAYED' && finalMatch.winner_team_id ? finalMatch.winner_team_id : null
+    const runnerUpTeamId =
+      championTeamId && finalMatch?.team1_id && finalMatch.team2_id
+        ? finalMatch.team1_id === championTeamId
+          ? finalMatch.team2_id
+          : finalMatch.team1_id
+        : null
     const championTeam = championTeamId ? teamsById.get(championTeamId) ?? null : null
+    const runnerUpTeam = runnerUpTeamId ? teamsById.get(runnerUpTeamId) ?? null : null
 
     let championName: string | null = null
-    if (championTeam) {
-      const userIds = [championTeam.player1_user_id, championTeam.player2_user_id].filter(Boolean) as string[]
+    let runnerUpName: string | null = null
+    if (championTeam || runnerUpTeam) {
+      const userIds = Array.from(new Set([
+        ...getTeamUserIds(championTeam),
+        ...getTeamUserIds(runnerUpTeam),
+      ]))
       const { data: profiles } = await supabaseAdmin
         .from('profiles')
         .select('user_id,email,first_name,last_name,display_name')
         .in('user_id', userIds)
 
       const profileMap = new Map(((profiles ?? []) as ProfileRow[]).map((profile) => [profile.user_id, profile]))
-      championName = userIds.map((userId) => getFullName(profileMap.get(userId))).join(' / ')
+      championName = getTeamName(championTeam, profileMap)
+      runnerUpName = getTeamName(runnerUpTeam, profileMap)
     }
 
     const status = String(tournamentRow.status ?? 'DRAFT').toUpperCase()
@@ -282,8 +331,6 @@ export async function GET(
     const groupMatchesPlayed = groupMatches.filter((match) => match.status === 'PLAYED').length
     const operationalStage = deriveOperationalStage({
       status,
-      confirmedRegistrations: registrationCounts.confirmed,
-      minPairs,
       groupCount: groupCount ?? 0,
       groupMatchesTotal: groupMatches.length,
       playoffMatchesCount: playoffMatches.length,
@@ -333,6 +380,8 @@ export async function GET(
         ? {
             id: finalMatch.id,
             status: finalMatch.status,
+            team1_id: finalMatch.team1_id,
+            team2_id: finalMatch.team2_id,
             winner_team_id: finalMatch.winner_team_id,
             score: finalMatch.score,
           }
@@ -343,7 +392,14 @@ export async function GET(
             name: championName ?? 'Equipo campeón',
           }
         : null,
+      runnerUp: runnerUpTeamId
+        ? {
+            team_id: runnerUpTeamId,
+            name: runnerUpName ?? 'Equipo subcampeón',
+          }
+        : null,
       operationalStage,
+      currentPlayoffPhase,
       nextStep,
     })
   } catch (error: unknown) {

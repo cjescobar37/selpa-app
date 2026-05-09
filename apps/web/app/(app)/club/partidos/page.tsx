@@ -602,7 +602,7 @@ export default function ClubPartidosPage() {
 
     if (!res.ok) {
       const unsupportedTieBreaker = res.status === 422 && json?.code === 'UNSUPPORTED_TIE_BREAKER'
-      setStandingsError(unsupportedTieBreaker ? 'El desempate head to head todavía no está disponible.' : json?.error ?? 'No pude cargar standings.')
+      setStandingsError(unsupportedTieBreaker ? 'El criterio de desempate configurado no está disponible para calcular standings.' : json?.error ?? 'No pude cargar standings.')
       setStandingGroups([])
       setLoadingStandings(false)
       return
@@ -696,7 +696,7 @@ export default function ClubPartidosPage() {
       const messages: Record<string, string> = {
         UNSUPPORTED_PLAYOFF_SHAPE: 'Para generar semifinales necesitás exactamente 2 grupos con 2 clasificados cada uno.',
         PLAYOFF_ALREADY_EXISTS_OR_STARTED: 'El playoff ya fue generado o ya tiene partidos iniciados.',
-        UNSUPPORTED_TIE_BREAKER: 'No se puede generar playoff con head to head hasta implementar ese desempate.',
+        UNSUPPORTED_TIE_BREAKER: 'No se puede generar playoff con el criterio de desempate configurado.',
         UNSUPPORTED_TOURNAMENT_FORMAT: 'El playoff automático solo está disponible para torneos por grupos con eliminación.',
       }
       setMessage(json?.code ? messages[json.code] ?? json?.error ?? 'No pude generar el playoff.' : json?.error ?? 'No pude generar el playoff.')
@@ -872,8 +872,18 @@ export default function ClubPartidosPage() {
             <span role="cell">{row.wins}</span>
             <span role="cell">{row.losses}</span>
             <span role="cell">{row.match_points}</span>
-            <span role="cell">{row.set_difference}</span>
-            <span role="cell">{row.game_difference}</span>
+            <span
+              role="cell"
+              title={`Sets: ${row.sets_for} a favor / ${row.sets_against} en contra`}
+            >
+              {row.set_difference}
+            </span>
+            <span
+              role="cell"
+              title={`Games: ${row.games_for} a favor / ${row.games_against} en contra`}
+            >
+              {row.game_difference}
+            </span>
           </div>
         ))}
       </div>

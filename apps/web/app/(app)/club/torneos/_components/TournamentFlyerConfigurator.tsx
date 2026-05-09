@@ -22,6 +22,8 @@ import fondo17 from '@/app/flyers/fondo17.png'
 export type FlyerMode = 'NONE' | 'AUTO' | 'MANUAL'
 export type FlyerStyle = 'CLASSIC' | 'MODERN' | 'MINIMAL' | 'DARK'
 export type FlyerFont = 'SPORT' | 'DISPLAY' | 'CONDENSED' | 'ELEGANT' | 'GROTESK'
+export type FlyerFontWeight = 'LIGHT' | 'MEDIUM' | 'BOLD'
+export type FlyerTextAlign = 'left' | 'center' | 'right' | 'justify'
 
 export type FlyerConfig = {
   mode: FlyerMode
@@ -30,7 +32,9 @@ export type FlyerConfig = {
   textColor: string
   accentColor: string
   fontFamily: FlyerFont
+  fontWeight: FlyerFontWeight
   style: FlyerStyle
+  textAlign: FlyerTextAlign
 }
 
 export type FlyerPreviewData = {
@@ -39,14 +43,16 @@ export type FlyerPreviewData = {
   type: string
   gender: string
   categoryLabel: string
+  segmentLabel?: string | null
+  competitionSystemLabel?: string | null
+  venueName?: string | null
   startDate: string
   endDate: string
   registrationDeadline: string
   pricePerPlayer: string
-  minPairs: string
 }
 
-type FlyerPreviewVariant = 'editor' | 'sidebar' | 'card' | 'modal'
+type FlyerPreviewVariant = 'editor' | 'sidebar' | 'detailLarge' | 'card' | 'modal'
 
 type Props = {
   value: FlyerConfig
@@ -95,6 +101,12 @@ const fontOptions: Array<{ value: FlyerFont; label: string }> = [
   { value: 'GROTESK', label: 'Grotesk' },
 ]
 
+const fontWeightOptions: Array<{ value: FlyerFontWeight; label: string; weight: number }> = [
+  { value: 'LIGHT', label: 'Fina', weight: 500 },
+  { value: 'MEDIUM', label: 'Media', weight: 700 },
+  { value: 'BOLD', label: 'Ancha', weight: 900 },
+]
+
 const fontStacks: Record<FlyerFont, string> = {
   SPORT: '"Arial Black", "Segoe UI", sans-serif',
   DISPLAY: 'Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif',
@@ -103,10 +115,38 @@ const fontStacks: Record<FlyerFont, string> = {
   GROTESK: 'Inter, "Segoe UI", sans-serif',
 }
 
+const fontWeightByOption: Record<FlyerFontWeight, number> = {
+  LIGHT: 500,
+  MEDIUM: 700,
+  BOLD: 900,
+}
+
+function parseTournamentDate(value: string) {
+  if (!value) return null
+  const localDateTimeMatch = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/
+  )
+  if (localDateTimeMatch) {
+    const [, year, month, day, hours = '00', minutes = '00', seconds = '00'] = localDateTimeMatch
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hours),
+      Number(minutes),
+      Number(seconds)
+    )
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return date
+}
+
 function formatDate(value: string) {
   if (!value) return 'Por definir'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Por definir'
+  const date = parseTournamentDate(value)
+  if (!date) return 'Por definir'
   return new Intl.DateTimeFormat('es-AR', {
     day: 'numeric',
     month: 'short',
@@ -116,14 +156,16 @@ function formatDate(value: string) {
 
 function formatDateTime(value: string) {
   if (!value) return 'Por definir'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Por definir'
+  const date = parseTournamentDate(value)
+  if (!date) return 'Por definir'
   return new Intl.DateTimeFormat('es-AR', {
     day: 'numeric',
     month: 'short',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(date)
+    hour12: false,
+  }).format(date).replace(',', ' ·')
 }
 
 function formatPrice(value: string) {
@@ -134,12 +176,6 @@ function formatPrice(value: string) {
     currency: 'ARS',
     maximumFractionDigits: 0,
   }).format(parsed)
-}
-
-function formatMinPairs(value: string) {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed < 2) return 'Minimo por definir'
-  return `${Math.trunc(parsed)} parejas minimo`
 }
 
 function getBackgroundStyle(backgroundId: string, style: FlyerStyle) {
@@ -173,7 +209,9 @@ export const defaultFlyerConfig: FlyerConfig = {
   textColor: '#e2e8f0',
   accentColor: '#67e8f9',
   fontFamily: 'SPORT',
+  fontWeight: 'MEDIUM',
   style: 'MODERN',
+  textAlign: 'left',
 }
 
 export function readFlyerConfigFromRules(rules: Record<string, unknown> | null | undefined): FlyerConfig {
@@ -185,7 +223,9 @@ export function readFlyerConfigFromRules(rules: Record<string, unknown> | null |
   const textColor = typeof rules.flyer_text_color === 'string' ? rules.flyer_text_color : defaultFlyerConfig.textColor
   const accentColor = typeof rules.flyer_accent_color === 'string' ? rules.flyer_accent_color : defaultFlyerConfig.accentColor
   const fontFamily = typeof rules.flyer_font === 'string' ? rules.flyer_font : defaultFlyerConfig.fontFamily
+  const fontWeight = typeof rules.flyer_font_weight === 'string' ? rules.flyer_font_weight : defaultFlyerConfig.fontWeight
   const style = typeof rules.flyer_style === 'string' ? rules.flyer_style : defaultFlyerConfig.style
+  const textAlign = typeof rules.flyer_text_align === 'string' ? rules.flyer_text_align : defaultFlyerConfig.textAlign
 
   return {
     mode: mode === 'AUTO' || mode === 'MANUAL' || mode === 'NONE' ? mode : defaultFlyerConfig.mode,
@@ -196,9 +236,15 @@ export function readFlyerConfigFromRules(rules: Record<string, unknown> | null |
     fontFamily: fontFamily === 'SPORT' || fontFamily === 'DISPLAY' || fontFamily === 'CONDENSED' || fontFamily === 'ELEGANT' || fontFamily === 'GROTESK'
       ? fontFamily
       : defaultFlyerConfig.fontFamily,
+    fontWeight: fontWeight === 'LIGHT' || fontWeight === 'MEDIUM' || fontWeight === 'BOLD'
+      ? fontWeight
+      : defaultFlyerConfig.fontWeight,
     style: style === 'CLASSIC' || style === 'MODERN' || style === 'MINIMAL' || style === 'DARK'
       ? style
       : defaultFlyerConfig.style,
+    textAlign: textAlign === 'center' || textAlign === 'right' || textAlign === 'justify' || textAlign === 'left'
+      ? textAlign
+      : defaultFlyerConfig.textAlign,
   }
 }
 
@@ -214,14 +260,21 @@ export function TournamentFlyerPreviewCard({
   const previewStyle = useMemo(() => getBackgroundStyle(value.backgroundId, value.style), [value.backgroundId, value.style])
 
   const headline = previewData.name.trim() || 'Nombre del torneo'
-  const subtitle = `${previewData.categoryLabel || 'Categoria por definir'} · ${previewData.gender || 'Genero por definir'}`
+  const sportLine = [
+    previewData.categoryLabel || 'Categoria por definir',
+    previewData.gender || 'Genero por definir',
+    previewData.segmentLabel || null,
+  ].filter(Boolean).join(' · ')
   const tournamentType = previewData.type || 'Open'
   const clubName = previewData.clubName || 'Club por definir'
   const startDate = formatDate(previewData.startDate)
   const endDate = previewData.endDate ? formatDate(previewData.endDate) : ''
   const deadline = formatDateTime(previewData.registrationDeadline)
   const price = formatPrice(previewData.pricePerPlayer)
-  const minPairs = formatMinPairs(previewData.minPairs)
+  const dateRange = endDate ? `${startDate} - ${endDate}` : startDate
+  const highlightWeight = fontWeightByOption[value.fontWeight]
+  const labelWeight = value.fontWeight === 'BOLD' ? 800 : 700
+  const bodyWeight = value.fontWeight === 'LIGHT' ? 500 : 650
 
   return (
     <div className="flyerPreviewShell">
@@ -232,45 +285,61 @@ export function TournamentFlyerPreviewCard({
           ...previewStyle,
           fontFamily: fontStacks[value.fontFamily],
           color: value.textColor,
+          textAlign: value.textAlign,
         }}
       >
         <div className="flyerPreviewTop">
-          <span className="flyerPreviewClub">{clubName}</span>
-          <span className="flyerPreviewType" style={{ borderColor: value.accentColor, color: value.titleColor }}>
+          <span className="flyerPreviewClub" style={{ fontWeight: labelWeight }}>{clubName}</span>
+          <span
+            className="flyerPreviewType"
+            style={{
+              borderColor: `${value.accentColor}99`,
+              color: value.titleColor,
+              fontWeight: highlightWeight,
+            }}
+          >
             {tournamentType}
           </span>
         </div>
 
         <div className="flyerPreviewBody">
           <div className="flyerPreviewMain">
-            <span className="flyerPreviewEyebrow" style={{ color: value.accentColor }}>Padel competitivo</span>
-            <h3 style={{ color: value.titleColor }}>{headline}</h3>
-            <p>{subtitle}</p>
+            <span className="flyerPreviewEyebrow" style={{ color: value.accentColor, fontWeight: labelWeight }}>Padel competitivo</span>
+            <h3 style={{ color: value.titleColor, fontWeight: highlightWeight }}>{headline}</h3>
+            <p style={{ fontWeight: bodyWeight }}>{sportLine}</p>
           </div>
 
           <div className="flyerPreviewDate" style={{ borderColor: `${value.accentColor}80` }}>
             <span>Fecha destacada</span>
-            <strong style={{ color: value.titleColor }}>{endDate ? `${startDate} - ${endDate}` : startDate}</strong>
+            <strong style={{ color: value.titleColor, fontWeight: highlightWeight }}>{dateRange}</strong>
           </div>
         </div>
 
         <div className="flyerPreviewMeta">
           <div>
             <span>Cierre inscripcion</span>
-            <strong>{deadline}</strong>
+            <strong style={{ fontWeight: highlightWeight }}>{deadline}</strong>
           </div>
           <div>
             <span>Precio</span>
-            <strong>{price}</strong>
+            <strong style={{ fontWeight: highlightWeight }}>{price}</strong>
           </div>
           <div>
-            <span>Categoria y genero</span>
-            <strong>{subtitle}</strong>
+            <span>Perfil deportivo</span>
+            <strong style={{ fontWeight: highlightWeight }}>{sportLine}</strong>
           </div>
-          <div>
-            <span>Convocatoria</span>
-            <strong>{minPairs}</strong>
-          </div>
+          {previewData.competitionSystemLabel ? (
+            <div>
+              <span>Sistema</span>
+              <strong style={{ fontWeight: highlightWeight }}>{previewData.competitionSystemLabel}</strong>
+            </div>
+          ) : null}
+          {previewData.venueName ? (
+            <div>
+              <span>Sede</span>
+              <strong style={{ fontWeight: highlightWeight }}>{previewData.venueName}</strong>
+            </div>
+          ) : null}
         </div>
 
         {value.mode === 'MANUAL' ? (
@@ -292,6 +361,8 @@ export function TournamentFlyerPreviewCard({
 }
 
 export function TournamentFlyerConfigurator({ value, onChange, previewData, helperText }: Props) {
+  const showLargePreview = value.mode === 'AUTO'
+
   return (
     <section className="flyerCard">
       <div className="flyerBlockHead">
@@ -319,17 +390,17 @@ export function TournamentFlyerConfigurator({ value, onChange, previewData, help
         ))}
       </div>
 
-      <div className="flyerLayout">
+      <div className={`flyerLayout${showLargePreview ? '' : ' flyerLayout--compact'}`}>
         <div className="flyerControls">
           {value.mode === 'NONE' ? (
-            <div className="flyerPlaceholder">
+            <div className="flyerPlaceholder flyerPlaceholder--compact">
               <strong>Sin flyer por ahora.</strong>
               <p>El torneo se crea normalmente y despues vas a poder activarlo cuando quieras trabajar la pieza visual.</p>
             </div>
           ) : null}
 
           {value.mode === 'MANUAL' ? (
-            <div className="flyerPlaceholder">
+            <div className="flyerPlaceholder flyerPlaceholder--compact">
               <strong>Manual en preparacion.</strong>
               <p>Proximamente vas a poder subir tu flyer manual con la misma vista previa del torneo.</p>
             </div>
@@ -389,12 +460,33 @@ export function TournamentFlyerConfigurator({ value, onChange, previewData, help
                     ))}
                   </select>
                 </label>
+
+                <label className="flyerSelectField">
+                  <span>Alineación de textos</span>
+                  <select className="px-input" value={value.textAlign} onChange={(event) => onChange({ ...value, textAlign: event.target.value as FlyerTextAlign })}>
+                    <option value="left">Izquierda</option>
+                    <option value="center">Centro</option>
+                    <option value="right">Derecha</option>
+                    <option value="justify">Justificado</option>
+                  </select>
+                </label>
+
+                <label className="flyerSelectField">
+                  <span>Peso de letra</span>
+                  <select className="px-input" value={value.fontWeight} onChange={(event) => onChange({ ...value, fontWeight: event.target.value as FlyerFontWeight })}>
+                    {fontWeightOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </>
           ) : null}
         </div>
 
-        <TournamentFlyerPreviewCard value={value} previewData={previewData} variant="editor" />
+        {showLargePreview ? (
+          <TournamentFlyerPreviewCard value={value} previewData={previewData} variant="editor" />
+        ) : null}
       </div>
     </section>
   )

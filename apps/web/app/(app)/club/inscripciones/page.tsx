@@ -106,7 +106,7 @@ type RegistrationPaymentModal = {
   registration: Registration
 } | null
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const statusLabels: Record<string, string> = {
   PENDING: 'Pendiente',
@@ -166,7 +166,11 @@ function buildManualPlayer(value: string) {
 
 function buildManualPlayerPayload(value: string, selectedPlayer: PlayerSuggestion | null) {
   if (selectedPlayer) {
-    return { user_id: selectedPlayer.user_id, full_name: selectedPlayer.full_name }
+    return {
+      club_player_id: selectedPlayer.club_player_id,
+      user_id: selectedPlayer.user_id,
+      full_name: selectedPlayer.full_name,
+    }
   }
   return buildManualPlayer(value)
 }
@@ -207,6 +211,7 @@ export default function ClubInscripcionesPage() {
   const [generatingGroupMatches, setGeneratingGroupMatches] = useState(false)
   const [manualModalOpen, setManualModalOpen] = useState(false)
   const [creatingManual, setCreatingManual] = useState(false)
+  const [manualError, setManualError] = useState('')
   const [manualForm, setManualForm] = useState<ManualRegistrationForm>({
     player1: '',
     player2: '',
@@ -431,6 +436,7 @@ export default function ClubInscripcionesPage() {
   useEffect(() => {
     if (manualModalOpen && !canAddPair) {
       setManualModalOpen(false)
+      setManualError('')
       setMessage('')
     }
   }, [canAddPair, manualModalOpen])
@@ -475,6 +481,7 @@ export default function ClubInscripcionesPage() {
   function openManualRegistration() {
     if (!canAddPair) {
       setManualModalOpen(false)
+      setManualError('')
       setMessage('')
       return
     }
@@ -487,6 +494,7 @@ export default function ClubInscripcionesPage() {
     })
     setManualSelectedPlayers({ player1: null, player2: null })
     setPlayerSuggestions({ player1: [], player2: [] })
+    setManualError('')
     setManualModalOpen(true)
     setMessage('')
   }
@@ -494,12 +502,14 @@ export default function ClubInscripcionesPage() {
   function updateManualPlayerField(field: ManualPlayerField, value: string) {
     setManualForm((current) => ({ ...current, [field]: value }))
     setManualSelectedPlayers((current) => ({ ...current, [field]: null }))
+    setManualError('')
   }
 
   function selectManualPlayer(field: ManualPlayerField, player: PlayerSuggestion) {
     setManualForm((current) => ({ ...current, [field]: player.full_name }))
     setManualSelectedPlayers((current) => ({ ...current, [field]: player }))
     setPlayerSuggestions((current) => ({ ...current, [field]: [] }))
+    setManualError('')
   }
 
   async function searchManualPlayers(field: ManualPlayerField, query: string) {
@@ -537,7 +547,7 @@ export default function ClubInscripcionesPage() {
     const player1 = manualForm.player1.trim()
     const player2 = manualForm.player2.trim()
     if (!player1 || !player2) {
-      setMessage('Completá los dos jugadores para agregar la pareja.')
+      setManualError('Completá los dos jugadores para agregar la pareja.')
       return
     }
 
@@ -548,16 +558,17 @@ export default function ClubInscripcionesPage() {
       (selectedPlayer1 && selectedPlayer2 && selectedPlayer1.user_id === selectedPlayer2.user_id) ||
       (!selectedPlayer1 && !selectedPlayer2 && player1.toLowerCase() === player2.toLowerCase())
     ) {
-      setMessage('Los jugadores de la pareja deben ser distintos.')
+      setManualError('Los jugadores de la pareja deben ser distintos.')
       return
     }
 
     setCreatingManual(true)
+    setManualError('')
     setMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      setManualError('Sesión inválida.')
       setCreatingManual(false)
       return
     }
@@ -586,8 +597,13 @@ export default function ClubInscripcionesPage() {
         REGISTRATION_CLOSED: 'La fecha de cierre de inscripción ya venció.',
         INVALID_PLAYER: 'Completá los datos de ambos jugadores.',
         INVALID_PLAYER_NAME: 'Completá el nombre del jugador.',
+        INVALID_PLAYER_CLUB_PLAYER_ID: 'El jugador seleccionado no es válido. Volvé a buscarlo y seleccionarlo.',
         INVALID_PLAYER_USER_ID: 'El user_id de jugador no es válido.',
         PLAYER_USER_NOT_FOUND: 'No encontré uno de los usuarios indicados.',
+        PLAYER_NOT_IN_CLUB: 'Seleccioná un jugador aprobado del club.',
+        PLAYER_CATEGORY_MISMATCH: 'El jugador seleccionado no corresponde a la categoría del torneo.',
+        PLAYER_GENDER_MISMATCH: 'El jugador seleccionado no corresponde al género del torneo.',
+        PLAYER_AUTH_REQUIRED: 'El jugador seleccionado no tiene un usuario Auth válido. Para jugadores sin Auth hace falta una migración del modelo.',
         SAME_PLAYER: 'Los jugadores de la pareja deben ser distintos.',
         PLAYER_ALREADY_REGISTERED_IN_TOURNAMENT: 'Uno de los jugadores ya está inscripto en este torneo.',
         TEAM_ALREADY_REGISTERED: 'Esta pareja ya está cargada para el torneo.',
@@ -595,11 +611,12 @@ export default function ClubInscripcionesPage() {
         INVALID_PAYMENT_MODE: 'Modo de pago inválido.',
         MANUAL_PLAYER_CREATE_FAILED: 'No pude crear el jugador manual.',
       }
-      setMessage(errorMessages[json?.code as string] ?? json?.error ?? 'No pude agregar la pareja.')
+      setManualError(errorMessages[json?.code as string] ?? json?.error ?? 'No pude agregar la pareja.')
       return
     }
 
     setManualModalOpen(false)
+    setManualError('')
     setMessage('Pareja agregada correctamente.')
     await loadRegistrations(selectedTournamentId)
   }
@@ -973,6 +990,12 @@ export default function ClubInscripcionesPage() {
               </button>
             </div>
 
+            {manualError ? (
+              <div className="club-manualError" role="alert">
+                {manualError}
+              </div>
+            ) : null}
+
             <div className="club-manualGrid">
               <label className="club-manualField">
                 <span>Jugador 1</span>
@@ -1306,6 +1329,7 @@ export default function ClubInscripcionesPage() {
         .club-modalClose { background: #fff1f8; border: 1px solid rgba(190,24,93,.22); border-radius: 8px; color: #be185d; cursor: pointer; font-size: 12px; font-weight: 950; min-height: 34px; padding: 7px 10px; transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease; white-space: nowrap; }
         .club-modalClose:hover:not(:disabled) { background: #ffe4f1; border-color: rgba(190,24,93,.36); box-shadow: 0 10px 22px rgba(15,23,42,.08); transform: translateY(-1px); }
         .club-modalClose:disabled { cursor: not-allowed; opacity: .6; }
+        .club-manualError { background: #fff1f2; border: 1px solid rgba(220,38,38,.24); border-radius: 10px; color: #b91c1c; font-size: 12px; font-weight: 900; line-height: 1.35; padding: 10px 11px; }
         .club-manualGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .club-manualField { color: #17253f; display: grid; font-size: 12px; font-weight: 950; gap: 6px; min-width: 0; }
         .club-manualField:nth-child(3), .club-checkRow { grid-column: 1 / -1; }

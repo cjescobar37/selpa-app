@@ -18,6 +18,7 @@ type PlayerRow = {
   display_name: string | null
   category: number | null
   gender: string | null
+  ranking_points: number | null
   approved_at: string | null
   created_at: string
 }
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     const [playersRes, membershipsRes] = await Promise.all([
       supabaseAdmin
         .from('club_players')
-        .select('id,club_id,user_id,display_name,category,gender,approved_at,created_at')
+        .select('id,club_id,user_id,display_name,category,gender,ranking_points,approved_at,created_at')
         .eq('club_id', clubId)
         .not('approved_at', 'is', null)
         .order('created_at', { ascending: false }),
