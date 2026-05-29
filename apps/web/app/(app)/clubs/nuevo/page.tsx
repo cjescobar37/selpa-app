@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
 import { useSession } from '@/components/session/SessionProvider'
+import { CLUB_THEMES, CLUB_THEME_LABELS, getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
@@ -41,9 +42,12 @@ const initial = {
   mobile_phone: '',
   website: '',
   instagram: '',
+  theme_key: 'cyan' as ClubThemeKey,
   courts_count: '1',
   description: '',
 }
+
+const themeOptions = Object.values(CLUB_THEMES)
 
 const provinceOptions = [
   'Buenos Aires',
@@ -211,6 +215,9 @@ export default function CreateClubPage() {
     if (!v.description.trim()) {
       return 'Agregá una descripción breve del club.'
     }
+    if (!getClubTheme(v.theme_key).key) {
+      return 'Elegí una identidad visual para el club.'
+    }
     return null
   }
 
@@ -271,6 +278,7 @@ export default function CreateClubPage() {
             court_surfaces: normalizedSurfaces,
             opening_hours_json: normalizedHours,
             description: v.description,
+            theme_key: getClubTheme(v.theme_key).key,
           },
           owner: {
             email: authUser.email,
@@ -326,6 +334,37 @@ export default function CreateClubPage() {
               <div className="px-field"><label className="px-label">Nombre legal o razón social *</label><input className="px-input" value={v.legal_name} onChange={(e) => onChange('legal_name', e.target.value)} required /></div>
               <div className="px-field"><label className="px-label">Nombre comercial *</label><input className="px-input" value={v.brand_name} onChange={(e) => onChange('brand_name', e.target.value)} required /></div>
               <div className="px-field"><label className="px-label">CUIT *</label><input className="px-input" value={v.cuit} onChange={(e) => onChange('cuit', e.target.value)} placeholder="30-71234567-8" required /></div>
+            </div>
+          </section>
+
+          <section className="px-card px-glass clubOnboardingSection">
+            <div className="px-sectionTitle">Identidad visual *</div>
+            <p className="clubSectionHelp">Elegí una paleta Pamprax. Una vez creado el club, esta identidad queda fija para mantener consistencia de marca.</p>
+            <div className="clubThemeGrid">
+              {themeOptions.map((theme) => {
+                const selected = getClubTheme(v.theme_key).key === theme.key
+                return (
+                  <button
+                    key={theme.key}
+                    type="button"
+                    className="clubThemeChoice"
+                    onClick={() => onChange('theme_key', theme.key)}
+                    aria-pressed={selected}
+                    style={{
+                      borderColor: selected ? theme.vars.accent : 'rgba(15,23,42,.10)',
+                      boxShadow: selected ? `0 18px 42px ${theme.vars.glow}, 0 0 0 4px ${theme.vars.soft}` : '0 10px 28px rgba(15,23,42,.05)',
+                    }}
+                  >
+                    <span className="clubThemePreview" style={{ background: `linear-gradient(135deg, ${theme.vars.hero})` }}>
+                      <span className="clubThemeAccent" style={{ background: `linear-gradient(90deg, ${theme.vars.accent}, ${theme.vars.accent2})`, boxShadow: `0 0 20px ${theme.vars.glow}` }} />
+                    </span>
+                    <span className="clubThemeMeta">
+                      <strong>{CLUB_THEME_LABELS[theme.key]}</strong>
+                      {selected ? <em style={{ color: theme.vars.accent }}>Seleccionado</em> : <em>Theme Pamprax</em>}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </section>
 
@@ -519,6 +558,70 @@ export default function CreateClubPage() {
 
           .clubDescriptionField {
             margin-top: 12px;
+          }
+
+          .clubThemeGrid {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+            margin-top: 12px;
+          }
+
+          .clubThemeChoice {
+            background: rgba(255, 255, 255, 0.86);
+            border: 2px solid rgba(15, 23, 42, 0.1);
+            border-radius: 16px;
+            cursor: pointer;
+            display: grid;
+            gap: 8px;
+            overflow: hidden;
+            padding: 0;
+            text-align: left;
+            transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+          }
+
+          .clubThemeChoice:hover {
+            transform: translateY(-2px);
+          }
+
+          .clubThemePreview {
+            min-height: 70px;
+            position: relative;
+          }
+
+          .clubThemePreview::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 20% 20%, rgba(255,255,255,.18), transparent 28%);
+          }
+
+          .clubThemeAccent {
+            border-radius: 999px;
+            height: 9px;
+            left: 12px;
+            position: absolute;
+            top: 12px;
+            width: 52px;
+            z-index: 1;
+          }
+
+          .clubThemeMeta {
+            display: grid;
+            gap: 2px;
+            padding: 0 12px 12px;
+          }
+
+          .clubThemeMeta strong {
+            color: #17253f;
+            font-size: 13px;
+          }
+
+          .clubThemeMeta em {
+            color: #64748b;
+            font-size: 11px;
+            font-style: normal;
+            font-weight: 800;
           }
 
           .clubFormActions {

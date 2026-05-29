@@ -15,7 +15,9 @@ export default function UpdatePasswordPage() {
   const [alert, setAlert] = useState<AlertState>(null)
   const [loading, setLoading] = useState(false)
 
-  async function updatePassword() {
+  async function updatePassword(e?: React.FormEvent) {
+    e?.preventDefault()
+
     if (!password) {
       setAlert({ variant: 'warning', title: 'Falta la contraseña', message: 'Ingresá la nueva contraseña.' })
       return
@@ -58,7 +60,7 @@ export default function UpdatePasswordPage() {
           </div>
         </div>
 
-        <div className="px-authBody">
+        <form className="px-authBody" onSubmit={updatePassword}>
           <div className="px-field">
             <label className="px-label">Nueva contraseña</label>
             <input
@@ -83,7 +85,7 @@ export default function UpdatePasswordPage() {
             />
           </div>
 
-          <button className="px-btn" onClick={updatePassword} disabled={loading}>
+          <button className="px-btn" type="submit" disabled={loading}>
             {loading ? (
               <>
                 <span className="px-spinner" />&nbsp;Guardando...
@@ -99,7 +101,7 @@ export default function UpdatePasswordPage() {
             <Link className="px-link" href="/login">Volver</Link>
             <span className="px-muted">Listo para ingresar</span>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   )

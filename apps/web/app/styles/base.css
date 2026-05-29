@@ -28,15 +28,42 @@
   --r18: 18px;
 
   --container: 1120px;
+
+  --font-ui: var(--font-main), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-weight-body: 500;
+  --font-weight-ui: 600;
+  --font-weight-strong: 700;
+  --font-weight-title: 800;
 }
 
 *{ box-sizing: border-box; }
 html, body{ height: 100%; }
 body{
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: var(--font-weight-body);
+  font-synthesis: none;
+  letter-spacing: 0;
+  line-height: 1.45;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   background: var(--bg);          /* <- sólido, sin burbujas */
   color: var(--text);
+}
+
+button,
+input,
+select,
+textarea{
+  font: inherit;
+  letter-spacing: 0;
+}
+
+strong,
+b{
+  font-weight: var(--font-weight-strong);
 }
 
 a{ color: inherit; }
@@ -81,14 +108,14 @@ a{ color: inherit; }
   margin: 0;
   font-size: 34px;
   line-height: 1.05;
-  font-weight: 900;
-  letter-spacing: .2px;
+  font-weight: var(--font-weight-title);
+  letter-spacing: 0;
 }
 .px-h2{
   margin: 0;
   font-size: 18px;
-  font-weight: 900;
-  letter-spacing: .02em;
+  font-weight: var(--font-weight-title);
+  letter-spacing: 0;
 }
 .px-muted{ color: var(--muted); }
 
@@ -101,8 +128,8 @@ a{ color: inherit; }
 .px-sepRow{
   margin: 6px 0 2px;
   font-size: 12px;
-  font-weight: 900;
-  letter-spacing: .12em;
+  font-weight: 700;
+  letter-spacing: .04em;
   text-transform: uppercase;
   color: rgba(23,37,63,.55);
 }
@@ -119,7 +146,7 @@ a{ color: inherit; }
   border: 1px solid rgba(83,199,217,.72);
   background: var(--cyan);
   color: #0b1b2b;
-  font-weight: 900;
+  font-weight: 700;
   cursor: pointer;
   text-decoration: none;
   box-shadow: 0 8px 18px rgba(83,199,217,.14);
@@ -162,7 +189,7 @@ a{ color: inherit; }
 /* Links */
 .px-link{
   color: var(--text);
-  font-weight: 900;
+  font-weight: 700;
   text-decoration: none;
   position: relative;
 }
@@ -188,7 +215,7 @@ a{ color: inherit; }
   background: rgba(255,255,255,.55);
   border: 1px solid rgba(23,37,63,.12);
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 /* Footer base helpers if needed */
@@ -230,7 +257,7 @@ a{ color: inherit; }
   color: var(--text);
   font-size: 30px;
   line-height: 1.04;
-  font-weight: 1000;
+  font-weight: var(--font-weight-title);
 }
 
 .px-modalSub{

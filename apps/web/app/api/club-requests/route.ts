@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withNotificationScope } from '@/lib/notificationScope'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { CLUB_THEMES } from '@/lib/clubThemes'
 
 type ClubRequestPayload = {
   club_name?: string
@@ -24,7 +25,10 @@ type ClubRequestPayload = {
   admin_name?: string
   admin_email?: string
   admin_phone?: string
+  theme_key?: string
 }
+
+const CLUB_THEME_KEYS = new Set(Object.keys(CLUB_THEMES))
 
 async function getTokenUser(req: Request) {
   const auth = req.headers.get('authorization') || ''
@@ -89,10 +93,14 @@ export async function POST(req: Request) {
       owner_name: (body.admin_name ?? '').trim(),
       owner_email: (body.admin_email ?? '').trim().toLowerCase(),
       owner_phone: (body.admin_phone ?? '').trim() || null,
+      theme_key: (body.theme_key ?? '').trim(),
     }
 
     if (!payload.club_name || !payload.contact_email || !payload.owner_name || !payload.owner_email) {
       return NextResponse.json({ error: 'Faltan campos obligatorios.' }, { status: 400 })
+    }
+    if (!CLUB_THEME_KEYS.has(payload.theme_key)) {
+      return NextResponse.json({ error: 'Elegí una identidad visual válida para el club.' }, { status: 400 })
     }
 
     const { data: inserted, error } = await supabaseAdmin

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { buildAssetProxyUrl } from '@/lib/clubAssets'
 import {
@@ -262,6 +262,7 @@ async function resolveContext() {
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
+  const hasResolvedContextRef = useRef(false)
   const [status, setStatus] = useState<'loading' | 'ready'>('loading')
   const [role, setRole] = useState<AppRole>('guest')
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
@@ -276,7 +277,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [postLoginDestination, setPostLoginDestination] = useState<PostLoginDestination>('/login')
 
   const refresh = useCallback(async (options?: RefreshOptions) => {
-    if (!options?.silent) setStatus('loading')
+    if (!options?.silent && !hasResolvedContextRef.current) setStatus('loading')
     const r = await resolveContext()
     setRole(r.role)
     setIsPlatformAdmin(r.isPlatformAdmin)
@@ -289,6 +290,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setMembershipStatus(r.membershipStatus)
     setMembershipApprovedAt(r.membershipApprovedAt)
     setPostLoginDestination(r.postLoginDestination)
+    hasResolvedContextRef.current = true
     setStatus('ready')
   }, [])
 
@@ -322,6 +324,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     try {
       await supabase.auth.signOut({ scope: 'global' })
     } finally {
+      hasResolvedContextRef.current = false
       setRole('guest')
       setIsPlatformAdmin(false)
       setUser(null)

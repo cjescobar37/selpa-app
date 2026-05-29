@@ -904,7 +904,13 @@ export default function ClubPartidosPage() {
       : null
 
     return (
-      <div className="club-resultForm">
+      <form
+        className="club-resultForm"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!savingResult && validation?.ok) void submitResult(match)
+        }}
+      >
         {legacyScore ? (
           <div className="club-legacyScoreNotice">
             Resultado anterior: <b>{match.score?.text as string}</b>. Para editarlo, recargalo con sets estructurados.
@@ -996,14 +1002,14 @@ export default function ClubPartidosPage() {
         </div>
 
         <div className="club-resultActions">
-          <button type="button" className="club-actionBtn club-actionBtn--primary" disabled={savingResult || !validation?.ok} onClick={() => submitResult(match)}>
+          <button type="submit" className="club-actionBtn club-actionBtn--primary" disabled={savingResult || !validation?.ok}>
             {savingResult ? 'Guardando...' : 'Guardar'}
           </button>
           <button type="button" className="club-actionBtn" disabled={savingResult} onClick={() => setResultForm(null)}>
             Cancelar
           </button>
         </div>
-      </div>
+      </form>
     )
   }
 

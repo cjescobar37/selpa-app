@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isApprovedMembership, isClubStaffRole, type ClubRole } from '@/lib/clubMembershipRules'
+import { getClubPermissions, hasClubPermission, type ClubCapability } from '@/lib/clubPermissions'
 
 type MembershipRow = {
   id: string
@@ -31,6 +32,20 @@ export async function isClubAdmin(userId: string, clubId: string) {
 export async function isClubOwner(userId: string, clubId: string) {
   const membership = await getApprovedMembership(userId, clubId)
   return Boolean(membership && membership.role === 'OWNER')
+}
+
+export async function userHasClubPermission(
+  userId: string,
+  clubId: string,
+  capability: ClubCapability,
+) {
+  const membership = await getApprovedMembership(userId, clubId)
+  return Boolean(membership && hasClubPermission(membership.role, capability))
+}
+
+export async function getClubPermissionsForUser(userId: string, clubId: string) {
+  const membership = await getApprovedMembership(userId, clubId)
+  return membership ? getClubPermissions(membership.role) : []
 }
 
 export async function ensureClubPlayerForMembership(input: {

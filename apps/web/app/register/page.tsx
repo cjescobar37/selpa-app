@@ -26,7 +26,9 @@ export default function RegisterPage() {
     })
   }, [router])
 
-  async function signUp() {
+  async function signUp(e?: React.FormEvent) {
+    e?.preventDefault()
+
     const cleanEmail = email.trim().toLowerCase()
 
     if (!cleanEmail || !password) {
@@ -97,7 +99,7 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <div className="px-authBody">
+        <form className="px-authBody" onSubmit={signUp}>
           <div className="px-field">
             <label className="px-label">Nombre</label>
             <input className="px-input" value={firstName} onChange={e => setFirstName(e.target.value)} />
@@ -153,7 +155,7 @@ export default function RegisterPage() {
             />
           </div>
 
-          <button className="px-btn" onClick={signUp} disabled={loading}>
+          <button className="px-btn" type="submit" disabled={loading}>
             {loading ? (
               <>
                 <span className="px-spinner" />&nbsp;Creando...
@@ -169,7 +171,7 @@ export default function RegisterPage() {
             <span className="px-muted">¿Ya tenés cuenta?</span>
             <Link className="px-link" href="/login">Ingresar</Link>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   )

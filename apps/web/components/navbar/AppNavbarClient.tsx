@@ -1,13 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Bell, Mail, Search, ChevronDown, Menu, X } from 'lucide-react'
 
-import { NAV_CONFIG, type NavItem } from '@/lib/navConfig'
+import { NAV_CONFIG, type NavChild, type NavItem } from '@/lib/navConfig'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
+import { hasAnyClubPermission } from '@/lib/clubPermissions'
+import { getClubTheme } from '@/lib/clubThemes'
 import { PLATFORM_NOTIFICATION_TYPES } from '@/lib/notificationScope'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -33,18 +35,48 @@ function normalizePath(p?: string | null) {
   return raw.length > 1 ? raw.replace(/\/+$/, '') : raw
 }
 
-function isActiveHref(pathname: string | null, href: string, exact?: boolean) {
-  const p = normalizePath(pathname)
-  const h = normalizePath(href)
-  if (exact) return p === h
-  if (h === '/') return p === '/'
-  return p === h || p.startsWith(h + '/')
+function getHrefQuery(href: string) {
+  const query = href.split('?')[1]?.split('#')[0] ?? ''
+  return new URLSearchParams(query)
 }
 
-function isActiveItem(pathname: string | null, item: NavItem) {
-  if (isActiveHref(pathname, item.href, item.exact)) return true
+function hasHrefQuery(href: string) {
+  return href.includes('?') && getHrefQuery(href).toString().length > 0
+}
+
+function queryMatches(currentSearch: string, href: string) {
+  const expected = getHrefQuery(href)
+  if (!expected.toString()) return true
+
+  const current = new URLSearchParams(currentSearch)
+  for (const [key, value] of expected.entries()) {
+    if (current.get(key) !== value) return false
+  }
+  return true
+}
+
+function isActiveHref(pathname: string | null, currentSearch: string, href: string, exact?: boolean) {
+  const p = normalizePath(pathname)
+  const h = normalizePath(href)
+  if (exact) {
+    if (p !== h) return false
+    if (hasHrefQuery(href)) return queryMatches(currentSearch, href)
+    return !currentSearch
+  }
+  if (h === '/') return p === '/'
+  const pathMatches = p === h || p.startsWith(h + '/')
+  return pathMatches && queryMatches(currentSearch, href)
+}
+
+function isActiveChild(pathname: string | null, currentSearch: string, child: NavChild) {
+  if (child.activeMatch === 'none') return false
+  return isActiveHref(pathname, currentSearch, child.href, child.activeMatch !== 'prefix')
+}
+
+function isActiveItem(pathname: string | null, currentSearch: string, item: NavItem) {
+  if (isActiveHref(pathname, currentSearch, item.href, item.exact)) return true
   if (item.children?.length) {
-    return item.children.some((c) => isActiveHref(pathname, c.href, true))
+    return item.children.some((c) => isActiveChild(pathname, currentSearch, c))
   }
   return false
 }
@@ -68,8 +100,30 @@ function previewText(value: string, max = 78) {
   return `${clean.slice(0, max - 1)}…`
 }
 
+function canShowClubNavItem(clubRole: string | null | undefined, item: NavItem) {
+  const required = item.requiredAnyCapabilities
+  return !required?.length || hasAnyClubPermission(clubRole, required)
+}
+
+function filterClubNavItems(items: NavItem[], clubRole: string | null | undefined) {
+  return items.reduce<NavItem[]>((acc, item) => {
+    const children = item.children?.filter((child) => canShowClubNavItem(clubRole, child)) ?? []
+    const canShowItem = canShowClubNavItem(clubRole, item)
+
+    if (!canShowItem && children.length === 0) return acc
+
+    acc.push({
+      ...item,
+      children: item.children ? children : undefined,
+    })
+
+    return acc
+  }, [])
+}
+
 export default function AppNavbarClient() {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -99,9 +153,13 @@ export default function AppNavbarClient() {
     }, 180)
   }
 
-  const { role, user, activeClub, clubs, setActiveClub, signOut } = useSession()
+  const { role, clubRole, user, activeClub, clubs, setActiveClub, signOut } = useSession()
+  const currentSearch = searchParams.toString()
   const cfg = useMemo(() => NAV_CONFIG[role || 'guest'], [role])
-  const nav = cfg.main as NavItem[]
+  const nav = useMemo(() => {
+    const items = cfg.main as NavItem[]
+    return role === 'club' ? filterClubNavItems(items, clubRole) : items
+  }, [cfg.main, clubRole, role])
 
   const [navOpenIndex, setNavOpenIndex] = useState<number | null>(null)
   const [userOpen, setUserOpen] = useState(false)
@@ -112,11 +170,47 @@ export default function AppNavbarClient() {
   const [previewModal, setPreviewModal] = useState<PreviewNotification | null>(null)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
+  const [activeClubThemeKey, setActiveClubThemeKey] = useState<string | null>(null)
 
   const isAuthed = (role || 'guest') !== 'guest'
   const showRight = cfg.right || {}
   const displayClub = activeClub ?? clubs?.[0] ?? null
   const displayClubName = displayClub?.name?.trim() ? displayClub.name : 'Mi Club'
+  const activeClubTheme = useMemo(() => getClubTheme(activeClubThemeKey), [activeClubThemeKey])
+  const clubThemeStyle = useMemo(
+    () => ({
+      '--px-club-accent': activeClubTheme.vars.accent,
+      '--px-club-accent-2': activeClubTheme.vars.accent2,
+      '--px-club-soft': activeClubTheme.vars.soft,
+      '--px-club-glow': activeClubTheme.vars.glow,
+    }) as React.CSSProperties,
+    [activeClubTheme]
+  )
+
+  useEffect(() => {
+    let alive = true
+
+    ;(async () => {
+      if (!displayClub?.id) {
+        setActiveClubThemeKey(null)
+        return
+      }
+
+      const { data } = await supabase
+        .from('clubs')
+        .select('theme_key')
+        .eq('id', displayClub.id)
+        .maybeSingle()
+
+      if (alive) {
+        setActiveClubThemeKey((data?.theme_key as string | null) ?? null)
+      }
+    })()
+
+    return () => {
+      alive = false
+    }
+  }, [displayClub?.id])
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -160,7 +254,7 @@ export default function AppNavbarClient() {
     setMobileMenuOpen(false)
     setNotificationsOpen(false)
     setPreviewModal(null)
-  }, [pathname])
+  }, [currentSearch, pathname])
 
   async function loadPreviewData() {
     if (!isAuthed || !user?.id) {
@@ -329,19 +423,31 @@ export default function AppNavbarClient() {
 
   function renderDesktopLeft() {
     if (cfg.leftMode === 'club' || cfg.leftMode === 'club-static') {
+      const clubHomeContent = (
+        <>
+          <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
+          <span className="px-clubName">{shorten(displayClubName, 18)}</span>
+        </>
+      )
+
       return (
         <div className="px-left">
           <div className="px-dd px-clubWrap">
-            <button
-              type="button"
-              className="px-clubBtn"
-              onClick={cfg.leftMode === 'club' ? () => setClubOpen((v) => !v) : undefined}
-              style={cfg.leftMode === 'club-static' ? { cursor: 'default' } : undefined}
-            >
-              <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
-              <span className="px-clubName">{shorten(displayClubName, 16)}</span>
-              {cfg.leftMode === 'club' ? <ChevronDown size={16} className="px-caret" /> : null}
-            </button>
+            {cfg.leftMode === 'club-static' ? (
+              <Link href="/club" className="px-clubBtn px-clubBtn--themed" style={clubThemeStyle} aria-label="Inicio del club">
+                {clubHomeContent}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="px-clubBtn px-clubBtn--themed"
+                style={clubThemeStyle}
+                onClick={() => setClubOpen((v) => !v)}
+              >
+                {clubHomeContent}
+                <ChevronDown size={16} className="px-caret" />
+              </button>
+            )}
             {cfg.leftMode === 'club' ? renderClubMenu() : null}
           </div>
         </div>
@@ -362,7 +468,7 @@ export default function AppNavbarClient() {
     return (
       <nav className="px-navlinks" aria-label="Primary">
         {nav.map((item, i) => {
-          const active = isActiveItem(pathname, item)
+          const active = isActiveItem(pathname, currentSearch, item)
           const hasChildren = !!item.children?.length
 
           if (!hasChildren) {
@@ -405,7 +511,7 @@ export default function AppNavbarClient() {
                   <Link
                     key={c.href}
                     href={c.href}
-                    className={`px-ddItem ${isActiveHref(pathname, c.href) ? 'is-active' : ''}`}
+                    className={`px-ddItem ${isActiveChild(pathname, currentSearch, c) ? 'is-active' : ''}`}
                     onClick={() => {
                       clearNavCloseTimeout()
                       setNavOpenIndex(null)
@@ -509,7 +615,7 @@ export default function AppNavbarClient() {
 
     return (
       <div className="px-dd px-clubWrap px-mobileClubWrap">
-        <button type="button" className="px-mobileClubBtn" onClick={() => setClubOpen((v) => !v)} aria-label="Club activo">
+        <button type="button" className="px-mobileClubBtn px-clubBtn--themed" style={clubThemeStyle} onClick={() => setClubOpen((v) => !v)} aria-label="Club activo">
           <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
           <ChevronDown size={14} className="px-caret" />
         </button>
@@ -598,7 +704,7 @@ export default function AppNavbarClient() {
 
         {items.map((item) => (
           <div key={item.href} className="px-mobileRow">
-            <Link className={`px-mobileLink ${isActiveItem(pathname, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}>
+            <Link className={`px-mobileLink ${isActiveItem(pathname, currentSearch, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}>
               {item.label}
             </Link>
             {item.children?.length ? (
@@ -606,7 +712,7 @@ export default function AppNavbarClient() {
                 {item.children.map((child) => (
                   <Link
                     key={child.href}
-                    className={`px-mobileChild ${isActiveHref(pathname, child.href, true) ? 'is-active' : ''}`}
+                    className={`px-mobileChild ${isActiveChild(pathname, currentSearch, child) ? 'is-active' : ''}`}
                     href={child.href}
                     onClick={closeAllMenus}
                   >

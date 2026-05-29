@@ -110,7 +110,7 @@ Observaciones/deuda:
 
 Propósito funcional: perfil deportivo de un usuario dentro de un club.
 
-Columnas principales: `id`, `club_id`, `user_id`, `display_name`, `category`, `gender`, `approved_at`, `approved_by`, `created_at`, `updated_at`.
+Columnas principales: `id`, `club_id`, `user_id`, `display_name`, `category`, `gender`, `preferred_position`, `approved_at`, `approved_by`, `created_at`, `updated_at`.
 
 Claves:
 

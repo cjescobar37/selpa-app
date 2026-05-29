@@ -1,42 +1,57 @@
-'use client'
+import PublicTournamentsExperience, { type PublicTournamentItem } from '@/components/public/PublicTournamentsExperience'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
 
-import { useEffect } from 'react'
-import Link from 'next/link'
-import { useSession } from '@/components/session/SessionProvider'
+export const dynamic = 'force-dynamic'
 
-export default function TorneosPublicPage() {
-  const { role } = useSession()
+type ClubRow = {
+  id: string
+  name: string
+  logo_url: string | null
+  theme_key: string | null
+}
 
-  useEffect(() => {
-    if (role === 'club') {
-      window.location.assign('/club/torneos')
+export default async function TorneosPublicPage() {
+  const { data: tournamentRows } = await supabaseAdmin
+    .from('tournaments')
+    .select(TOURNAMENT_SELECT)
+    .not('status', 'in', '("DRAFT","CANCELLED","ARCHIVED")')
+    .order('starts_on', { ascending: true, nullsFirst: false })
+    .order('start_date', { ascending: true, nullsFirst: false })
+    .limit(96)
+
+  const tournamentViews = (tournamentRows ?? []).map((row: any) => toTournamentView(row)).filter(Boolean)
+  const clubIds = Array.from(new Set(tournamentViews.map((item: any) => item.club_id).filter(Boolean)))
+
+  const { data: clubRows } = clubIds.length
+    ? await supabaseAdmin.from('clubs').select('id,name,logo_url,theme_key').in('id', clubIds)
+    : { data: [] }
+
+  const clubsById = new Map(((clubRows ?? []) as ClubRow[]).map((club) => [club.id, club]))
+  const tournaments: PublicTournamentItem[] = tournamentViews.map((item: any) => {
+    const club = clubsById.get(item.club_id)
+    return {
+      id: item.id,
+      club_id: item.club_id,
+      clubName: club?.name ?? 'Club Pamprax',
+      clubLogoUrl: club?.logo_url ?? null,
+      clubThemeKey: club?.theme_key ?? null,
+      name: item.name,
+      status: item.status,
+      gender: item.gender,
+      category: item.category,
+      startDate: item.startDate,
+      registrationDeadline: item.registrationDeadline,
+      maxPairs: item.maxPairs,
+      pricePerPlayer: item.pricePerPlayer,
     }
-  }, [role])
+  })
+
+  const clubs = Array.from(new Set(tournaments.map((item) => item.clubName))).sort((a, b) => a.localeCompare(b))
 
   return (
-    <div className="px-page">
-      <div className="px-pageHead">
-        <h1 className="px-pageTitle">Torneos</h1>
-        <p className="px-pageSub">Calendario, torneos vigentes y reglamento público.</p>
-      </div>
-
-      <div className="px-card px-cardTopAccent px-sectionCard" id="calendario">
-        <h2 className="px-cardTitle">Calendario</h2>
-        <p className="px-muted" style={{ marginTop: 6 }}>
-          (placeholder) Acá va la vista calendario + filtro por club / categoría.
-        </p>
-        <div className="px-pageActions">
-          <Link className="px-btn px-btn--ghost" href="/torneos/calendario">Ir al calendario</Link>
-          <Link className="px-btn px-btn--ghost" href="/torneos/reglamento">Ver reglamento</Link>
-        </div>
-      </div>
-
-      <div id="reglamento" className="px-card px-cardTopAccent px-sectionCard">
-        <h2 className="px-cardTitle">Reglamento</h2>
-        <p className="px-muted" style={{ marginTop: 6 }}>
-          (placeholder) Reglamento general + reglas específicas por club.
-        </p>
-      </div>
+    <div className="px-wrap">
+      <PublicTournamentsExperience tournaments={tournaments} clubs={clubs} />
     </div>
   )
 }

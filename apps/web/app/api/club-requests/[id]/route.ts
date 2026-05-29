@@ -33,6 +33,7 @@ type ClubRequestRow = {
   owner_name: string | null
   owner_email: string | null
   owner_phone: string | null
+  theme_key: string | null
 }
 
 function slugify(value: string) {
@@ -177,6 +178,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         owner_email: request.owner_email,
         owner_phone: request.owner_phone,
         owner_user_id: requesterProfile?.user_id ?? null,
+        theme_key: request.theme_key || 'cyan',
+        theme_locked: true,
         is_active: true,
         status: 'ACTIVE',
       })

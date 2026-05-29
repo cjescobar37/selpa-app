@@ -72,6 +72,22 @@ const historyStatuses = new Set([
   'ARCHIVED',
 ])
 type TournamentTab = 'recent' | 'drafts' | 'history'
+type CalendarStatusFilter = 'all' | 'active' | 'finished' | 'drafts'
+
+const monthLabels = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+]
 
 function formatDate(value?: string | null) {
   if (!value) return 'Sin fecha'
@@ -97,15 +113,40 @@ function isUpcomingOrActive(tournament: Tournament, operationalStage?: Operation
   return Boolean(tournament.start_date && tournament.start_date >= today)
 }
 
+function getTournamentDateForCalendar(tournament: Tournament) {
+  return tournament.start_date ?? tournament.end_date ?? tournament.registration_deadline ?? tournament.created_at
+}
+
+function getTournamentCalendarDate(tournament: Tournament) {
+  return new Date(getTournamentDateForCalendar(tournament))
+}
+
+function getMonthKey(tournament: Tournament) {
+  const date = getTournamentCalendarDate(tournament)
+  if (Number.isNaN(date.getTime())) return 'sin-fecha'
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function getMonthLabel(tournament: Tournament) {
+  const date = getTournamentCalendarDate(tournament)
+  if (Number.isNaN(date.getTime())) return 'Sin fecha'
+  return `${monthLabels[date.getMonth()]} ${date.getFullYear()}`
+}
+
 export default function ClubTorneosPage() {
   const router = useRouter()
   const { activeClub } = useSession()
+  const currentYear = String(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [stagesByTournamentId, setStagesByTournamentId] = useState<Record<string, OperationalStage>>({})
   const [summariesByTournamentId, setSummariesByTournamentId] = useState<Record<string, TournamentListSummary>>({})
   const [activeTab, setActiveTab] = useState<TournamentTab>('recent')
+  const [selectedYear, setSelectedYear] = useState(currentYear)
+  const [selectedMonth, setSelectedMonth] = useState('all')
+  const [statusFilter, setStatusFilter] = useState<CalendarStatusFilter>('all')
+  const [selectedType, setSelectedType] = useState('all')
 
   const activeOrUpcoming = useMemo(
     () => tournaments.filter((tournament) => isUpcomingOrActive(tournament, stagesByTournamentId[tournament.id])).length,
@@ -122,12 +163,56 @@ export default function ClubTorneosPage() {
   const historicalTournaments = useMemo(() => {
     return tournaments.filter((tournament) => isHistoryTournament(tournament, stagesByTournamentId[tournament.id]))
   }, [stagesByTournamentId, tournaments])
-  const visibleTournaments =
+  const yearOptions = useMemo(() => {
+    const years = new Set<string>()
+    tournaments.forEach((tournament) => {
+      const date = getTournamentCalendarDate(tournament)
+      if (!Number.isNaN(date.getTime())) years.add(String(date.getFullYear()))
+    })
+    return Array.from(years).sort((a, b) => Number(b) - Number(a))
+  }, [tournaments])
+  const typeOptions = useMemo(() => {
+    const values = new Set<string>()
+    tournaments.forEach((tournament) => {
+      if (tournament.type?.trim()) values.add(tournament.type.trim())
+    })
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'es'))
+  }, [tournaments])
+  const tabTournaments =
     activeTab === 'recent'
       ? latestTournaments
       : activeTab === 'drafts'
         ? draftTournaments
         : historicalTournaments
+  const visibleTournaments = useMemo(() => {
+    return tabTournaments.filter((tournament) => {
+      const date = getTournamentCalendarDate(tournament)
+      const year = Number.isNaN(date.getTime()) ? null : String(date.getFullYear())
+      const month = Number.isNaN(date.getTime()) ? null : String(date.getMonth() + 1)
+      const operationalStage = stagesByTournamentId[tournament.id]
+
+      if (selectedYear !== 'all' && year !== selectedYear) return false
+      if (selectedMonth !== 'all' && month !== selectedMonth) return false
+      if (selectedType !== 'all' && tournament.type?.trim() !== selectedType) return false
+      if (statusFilter === 'active' && !isUpcomingOrActive(tournament, operationalStage)) return false
+      if (statusFilter === 'finished' && !isHistoryTournament(tournament, operationalStage)) return false
+      if (statusFilter === 'drafts' && tournament.status?.toUpperCase() !== 'DRAFT') return false
+
+      return true
+    })
+  }, [selectedMonth, selectedType, selectedYear, stagesByTournamentId, statusFilter, tabTournaments])
+  const groupedVisibleTournaments = useMemo(() => {
+    const groups = new Map<string, { label: string; tournaments: Tournament[] }>()
+    visibleTournaments.forEach((tournament) => {
+      const key = getMonthKey(tournament)
+      const current = groups.get(key) ?? { label: getMonthLabel(tournament), tournaments: [] }
+      current.tournaments.push(tournament)
+      groups.set(key, current)
+    })
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([, group]) => group)
+  }, [visibleTournaments])
   const visibleEmptyMessage =
     activeTab === 'recent'
       ? 'Todavía no hay torneos recientes.'
@@ -338,9 +423,9 @@ export default function ClubTorneosPage() {
             <section className="club-card">
               <div className="club-cardHead club-cardHead--tabs">
                 <div>
-                  <span className="club-kicker">Listado</span>
+                  <span className="club-kicker">Calendario</span>
                   <h2>Torneos del club</h2>
-                  <p>Usá las pestañas para separar operación actual e historial.</p>
+                  <p>Vista de eventos por temporada, mes y estado operativo.</p>
                 </div>
                 <div className="club-tabs" role="tablist" aria-label="Filtro de torneos">
                   <button
@@ -376,6 +461,45 @@ export default function ClubTorneosPage() {
                 </div>
               </div>
 
+              <div className="club-calendarFilters" aria-label="Filtros del calendario de torneos">
+                <label>
+                  <span>Año</span>
+                  <select value={selectedYear} onChange={(event) => setSelectedYear(event.target.value)}>
+                    <option value="all">Todos</option>
+                    {yearOptions.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Mes</span>
+                  <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
+                    <option value="all">Todos</option>
+                    {monthLabels.map((month, index) => (
+                      <option key={month} value={String(index + 1)}>{month}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Estado</span>
+                  <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CalendarStatusFilter)}>
+                    <option value="all">Todos</option>
+                    <option value="active">Activos</option>
+                    <option value="finished">Finalizados</option>
+                    <option value="drafts">Borradores</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Tipo</span>
+                  <select value={selectedType} onChange={(event) => setSelectedType(event.target.value)}>
+                    <option value="all">Todos</option>
+                    {typeOptions.map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
               {tournaments.length === 0 ? (
                 <div className="club-emptyAction">
                   <div className="px-empty">Todavía no hay torneos creados.</div>
@@ -384,8 +508,18 @@ export default function ClubTorneosPage() {
               ) : visibleTournaments.length === 0 ? (
                 <div className="px-empty">{visibleEmptyMessage}</div>
               ) : (
-                <div className={`club-tournamentList ${activeTab === 'history' ? 'club-tournamentList--history' : ''}`}>
-                  {visibleTournaments.map((tournament) => renderTournamentRow(tournament, activeTab === 'history'))}
+                <div className="club-calendarGroups">
+                  {groupedVisibleTournaments.map((group) => (
+                    <section key={group.label} className="club-calendarMonth">
+                      <div className="club-calendarMonthHead">
+                        <h3>{group.label}</h3>
+                        <span>{group.tournaments.length} torneo{group.tournaments.length === 1 ? '' : 's'}</span>
+                      </div>
+                      <div className={`club-tournamentList ${activeTab === 'history' ? 'club-tournamentList--history' : ''}`}>
+                        {group.tournaments.map((tournament) => renderTournamentRow(tournament, activeTab === 'history'))}
+                      </div>
+                    </section>
+                  ))}
                 </div>
               )}
             </section>
@@ -417,6 +551,15 @@ export default function ClubTorneosPage() {
         .club-tab:hover { background: #fff; border-color: rgba(83,199,217,.22); color: #0f8ea0; }
         .club-tab--active { background: #fff; border-color: rgba(83,199,217,.42); box-shadow: 0 8px 18px rgba(15,23,42,.06); color: #0f8ea0; }
         .club-tab--active span { background: #e9fbff; color: #0f7180; }
+        .club-calendarFilters { align-items: end; background: #f8fafc; border: 1px solid rgba(15,23,42,.08); border-radius: 12px; display: grid; gap: 8px; grid-template-columns: .8fr 1fr 1fr 1fr; padding: 10px; }
+        .club-calendarFilters label { display: grid; gap: 4px; min-width: 0; }
+        .club-calendarFilters span { color: #64748b; font-size: 10px; font-weight: 950; text-transform: uppercase; }
+        .club-calendarFilters select { appearance: none; background: #fff; border: 1px solid rgba(15,23,42,.10); border-radius: 9px; color: #17253f; font: inherit; font-size: 12px; font-weight: 850; min-height: 34px; min-width: 0; padding: 7px 28px 7px 9px; }
+        .club-calendarGroups { display: grid; gap: 16px; }
+        .club-calendarMonth { display: grid; gap: 9px; min-width: 0; }
+        .club-calendarMonthHead { align-items: center; border-bottom: 1px solid rgba(15,23,42,.08); display: flex; gap: 10px; justify-content: space-between; padding-bottom: 7px; }
+        .club-calendarMonthHead h3 { color: #17253f; font-size: 14px; font-weight: 950; line-height: 1.1; margin: 0; }
+        .club-calendarMonthHead span { background: #eef8ff; border-radius: 999px; color: #164e63; font-size: 11px; font-weight: 900; padding: 4px 8px; white-space: nowrap; }
         .club-emptyAction { display: grid; gap: 10px; justify-items: start; }
         .club-tournamentList { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
         .club-tournamentList--history { gap: 12px; }
@@ -496,6 +639,7 @@ export default function ClubTorneosPage() {
           .club-tournamentsHead { display: grid; }
           .club-headActions { justify-content: flex-start; }
           .club-cardHead--tabs { align-items: flex-start; flex-direction: column; }
+          .club-calendarFilters { grid-template-columns: 1fr; }
           .club-tabs { align-items: stretch; flex-direction: column; width: 100%; }
           .club-tab { justify-content: space-between; width: 100%; }
           .club-metrics { grid-template-columns: 1fr; }

@@ -17,6 +17,22 @@ type ClubPlayer = {
   user_status?: string
 }
 
+type ActivePartnership = {
+  id: string
+  player1_club_player_id: string
+  player2_club_player_id: string
+  status: string
+  player1?: ActivePartnerPlayer | null
+  player2?: ActivePartnerPlayer | null
+}
+
+type ActivePartnerPlayer = {
+  id: string
+  user_id: string
+  full_name: string
+  avatar_url: string | null
+}
+
 function isPastDeadline(deadline: string | null) {
   if (!deadline) return false
   return new Date() > new Date(deadline)
@@ -61,6 +77,8 @@ export default function TorneoInscripcionPage() {
   const [clubMe, setClubMe] = useState<ClubPlayer | null>(null)
   const [partnerUserId, setPartnerUserId] = useState<string>('')
   const [clubPartner, setClubPartner] = useState<ClubPlayer | null>(null)
+  const [activePartner, setActivePartner] = useState<ActivePartnerPlayer | null>(null)
+  const [loadingActivePartner, setLoadingActivePartner] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -117,12 +135,53 @@ export default function TorneoInscripcionPage() {
     })()
   }, [activeClub?.id, me?.userId, me?.status])
 
+  useEffect(() => {
+    let cancelled = false
+
+    ;(async () => {
+      setActivePartner(null)
+      if (!activeClub?.id || !clubMe?.id) return
+
+      setLoadingActivePartner(true)
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        if (!token) return
+
+        const res = await fetch(`/api/clubs/${activeClub.id}/active-partnerships`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(json?.error ?? 'No pude leer tu pareja activa.')
+
+        const partnerships = (json?.partnerships ?? []) as ActivePartnership[]
+        const ownPartnership = partnerships.find((partnership) => (
+          partnership.status === 'ACTIVE' &&
+          (partnership.player1_club_player_id === clubMe.id || partnership.player2_club_player_id === clubMe.id)
+        ))
+        const partner = ownPartnership?.player1_club_player_id === clubMe.id
+          ? ownPartnership?.player2
+          : ownPartnership?.player1
+
+        if (!cancelled) setActivePartner(partner?.user_id ? partner : null)
+      } catch {
+        if (!cancelled) setActivePartner(null)
+      } finally {
+        if (!cancelled) setLoadingActivePartner(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeClub?.id, clubMe?.id])
+
   const clubMismatch = useMemo(() => {
     if (!t || !activeClub) return false
     return t.club_id !== activeClub.id
   }, [t, activeClub])
 
-  async function loadPartner() {
+  async function loadPartnerByUserId(userId: string, successMessage = '✅ Compañero cargado.') {
     setMsg('')
     setClubPartner(null)
 
@@ -134,11 +193,11 @@ export default function TorneoInscripcionPage() {
       setMsg('❌ Tu usuario está suspendido y no puede interactuar como jugador.')
       return
     }
-    if (!partnerUserId.trim()) {
+    if (!userId.trim()) {
       setMsg('❌ Pegá el user_id del compañero/a.')
       return
     }
-    if (partnerUserId.trim() === me?.userId) {
+    if (userId.trim() === me?.userId) {
       setMsg('❌ No podés ser tu propio compañero/a.')
       return
     }
@@ -147,7 +206,7 @@ export default function TorneoInscripcionPage() {
       .from('club_players')
       .select('id, club_id, user_id, display_name, category, gender')
       .eq('club_id', activeClub.id)
-      .eq('user_id', partnerUserId.trim())
+      .eq('user_id', userId.trim())
       .maybeSingle()
 
     if (error) {
@@ -161,7 +220,7 @@ export default function TorneoInscripcionPage() {
 
     let partnerStatus = 'ACTIVE'
     try {
-      partnerStatus = await getGlobalUserStatus(partnerUserId.trim())
+      partnerStatus = await getGlobalUserStatus(userId.trim())
     } catch (statusError: any) {
       setMsg(`❌ ${statusError?.message ?? 'No pude validar el estado global del compañero.'}`)
       return
@@ -172,7 +231,17 @@ export default function TorneoInscripcionPage() {
     }
 
     setClubPartner({ ...(data as any), user_status: partnerStatus })
-    setMsg('✅ Compañero cargado.')
+    setMsg(successMessage)
+  }
+
+  async function loadPartner() {
+    await loadPartnerByUserId(partnerUserId)
+  }
+
+  async function useActivePartner() {
+    if (!activePartner?.user_id) return
+    setPartnerUserId(activePartner.user_id)
+    await loadPartnerByUserId(activePartner.user_id, '✅ Pareja activa cargada como compañero/a.')
   }
 
   const canRegister = useMemo(() => {
@@ -181,6 +250,8 @@ export default function TorneoInscripcionPage() {
     if (isPastDeadline(t.registrationDeadline)) return false
     return true
   }, [t, activeClub?.id, clubMismatch, me?.userId, me?.status, clubMe, clubPartner])
+
+  const activePartnerMismatch = Boolean(activePartner && clubPartner && clubPartner.id !== activePartner.id)
 
   async function register() {
     setMsg('')
@@ -288,11 +359,42 @@ export default function TorneoInscripcionPage() {
         <div style={card}>
           <div style={{ fontWeight: 900, marginBottom: 8 }}>Compañero/a</div>
           <div style={{ display: 'grid', gap: 10 }}>
-            <input value={partnerUserId} onChange={(e) => setPartnerUserId(e.target.value)} placeholder="Pegá el user_id del compañero/a" style={input} />
+            {activePartner ? (
+              <div style={activePartnerBox}>
+                <div style={activePartnerAvatar}>
+                  {activePartner.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={activePartner.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    getInitials(activePartner.full_name)
+                  )}
+                </div>
+                <div style={{ minWidth: 0, flex: '1 1 180px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 900, color: '#6ee7f9', textTransform: 'uppercase' }}>Pareja activa detectada</div>
+                  <div style={{ fontWeight: 950, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activePartner.full_name}</div>
+                </div>
+                <button style={activePartnerButton} type="button" onClick={useActivePartner}>Usar pareja activa</button>
+              </div>
+            ) : loadingActivePartner ? (
+              <div style={activePartnerLoading}>Buscando pareja activa…</div>
+            ) : null}
+
+            <input
+              value={partnerUserId}
+              onChange={(e) => {
+                setPartnerUserId(e.target.value)
+                setClubPartner(null)
+              }}
+              placeholder="Pegá el user_id del compañero/a"
+              style={input}
+            />
             <div style={{ display: 'flex', gap: 10 }}>
               <button style={btn} type="button" onClick={loadPartner}>Validar compañero/a</button>
               <button style={btnGhost} type="button" onClick={() => { setPartnerUserId(''); setClubPartner(null); }}>Limpiar</button>
             </div>
+            {activePartnerMismatch ? (
+              <div style={activePartnerWarning}>No coincide con tu pareja activa.</div>
+            ) : null}
             {clubPartner ? (
               <div style={{ opacity: 0.9 }}>
                 <div>Jugador: <b>{clubPartner.display_name ?? clubPartner.user_id}</b></div>
@@ -315,6 +417,11 @@ export default function TorneoInscripcionPage() {
       </div>
     </div>
   )
+}
+
+function getInitials(name: string) {
+  const parts = name.split(/\s+/).filter(Boolean)
+  return (parts[0]?.[0] ?? 'P') + (parts[1]?.[0] ?? '')
 }
 
 const card: React.CSSProperties = {
@@ -348,4 +455,53 @@ const warnBox: React.CSSProperties = {
   border: '1px solid rgba(255,120,120,0.35)',
   background: 'rgba(255,120,120,0.10)',
   color: 'white',
+}
+const activePartnerBox: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: 10,
+  padding: 10,
+  borderRadius: 16,
+  border: '1px solid rgba(103,232,249,0.28)',
+  background: 'linear-gradient(135deg, rgba(34,211,238,0.13), rgba(236,72,153,0.08))',
+  boxShadow: '0 14px 34px rgba(8,145,178,0.10)',
+}
+const activePartnerAvatar: React.CSSProperties = {
+  width: 44,
+  height: 44,
+  borderRadius: 999,
+  overflow: 'hidden',
+  display: 'grid',
+  placeItems: 'center',
+  border: '1px solid rgba(255,255,255,0.35)',
+  background: 'rgba(8,47,73,0.82)',
+  color: 'white',
+  fontWeight: 950,
+  fontSize: 13,
+}
+const activePartnerButton: React.CSSProperties = {
+  ...btn,
+  marginLeft: 'auto',
+  padding: '9px 11px',
+  borderColor: 'rgba(103,232,249,0.45)',
+  background: 'rgba(34,211,238,0.16)',
+  color: '#e0faff',
+}
+const activePartnerLoading: React.CSSProperties = {
+  padding: 10,
+  borderRadius: 14,
+  border: '1px solid rgba(255,255,255,0.10)',
+  background: 'rgba(255,255,255,0.04)',
+  color: 'rgba(255,255,255,0.72)',
+  fontWeight: 700,
+}
+const activePartnerWarning: React.CSSProperties = {
+  padding: '9px 10px',
+  borderRadius: 12,
+  border: '1px solid rgba(251,191,36,0.32)',
+  background: 'rgba(251,191,36,0.10)',
+  color: '#fde68a',
+  fontWeight: 800,
+  fontSize: 13,
 }

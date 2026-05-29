@@ -72,7 +72,9 @@ export default function LoginPageClient() {
     }
   }
 
-  async function signInWithEmail() {
+  async function signInWithEmail(e?: React.FormEvent) {
+    e?.preventDefault()
+
     if (!identifier || !password) {
       setAlert({
         variant: 'warning',
@@ -147,9 +149,10 @@ export default function LoginPageClient() {
           </div>
         </div>
 
-        <div className="px-authBody">
+        <form className="px-authBody" onSubmit={signInWithEmail}>
           <button
             className="px-btn px-btnGoogle"
+            type="button"
             onClick={signInWithGoogle}
             disabled={loading}
           >
@@ -197,7 +200,7 @@ export default function LoginPageClient() {
 
           <button
             className="px-btn"
-            onClick={signInWithEmail}
+            type="submit"
             disabled={loading}
           >
             {loading ? (
@@ -225,7 +228,7 @@ export default function LoginPageClient() {
               Olvidé mi contraseña
             </Link>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   )

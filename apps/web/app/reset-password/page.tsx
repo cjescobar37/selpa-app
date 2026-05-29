@@ -17,7 +17,9 @@ export default function ResetPasswordPage() {
     return `${window.location.origin}/auth/callback?next=/update-password&recovered=1`
   }, [])
 
-  async function sendReset() {
+  async function sendReset(e?: React.FormEvent) {
+    e?.preventDefault()
+
     if (!email) {
       setAlert({ variant: 'warning', title: 'Falta el email', message: 'Ingresá tu email para enviarte el link.' })
       return
@@ -55,7 +57,7 @@ export default function ResetPasswordPage() {
           </div>
         </div>
 
-        <div className="px-authBody">
+        <form className="px-authBody" onSubmit={sendReset}>
           <div className="px-field">
             <label className="px-label">Email</label>
             <input
@@ -67,7 +69,7 @@ export default function ResetPasswordPage() {
             />
           </div>
 
-          <button className="px-btn" onClick={sendReset} disabled={loading}>
+          <button className="px-btn" type="submit" disabled={loading}>
             {loading ? (
               <>
                 <span className="px-spinner" />&nbsp;Enviando...
@@ -83,7 +85,7 @@ export default function ResetPasswordPage() {
             <Link className="px-link" href="/login">Volver</Link>
             <Link className="px-link" href="/register">Crear cuenta</Link>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   )

@@ -1,13 +1,13 @@
 // app/layout.tsx
 import './globals.css'
-import { Inter } from 'next/font/google'
+import { Manrope } from 'next/font/google'
 import AppShellClient from '@/components/AppShellClient'
 
-const inter = Inter({
+const manrope = Manrope({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-main',
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700', '800'],
 })
 
 export const metadata = {
@@ -23,7 +23,7 @@ export const viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={inter.variable}>
+    <html lang="es" className={manrope.variable}>
       <body>
         {/* Único layout visual para TODA la app (Navbar + Footer consistentes). */}
         <AppShellClient>{children}</AppShellClient>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import { CLUB_THEMES, CLUB_THEME_LABELS, getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
@@ -28,11 +29,14 @@ const initial = {
   logo_url: '',
   notes: '',
   rules_pdf_url: '',
+  theme_key: 'cyan' as ClubThemeKey,
   owner_name: '',
   owner_phone: '',
   owner_email: '',
   owner_password: '',
 }
+
+const themeOptions = Object.values(CLUB_THEMES)
 
 export default function PlatformCreateClubPage() {
   const router = useRouter()
@@ -65,7 +69,7 @@ export default function PlatformCreateClubPage() {
             name: v.name, brand_name: v.brand_name, legal_name: v.legal_name, cuit: v.cuit, city: v.city, province: v.province,
             country: v.country, address: v.address, phone: v.phone, contact_email: v.contact_email, website: v.website,
             instagram: v.instagram, opening_hours: v.opening_hours, courts_count: v.courts_count, courts_surface: v.courts_surface,
-            logo_url: v.logo_url, notes: v.notes, rules_pdf_url: v.rules_pdf_url,
+            logo_url: v.logo_url, notes: v.notes, rules_pdf_url: v.rules_pdf_url, theme_key: getClubTheme(v.theme_key).key,
           },
           owner: { email: v.owner_email, password: v.owner_password, fullName: v.owner_name, phone: v.owner_phone },
         }),
@@ -125,6 +129,62 @@ export default function PlatformCreateClubPage() {
               <div className="px-field"><label className="px-label">URL logo</label><input className="px-input" value={v.logo_url} onChange={e => onChange('logo_url', e.target.value)} /></div>
               <div className="px-field"><label className="px-label">URL reglamento PDF</label><input className="px-input" value={v.rules_pdf_url} onChange={e => onChange('rules_pdf_url', e.target.value)} /></div>
               <div className="px-field" style={{ gridColumn: '1 / -1' }}><label className="px-label">Notas</label><textarea className="px-input" value={v.notes} onChange={e => onChange('notes', e.target.value)} rows={3} /></div>
+            </div>
+          </div>
+
+          <div className="px-card px-glass" style={{ borderRadius: 18 }}>
+            <div className="px-sectionTitle">Identidad visual *</div>
+            <div className="px-help" style={{ marginTop: 6 }}>La paleta elegida queda fija para mantener consistencia de marca.</div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))',
+                gap: 10,
+                marginTop: 12,
+              }}
+            >
+              {themeOptions.map((theme) => {
+                const selected = getClubTheme(v.theme_key).key === theme.key
+                return (
+                  <button
+                    key={theme.key}
+                    type="button"
+                    onClick={() => onChange('theme_key', theme.key)}
+                    aria-pressed={selected}
+                    style={{
+                      background: '#fff',
+                      border: selected ? `2px solid ${theme.vars.accent}` : '1px solid rgba(15,23,42,.10)',
+                      borderRadius: 16,
+                      boxShadow: selected ? `0 18px 42px ${theme.vars.glow}, 0 0 0 4px ${theme.vars.soft}` : '0 10px 28px rgba(15,23,42,.05)',
+                      cursor: 'pointer',
+                      display: 'grid',
+                      gap: 8,
+                      overflow: 'hidden',
+                      padding: 0,
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ minHeight: 68, padding: 12, background: `linear-gradient(135deg, ${theme.vars.hero})` }}>
+                      <span
+                        style={{
+                          display: 'block',
+                          width: 52,
+                          height: 9,
+                          borderRadius: 999,
+                          background: `linear-gradient(90deg, ${theme.vars.accent}, ${theme.vars.accent2})`,
+                          boxShadow: `0 0 20px ${theme.vars.glow}`,
+                        }}
+                      />
+                    </span>
+                    <span style={{ display: 'grid', gap: 2, padding: '0 12px 12px' }}>
+                      <strong style={{ color: '#17253f', fontSize: 13 }}>{CLUB_THEME_LABELS[theme.key]}</strong>
+                      <em style={{ color: selected ? theme.vars.accent : '#64748b', fontSize: 11, fontStyle: 'normal', fontWeight: 800 }}>
+                        {selected ? 'Seleccionado' : 'Theme Pamprax'}
+                      </em>
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 

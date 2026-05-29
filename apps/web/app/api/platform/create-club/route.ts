@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { withNotificationScope } from '@/lib/notificationScope'
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
 import { ensureClubPlayerForMembership, setActiveClubIfApproved } from '@/lib/clubMembershipServer'
+import { CLUB_THEMES } from '@/lib/clubThemes'
 
 type Body = {
   accessToken: string
@@ -28,6 +29,7 @@ type Body = {
     notes?: string
     description?: string
     rules_pdf_url?: string
+    theme_key?: string
   }
   owner: {
     email?: string
@@ -36,6 +38,8 @@ type Body = {
     phone?: string
   }
 }
+
+const CLUB_THEME_KEYS = new Set(Object.keys(CLUB_THEMES))
 
 function slugify(value: string) {
   return value
@@ -114,6 +118,7 @@ export async function POST(req: Request) {
     const description = (body.club?.description ?? '').trim() || null
     const notes = (body.club?.notes ?? '').trim() || description
     const rules_pdf_url = (body.club?.rules_pdf_url ?? '').trim() || null
+    const theme_key = (body.club?.theme_key ?? '').trim()
 
     const requestedOwnerEmail = (body.owner?.email ?? '').trim().toLowerCase()
     const password = (body.owner?.password ?? '').trim()
@@ -129,6 +134,7 @@ export async function POST(req: Request) {
 
     if (name.length < 2) return NextResponse.json({ error: 'Nombre de club inválido' }, { status: 400 })
     if (!email.includes('@')) return NextResponse.json({ error: 'Email inválido' }, { status: 400 })
+    if (!CLUB_THEME_KEYS.has(theme_key)) return NextResponse.json({ error: 'Elegí una identidad visual válida para el club.' }, { status: 400 })
     if (shouldCreateOwnerUser && password.length < 8) {
       return NextResponse.json({ error: 'La clave debe tener al menos 8 caracteres' }, { status: 400 })
     }
@@ -147,6 +153,7 @@ export async function POST(req: Request) {
         name, brand_name, legal_name, cuit, slug, city, province, country, address, phone,
         contact_email, website, instagram, opening_hours, courts_count, courts_surface,
         logo_url, notes, rules_pdf_url, mobile_phone, description, court_surfaces, opening_hours_json,
+        theme_key, theme_locked: true,
         owner_name: fullName, owner_email: email, owner_phone: ownerPhone,
         is_active: false,
         status: 'PENDING_APPROVAL',

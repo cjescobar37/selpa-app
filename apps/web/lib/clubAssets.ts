@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabaseClient'
 
 export const CLUB_LOGO_BUCKET_CANDIDATES = ['club-logos', 'club-assets', 'clubs'] as const
 export const CLUB_RULES_BUCKET_CANDIDATES = ['club-rules', 'club-assets', 'clubs'] as const
+export const PLAYER_PROFILE_BUCKET = 'player-assets'
 
 function sanitizeFileName(value: string) {
   return value
@@ -158,4 +159,42 @@ export async function uploadClubRulesPdf(params: {
     file,
     objectPath,
   })
+}
+
+export async function uploadPlayerProfileImage(params: {
+  file: File
+  userId?: string | null
+  kind: 'avatar' | 'cover'
+}) {
+  const { file, userId, kind } = params
+
+  if (!file.type.toLowerCase().startsWith('image/')) {
+    throw new Error('El archivo debe ser una imagen.')
+  }
+
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+  const safeBase = sanitizeFileName(file.name.replace(/\.[^.]+$/, '')) || `player-${kind}`
+  const folder = kind === 'avatar' ? 'avatars' : 'covers'
+  const objectPath = `${folder}/${userId || 'pending'}/${Date.now()}-${safeBase}.${ext}`
+
+  const { error } = await supabase.storage.from(PLAYER_PROFILE_BUCKET).upload(objectPath, file, {
+    cacheControl: '3600',
+    upsert: true,
+    contentType: file.type || undefined,
+  })
+
+  if (error) {
+    const msg = error.message?.toLowerCase?.() || ''
+    if (msg.includes('bucket not found')) {
+      throw new Error('No existe el bucket player-assets en Supabase Storage.')
+    }
+    throw new Error(error.message || 'No pude subir la imagen del perfil.')
+  }
+
+  const { data } = supabase.storage.from(PLAYER_PROFILE_BUCKET).getPublicUrl(objectPath)
+  return {
+    bucket: PLAYER_PROFILE_BUCKET,
+    objectPath,
+    publicUrl: data.publicUrl,
+  }
 }

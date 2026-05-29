@@ -42,7 +42,7 @@
 
 .hero__rankBig{
   font-size: 96px;
-  font-weight: 1000;
+  font-weight: 800;
   line-height: .9;
   letter-spacing: -2px;
   color: rgba(255,255,255,.96);
@@ -51,7 +51,7 @@
 .hero__name{
   margin-top: 8px;
   font-size: 46px;
-  font-weight: 1000;
+  font-weight: 800;
   letter-spacing: -0.8px;
   color: rgba(255,255,255,.98);
 }
@@ -75,8 +75,8 @@
   background: rgba(255,255,255,.18);
 }
 
-.hero__code{ font-weight: 950; letter-spacing: .10em; text-transform: uppercase; color: rgba(255,255,255,.96); }
-.hero__points{ border-left: 1px solid rgba(255,255,255,.28); padding-left: 12px; font-weight: 950; color: rgba(255,255,255,.96); }
+.hero__code{ font-weight: 800; letter-spacing: .10em; text-transform: uppercase; color: rgba(255,255,255,.96); }
+.hero__points{ border-left: 1px solid rgba(255,255,255,.28); padding-left: 12px; font-weight: 800; color: rgba(255,255,255,.96); }
 
 .hero__partner{
   margin-top: 14px;
@@ -86,8 +86,8 @@
   align-items:center;
 }
 
-.hero__partnerLabel{ font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.82); font-weight: 950; }
-.hero__partnerName{ font-size: 20px; font-weight: 1000; color: rgba(255,255,255,.98); }
+.hero__partnerLabel{ font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.82); font-weight: 800; }
+.hero__partnerName{ font-size: 20px; font-weight: 800; color: rgba(255,255,255,.98); }
 
 .hero__avatar{
   width: 42px;
@@ -138,8 +138,8 @@
     backdrop-filter: blur(10px);
   }
   .hero__overlayRow{ display:flex; align-items:flex-start; gap: 12px; }
-  .hero__overlayRank{ font-weight: 1000; font-size: 30px; line-height: 1; color: rgba(255,255,255,.96); }
-  .hero__overlayName{ font-weight: 1000; color: rgba(255,255,255,.96); }
+  .hero__overlayRank{ font-weight: 800; font-size: 30px; line-height: 1; color: rgba(255,255,255,.96); }
+  .hero__overlayName{ font-weight: 800; color: rgba(255,255,255,.96); }
   .hero__overlayLine{ margin-top: 4px; display:flex; align-items:center; gap: 8px; flex-wrap:wrap; color: rgba(255,255,255,.86); font-weight: 900; font-size: 13px; }
   .hero__overlaySep{ opacity:.7; }
 }
@@ -159,8 +159,8 @@
 .metaCell{ padding: 14px 16px; border-right: 1px solid rgba(255,255,255,.28); }
 .metaCell:last-child{ border-right: 0; }
 
-.metaLabel{ font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.86); font-weight: 950; }
-.metaValue{ margin-top: 8px; font-size: 20px; font-weight: 1000; color: rgba(255,255,255,.98); }
+.metaLabel{ font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.86); font-weight: 800; }
+.metaValue{ margin-top: 8px; font-size: 20px; font-weight: 800; color: rgba(255,255,255,.98); }
 
 @media (max-width: 980px){ .metaRow{ grid-template-columns: 1fr 1fr; } }
 
@@ -175,7 +175,7 @@
 }
 
 .tableTitle{
-  font-weight: 1000;
+  font-weight: 800;
   margin-bottom: 12px;
   position: relative;
   padding-bottom: 10px;
@@ -200,8 +200,8 @@
 .statsItem{ padding: 16px 12px; border-right: 1px solid rgba(11,26,46,.10); }
 .statsItem:last-child{ border-right:0; }
 
-.statsK{ font-size: 11px; letter-spacing: .10em; text-transform: uppercase; color: rgba(11,26,46,.56); font-weight: 950; }
-.statsV{ margin-top: 8px; font-size: 32px; font-weight: 1000; color: rgba(39,57,101,.96); }
+.statsK{ font-size: 11px; letter-spacing: .10em; text-transform: uppercase; color: rgba(11,26,46,.56); font-weight: 800; }
+.statsV{ margin-top: 8px; font-size: 32px; font-weight: 800; color: rgba(39,57,101,.96); }
 
 @media (max-width: 980px){
   .statsGrid{ grid-template-columns: repeat(2, 1fr); }

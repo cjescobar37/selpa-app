@@ -932,12 +932,16 @@ export default function ClubTournamentDetailPage() {
     isDragging: boolean
     pointerId: number | null
     startX: number
+    startY: number
     startScrollLeft: number
-  }>({ isDragging: false, pointerId: null, startX: 0, startScrollLeft: 0 })
+    startScrollTop: number
+  }>({ isDragging: false, pointerId: null, startX: 0, startY: 0, startScrollLeft: 0, startScrollTop: 0 })
   const [playoffBracketScrollState, setPlayoffBracketScrollState] = useState({ canScrollLeft: false, canScrollRight: false })
   const [playoffBracketNavState, setPlayoffBracketNavState] = useState({ isVisible: false, top: 0 })
   const [isDraggingPlayoffBracket, setIsDraggingPlayoffBracket] = useState(false)
   const [playoffBracketPreferredColumns, setPlayoffBracketPreferredColumns] = useState(3)
+  const [playoffBracketZoom, setPlayoffBracketZoom] = useState(1)
+  const [activePlayoffTeamId, setActivePlayoffTeamId] = useState<string | null>(null)
   const [expandedGroupMatches, setExpandedGroupMatches] = useState<string[]>([])
   const [selectedPlayoffRound, setSelectedPlayoffRound] = useState('')
   const [bracketView, setBracketView] = useState<'tree' | 'compact'>('tree')
@@ -1486,7 +1490,9 @@ export default function ClubTournamentDetailPage() {
       isDragging: true,
       pointerId: event.pointerId,
       startX: event.clientX,
+      startY: event.clientY,
       startScrollLeft: scrollEl.scrollLeft,
+      startScrollTop: scrollEl.scrollTop,
     }
     setIsDraggingPlayoffBracket(true)
     scrollEl.setPointerCapture(event.pointerId)
@@ -1499,6 +1505,7 @@ export default function ClubTournamentDetailPage() {
 
     event.preventDefault()
     scrollEl.scrollLeft = drag.startScrollLeft - (event.clientX - drag.startX)
+    scrollEl.scrollTop = drag.startScrollTop - (event.clientY - drag.startY)
     updatePlayoffBracketScrollState()
   }
 
@@ -1509,9 +1516,17 @@ export default function ClubTournamentDetailPage() {
       scrollEl.releasePointerCapture(event.pointerId)
     }
 
-    playoffBracketDragRef.current = { isDragging: false, pointerId: null, startX: 0, startScrollLeft: 0 }
+    playoffBracketDragRef.current = { isDragging: false, pointerId: null, startX: 0, startY: 0, startScrollLeft: 0, startScrollTop: 0 }
     setIsDraggingPlayoffBracket(false)
     updatePlayoffBracketScrollState()
+  }
+
+  function setPlayoffBracketZoomLevel(nextZoom: number) {
+    setPlayoffBracketZoom(Math.min(1.3, Math.max(0.7, Number(nextZoom.toFixed(2)))))
+    window.requestAnimationFrame(() => {
+      updatePlayoffBracketScrollState()
+      updatePlayoffBracketNavState()
+    })
   }
 
   function updatePlayoffBracketScrollState() {
@@ -1704,6 +1719,29 @@ export default function ClubTournamentDetailPage() {
       height: `${Math.max(0, bottom - top)}px`,
       top: `${top}px`,
     }
+  }
+  const getPlayoffSlotTeamIds = (slot: PlayoffVisualSlot) => {
+    if (slot.kind === 'match' && slot.match) {
+      return [slot.match.team1_id, slot.match.team2_id].filter(Boolean) as string[]
+    }
+
+    if (slot.kind === 'bye') {
+      return [slot.byeTeam?.teamId, slot.placeholderTeams?.[0]?.teamId, slot.placeholderTeams?.[1]?.teamId].filter(Boolean) as string[]
+    }
+
+    return (slot.placeholderTeams ?? []).map((team) => team?.teamId).filter(Boolean) as string[]
+  }
+  const isPlayoffSlotInActivePath = (slot: PlayoffVisualSlot) => {
+    if (!activePlayoffTeamId) return false
+    return getPlayoffSlotTeamIds(slot).includes(activePlayoffTeamId)
+  }
+  const isPlayoffMatchInActivePath = (match: TournamentMatch) => {
+    if (!activePlayoffTeamId) return false
+    return match.team1_id === activePlayoffTeamId || match.team2_id === activePlayoffTeamId
+  }
+  const getPlayoffPathClass = (isActive: boolean, base = '') => {
+    if (!activePlayoffTeamId) return base
+    return `${base} ${isActive ? 'club-playoffPathActive' : 'club-playoffPathDimmed'}`
   }
   const selectedPlayoffRoundData = useMemo(
     () => playoffRounds.find((round) => round.phase === selectedPlayoffRound) ?? playoffRounds[0] ?? null,
@@ -2438,7 +2476,13 @@ export default function ClubTournamentDetailPage() {
       : null
 
     return (
-      <div className={`club-resultForm ${errorState.hasError ? 'club-resultForm--danger' : ''}`}>
+      <form
+        className={`club-resultForm ${errorState.hasError ? 'club-resultForm--danger' : ''}`}
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!savingResult && validation?.ok) void submitResult(match)
+        }}
+      >
         {legacyScore ? (
           <div className="club-legacyScoreNotice">
             Resultado anterior: <b>{match.score?.text as string}</b>. Para editarlo, recargalo con sets estructurados.
@@ -2555,10 +2599,9 @@ export default function ClubTournamentDetailPage() {
 
         <div className="club-resultActions">
           <button
-            type="button"
+            type="submit"
             className="club-primaryBtn"
             disabled={savingResult || !validation?.ok}
-            onClick={() => submitResult(match)}
           >
             {savingResult ? 'Guardando...' : 'Guardar'}
           </button>
@@ -2571,7 +2614,7 @@ export default function ClubTournamentDetailPage() {
             Cancelar
           </button>
         </div>
-      </div>
+      </form>
     )
   }
 
@@ -2692,9 +2735,12 @@ export default function ClubTournamentDetailPage() {
     const scoreSets = extractStructuredScoreSets(match.score)
     const hasStructuredScore = scoreSets.length > 0
     const scheduleSwapOpenDisabledReason = getScheduleSwapOpenDisabledReason(match)
+    const matchInActivePath = isPlayoffMatchInActivePath(match)
+    const team1InActivePath = activePlayoffTeamId === match.team1_id
+    const team2InActivePath = activePlayoffTeamId === match.team2_id
 
     return (
-      <article key={match.id} className="club-playoffBracketMatch" style={options?.style}>
+      <article key={match.id} className={getPlayoffPathClass(matchInActivePath, 'club-playoffBracketMatch')} style={options?.style}>
         <div className="club-playoffBracketMatchHead">
           <div className="club-playoffMatchTitleStack">
             <div className="club-playoffMatchTitleLine">
@@ -2730,7 +2776,12 @@ export default function ClubTournamentDetailPage() {
 
         <div className="club-playoffBracketBody">
           <div className="club-playoffBracketTeams">
-            <div className={`club-playoffBracketTeam ${team1Winner ? 'club-playoffBracketTeam--winner' : played ? 'club-playoffBracketTeam--loser' : ''}`}>
+            <div
+              className={getPlayoffPathClass(team1InActivePath, `club-playoffBracketTeam ${team1Winner ? 'club-playoffBracketTeam--winner' : played ? 'club-playoffBracketTeam--loser' : ''}`)}
+              onMouseEnter={() => match.team1_id && setActivePlayoffTeamId(match.team1_id)}
+              onMouseLeave={() => setActivePlayoffTeamId(null)}
+              title={match.team1_id ? 'Ver recorrido' : undefined}
+            >
               <div className="club-playoffBracketTeamRow">
                 {renderPlayoffTeamMain(team1Seed, team1Name)}
                 <div className="club-playoffInlineScore" aria-label={hasStructuredScore ? `Score ${team1Name}` : 'Sin resultado'}>
@@ -2748,7 +2799,12 @@ export default function ClubTournamentDetailPage() {
                 {team1Winner ? <span className="club-playoffWinnerMark">✓</span> : null}
               </span>
             </div>
-            <div className={`club-playoffBracketTeam ${team2Winner ? 'club-playoffBracketTeam--winner' : played ? 'club-playoffBracketTeam--loser' : ''}`}>
+            <div
+              className={getPlayoffPathClass(team2InActivePath, `club-playoffBracketTeam ${team2Winner ? 'club-playoffBracketTeam--winner' : played ? 'club-playoffBracketTeam--loser' : ''}`)}
+              onMouseEnter={() => match.team2_id && setActivePlayoffTeamId(match.team2_id)}
+              onMouseLeave={() => setActivePlayoffTeamId(null)}
+              title={match.team2_id ? 'Ver recorrido' : undefined}
+            >
               <div className="club-playoffBracketTeamRow">
                 {renderPlayoffTeamMain(team2Seed, team2Name)}
                 <div className="club-playoffInlineScore" aria-hidden="true">
@@ -2782,11 +2838,13 @@ export default function ClubTournamentDetailPage() {
     }
   ) {
     const teams = options?.teams ?? [null, null]
+    const slotTeamIds = teams.map((team) => team?.teamId).filter(Boolean) as string[]
+    const cardInActivePath = Boolean(activePlayoffTeamId && slotTeamIds.includes(activePlayoffTeamId))
 
     return (
       <article
         key={options?.key}
-        className="club-playoffBracketMatch club-playoffBracketMatch--placeholder"
+        className={getPlayoffPathClass(cardInActivePath, 'club-playoffBracketMatch club-playoffBracketMatch--placeholder')}
         style={options?.style}
       >
         <div className="club-playoffBracketMatchHead">
@@ -2797,8 +2855,14 @@ export default function ClubTournamentDetailPage() {
         <div className="club-playoffBracketTeams">
           {[1, 2].map((teamSlot) => (
             <div
-              className={`club-playoffBracketTeam ${teams[teamSlot - 1] ? '' : 'club-playoffBracketTeam--empty'}`}
+              className={getPlayoffPathClass(activePlayoffTeamId === teams[teamSlot - 1]?.teamId, `club-playoffBracketTeam ${teams[teamSlot - 1] ? '' : 'club-playoffBracketTeam--empty'}`)}
               key={`placeholder-team-${options?.key ?? label}-${teamSlot}`}
+              onMouseEnter={() => {
+                const teamId = teams[teamSlot - 1]?.teamId
+                if (teamId) setActivePlayoffTeamId(teamId)
+              }}
+              onMouseLeave={() => setActivePlayoffTeamId(null)}
+              title={teams[teamSlot - 1]?.teamId ? 'Ver recorrido' : undefined}
             >
               <div className="club-playoffBracketTeamRow">
                 {renderPlayoffTeamMain(
@@ -2831,11 +2895,12 @@ export default function ClubTournamentDetailPage() {
     }
   ) {
     const team = slot.byeTeam ?? slot.placeholderTeams?.[0] ?? null
+    const cardInActivePath = Boolean(activePlayoffTeamId && team?.teamId === activePlayoffTeamId)
 
     return (
       <article
         key={options?.key}
-        className="club-playoffBracketMatch club-playoffBracketMatch--bye"
+        className={getPlayoffPathClass(cardInActivePath, 'club-playoffBracketMatch club-playoffBracketMatch--bye')}
         style={options?.style}
       >
         <div className="club-playoffBracketMatchHead">
@@ -2844,7 +2909,12 @@ export default function ClubTournamentDetailPage() {
         </div>
 
         <div className="club-playoffBracketTeams">
-          <div className={`club-playoffBracketTeam ${team ? '' : 'club-playoffBracketTeam--empty'}`}>
+          <div
+            className={getPlayoffPathClass(cardInActivePath, `club-playoffBracketTeam ${team ? '' : 'club-playoffBracketTeam--empty'}`)}
+            onMouseEnter={() => team?.teamId && setActivePlayoffTeamId(team.teamId)}
+            onMouseLeave={() => setActivePlayoffTeamId(null)}
+            title={team?.teamId ? 'Ver recorrido' : undefined}
+          >
             <div className="club-playoffBracketTeamRow">
               {renderPlayoffTeamMain(
                 team?.seed ?? null,
@@ -2937,11 +3007,19 @@ export default function ClubTournamentDetailPage() {
         const firstChild = currentRound.slots[slotIndex * 2]
         const secondChild = currentRound.slots[(slotIndex * 2) + 1]
         if (!firstChild || !secondChild) return null
+        const connectorActive = Boolean(
+          activePlayoffTeamId &&
+          (
+            isPlayoffSlotInActivePath(firstChild) ||
+            isPlayoffSlotInActivePath(secondChild) ||
+            isPlayoffSlotInActivePath(slot)
+          )
+        )
 
         return (
           <div
             aria-hidden="true"
-            className="club-playoffBracketConnector"
+            className={getPlayoffPathClass(connectorActive, 'club-playoffBracketConnector')}
             key={`connector-${roundIndex}-${slot.id}`}
             style={getPlayoffConnectorStyle(firstChild, secondChild)}
           >
@@ -4527,16 +4605,46 @@ export default function ClubTournamentDetailPage() {
                                   <span><i className="club-playoffLegendDot club-playoffLegendDot--walkover" />WO / Walkover</span>
                                 </div>
 
-                                <button
-                                  type="button"
-                                  className="club-secondaryBtn club-secondaryBtn--compact"
-                                  onClick={() => {
-                                    const target = document.getElementById('playoff-upcoming')
-                                    target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                                  }}
-                                >
-                                  Ver partidos
-                                </button>
+                                <div className="club-playoffToolbarActions">
+                                  {bracketView === 'tree' ? (
+                                    <div className="club-playoffZoomControls" aria-label="Zoom del bracket">
+                                      <button
+                                        type="button"
+                                        onClick={() => setPlayoffBracketZoomLevel(playoffBracketZoom - 0.1)}
+                                        disabled={playoffBracketZoom <= 0.7}
+                                        aria-label="Achicar bracket"
+                                      >
+                                        -
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="club-playoffZoomValue"
+                                        onClick={() => setPlayoffBracketZoomLevel(1)}
+                                        aria-label="Restablecer zoom del bracket"
+                                      >
+                                        {Math.round(playoffBracketZoom * 100)}%
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setPlayoffBracketZoomLevel(playoffBracketZoom + 0.1)}
+                                        disabled={playoffBracketZoom >= 1.3}
+                                        aria-label="Agrandar bracket"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="club-secondaryBtn club-secondaryBtn--compact"
+                                    onClick={() => {
+                                      const target = document.getElementById('playoff-upcoming')
+                                      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                                    }}
+                                  >
+                                    Ver partidos
+                                  </button>
+                                </div>
                               </div>
 
                               {bracketView === 'tree' ? (
@@ -4567,6 +4675,7 @@ export default function ClubTournamentDetailPage() {
                                   <div
                                     className={`club-playoffBracketScroll ${isDraggingPlayoffBracket ? 'club-playoffBracketScroll--dragging' : ''}`}
                                     ref={playoffBracketScrollRef}
+                                    style={{ ['--playoff-bracket-zoom' as string]: String(playoffBracketZoom) }}
                                     onScroll={updatePlayoffBracketScrollState}
                                     onPointerDown={startPlayoffBracketDrag}
                                     onPointerMove={movePlayoffBracketDrag}
@@ -5636,8 +5745,14 @@ export default function ClubTournamentDetailPage() {
         .club-playoffMatchesSection { --bracket-line-color: rgba(83,199,217,.78); --bracket-line-width: 2px; background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%); border: 1px solid rgba(15,23,42,.08); border-radius: 16px; display: grid; gap: 14px; padding: 12px; }
         .club-playoffToolbar { align-items: center; display: flex; flex-wrap: wrap; gap: 10px 14px; justify-content: space-between; }
         .club-playoffToolbarLeft { display: flex; gap: 8px; }
+        .club-playoffToolbarActions { align-items: center; display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
         .club-playoffViewChip { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 10px; color: #475569; cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 900; justify-content: center; min-height: 34px; padding: 0 12px; }
         .club-playoffViewChip--active { background: #e9fbff; border-color: rgba(83,199,217,.38); color: #0f8ea0; box-shadow: inset 0 0 0 1px rgba(83,199,217,.08); }
+        .club-playoffZoomControls { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 10px; display: inline-flex; gap: 3px; min-height: 34px; padding: 3px; }
+        .club-playoffZoomControls button { align-items: center; background: transparent; border: 0; border-radius: 8px; color: #475569; cursor: pointer; display: inline-flex; font-size: 14px; font-weight: 950; height: 28px; justify-content: center; min-width: 30px; padding: 0 8px; transition: background .16s ease, color .16s ease; }
+        .club-playoffZoomControls button:hover:not(:disabled) { background: #e9fbff; color: #0f8ea0; }
+        .club-playoffZoomControls button:disabled { color: #cbd5e1; cursor: not-allowed; }
+        .club-playoffZoomControls .club-playoffZoomValue { color: #17253f; font-size: 11px; min-width: 48px; }
         .club-playoffLegend { align-items: center; display: flex; flex: 1 1 auto; flex-wrap: wrap; gap: 10px 16px; justify-content: center; min-width: 0; }
         .club-playoffLegend span { align-items: center; color: #64748b; display: inline-flex; font-size: 12px; font-weight: 900; gap: 6px; white-space: nowrap; }
         .club-playoffLegendDot { border-radius: 999px; display: inline-block; height: 10px; width: 10px; }
@@ -5646,10 +5761,10 @@ export default function ClubTournamentDetailPage() {
         .club-playoffLegendDot--walkover { background: #facc15; }
         .club-playoffBracketViewport { display: block; min-width: 0; overflow: visible; position: relative; }
         .club-playoffBracketViewport--simple { overflow: hidden; }
-        .club-playoffBracketScroll { cursor: grab; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 6px; scroll-behavior: smooth; scroll-snap-type: x proximity; scrollbar-color: rgba(83,199,217,.5) rgba(226,232,240,.78); scrollbar-width: thin; }
+        .club-playoffBracketScroll { cursor: grab; max-height: min(72vh, 760px); min-height: 260px; min-width: 0; overflow: auto; overscroll-behavior: contain; padding-bottom: 6px; scroll-behavior: smooth; scroll-snap-type: x proximity; scrollbar-color: rgba(83,199,217,.5) rgba(226,232,240,.78); scrollbar-width: thin; touch-action: none; }
         .club-playoffBracketScroll--dragging { cursor: grabbing; scroll-behavior: auto; scroll-snap-type: none; user-select: none; }
         .club-playoffBracketScroll--dragging * { user-select: none; }
-        .club-playoffBracketGrid { align-items: start; display: grid; gap: var(--playoff-column-gap, 44px); grid-auto-flow: column; min-width: max-content; }
+        .club-playoffBracketGrid { align-items: start; display: grid; gap: var(--playoff-column-gap, 44px); grid-auto-flow: column; min-width: max-content; transform-origin: top left; zoom: var(--playoff-bracket-zoom, 1); }
         .club-playoffBracketGrid--fluid { grid-auto-columns: unset; grid-auto-flow: initial; width: 100%; }
         .club-playoffBracketNav { align-items: center; background: rgba(255,255,255,.42); backdrop-filter: blur(14px); border: 1px solid rgba(15,23,42,.08); border-radius: 999px; box-shadow: 0 18px 45px rgba(15,23,42,.12); color: rgba(15,29,51,.52); cursor: pointer; display: inline-flex; height: 220px; justify-content: center; padding: 0; position: fixed; touch-action: manipulation; transform: translateY(-50%); transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease, transform .16s ease; user-select: none; width: 42px; z-index: 80; }
         .club-playoffBracketNav:hover { background: rgba(255,255,255,.76); border-color: rgba(83,199,217,.34); box-shadow: 0 24px 54px rgba(15,23,42,.18); color: #0f8ea0; transform: translateY(-50%) scale(1.04); }
@@ -5669,7 +5784,7 @@ export default function ClubTournamentDetailPage() {
         .club-playoffConnectorHorizontal--top { top: 25%; }
         .club-playoffConnectorHorizontal--bottom { top: 75%; }
         .club-playoffConnectorToFinal { background: var(--bracket-line-color); border-radius: 999px; height: var(--bracket-line-width); left: 20px; position: absolute; top: 50%; width: 20px; }
-        .club-playoffRoundHead { background: linear-gradient(180deg, #13233b 0%, #0f1d33 100%); border: 1px solid rgba(15,23,42,.24); border-radius: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); color: #f8fbfd; display: grid; gap: 6px; min-width: 0; padding: 12px 13px; position: sticky; top: 0; z-index: 1; }
+        .club-playoffRoundHead { background: linear-gradient(180deg, #13233b 0%, #0f1d33 100%); border: 1px solid rgba(15,23,42,.24); border-radius: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); color: #f8fbfd; display: grid; gap: 6px; min-width: 0; padding: 12px 13px; position: sticky; top: 0; z-index: 20; }
         .club-playoffRoundHeadContent { align-items: center; display: flex; gap: 8px; justify-content: space-between; min-width: 0; }
         .club-playoffRoundLabel { color: #f8fbfd; display: inline-flex; font-size: 12px; font-weight: 950; letter-spacing: .02em; text-transform: uppercase; }
         .club-playoffRoundHead b { color: rgba(233,251,255,.82); font-size: 11px; font-weight: 900; white-space: nowrap; }
@@ -5686,6 +5801,18 @@ export default function ClubTournamentDetailPage() {
         .club-playoffBracketMatch { background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%); border: 1px solid rgba(15,23,42,.08); border-radius: 16px; box-shadow: 0 12px 28px rgba(15,23,42,.06); display: grid; gap: 7px; min-height: var(--playoff-card-height); min-width: 0; padding: 9px; position: relative; }
         .club-playoffBracketMatch--placeholder { background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); border-style: dashed; min-height: var(--playoff-card-height); }
         .club-playoffBracketMatch--bye { background: linear-gradient(180deg, #f0fdfa 0%, #ecfeff 100%); border-color: rgba(20,184,166,.26); min-height: var(--playoff-card-height); }
+        .club-playoffBracketMatch .club-statusBadge,
+        .club-playoffBracketMatch--placeholder .club-statusBadge { z-index: 1; }
+        .club-playoffBracketGrid:has(.club-playoffPathActive) .club-playoffPathDimmed { opacity: .38; }
+        .club-playoffBracketGrid:has(.club-playoffPathActive) .club-playoffPathActive { opacity: 1; }
+        .club-playoffBracketMatch.club-playoffPathActive { border-color: rgba(6,182,212,.66); box-shadow: 0 16px 34px rgba(6,182,212,.16), inset 0 0 0 1px rgba(6,182,212,.12); }
+        .club-playoffBracketTeam { cursor: pointer; }
+        .club-playoffBracketTeam.club-playoffPathActive { background: linear-gradient(135deg, #ecfeff 0%, #f0fdf4 100%); border-color: rgba(6,182,212,.42); box-shadow: inset 0 0 0 1px rgba(6,182,212,.08); opacity: 1; }
+        .club-playoffBracketConnector.club-playoffPathActive .club-playoffBracketConnectorLine,
+        .club-playoffBracketConnector.club-playoffPathActive .club-playoffBracketConnectorVerticalLine { background: rgba(6,182,212,.98); box-shadow: 0 0 0 1px rgba(6,182,212,.10), 0 0 10px rgba(6,182,212,.24); }
+        .club-playoffBracketMatch,
+        .club-playoffBracketTeam,
+        .club-playoffBracketConnector { transition: opacity .16s ease, border-color .16s ease, box-shadow .16s ease, background .16s ease; }
         .club-playoffRoundMatches .club-playoffBracketMatch,
         .club-playoffRoundMatches .club-playoffBracketMatch--placeholder { align-self: stretch; max-width: none; min-width: 0; width: 100%; }
         .club-playoffRoundMatches--finalLane .club-playoffBracketMatch,
@@ -5886,6 +6013,7 @@ export default function ClubTournamentDetailPage() {
           .club-playoffSummaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .club-playoffToolbar { align-items: flex-start; flex-direction: column; }
           .club-playoffLegend { justify-content: flex-start; }
+          .club-playoffToolbarActions { justify-content: flex-start; width: 100%; }
           .club-playoffBracketViewport { display: block; margin-inline: -2px; }
           .club-playoffBracketScroll { display: block; padding-bottom: 8px; scroll-snap-type: x mandatory; }
           .club-playoffRoundColumn { scroll-snap-align: start; }
@@ -5927,6 +6055,7 @@ export default function ClubTournamentDetailPage() {
           .club-playoffSummaryGrid { grid-template-columns: 1fr; }
           .club-playoffToolbarLeft { width: 100%; }
           .club-playoffViewChip { flex: 1 1 0; justify-content: center; }
+          .club-playoffZoomControls { flex: 1 1 auto; justify-content: center; }
           .club-playoffLegend { gap: 8px; }
           .club-playoffLegend span { font-size: 10px; }
           .club-playoffBracketViewport { margin-inline: -6px; }

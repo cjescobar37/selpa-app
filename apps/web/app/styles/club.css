@@ -22,7 +22,7 @@
 }
 
 .px-clubHead{ display:flex; align-items:flex-end; justify-content:space-between; gap: 14px; flex-wrap:wrap; }
-.px-clubTitle{ margin:0; font-size: 22px; font-weight: 1000; }
+.px-clubTitle{ margin:0; font-size: 22px; font-weight: var(--font-weight-title); }
 .px-clubSub{ margin-top: 4px; color: var(--px-ink-dim); font-size: 13.5px; }
 
 .px-clubKpis{ margin-top: 12px; display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -53,7 +53,7 @@
   background: rgba(255,78,114,.90);
 }
 .club-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap; }
-.club-title{ margin:0; font-size:22px; font-weight:1000; }
+.club-title{ margin:0; font-size:22px; font-weight:var(--font-weight-title); letter-spacing:0; }
 .club-sub{ margin-top:4px; color: var(--muted); font-size:13.5px; }
 .club-kpis{ margin-top:12px; display:grid; grid-template-columns: repeat(4,1fr); gap:12px; }
 .club-kpi{ border-radius:18px; padding:14px; background: rgba(255,255,255,.82); border:1px solid rgba(11,26,46,.10); }

@@ -26,10 +26,10 @@
   display:grid; place-items:center;
   background: rgba(41,170,225,.22);
   border: 1px solid rgba(255,255,255,.16);
-  font-weight: 1000;
+  font-weight: 800;
   color: rgba(234,242,255,.95);
 }
-.px-footer-title{ font-weight: 1000; letter-spacing:.6px; color: rgba(234,242,255,.95); }
+.px-footer-title{ font-weight: 800; letter-spacing:.02em; color: rgba(234,242,255,.95); }
 .px-footer-text{ margin:0; color: rgba(234,242,255,.70); font-size: 13.5px; }
 
 .px-footer-socials{ display:flex; gap: 10px; }
@@ -40,7 +40,7 @@
   text-decoration:none;
   background: rgba(255,255,255,.08);
   border: 1px solid rgba(255,255,255,.12);
-  font-weight: 900;
+  font-weight: 700;
   color: rgba(234,242,255,.88);
 }
 .px-footer-socials a:hover{ background: rgba(255,255,255,.12); }
@@ -66,7 +66,7 @@
 }
 
 .px-alertDot{ width: 10px; height: 10px; border-radius: 99px; margin-top: 5px; background: var(--px-magenta); flex: 0 0 auto; }
-.px-alertTitle{ font-weight: 1000; }
+.px-alertTitle{ font-weight: 700; }
 .px-alertText{ margin: 6px 0 0; color: var(--px-ink-dim); font-size: 13.5px; }
 
 .px-alert--success{ border-color: rgba(106,222,227,.35); background: rgba(106,222,227,.10); }
@@ -92,8 +92,8 @@
   margin: 0;
   font-size: 34px;
   line-height: 1.05;
-  font-weight: 900;
-  letter-spacing: .2px;
+  font-weight: var(--font-weight-title);
+  letter-spacing: 0;
   color: var(--text);
 }
 .px-pageSub{
@@ -106,7 +106,7 @@
 .px-cardTitle{
   margin: 0;
   font-size: 18px;
-  font-weight: 900;
+  font-weight: var(--font-weight-title);
   color: var(--text);
 }
 .px-pageActions{
@@ -165,12 +165,12 @@
   place-items:center;
   background: var(--navy);
   color:#fff;
-  font-weight:900;
+  font-weight:800;
 }
 .px-authTitle{
   margin:0;
   font-size: 24px;
-  font-weight: 900;
+  font-weight: var(--font-weight-title);
   color: var(--text);
 }
 .px-authSub{
@@ -266,7 +266,7 @@ select.px-input option{
 }
 
 .px-sectionTitle{
-  font-weight: 900;
+  font-weight: var(--font-weight-title);
   font-size: 18px;
   color: var(--text);
 }

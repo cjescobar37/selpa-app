@@ -1,11 +1,20 @@
 import type { AppRole } from '@/components/session/SessionProvider'
+import type { ClubCapability } from '@/lib/clubPermissions'
+
+export type NavChild = {
+  label: string
+  href: string
+  activeMatch?: 'exact' | 'prefix' | 'none'
+  requiredAnyCapabilities?: readonly ClubCapability[]
+}
 
 export type NavItem = {
   label: string
   href: string
   exact?: boolean
   dot?: boolean
-  children?: Array<{ label: string; href: string }>
+  requiredAnyCapabilities?: readonly ClubCapability[]
+  children?: NavChild[]
 }
 
 export type NavRight = {
@@ -46,10 +55,12 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
       { label: 'Inicio', href: '/player', exact: true },
       {
         label: 'Torneos',
-        href: '/torneos',
+        href: '/player/torneos',
         children: [
-          { label: 'Calendario', href: '/torneos/calendario' },
-          { label: 'Reglamento', href: '/torneos/reglamento' },
+          { label: 'Mis torneos', href: '/player/torneos' },
+          { label: 'Calendario del club', href: '/player/torneos/calendario' },
+          { label: 'Explorar torneos', href: '/player/torneos/explorar' },
+          { label: 'Reglamento', href: '/player/torneos/reglamento' },
         ],
       },
       {
@@ -57,8 +68,7 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
         href: '/ranking',
         children: [
           { label: 'Mi ranking', href: '/player/ranking' },
-          { label: 'Masculino', href: '/ranking/masculino' },
-          { label: 'Femenino', href: '/ranking/femenino' },
+          { label: 'Ranking del club', href: '/player/ranking/club' },
         ],
       },
       { label: 'En vivo', href: '/envivo', dot: true },
@@ -76,39 +86,45 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
   club: {
     leftMode: 'club-static',
     main: [
-      { label: 'Dashboard', href: '/club', exact: true },
+      { label: 'Inicio', href: '/club', exact: true },
       {
         label: 'Torneos',
         href: '/club/torneos',
+        requiredAnyCapabilities: ['tournament:create', 'tournament:update', 'registrations:manage', 'groups:generate', 'playoff:generate'],
         children: [
-          { label: 'Calendario', href: '/club/torneos' },
-          { label: 'Inscripciones', href: '/club/inscripciones' },
-          { label: 'Partidos', href: '/club/partidos' },
+          { label: 'Calendario', href: '/club/torneos', requiredAnyCapabilities: ['tournament:create', 'tournament:update', 'registrations:manage', 'groups:generate', 'playoff:generate'] },
+          { label: 'Crear torneo', href: '/club/torneos/nuevo', requiredAnyCapabilities: ['tournament:create'] },
+          { label: 'Reglamento', href: '/club/reglamento', requiredAnyCapabilities: ['content:edit', 'content:publish', 'club:configure'] },
         ],
       },
       {
         label: 'Jugadores',
         href: '/club/jugadores',
+        requiredAnyCapabilities: ['tournament:create', 'tournament:update', 'groups:generate', 'playoff:generate', 'matches:update', 'registrations:manage', 'users:manage', 'club:configure'],
         children: [
-          { label: 'Lista', href: '/club/jugadores' },
-          { label: 'Ranking', href: '/club/ranking' },
+          { label: 'Gestión', href: '/club/jugadores', requiredAnyCapabilities: ['tournament:create', 'tournament:update', 'groups:generate', 'playoff:generate', 'matches:update', 'registrations:manage', 'users:manage', 'club:configure'] },
+          { label: 'Solicitudes', href: '/club/jugadores?tab=solicitudes', requiredAnyCapabilities: ['users:manage', 'roles:manage'] },
+          { label: 'Ranking', href: '/club/ranking', requiredAnyCapabilities: ['tournament:create', 'tournament:update', 'groups:generate', 'playoff:generate', 'matches:update', 'registrations:manage', 'users:manage', 'club:configure'] },
         ],
       },
       {
-        label: 'Gestión',
-        href: '/club/contabilidad',
+        label: 'Club',
+        href: '/club/configuracion',
+        requiredAnyCapabilities: ['users:manage', 'roles:manage', 'club:configure', 'club:branding', 'finance:view', 'finance:manage'],
         children: [
-          { label: 'Contabilidad', href: '/club/contabilidad' },
-          { label: 'Usuarios', href: '/club/usuarios' },
-          { label: 'Reportes', href: '/club/reportes' },
+          { label: 'Equipo y roles', href: '/club/usuarios', requiredAnyCapabilities: ['users:manage', 'roles:manage'] },
+          { label: 'Configuración', href: '/club/configuracion', requiredAnyCapabilities: ['club:configure', 'club:branding'] },
+          { label: 'Finanzas', href: '/club/contabilidad', requiredAnyCapabilities: ['finance:view', 'finance:manage'] },
+          { label: 'Reportes', href: '/club/reportes', requiredAnyCapabilities: ['finance:view', 'finance:manage', 'users:manage'] },
         ],
       },
       {
         label: 'Contenido',
         href: '/club/noticias',
+        requiredAnyCapabilities: ['content:edit', 'content:publish', 'club:configure'],
         children: [
-          { label: 'Noticias', href: '/club/noticias' },
-          { label: 'Reglamento', href: '/club/reglamento' },
+          { label: 'Noticias', href: '/club/noticias', requiredAnyCapabilities: ['content:edit', 'content:publish'] },
+          { label: 'Sponsors y publicidad', href: '/club/publicidad', requiredAnyCapabilities: ['content:edit', 'content:publish', 'club:configure'] },
         ],
       },
     ],

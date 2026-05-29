@@ -7,6 +7,7 @@ import {
   buildLocalPreview,
   getClubInitials,
 } from '@/lib/clubAssets'
+import { CLUB_THEMES, CLUB_THEME_LABELS, getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
 
 type ClubForm = {
   name: string
@@ -27,6 +28,8 @@ type ClubForm = {
   logo_url: string
   rules_pdf_url: string
   notes: string
+  theme_key: ClubThemeKey
+  theme_locked: boolean
 }
 
 type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
@@ -62,7 +65,11 @@ const empty: ClubForm = {
   logo_url: '',
   rules_pdf_url: '',
   notes: '',
+  theme_key: 'cyan',
+  theme_locked: false,
 }
+
+const THEME_OPTIONS = Object.values(CLUB_THEMES)
 
 type BannerState =
   | { type: 'success' | 'error' | 'info'; text: string }
@@ -151,6 +158,9 @@ export default function ClubConfiguracionPage() {
     return ''
   }, [logoPreview, v.logo_url])
 
+  const selectedTheme = useMemo(() => getClubTheme(v.theme_key), [v.theme_key])
+  const canChooseTheme = !v.theme_locked
+
   async function loadClubData(clubId: string) {
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData?.session?.access_token
@@ -191,6 +201,8 @@ export default function ClubConfiguracionPage() {
       logo_url: normalizeUrl(data?.logo_url),
       rules_pdf_url: normalizeUrl(data?.rules_pdf_url),
       notes: data?.notes ?? '',
+      theme_key: getClubTheme(data?.theme_key).key,
+      theme_locked: Boolean(data?.theme_locked),
     })
     setReview({
       status: (data?.status as ClubStatus | null) ?? 'PENDING_APPROVAL',
@@ -318,7 +330,7 @@ export default function ClubConfiguracionPage() {
     setSaving(true)
     setBanner(null)
 
-    const payload = {
+    const payload: Record<string, string | number | boolean | null> = {
       name: v.name || null,
       brand_name: v.brand_name || null,
       legal_name: v.legal_name || null,
@@ -337,6 +349,9 @@ export default function ClubConfiguracionPage() {
       logo_url: normalizeUrl(v.logo_url) || null,
       rules_pdf_url: normalizeUrl(v.rules_pdf_url) || null,
       notes: v.notes || null,
+    }
+    if (!v.theme_locked) {
+      payload.theme_key = getClubTheme(v.theme_key).key
     }
 
     const { data: sessionData } = await supabase.auth.getSession()
@@ -600,6 +615,167 @@ export default function ClubConfiguracionPage() {
                     />
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="px-card px-card--flat">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <div className="px-sectionTitle">Identidad visual</div>
+                  <p className="px-help" style={{ marginTop: 6 }}>
+                    {canChooseTheme
+                      ? 'Elegí una identidad Pamprax curada para que el modo jugador del club tenga un acento propio.'
+                      : 'La identidad visual del club queda fija para mantener consistencia de marca.'}
+                  </p>
+                </div>
+                {v.theme_locked ? (
+                  <span
+                    style={{
+                      borderRadius: 999,
+                      background: selectedTheme.vars.soft,
+                      color: selectedTheme.vars.accent,
+                      fontSize: 12,
+                      fontWeight: 900,
+                      padding: '8px 11px',
+                    }}
+                  >
+                    Identidad fijada
+                  </span>
+                ) : null}
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+                  gap: 12,
+                  marginTop: 12,
+                }}
+              >
+                {THEME_OPTIONS.map((theme) => {
+                  const isSelected = theme.key === selectedTheme.key
+                  const isDisabled = !canChooseTheme
+
+                  return (
+                    <button
+                      key={theme.key}
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={() => onChange('theme_key', theme.key)}
+                      aria-pressed={isSelected}
+                      style={{
+                        border: isSelected ? `2px solid ${theme.vars.accent}` : '1px solid rgba(23,37,63,.10)',
+                        borderRadius: 18,
+                        background: '#fff',
+                        boxShadow: isSelected
+                          ? `0 20px 46px ${theme.vars.glow}, 0 0 0 4px ${theme.vars.soft}`
+                          : '0 12px 30px rgba(15,23,42,.06)',
+                        cursor: isDisabled ? 'default' : 'pointer',
+                        display: 'grid',
+                        gap: 10,
+                        overflow: 'hidden',
+                        opacity: !canChooseTheme && !isSelected ? 0.46 : 1,
+                        padding: 0,
+                        textAlign: 'left',
+                        transition: 'transform .16s ease, box-shadow .16s ease, border-color .16s ease',
+                      }}
+                      onMouseEnter={(event) => {
+                        if (!isDisabled) event.currentTarget.style.transform = 'translateY(-2px)'
+                      }}
+                      onMouseLeave={(event) => {
+                        event.currentTarget.style.transform = 'translateY(0)'
+                      }}
+                    >
+                      <div
+                        style={{
+                          minHeight: 84,
+                          padding: 12,
+                          background: `linear-gradient(135deg, ${theme.vars.hero})`,
+                          position: 'relative',
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: `radial-gradient(circle at 18% 24%, ${theme.vars.soft}, transparent 34%), radial-gradient(circle at 82% 20%, rgba(255,255,255,.16), transparent 28%)`,
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'relative',
+                            display: 'grid',
+                            gap: 8,
+                            maxWidth: 126,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 56,
+                              height: 10,
+                              borderRadius: 999,
+                              background: `linear-gradient(90deg, ${theme.vars.accent}, ${theme.vars.accent2})`,
+                              boxShadow: `0 0 20px ${theme.vars.glow}`,
+                            }}
+                          />
+                          <div
+                            style={{
+                              borderRadius: 14,
+                              border: '1px solid rgba(255,255,255,.24)',
+                              background: 'rgba(255,255,255,.16)',
+                              height: 34,
+                              backdropFilter: 'blur(10px)',
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gap: 8, padding: '0 14px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                          <strong style={{ color: '#17253f', fontSize: 14 }}>{CLUB_THEME_LABELS[theme.key]}</strong>
+                          {isSelected ? (
+                            <span
+                              style={{
+                                borderRadius: 999,
+                                background: theme.vars.soft,
+                                color: theme.vars.accent,
+                                fontSize: 11,
+                                fontWeight: 900,
+                                padding: '5px 8px',
+                              }}
+                            >
+                              {v.theme_locked ? 'FIJADO' : 'ACTIVO'}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <span
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: 999,
+                              background: theme.vars.accent,
+                              boxShadow: `0 0 18px ${theme.vars.glow}`,
+                            }}
+                          />
+                          <span
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: 999,
+                              background: theme.vars.accent2,
+                              opacity: 0.9,
+                            }}
+                          />
+                          <span className="px-help" style={{ marginLeft: 2 }}>
+                            Glow y acento Pamprax
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 

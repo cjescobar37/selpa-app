@@ -112,6 +112,13 @@ export default function PublicNewsExperience({
             </div>
           </section>
         ) : null}
+
+        {!hero && !grid.length && !latest.length ? (
+          <section className="px-publicNewsEmpty">
+            <strong>Todavía no hay noticias públicas</strong>
+            <p>Cuando Pamprax o los clubes publiquen contenido, va a aparecer en esta portada editorial.</p>
+          </section>
+        ) : null}
       </div>
 
       {selected ? (
@@ -174,6 +181,9 @@ export default function PublicNewsExperience({
         .px-publicArchiveList { display: grid; gap: 8px; }
         .px-publicArchiveItem { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid rgba(15,23,42,.08); border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,.88); }
         .px-publicArchiveItem:hover { border-color: rgba(16,185,129,.22); }
+        .px-publicNewsEmpty { background: radial-gradient(circle at 12% 0%, rgba(34,211,238,.18), transparent 34%), #fff; border: 1px dashed rgba(15,23,42,.14); border-radius: 16px; color: rgba(23,37,63,.68); display: grid; gap: 6px; padding: 28px; }
+        .px-publicNewsEmpty strong { color: #061b3a; font-size: 20px; font-weight: 950; }
+        .px-publicNewsEmpty p { margin: 0; }
         .px-publicArchiveMeta { min-width: 0; display: grid; gap: 4px; }
         .px-publicArchiveMeta strong { font-size: 14px; line-height: 1.2; }
         .px-publicArchiveMeta p { margin: 0; color: rgba(23,37,63,.62); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 540px; }

@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getApprovedMembership, isClubAdmin } from '@/lib/clubMembershipServer'
 import { isClubStaffRole } from '@/lib/clubMembershipRules'
+import { CLUB_THEMES, getClubTheme } from '@/lib/clubThemes'
 
 type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
+
+const CLUB_THEME_KEYS = new Set(Object.keys(CLUB_THEMES))
 
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
@@ -86,7 +89,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
 
   const { data: club, error } = await supabaseAdmin
     .from('clubs')
-    .select('id,name,status,city,province,country,address,phone,contact_email,website,instagram,courts_count,opening_hours,courts_surface,rules_pdf_url,logo_url,notes,rejected_at,rejection_reason,correction_requested_at,correction_reason,suspended_at,suspension_reason,brand_name,legal_name,cuit')
+    .select('id,name,status,city,province,country,address,phone,contact_email,website,instagram,courts_count,opening_hours,courts_surface,rules_pdf_url,logo_url,notes,theme_key,theme_locked,rejected_at,rejection_reason,correction_requested_at,correction_reason,suspended_at,suspension_reason,brand_name,legal_name,cuit')
     .eq('id', clubId)
     .maybeSingle()
 
@@ -138,7 +141,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ clubI
 
   const { data: currentClub, error: currentClubError } = await supabaseAdmin
     .from('clubs')
-    .select('id,status,owner_user_id')
+    .select('id,status,owner_user_id,theme_key,theme_locked')
     .eq('id', clubId)
     .maybeSingle()
 
@@ -152,6 +155,29 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ clubI
 
   const body = await req.json().catch(() => ({}))
   const patch = normalizeClubPatch(body as Record<string, unknown>)
+  const bodyRecord = body as Record<string, unknown>
+  const wantsThemeUpdate = Object.prototype.hasOwnProperty.call(bodyRecord, 'theme_key')
+
+  if (wantsThemeUpdate) {
+    const requestedThemeKey = String(bodyRecord.theme_key ?? '').trim()
+    if (!CLUB_THEME_KEYS.has(requestedThemeKey)) {
+      return NextResponse.json({ error: 'Identidad visual inválida.' }, { status: 400 })
+    }
+
+    const currentThemeKey = getClubTheme(currentClub.theme_key).key
+    if (currentClub.theme_locked && requestedThemeKey !== currentThemeKey) {
+      return NextResponse.json({
+        error: 'La identidad visual del club queda fija para mantener consistencia de marca.',
+      }, { status: 409 })
+    }
+
+    if (!currentClub.theme_locked) {
+      Object.assign(patch, {
+        theme_key: requestedThemeKey,
+        theme_locked: true,
+      })
+    }
+  }
 
   if (patch.courts_count !== null && (!Number.isInteger(patch.courts_count) || patch.courts_count < 1 || patch.courts_count > 20)) {
     return NextResponse.json({ error: 'La cantidad de canchas debe estar entre 1 y 20.' }, { status: 400 })
@@ -165,7 +191,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ clubI
     .from('clubs')
     .update(patch)
     .eq('id', clubId)
-    .select('id,name,status,brand_name,legal_name,cuit,city,province,country,address,phone,contact_email,website,instagram,opening_hours,courts_count,courts_surface,logo_url,rules_pdf_url,notes,rejected_at,rejection_reason,correction_requested_at,correction_reason,suspended_at,suspension_reason')
+    .select('id,name,status,brand_name,legal_name,cuit,city,province,country,address,phone,contact_email,website,instagram,opening_hours,courts_count,courts_surface,logo_url,rules_pdf_url,notes,theme_key,theme_locked,rejected_at,rejection_reason,correction_requested_at,correction_reason,suspended_at,suspension_reason')
     .maybeSingle()
 
   if (updateError) {

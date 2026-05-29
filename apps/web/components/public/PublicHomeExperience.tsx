@@ -103,9 +103,9 @@ export default function PublicHomeExperience({
   const inlineAds = ads.filter((item) => item.slot !== 'HOME_HERO').slice(0, 2)
 
   const rankingCards = [
-    { title: 'Ranking masculino', subtitle: 'Top jugadores y puntos recientes', href: '/ranking/masculino' },
-    { title: 'Ranking femenino', subtitle: 'Categorias y rendimiento destacado', href: '/ranking/femenino' },
-    { title: 'Ranking general', subtitle: 'Vista publica por categoria', href: '/ranking' },
+    { title: 'Ranking público', subtitle: 'Masculino y femenino con filtros', href: '/ranking' },
+    { title: 'Top 10 destacado', subtitle: 'Jugadores con más puntos', href: '/ranking' },
+    { title: 'Por club y categoría', subtitle: 'Vista pública ordenada', href: '/ranking' },
   ]
 
   const quickActions = [
@@ -118,10 +118,22 @@ export default function PublicHomeExperience({
 
   return (
     <div className="px-homeSurface">
-      {currentSlide ? (
-        <section className="px-homeHero">
+      <section className="px-homeHero">
+        {currentSlide ? (
           <div className="px-homeHeroFrame">
-            <button type="button" className="px-homeHeroMedia" onClick={() => setSelectedNews(currentSlide)} aria-label={`Abrir noticia ${currentSlide.title}`}>
+            <article
+              className="px-homeHeroMedia"
+              onClick={() => setSelectedNews(currentSlide)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  setSelectedNews(currentSlide)
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`Abrir noticia ${currentSlide.title}`}
+            >
               {currentSlide.cover_url ? <img src={currentSlide.cover_url} alt={currentSlide.title} className="px-homeHeroImage" /> : <div className="px-homeHeroFallback" />}
               <div className="px-homeHeroOverlay">
                 <span className={placementBadgeClass(currentSlide.placement)}>{placementLabel(currentSlide.placement)}</span>
@@ -129,6 +141,10 @@ export default function PublicHomeExperience({
                 <p>{currentSlide.excerpt || 'Segui la cobertura institucional y deportiva de Pamprax.'}</p>
                 <div className="px-homeHeroMeta">
                   <span>{formatDate(currentSlide.published_at || currentSlide.updated_at)}</span>
+                </div>
+                <div className="px-homeHeroCta">
+                  <Link href="/login" onClick={(event) => event.stopPropagation()}>Ingresar</Link>
+                  <Link href="/register" onClick={(event) => event.stopPropagation()}>Registrarme</Link>
                 </div>
               </div>
 
@@ -195,10 +211,24 @@ export default function PublicHomeExperience({
                   />
                 ))}
               </div>
-            </button>
+            </article>
           </div>
-        </section>
-      ) : null}
+        ) : (
+          <div className="px-homeHeroFrame">
+            <div className="px-homeHeroMedia px-homeHeroMedia--fallback">
+              <div className="px-homeHeroOverlay">
+                <span className="px-homeBadge px-homeBadge--hero">Pamprax</span>
+                <h1>Tu circuito de pádel, ordenado y vivo</h1>
+                <p>Torneos, ranking, noticias y operación deportiva en una experiencia premium para clubes y jugadores.</p>
+                <div className="px-homeHeroCta">
+                  <Link href="/login">Ingresar</Link>
+                  <Link href="/register">Registrarme</Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
 
       <section className="px-homeGrid">
         <div className="px-homeColumn px-homeColumn--primary">
@@ -385,6 +415,7 @@ export default function PublicHomeExperience({
         .px-homeHeroFrame { display: grid; grid-template-columns: minmax(0, 1fr); position: relative; padding-top: 4px; }
         .px-homeHeroFrame::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; border-radius: 999px; background: linear-gradient(90deg, rgba(255,78,114,.92), rgba(83,199,217,.92)); }
         .px-homeHeroMedia { position: relative; height: clamp(440px, 50vw, 560px); min-height: 0; border: 0; width: 100%; border-radius: 14px; overflow: hidden; background: #0f172a; cursor: pointer; padding: 0; text-align: left; display: block; }
+        .px-homeHeroMedia--fallback { background: radial-gradient(circle at 12% 0%, rgba(34,211,238,.34), transparent 34%), radial-gradient(circle at 86% 20%, rgba(236,72,153,.28), transparent 34%), linear-gradient(135deg, #071a36, #0f274a 58%, #431039); cursor: default; }
         .px-homeHeroImage { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 280ms ease, filter 280ms ease; }
         .px-homeHeroMedia:hover .px-homeHeroImage { transform: scale(1.03); filter: saturate(1.06) contrast(1.04); }
         .px-homeHeroFallback { position: absolute; inset: 0; background: linear-gradient(135deg, #0f172a, #1d4ed8); }
@@ -394,6 +425,10 @@ export default function PublicHomeExperience({
         .px-homeHeroMedia:hover .px-homeHeroOverlay h1 { text-decoration-color: rgba(255,255,255,.72); }
         .px-homeHeroOverlay p { margin: 0; max-width: 58%; font-size: 16px; line-height: 1.5; color: rgba(255,255,255,.84); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .px-homeHeroMeta { font-size: 13px; color: rgba(255,255,255,.76); }
+        .px-homeHeroCta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+        .px-homeHeroCta a { border-radius: 999px; font-size: 13px; font-weight: 950; padding: 10px 14px; text-decoration: none; }
+        .px-homeHeroCta a:first-child { background: #fff; color: #061b3a; }
+        .px-homeHeroCta a:last-child { background: linear-gradient(135deg, #06b6d4, #ec4899); color: #fff; }
         .px-homeHeroControls { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; pointer-events: none; }
         .px-homeArrow { width: 42px; height: 42px; border-radius: 999px; border: 1px solid rgba(255,255,255,.28); background: rgba(15,23,42,.48); backdrop-filter: blur(12px); color: #fff; display: grid; place-items: center; font-size: 28px; line-height: 1; pointer-events: auto; transition: transform 180ms ease, background 180ms ease, border-color 180ms ease; }
         .px-homeArrow:hover { transform: scale(1.06); background: rgba(15,23,42,.72); border-color: rgba(255,255,255,.44); }
