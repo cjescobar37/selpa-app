@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { Suspense, type ReactNode } from 'react'
 import Footer from '@/components/Footer'
 import AppNavbarClient from '@/components/navbar/AppNavbarClient'
 import { SessionProvider } from '@/components/session/SessionProvider'
@@ -14,7 +14,9 @@ export default function AppShellClient({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
       <div className="app-shell">
-        <AppNavbarClient />
+        <Suspense fallback={null}>
+          <AppNavbarClient />
+        </Suspense>
 
         <main className="px-main">
           <div className="px-wrap">{children}</div>
