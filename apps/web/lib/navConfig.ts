@@ -38,6 +38,7 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
       { label: 'Inicio', href: '/' },
       { label: 'Torneos', href: '/torneos' },
       { label: 'Ranking', href: '/ranking' },
+      { label: 'Clubes', href: '/clubes' },
       { label: 'Noticias', href: '/noticias' },
     ],
     right: {

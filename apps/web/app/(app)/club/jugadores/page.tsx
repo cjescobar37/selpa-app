@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
+import { getClubTheme } from '@/lib/clubThemes'
 
 type Profile = {
   user_id: string
@@ -69,11 +70,12 @@ export default function ClubJugadoresPage() {
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+  const [themeKey, setThemeKey] = useState<string | null>(null)
   const [players, setPlayers] = useState<ClubPlayer[]>([])
   const [requests, setRequests] = useState<PlayerRequest[]>([])
   const [selectedRequest, setSelectedRequest] = useState<PlayerRequest | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
-  const [playerSearch, setPlayerSearch] = useState('')
+  const [playerSearch, setPlayerSearch] = useState(searchParams.get('buscar') ?? '')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [accountFilter, setAccountFilter] = useState('all')
@@ -81,6 +83,17 @@ export default function ClubJugadoresPage() {
   const [pageSize, setPageSize] = useState(25)
 
   const activeTab = searchParams.get('tab') === 'solicitudes' ? 'requests' : 'players'
+  const urlPlayerSearch = searchParams.get('buscar') ?? ''
+  const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
+  const themeStyle = useMemo(
+    () => ({
+      '--club-admin-accent': theme.vars.accent,
+      '--club-admin-accent-2': theme.vars.accent2,
+      '--club-admin-soft': theme.vars.soft,
+      '--club-admin-glow': theme.vars.glow,
+    }) as CSSProperties,
+    [theme]
+  )
 
   const sortedPlayers = useMemo(
     () => [...players].sort((a, b) => a.full_name.localeCompare(b.full_name)),
@@ -137,6 +150,7 @@ export default function ClubJugadoresPage() {
     if (!activeClub?.id) {
       setPlayers([])
       setRequests([])
+      setThemeKey(null)
       setLoading(false)
       return
     }
@@ -155,7 +169,10 @@ export default function ClubJugadoresPage() {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     })
-    const json = await res.json().catch(() => ({}))
+    const [json, clubThemeResult] = await Promise.all([
+      res.json().catch(() => ({})),
+      supabase.from('clubs').select('theme_key').eq('id', activeClub.id).maybeSingle(),
+    ])
 
     if (!res.ok) {
       setMessage(json?.error ?? 'No pude cargar jugadores.')
@@ -165,6 +182,7 @@ export default function ClubJugadoresPage() {
 
     setPlayers((json?.players ?? []) as ClubPlayer[])
     setRequests((json?.requests ?? []) as PlayerRequest[])
+    setThemeKey((clubThemeResult.data?.theme_key as string | null) ?? null)
     setLoading(false)
   }
 
@@ -176,6 +194,10 @@ export default function ClubJugadoresPage() {
   useEffect(() => {
     setPage(1)
   }, [accountFilter, categoryFilter, pageSize, playerSearch, statusFilter])
+
+  useEffect(() => {
+    setPlayerSearch(urlPlayerSearch)
+  }, [urlPlayerSearch])
 
   async function applyAction(request: PlayerRequest, action: 'approve' | 'reject') {
     setSavingId(request.id)
@@ -216,9 +238,10 @@ export default function ClubJugadoresPage() {
 
   return (
     <div className="px-wrap">
-      <div className="club-panel club-players">
+      <div className="club-panel club-players" style={themeStyle}>
         <div className="club-playersHead">
           <div>
+            <span className="club-kicker">Comunidad del club</span>
             <h1 className="club-title">Jugadores</h1>
             <p className="club-sub">Comunidad deportiva, padrón de jugadores y solicitudes de ingreso de {activeClub?.name ?? 'tu club'}.</p>
           </div>
@@ -471,30 +494,59 @@ export default function ClubJugadoresPage() {
       </div>
 
       <style>{`
-        .club-players { overflow: hidden; }
-        .club-playersHead { align-items: flex-start; display: flex; gap: 14px; justify-content: space-between; }
+        .club-players {
+          background: #fff;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 24px;
+          box-shadow: 0 24px 64px rgba(15,23,42,.09);
+          min-width: 0;
+          overflow: hidden;
+          padding: 22px;
+          position: relative;
+        }
+        .club-players::before {
+          background: linear-gradient(90deg, var(--club-admin-accent), var(--club-admin-accent-2));
+          content: "";
+          height: 4px;
+          left: 0;
+          position: absolute;
+          right: 0;
+          top: 0;
+        }
+        .club-playersHead {
+          align-items: flex-start;
+          background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-admin-soft));
+          border: 1px solid rgba(15,23,42,.07);
+          border-radius: 20px;
+          display: flex;
+          gap: 14px;
+          justify-content: space-between;
+          padding: 18px;
+        }
         .club-playersStats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-        .club-playersStats span { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 999px; color: #475569; font-size: 13px; font-weight: 800; padding: 8px 10px; white-space: nowrap; }
+        .club-playersStats span { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 16%, transparent); border-radius: 999px; color: #475569; font-size: 13px; font-weight: 800; padding: 8px 10px; white-space: nowrap; }
         .club-playersStats b { color: #17253f; }
-        .club-message { background: #eef8ff; border: 1px solid #b8dff1; border-radius: 12px; color: #164e63; font-weight: 800; margin-top: 12px; padding: 10px 12px; }
+        .club-message { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 24%, transparent); border-radius: 14px; color: #061b3a; font-weight: 850; margin-top: 12px; padding: 10px 12px; }
         .club-playerTabs { align-items: center; background: #f8fafc; border: 1px solid rgba(15,23,42,.08); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 14px; padding: 4px; }
         .club-playerTab { align-items: center; background: transparent; border: 1px solid transparent; border-radius: 9px; color: #64748b; display: inline-flex; font-size: 12px; font-weight: 950; gap: 7px; min-height: 34px; padding: 7px 10px; text-decoration: none; }
         .club-playerTab span { background: rgba(100,116,139,.10); border-radius: 999px; font-size: 11px; min-width: 22px; padding: 2px 6px; text-align: center; }
-        .club-playerTab.is-active { background: #fff; border-color: rgba(83,199,217,.42); box-shadow: 0 8px 18px rgba(15,23,42,.06); color: #0f8ea0; }
+        .club-playerTab:hover { background: #fff; border-color: color-mix(in srgb, var(--club-admin-accent) 24%, transparent); color: #061b3a; }
+        .club-playerTab.is-active { background: #fff; border-color: color-mix(in srgb, var(--club-admin-accent) 42%, transparent); box-shadow: 0 8px 18px var(--club-admin-glow); color: #061b3a; }
         .club-playersGrid { display: grid; gap: 14px; margin-top: 14px; }
-        .club-card { background: rgba(255,255,255,.94); border: 1px solid rgba(15,23,42,.08); border-radius: 16px; display: grid; gap: 12px; margin-top: 14px; min-width: 0; padding: 14px; }
+        .club-card { background: rgba(255,255,255,.96); border: 1px solid rgba(15,23,42,.08); border-radius: 20px; box-shadow: 0 16px 42px rgba(15,23,42,.055); display: grid; gap: 12px; margin-top: 14px; min-width: 0; padding: 16px; }
         .club-cardHead { align-items: flex-start; display: flex; justify-content: space-between; gap: 10px; }
         .club-cardHead h2 { color: #17253f; font-size: 18px; line-height: 1.15; margin: 2px 0 0; }
         .club-cardHead p { color: #64748b; font-size: 12px; font-weight: 800; margin: 5px 0 0; }
-        .club-kicker { color: #64748b; font-size: 11px; font-weight: 950; letter-spacing: 0; text-transform: uppercase; }
-        .club-playerFilters { align-items: end; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 14px; display: grid; gap: 8px; grid-template-columns: minmax(220px,1.3fr) repeat(3,minmax(130px,.7fr)); padding: 10px; }
+        .club-kicker { color: var(--club-admin-accent); font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+        .club-playerFilters { align-items: end; background: linear-gradient(135deg, #fff, color-mix(in srgb, var(--club-admin-accent) 4%, white)); border: 1px solid rgba(15,23,42,.07); border-radius: 16px; display: grid; gap: 8px; grid-template-columns: minmax(220px,1.3fr) repeat(3,minmax(130px,.7fr)); padding: 10px; }
         .club-playerFilters label { color: #17253f; display: grid; font-size: 12px; font-weight: 900; gap: 5px; min-width: 0; }
         .club-playerFilters label > span { color: #64748b; font-size: 10px; font-weight: 950; text-transform: uppercase; }
         .club-playerListToolbar, .club-playerPagination { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
         .club-playerListToolbar > span, .club-playerPagination > span { color: #475569; font-size: 12px; font-weight: 850; }
         .club-playerListToolbar label { align-items: center; color: #64748b; display: inline-flex; font-size: 11px; font-weight: 950; gap: 6px; text-transform: uppercase; }
         .club-list { display: grid; gap: 8px; min-width: 0; }
-        .club-requestRow { align-items: center; border: 1px solid rgba(15,23,42,.07); border-radius: 12px; display: grid; gap: 10px; min-width: 0; padding: 10px; }
+        .club-requestRow { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 16px; display: grid; gap: 10px; min-width: 0; padding: 12px; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+        .club-requestRow:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 28%, transparent); box-shadow: 0 12px 30px var(--club-admin-glow); transform: translateY(-1px); }
         .club-person { align-items: center; display: flex; gap: 10px; min-width: 0; }
         .club-person--compact { gap: 8px; }
         .club-avatar { align-items: center; background: rgba(15,23,42,.08); border-radius: 12px; color: #17253f; display: inline-flex; flex: 0 0 auto; font-weight: 950; height: 42px; justify-content: center; overflow: hidden; width: 42px; }
@@ -505,11 +557,13 @@ export default function ClubJugadoresPage() {
         .club-personMain strong { color: #17253f; font-size: 14px; font-weight: 950; }
         .club-personMain span, .club-personMain small { color: #64748b; font-size: 12px; }
         .club-rowActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
-        .club-btn { border: 1px solid transparent; border-radius: 8px; cursor: pointer; font-weight: 900; min-height: 34px; padding: 8px 10px; }
+        .club-btn { border: 1px solid transparent; border-radius: 999px; cursor: pointer; font-weight: 950; min-height: 34px; padding: 8px 12px; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+        .club-btn:hover:not(:disabled) { transform: translateY(-1px); }
         .club-btn:disabled { cursor: not-allowed; opacity: .65; }
         .club-btn--ok { background: #ecfdf3; border-color: #b7ebc6; color: #166534; }
         .club-btn--danger { background: #fff0f5; border-color: rgba(190,24,93,.22); color: #9d174d; }
-        .club-btn--ghost { background: #fff; border-color: rgba(83,199,217,.34); color: #0f8ea0; }
+        .club-btn--ghost { background: #fff; border-color: color-mix(in srgb, var(--club-admin-accent) 34%, transparent); color: #061b3a; }
+        .club-btn--ghost:hover:not(:disabled) { border-color: color-mix(in srgb, var(--club-admin-accent) 48%, transparent); box-shadow: 0 10px 22px var(--club-admin-glow); }
         .club-statusPill { border-radius: 999px; font-size: 11px; font-weight: 950; padding: 5px 7px; text-align: center; white-space: nowrap; width: fit-content; }
         .club-statusPill--ok { background: #ecfdf3; color: #166534; }
         .club-statusPill--pending { background: #fff7df; color: #854d0e; }
@@ -517,14 +571,18 @@ export default function ClubJugadoresPage() {
         .club-playerTable { display: grid; gap: 6px; min-width: 0; width: 100%; }
         .club-playerTableHead, .club-playerTableRow { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(220px,1.8fr) 78px 88px 88px 112px 108px 64px; min-width: 0; }
         .club-playerTableHead { color: #64748b; font-size: 11px; font-weight: 950; text-transform: uppercase; }
-        .club-playerTableRow { border: 1px solid rgba(15,23,42,.07); border-radius: 12px; color: #334155; font-size: 13px; padding: 8px; }
+        .club-playerTableRow { background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 14px; color: #334155; font-size: 13px; padding: 9px; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+        .club-playerTableRow:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 28%, transparent); box-shadow: 0 12px 28px var(--club-admin-glow); transform: translateY(-1px); }
         .club-playerTableRow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .club-profileLink { align-items: center; background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 9px; color: #0e7490; display: inline-flex; font-size: 12px; font-weight: 950; justify-content: center; min-height: 30px; padding: 6px 10px; text-decoration: none; }
+        .club-profileLink, .club-profileLink:hover, .club-profileLink:focus-visible, .club-profileLink:visited { -webkit-text-fill-color: #fff !important; align-items: center; background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 34%, transparent); border-radius: 999px; box-shadow: 0 8px 18px var(--club-admin-glow); color: #fff !important; display: inline-flex; font-size: 12px; font-weight: 950; justify-content: center; min-height: 30px; padding: 6px 12px; text-decoration: none; transition: box-shadow .16s ease, transform .16s ease; }
+        .club-profileLink:hover { -webkit-text-fill-color: #fff !important; box-shadow: 0 12px 26px var(--club-admin-glow); color: #fff !important; transform: translateY(-1px); }
+        .club-profileLink svg { color: #fff !important; stroke: #fff !important; }
         .club-playerIdentity { align-items: center; display: flex; gap: 8px; min-width: 0; }
         .club-playerIdentity .club-person { flex: 1 1 auto; min-width: 0; }
         .club-playerPagination { justify-content: flex-end; }
         .club-modalBackdrop { align-items: center; background: rgba(15,23,42,.38); display: flex; inset: 0; justify-content: center; padding: 18px; position: fixed; z-index: 80; }
-        .club-modal { background: #fff; border: 1px solid rgba(15,23,42,.10); border-radius: 16px; box-shadow: 0 24px 70px rgba(15,23,42,.22); display: grid; gap: 12px; max-width: 520px; padding: 16px; width: min(100%, 520px); }
+        .club-modal { background: #fff; border: 1px solid rgba(15,23,42,.10); border-radius: 22px; box-shadow: 0 24px 70px rgba(15,23,42,.22); display: grid; gap: 12px; max-width: 520px; overflow: hidden; padding: 18px; position: relative; width: min(100%, 520px); }
+        .club-modal::before { background: linear-gradient(90deg, var(--club-admin-accent), var(--club-admin-accent-2)); content: ""; height: 4px; left: 0; position: absolute; right: 0; top: 0; }
         .club-modal h2 { color: #17253f; font-size: 20px; line-height: 1.15; margin: 2px 0; }
         .club-modal p { color: #64748b; margin: 0; }
         .club-modalActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }

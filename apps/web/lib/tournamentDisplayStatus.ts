@@ -1,3 +1,18 @@
+export type TournamentDisplayStatusKey =
+  | 'live'
+  | 'registration_open'
+  | 'upcoming'
+  | 'finished'
+  | 'draft'
+  | 'cancelled'
+
+export type TournamentDisplayStatus = {
+  key: TournamentDisplayStatusKey
+  label: string
+  priority: number
+  className: string
+}
+
 export type OperationalStage =
   | 'BORRADOR'
   | 'INSCRIPCIONES'
@@ -31,9 +46,12 @@ type DisplayStatusInput = {
   currentPlayoffPhase?: string | null
 }
 
+type TournamentDisplayInput = Record<string, unknown>
+
 const openStatusValues = new Set(['OPEN', 'PUBLISHED', 'REGISTRATION_OPEN'])
-const finishedStatusValues = new Set(['FINISHED', 'COMPLETED', 'FINALIZADO'])
-const cancelledStatusValues = new Set(['CANCELLED', 'CANCELED', 'CANCELADO'])
+const liveStatusValues = new Set(['IN_PROGRESS', 'ACTIVE', 'LIVE', 'RUNNING', 'PLAYING', 'STARTED', 'GROUPS', 'PLAYOFF'])
+const finishedStatusValues = new Set(['FINISHED', 'COMPLETED', 'FINALIZADO', 'CLOSED'])
+const cancelledStatusValues = new Set(['CANCELLED', 'CANCELED', 'CANCELADO', 'ARCHIVED'])
 
 const displayByStage: Record<OperationalStage, string> = {
   BORRADOR: 'Borrador',
@@ -77,8 +95,82 @@ function parseTournamentDate(value?: string | null) {
   return parsed
 }
 
-export function getTournamentDisplayStatus(input: DisplayStatusInput) {
-  return getTournamentOperationalStatus(input).label
+function isLegacyDisplayInput(value: unknown): value is DisplayStatusInput {
+  return Boolean(value && typeof value === 'object' && 'operationalStage' in value)
+}
+
+function asObject(value: unknown): TournamentDisplayInput {
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value)
+      return asObject(parsed)
+    } catch {
+      return {}
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as TournamentDisplayInput
+}
+
+function getField(item: TournamentDisplayInput, ...keys: string[]) {
+  for (const key of keys) {
+    const value = item[key]
+    if (value !== undefined && value !== null && value !== '') return value
+  }
+  return null
+}
+
+function asStatus(value: unknown) {
+  return String(value ?? '').trim().toUpperCase()
+}
+
+function getTournamentDisplayStatusInfo(tournament: unknown, now = new Date()): TournamentDisplayStatus {
+  const item = asObject(tournament)
+  const rules = asObject(item.rules ?? item.rules_json)
+  const legacyStage = asStatus(item.operationalStage)
+  const status = asStatus(item.status)
+  const phase = asStatus(getField(item, 'phase', 'current_phase') ?? getField(rules, 'phase', 'current_phase') ?? legacyStage)
+  const startedAt = parseTournamentDate(String(getField(item, 'starts_on', 'startDate', 'start_date') ?? '') || null)
+  const endedAt = parseTournamentDate(String(getField(item, 'ends_on', 'endDate', 'end_date') ?? '') || null)
+  const registrationDeadline = parseTournamentDate(String(getField(item, 'registrationDeadline', 'registration_deadline', 'signup_deadline') ?? '') || null)
+  const time = now.getTime()
+
+  if (status === 'DRAFT' || legacyStage === 'BORRADOR') {
+    return { key: 'draft', label: 'Borrador', priority: 90, className: 'is-draft' }
+  }
+
+  if (cancelledStatusValues.has(status)) {
+    return { key: 'cancelled', label: 'Cancelado', priority: 95, className: 'is-cancelled' }
+  }
+
+  if (legacyStage === 'FINALIZADO' || finishedStatusValues.has(status) || (endedAt && endedAt.getTime() < time)) {
+    return { key: 'finished', label: 'Finalizado', priority: 40, className: 'is-finished' }
+  }
+
+  if (
+    liveStatusValues.has(status) ||
+    ['GRUPOS', 'PLAYOFF', 'GROUPS', 'LIVE', 'IN_PROGRESS'].includes(phase) ||
+    (startedAt && startedAt.getTime() <= time && (!endedAt || endedAt.getTime() >= time))
+  ) {
+    return { key: 'live', label: 'En juego', priority: 0, className: 'is-live' }
+  }
+
+  if (
+    openStatusValues.has(status) &&
+    (!startedAt || startedAt.getTime() > time) &&
+    (!registrationDeadline || registrationDeadline.getTime() >= time)
+  ) {
+    return { key: 'registration_open', label: 'Inscripción abierta', priority: 10, className: 'is-open' }
+  }
+
+  return { key: 'upcoming', label: 'Próximo', priority: 20, className: 'is-upcoming' }
+}
+
+export function getTournamentDisplayStatus(input: DisplayStatusInput & { operationalStage?: OperationalStage | string | null }): string
+export function getTournamentDisplayStatus(tournament: unknown, now?: Date): TournamentDisplayStatus
+export function getTournamentDisplayStatus(input: unknown, now = new Date()) {
+  if (isLegacyDisplayInput(input)) return getTournamentOperationalStatus(input).label
+  return getTournamentDisplayStatusInfo(input, now)
 }
 
 export function getTournamentDisplayStatusTone(input: DisplayStatusInput) {

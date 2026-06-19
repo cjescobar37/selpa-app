@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import type { FormEvent } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
+import { getClubTheme } from '@/lib/clubThemes'
 import {
   getTournamentDisplayStatus,
   getTournamentDisplayStatusTone,
@@ -29,6 +30,17 @@ type Registration = {
   admission_at: string | null
   eligibility_blocked_reason: string | null
   payment_status: 'SIN_PAGO' | 'PENDIENTE' | 'PAGADO' | 'FALLIDO'
+  payment_method?: string | null
+  registration_change_request?: null | {
+    id: string
+    type: string
+    status: string
+    reason: string | null
+    refund_percent: number | null
+    refund_policy_label: string | null
+    created_at: string
+    resolved_at: string | null
+  }
   eligible: boolean
   alerts: string[]
   seed_snapshot: {
@@ -119,6 +131,13 @@ const paymentLabels: Record<Registration['payment_status'], string> = {
   PENDIENTE: 'Pendiente',
   PAGADO: 'Pagado',
   FALLIDO: 'Fallido',
+}
+
+function paymentLabel(registration: Registration) {
+  if (registration.payment_status === 'PENDIENTE' && registration.payment_method === 'CASH_ON_SITE_REQUEST') {
+    return 'Pago en club pendiente'
+  }
+  return paymentLabels[registration.payment_status]
 }
 
 const admissionLabels: Record<Registration['admission_status'], string> = {
@@ -231,6 +250,7 @@ export default function ClubInscripcionesPage() {
     player2: false,
   })
   const [message, setMessage] = useState('')
+  const [themeKey, setThemeKey] = useState<string | null>(null)
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selectedTournamentId, setSelectedTournamentId] = useState('')
   const [registrationDetailModal, setRegistrationDetailModal] = useState<RegistrationDetailModal>(null)
@@ -254,6 +274,16 @@ export default function ClubInscripcionesPage() {
     [selectedTournamentId, tournaments]
   )
   const requestedTournamentId = searchParams.get('tournamentId')?.trim() ?? ''
+  const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
+  const themeStyle = useMemo(
+    () => ({
+      '--club-admin-accent': theme.vars.accent,
+      '--club-admin-accent-2': theme.vars.accent2,
+      '--club-admin-soft': theme.vars.soft,
+      '--club-admin-glow': theme.vars.glow,
+    }) as CSSProperties,
+    [theme]
+  )
 
   const registrationClosed = isTournamentRegistrationClosed({ registrationDeadline: selectedTournamentDeadline })
   const selectedTournamentIsOpen = selectedTournament?.status?.toUpperCase() === 'OPEN' && !registrationClosed
@@ -293,6 +323,7 @@ export default function ClubInscripcionesPage() {
     if (!activeClub?.id) {
       setTournaments([])
       setSelectedTournamentId('')
+      setThemeKey(null)
       setLoadingTournaments(false)
       return
     }
@@ -311,7 +342,10 @@ export default function ClubInscripcionesPage() {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     })
-    const json = await res.json().catch(() => ({}))
+    const [json, clubThemeResult] = await Promise.all([
+      res.json().catch(() => ({})),
+      supabase.from('clubs').select('theme_key').eq('id', activeClub.id).maybeSingle(),
+    ])
 
     if (!res.ok) {
       setMessage(json?.error ?? 'No pude cargar torneos.')
@@ -320,6 +354,7 @@ export default function ClubInscripcionesPage() {
     }
 
     const rows = (json?.tournaments ?? []) as Tournament[]
+    setThemeKey((clubThemeResult.data?.theme_key as string | null) ?? null)
     setTournaments(rows)
     setSelectedTournamentId((current) => {
       if (requestedTournamentId && rows.some((row) => row.id === requestedTournamentId)) {
@@ -743,7 +778,7 @@ export default function ClubInscripcionesPage() {
 
   return (
     <div className="px-wrap">
-      <div className="club-panel club-registrations">
+      <div className="club-panel club-registrations" style={themeStyle}>
         <div className="club-detailTopbar">
           {selectedTournamentId ? (
             <Link href={`/club/torneos/${selectedTournamentId}`} className="club-backBtn">
@@ -769,6 +804,7 @@ export default function ClubInscripcionesPage() {
 
         <div className="club-registrationsHead">
           <div>
+            <span className="club-kicker">Bandeja operativa</span>
             <h1 className="club-title">Inscripciones</h1>
             <p className="club-sub">Seguimiento y aprobación de equipos inscriptos en torneos de {activeClub?.name ?? 'tu club'}.</p>
           </div>
@@ -928,8 +964,15 @@ export default function ClubInscripcionesPage() {
                       </span>
 
                       <span className={`club-paymentBadge club-paymentBadge--${paymentTone(registration.payment_status)}`}>
-                        {paymentLabels[registration.payment_status]}
+                        {paymentLabel(registration)}
                       </span>
+
+                      {registration.registration_change_request?.status === 'PENDING' ? (
+                        <span className="club-statusBadge club-statusBadge--pending">
+                          Baja solicitada
+                          {registration.registration_change_request.refund_percent !== null ? ` · ${registration.registration_change_request.refund_percent}%` : ''}
+                        </span>
+                      ) : null}
 
                       <div className="club-seedCell">
                         <span
@@ -1185,12 +1228,23 @@ export default function ClubInscripcionesPage() {
               </div>
               <div className="club-registrationDetailCard">
                 <span>Pago</span>
-                <strong>{paymentLabels[registrationDetailModal.registration.payment_status]}</strong>
+                <strong>{paymentLabel(registrationDetailModal.registration)}</strong>
               </div>
               <div className="club-registrationDetailCard">
                 <span>Medio de pago</span>
                 <strong>{admissionLabels[registrationDetailModal.registration.admission_status]}</strong>
               </div>
+              {registrationDetailModal.registration.registration_change_request?.status === 'PENDING' ? (
+                <div className="club-registrationDetailCard">
+                  <span>Baja</span>
+                  <strong>
+                    Solicitada
+                    {registrationDetailModal.registration.registration_change_request.refund_percent !== null
+                      ? ` · ${registrationDetailModal.registration.registration_change_request.refund_percent}% estimado`
+                      : ''}
+                  </strong>
+                </div>
+              ) : null}
               <div className="club-registrationDetailCard">
                 <span>Seed</span>
                 <strong>
@@ -1221,28 +1275,46 @@ export default function ClubInscripcionesPage() {
       ) : null}
 
       <style>{`
-        .club-registrations { overflow: hidden; }
+        .club-registrations {
+          background: #fff;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 24px;
+          box-shadow: 0 24px 64px rgba(15,23,42,.09);
+          min-width: 0;
+          overflow: hidden;
+          padding: 22px;
+          position: relative;
+        }
+        .club-registrations::before {
+          background: linear-gradient(90deg, var(--club-admin-accent), var(--club-admin-accent-2));
+          content: "";
+          height: 4px;
+          left: 0;
+          position: absolute;
+          right: 0;
+          top: 0;
+        }
         .club-detailTopbar { align-items: center; display: flex; gap: 10px; justify-content: space-between; margin-bottom: 12px; }
         .club-topbarActions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-        .club-backBtn { align-items: center; background: #fff1f7; border: 1px solid rgba(190,24,93,.34); border-radius: 8px; color: #be185d; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; min-height: 36px; padding: 8px 12px; text-decoration: none; transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
-        .club-backBtn:hover { background: #ffe4f1; border-color: rgba(190,24,93,.52); box-shadow: 0 8px 18px rgba(190,24,93,.14); transform: translateY(-1px); }
-        .club-editBtn { align-items: center; background: #f0fcff; border: 1px solid rgba(83,199,217,.40); border-radius: 8px; color: #0f8ea0; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; min-height: 36px; padding: 8px 12px; text-decoration: none; transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
-        .club-editBtn:hover { background: #d9f8ff; border-color: rgba(15,142,160,.56); box-shadow: 0 8px 18px rgba(15,142,160,.12); transform: translateY(-1px); }
+        .club-backBtn { align-items: center; background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 28%, transparent); border-radius: 999px; color: #061b3a; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; min-height: 38px; padding: 8px 13px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
+        .club-backBtn:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 46%, transparent); box-shadow: 0 10px 24px var(--club-admin-glow); transform: translateY(-1px); }
+        .club-editBtn { align-items: center; background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 38%, transparent); border-radius: 999px; box-shadow: 0 12px 28px var(--club-admin-glow); color: #fff; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; min-height: 38px; padding: 8px 13px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
+        .club-editBtn:hover { box-shadow: 0 16px 34px var(--club-admin-glow); transform: translateY(-1px); }
         .club-editBtn:disabled { cursor: not-allowed; opacity: .58; }
-        .club-editBtn:disabled:hover { background: #f0fcff; border-color: rgba(83,199,217,.40); box-shadow: none; transform: none; }
-        .club-registrationsHead { align-items: flex-start; display: flex; gap: 14px; justify-content: space-between; }
-        .club-message { background: #eef8ff; border: 1px solid #b8dff1; border-radius: 12px; color: #164e63; font-weight: 800; margin-top: 12px; padding: 10px 12px; }
+        .club-editBtn:disabled:hover { box-shadow: none; transform: none; }
+        .club-registrationsHead { align-items: flex-start; background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-admin-soft)); border: 1px solid rgba(15,23,42,.07); border-radius: 20px; display: flex; gap: 14px; justify-content: space-between; padding: 18px; }
+        .club-message { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 24%, transparent); border-radius: 14px; color: #061b3a; font-weight: 850; margin-top: 12px; padding: 10px 12px; }
         .club-toolbar { align-items: end; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto auto; margin-top: 14px; min-width: 0; }
         .club-selectLabel { color: #17253f; display: grid; font-size: 13px; font-weight: 900; gap: 6px; min-width: 0; }
         .club-counts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-        .club-counts span { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 999px; color: #475569; font-size: 13px; font-weight: 800; padding: 8px 10px; white-space: nowrap; }
+        .club-counts span { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 16%, transparent); border-radius: 999px; color: #475569; font-size: 13px; font-weight: 800; padding: 8px 10px; white-space: nowrap; }
         .club-counts b { color: #17253f; }
-        .club-addPairBtn { background: #e9fbff; border: 1px solid rgba(83,199,217,.42); border-radius: 8px; color: #0f7180; cursor: pointer; font-size: 12px; font-weight: 950; min-height: 38px; padding: 9px 12px; transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease; white-space: nowrap; }
-        .club-addPairBtn:hover:not(:disabled) { background: #d7f8ff; border-color: rgba(15,142,160,.62); box-shadow: 0 10px 22px rgba(15,23,42,.08); transform: translateY(-1px); }
+        .club-addPairBtn { background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 38%, transparent); border-radius: 999px; box-shadow: 0 12px 28px var(--club-admin-glow); color: #fff; cursor: pointer; font-size: 12px; font-weight: 950; min-height: 40px; padding: 9px 14px; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; white-space: nowrap; }
+        .club-addPairBtn:hover:not(:disabled) { box-shadow: 0 16px 34px var(--club-admin-glow); transform: translateY(-1px); }
         .club-addPairBtn:disabled { cursor: not-allowed; opacity: .6; }
         .club-backTournamentBtn { align-items: center; background: #fff1f8; border: 1px solid rgba(190,24,93,.22); border-radius: 8px; color: #be185d; cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 950; justify-content: center; min-height: 38px; padding: 9px 12px; text-decoration: none; transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease; white-space: nowrap; }
         .club-backTournamentBtn:hover { background: #ffe4f1; border-color: rgba(190,24,93,.38); box-shadow: 0 10px 22px rgba(15,23,42,.08); transform: translateY(-1px); }
-        .club-card { background: rgba(255,255,255,.94); border: 1px solid rgba(15,23,42,.08); border-radius: 16px; display: grid; gap: 12px; margin-top: 14px; min-width: 0; padding: 14px; }
+        .club-card { background: rgba(255,255,255,.96); border: 1px solid rgba(15,23,42,.08); border-radius: 20px; box-shadow: 0 16px 42px rgba(15,23,42,.055); display: grid; gap: 12px; margin-top: 14px; min-width: 0; padding: 16px; }
         .club-cardHead { align-items: flex-start; display: flex; gap: 10px; justify-content: space-between; min-width: 0; }
         .club-cardHead > div { min-width: 0; }
         .club-cardHead h2 { color: #17253f; font-size: 18px; line-height: 1.15; margin: 2px 0 0; }
@@ -1250,9 +1322,9 @@ export default function ClubInscripcionesPage() {
         .club-tournamentStatusBadge { border-radius: 999px; flex: 0 0 auto; font-size: 11px; font-weight: 950; padding: 6px 9px; white-space: nowrap; }
         .club-tournamentStatusBadge--active { background: #ecfdf3; color: #166534; }
         .club-tournamentStatusBadge--ready { background: #fff7df; color: #854d0e; }
-        .club-tournamentStatusBadge--done { background: #eef8ff; color: #164e63; }
+        .club-tournamentStatusBadge--done { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); color: #061b3a; }
         .club-tournamentStatusBadge--draft { background: #fff7df; color: #854d0e; }
-        .club-kicker { color: #64748b; font-size: 11px; font-weight: 950; letter-spacing: 0; text-transform: uppercase; }
+        .club-kicker { color: var(--club-admin-accent); font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
         .club-readiness { display: grid; gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .club-readinessItem { background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 12px; display: grid; gap: 3px; min-width: 0; padding: 9px 10px; }
         .club-readinessItem span { color: #64748b; font-size: 11px; font-weight: 950; text-transform: uppercase; }
@@ -1260,17 +1332,17 @@ export default function ClubInscripcionesPage() {
         .club-readinessItem--ready { background: #ecfdf3; border-color: rgba(22,101,52,.12); }
         .club-readinessItem--blocked { background: #fff1f2; border-color: rgba(159,18,57,.12); }
         .club-seedStatus { align-items: center; border: 1px solid rgba(15,23,42,.08); border-radius: 12px; display: flex; justify-content: space-between; min-width: 0; padding: 10px 12px; }
-        .club-seedStatus--ready { background: #f0fcff; border-color: rgba(15,118,128,.14); }
+        .club-seedStatus--ready { background: color-mix(in srgb, var(--club-admin-accent) 9%, white); border-color: color-mix(in srgb, var(--club-admin-accent) 18%, transparent); }
         .club-seedStatus--missing { background: #f8fafc; }
         .club-seedStatus div { display: grid; gap: 3px; min-width: 0; }
         .club-seedStatus strong { color: #17253f; font-size: 13px; font-weight: 950; }
         .club-seedStatus span { color: #64748b; font-size: 12px; font-weight: 750; }
         .club-seedActions { align-items: center; display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-        .club-generateSeedBtn { background: #69dfe3; border: 1px solid rgba(15,23,42,.10); border-radius: 8px; color: #102538; cursor: pointer; flex: 0 0 auto; font-size: 12px; font-weight: 950; min-height: 34px; padding: 8px 11px; transition: transform .16s ease, box-shadow .16s ease, background .16s ease; white-space: nowrap; }
-        .club-generateSeedBtn:hover:not(:disabled) { background: #79edf0; box-shadow: 0 10px 22px rgba(15,23,42,.10); transform: translateY(-1px); }
+        .club-generateSeedBtn { background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 38%, transparent); border-radius: 999px; box-shadow: 0 10px 24px var(--club-admin-glow); color: #fff; cursor: pointer; flex: 0 0 auto; font-size: 12px; font-weight: 950; min-height: 36px; padding: 8px 12px; transition: transform .16s ease, box-shadow .16s ease; white-space: nowrap; }
+        .club-generateSeedBtn:hover:not(:disabled) { box-shadow: 0 14px 30px var(--club-admin-glow); transform: translateY(-1px); }
         .club-generateSeedBtn:disabled { cursor: not-allowed; opacity: .62; }
-        .club-generateGroupsBtn { background: #fff; border: 1px solid rgba(83,199,217,.42); border-radius: 8px; color: #0f8ea0; cursor: pointer; flex: 0 0 auto; font-size: 12px; font-weight: 950; min-height: 34px; padding: 8px 11px; transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; white-space: nowrap; }
-        .club-generateGroupsBtn:hover:not(:disabled) { border-color: rgba(15,142,160,.62); box-shadow: 0 10px 22px rgba(15,23,42,.08); transform: translateY(-1px); }
+        .club-generateGroupsBtn { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 32%, transparent); border-radius: 999px; color: #061b3a; cursor: pointer; flex: 0 0 auto; font-size: 12px; font-weight: 950; min-height: 36px; padding: 8px 12px; transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; white-space: nowrap; }
+        .club-generateGroupsBtn:hover:not(:disabled) { border-color: color-mix(in srgb, var(--club-admin-accent) 48%, transparent); box-shadow: 0 10px 24px var(--club-admin-glow); transform: translateY(-1px); }
         .club-generateGroupsBtn:disabled { cursor: not-allowed; opacity: .62; }
         .club-generateMatchesBtn { background: #fff1f8; border: 1px solid rgba(190,24,93,.20); border-radius: 8px; color: #be185d; cursor: pointer; flex: 0 0 auto; font-size: 12px; font-weight: 950; min-height: 34px; padding: 8px 11px; transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; white-space: nowrap; }
         .club-generateMatchesBtn:hover:not(:disabled) { border-color: rgba(190,24,93,.36); box-shadow: 0 10px 22px rgba(15,23,42,.08); transform: translateY(-1px); }
@@ -1286,7 +1358,7 @@ export default function ClubInscripcionesPage() {
         .club-groupTitle span { color: #64748b; font-size: 11px; font-weight: 900; }
         .club-groupTeams { display: grid; gap: 6px; }
         .club-groupTeamRow { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.06); border-radius: 10px; display: grid; gap: 8px; grid-template-columns: auto minmax(0, 1fr); min-width: 0; padding: 8px; }
-        .club-groupSeed { background: #e9fbff; border-radius: 999px; color: #0f7180; font-size: 11px; font-weight: 950; padding: 5px 7px; }
+        .club-groupSeed { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); border-radius: 999px; color: #061b3a; font-size: 11px; font-weight: 950; padding: 5px 7px; }
         .club-groupTeamRow div { display: grid; gap: 2px; min-width: 0; }
         .club-groupTeamRow strong { color: #17253f; font-size: 12px; font-weight: 950; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-groupTeamRow small { color: #64748b; font-size: 11px; font-weight: 850; }
@@ -1311,15 +1383,15 @@ export default function ClubInscripcionesPage() {
         .club-seedCell, .club-scoreCell { display: grid; gap: 2px; min-width: 0; }
         .club-seedCell small, .club-scoreCell span { color: #64748b; font-size: 10px; font-weight: 850; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-seedBadge { border-radius: 999px; font-size: 10px; font-weight: 950; justify-self: start; padding: 5px 7px; white-space: nowrap; }
-        .club-seedBadge--ready { background: #e9fbff; color: #0f7180; }
+        .club-seedBadge--ready { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); color: #061b3a; }
         .club-seedBadge--empty { background: #f1f5f9; color: #64748b; }
         .club-scoreCell strong { color: #17253f; font-size: 14px; font-weight: 950; line-height: 1; }
         .club-rowActions { display: grid; gap: 5px; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
-        .club-primaryBtn, .club-secondaryBtn { border-radius: 8px; cursor: pointer; font-weight: 950; min-height: 28px; padding: 5px 7px; transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease; white-space: nowrap; }
-        .club-primaryBtn { background: #69dfe3; border: 1px solid rgba(15,23,42,.10); color: #102538; }
-        .club-secondaryBtn { background: #e9fbff; border: 1px solid rgba(83,199,217,.36); color: #0f8ea0; }
-        .club-primaryBtn:hover:not(:disabled) { background: #79edf0; box-shadow: 0 10px 22px rgba(15,23,42,.10); transform: translateY(-1px); }
-        .club-secondaryBtn:hover:not(:disabled) { background: #d7f8ff; border-color: rgba(15,142,160,.62); box-shadow: 0 10px 22px rgba(15,23,42,.08); transform: translateY(-1px); }
+        .club-primaryBtn, .club-secondaryBtn { border-radius: 999px; cursor: pointer; font-weight: 950; min-height: 30px; padding: 6px 10px; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; white-space: nowrap; }
+        .club-primaryBtn { background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 34%, transparent); box-shadow: 0 10px 22px var(--club-admin-glow); color: #fff; }
+        .club-secondaryBtn { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 30%, transparent); color: #061b3a; }
+        .club-primaryBtn:hover:not(:disabled) { box-shadow: 0 14px 28px var(--club-admin-glow); transform: translateY(-1px); }
+        .club-secondaryBtn:hover:not(:disabled) { border-color: color-mix(in srgb, var(--club-admin-accent) 46%, transparent); box-shadow: 0 10px 22px var(--club-admin-glow); transform: translateY(-1px); }
         .club-primaryBtn:disabled, .club-secondaryBtn:disabled { cursor: not-allowed; opacity: .65; }
         .club-modalBackdrop { align-items: center; background: rgba(15,23,42,.38); display: flex; inset: 0; justify-content: center; padding: 18px; position: fixed; z-index: 80; }
         .club-manualModal { background: #fff; border: 1px solid rgba(15,23,42,.10); border-radius: 14px; box-shadow: 0 24px 70px rgba(15,23,42,.24); display: grid; gap: 14px; max-width: 620px; min-width: 0; padding: 16px; width: min(620px, 100%); }
@@ -1340,13 +1412,13 @@ export default function ClubInscripcionesPage() {
         .club-selectedPlayer button:disabled { cursor: not-allowed; opacity: .6; }
         .club-suggestionBox { background: #fff; border: 1px solid rgba(15,23,42,.10); border-radius: 12px; box-shadow: 0 14px 34px rgba(15,23,42,.10); display: grid; gap: 4px; max-height: 238px; overflow: auto; padding: 6px; z-index: 2; }
         .club-suggestionItem { align-items: center; background: #fff; border: 1px solid transparent; border-radius: 10px; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; min-width: 0; padding: 8px; text-align: left; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
-        .club-suggestionItem:hover:not(:disabled) { background: #f0fcff; border-color: rgba(83,199,217,.28); transform: translateY(-1px); }
+        .club-suggestionItem:hover:not(:disabled) { background: color-mix(in srgb, var(--club-admin-accent) 8%, white); border-color: color-mix(in srgb, var(--club-admin-accent) 28%, transparent); transform: translateY(-1px); }
         .club-suggestionItem:disabled { cursor: not-allowed; opacity: .45; }
         .club-suggestionItem strong { color: #17253f; font-size: 12px; font-weight: 950; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-suggestionItem span { color: #64748b; flex: 0 0 auto; font-size: 11px; font-weight: 900; white-space: nowrap; }
         .club-suggestionHint { background: #f8fafc; border-radius: 9px; color: #64748b; font-size: 11px; font-weight: 850; padding: 8px; }
         .club-checkRow { align-items: center; background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 10px; color: #334155; cursor: pointer; display: flex; font-size: 13px; font-weight: 850; gap: 9px; min-height: 42px; padding: 10px; }
-        .club-checkRow input { accent-color: #53c7d9; height: 16px; width: 16px; }
+        .club-checkRow input { accent-color: var(--club-admin-accent); height: 16px; width: 16px; }
         .club-modalActions { align-items: center; display: flex; gap: 8px; justify-content: flex-end; }
         .club-registrationDetailModal { max-width: 620px; width: min(620px, 100%); }
         .club-registrationDetailGrid { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }

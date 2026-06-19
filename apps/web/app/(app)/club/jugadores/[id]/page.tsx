@@ -34,6 +34,7 @@ import {
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { buildLocalPreview, getClubInitials, uploadPlayerProfileImage } from '@/lib/clubAssets'
+import { formatRankingCategory, formatRankingGender, formatRankingPoints, normalizeRankingGender } from '@/lib/ranking'
 import profileCoverFallback from '../../../../../imagenes/imagen2.jpg'
 
 type ProfileData = {
@@ -213,18 +214,6 @@ function getAge(value?: string | null) {
   return age
 }
 
-function formatCategory(value?: number | null) {
-  return value ? `${value}ta` : 'Sin categoría'
-}
-
-function formatGender(value?: string | null) {
-  const normalized = String(value ?? '').toUpperCase()
-  if (normalized === 'M' || normalized === 'MALE') return 'Masculino'
-  if (normalized === 'F' || normalized === 'FEMALE') return 'Femenino'
-  if (normalized === 'MIXED') return 'Mixto'
-  return 'Sin género'
-}
-
 function formatPreferredPosition(value?: string | null) {
   const normalized = String(value ?? '').toUpperCase()
   if (normalized === 'DRIVE') return 'Drive'
@@ -251,7 +240,6 @@ function maskEmail(value?: string | null) {
 function badgeFor(player?: PlayerProfileResponse['player'] | null, stats?: PlayerProfileResponse['stats'] | null) {
   const badges = ['Activo']
   if (player?.ranking_points && player.ranking_points > 0) badges.push('Ranking')
-  if (player?.ranking_points && player.ranking_points > 0) badges.push('Top 1')
   if ((stats?.titles ?? 0) > 0) badges.push('Campeón')
   if ((stats?.finals ?? 0) > 0) badges.push('Finalista')
   if (player?.is_manual) badges.push('Manual / sin cuenta')
@@ -605,6 +593,9 @@ export default function ClubJugadorDetailPage() {
   const winRate = matchesPlayed > 0 ? Math.round(((stats?.wins ?? 0) / matchesPlayed) * 100) : null
   const lossRate = matchesPlayed > 0 ? Math.round(((stats?.losses ?? 0) / matchesPlayed) * 100) : null
   const preferredPosition = formatPreferredPosition(player?.preferred_position)
+  const rankingPositionLabel = '—'
+  const rankingPointsLabel = formatRankingPoints(player?.ranking_points ?? null)
+  const rankingStatusLabel = player?.ranking_points && player.ranking_points > 0 ? 'Sin posición pública' : 'Sin ranking'
   const isOwnProfile = Boolean(player?.user_id && user?.id && player.user_id === user.id)
   const recentMatches = data?.recent_matches.slice(0, 5) ?? []
   const activePartnership = player
@@ -686,8 +677,8 @@ export default function ClubJugadorDetailPage() {
                   <h1>{player.full_name}</h1>
                   <p className="profileHeroV2__meta">
                     <span className="profileHeroV2__position">{preferredPosition}</span>
-                    <span>{formatCategory(player.category)}</span>
-                    <span>{formatGender(player.gender)}</span>
+                    <span>{formatRankingCategory(player.category)}</span>
+                    <span>{formatRankingGender(player.gender)}</span>
                   </p>
                   {data.frequent_partner ? (
                     <Link className="profileHeroV2__partner" href={`/club/jugadores/${data.frequent_partner.user_id}`}>
@@ -696,18 +687,18 @@ export default function ClubJugadorDetailPage() {
                     </Link>
                   ) : null}
                 </div>
-                <div className="profileHeroV2__rank">
+                <div className={`profileHeroV2__rank profileHeroV2__rank--${normalizeRankingGender(player.gender) === 'F' ? 'magenta' : 'cyan'}`}>
                   <span>Ranking actual</span>
                   <span className="profileHeroV2__crown">♕</span>
                   <div className="profileHeroV2__rankMain">
-                    <em>#1</em>
+                    <em>{rankingPositionLabel}</em>
                     <div>
                       <small>Puntos</small>
-                      <strong>{player.ranking_points}</strong>
+                      <strong>{rankingPointsLabel}</strong>
                       <b>Derivado</b>
                     </div>
                   </div>
-                  <i>{(stats?.titles ?? 0) > 0 ? 'Campeón activo' : 'Líder'}</i>
+                  <i>{(stats?.titles ?? 0) > 0 ? 'Campeón activo' : rankingStatusLabel}</i>
                 </div>
               </div>
             </section>
@@ -846,8 +837,8 @@ export default function ClubJugadorDetailPage() {
               <article className="player-card">
                 <header><span className="club-kicker">Resumen rápido</span><h2>Perfil competitivo</h2></header>
                 <div className="player-summaryList">
-                  <div><span>Puntos actuales</span><strong>{player.ranking_points}</strong></div>
-                  <div><span>Ranking actual</span><strong>#1</strong></div>
+                  <div><span>Puntos actuales</span><strong>{rankingPointsLabel}</strong></div>
+                  <div><span>Ranking actual</span><strong>{rankingPositionLabel}</strong></div>
                   <div><span>Torneos jugados</span><strong>{stats?.tournaments_played ?? 0}</strong></div>
                   <div><span>Partidos jugados</span><strong>{stats?.matches_played ?? 0}</strong></div>
                   <div><span>Efectividad</span><strong>{typeof stats?.effectiveness === 'number' ? `${stats.effectiveness}%` : 'Sin datos'}</strong></div>
@@ -891,7 +882,7 @@ export default function ClubJugadorDetailPage() {
                           {candidate.profile?.avatar_url ? <Image src={candidate.profile.avatar_url} alt={candidate.full_name} fill sizes="36px" /> : getClubInitials(candidate.full_name)}
                         </span>
                         <strong>{candidate.full_name}</strong>
-                        <small>{formatCategory(candidate.category)} · {formatGender(candidate.gender)}</small>
+                        <small>{formatRankingCategory(candidate.category)} · {formatRankingGender(candidate.gender)}</small>
                         {selectedInvitePlayerId === candidate.id ? <Check size={16} /> : null}
                       </button>
                     )) : <div className="player-placeholder">{inviteQuery.trim() ? 'No se encontraron jugadores.' : 'No hay jugadores disponibles para invitar.'}</div>}
@@ -1024,11 +1015,11 @@ export default function ClubJugadorDetailPage() {
                       </label>
                       <label className="is-locked">
                         <span>Categoría / rama</span>
-                        <input value={`${formatCategory(player.category)} · ${formatGender(player.gender)}`} readOnly />
+                        <input value={`${formatRankingCategory(player.category)} · ${formatRankingGender(player.gender)}`} readOnly />
                       </label>
                       <label className="is-locked">
                         <span>Ranking / puntos</span>
-                        <input value={`#1 · ${player.ranking_points} puntos`} readOnly />
+                        <input value={`${rankingPositionLabel} · ${rankingPointsLabel}`} readOnly />
                       </label>
                       <label className="is-locked">
                         <span>Estado de membresía</span>
@@ -1099,14 +1090,17 @@ export default function ClubJugadorDetailPage() {
         .profileHeroV2__badges span:nth-child(2) { background: rgba(37,99,235,.18); border-color: rgba(59,130,246,.36); color: #cfe6ff; }
         .profileHeroV2__badges span:nth-child(3) { background: rgba(245,158,11,.16); border-color: rgba(245,158,11,.40); color: #f8c55c; }
         .profileHeroV2__rank { align-self: end; background: rgba(255,255,255,.92); border: 1px solid rgba(125,211,252,.50); border-radius: 16px; box-shadow: 0 18px 38px rgba(0,0,0,.15), 0 0 20px rgba(103,232,249,.10); color: #061b3a; display: grid; gap: 2px; height: 126px; margin-bottom: 26px; padding: 12px 12px; width: 220px; }
+        .profileHeroV2__rank--magenta { border-color: rgba(244,114,182,.52); box-shadow: 0 18px 38px rgba(0,0,0,.15), 0 0 20px rgba(236,72,153,.12); }
         .profileHeroV2__rank > span, .profileHeroV2__rank small, .profileHeroV2__rank b { color: #64748b; font-size: 9px; font-weight: 900; text-transform: uppercase; }
         .profileHeroV2__crown { color: #f59e0b !important; font-size: 14px !important; line-height: 1; text-transform: none !important; }
         .profileHeroV2__rankMain { align-items: center; display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
         .profileHeroV2__rankMain > div { border-left: 1px solid #dbeafe; padding-left: 10px; }
         .profileHeroV2__rankMain em { background: linear-gradient(135deg, #061b3a 0%, #0b2f6b 58%, #0891b2 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 8px 16px rgba(8,47,73,.16)); font-size: 66px; font-style: normal; font-weight: 950; letter-spacing: -.07em; line-height: .78; position: relative; }
         .profileHeroV2__rankMain em::after { background: linear-gradient(90deg, rgba(6,182,212,.70), rgba(37,99,235,.18)); border-radius: 999px; bottom: -7px; content: ""; height: 5px; left: 8px; position: absolute; right: 2px; }
+        .profileHeroV2__rank--magenta .profileHeroV2__rankMain em::after { background: linear-gradient(90deg, rgba(236,72,153,.72), rgba(244,114,182,.22)); }
         .profileHeroV2__rankMain strong { color: #08204a; display: block; font-size: 25px; font-weight: 900; line-height: .95; margin: 1px 0; }
         .profileHeroV2__rank i { background: linear-gradient(135deg, #0ea5e9, #06b6d4); border-radius: 999px; color: #fff; font-size: 9px; font-style: normal; font-weight: 950; justify-self: start; padding: 4px 8px; text-transform: uppercase; }
+        .profileHeroV2__rank--magenta i { background: linear-gradient(135deg, #ec4899, #be185d); }
         .player-statGrid { display: grid; gap: 12px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
         .player-statGrid article, .player-card { background: rgba(255,255,255,.94); border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 12px 30px rgba(15,23,42,.05); }
         .player-statGrid article {

@@ -282,7 +282,7 @@ Observaciones/deuda:
 
 Propósito funcional: torneos organizados por un club.
 
-Columnas principales: `id`, `club_id`, `name`, `type`, `format`, `gender`, `category_id`, `category`, `start_date`, `starts_on`, `end_date`, `ends_on`, `signup_deadline`, `registration_deadline`, `status`, `price_per_player`, `max_pairs`, `min_pairs`, `points_total`, `tournament_type`, `description`, `rules_json`, `rules`, `created_at`, `updated_at`.
+Columnas principales: `id`, `club_id`, `name`, `type`, `format`, `gender`, `segment`, `category_id`, `category`, `start_date`, `starts_on`, `end_date`, `ends_on`, `signup_deadline`, `registration_deadline`, `status`, `price_per_player`, `max_pairs`, `min_pairs`, `points_total`, `tournament_type`, `description`, `rules_json`, `rules`, `created_at`, `updated_at`.
 
 Claves:
 
@@ -319,7 +319,7 @@ Triggers y funciones:
 
 Observaciones/deuda:
 
-- Es la tabla con mayor deuda legacy: `type` vs `tournament_type`, `format` text vs enum `tournament_format`, `gender` text vs enum `tournament_gender`, `category_id` vs `category`, `start_date` vs `starts_on`, `end_date` vs `ends_on`, `signup_deadline` vs `registration_deadline`, `rules_json` vs `rules`.
+- Es la tabla con mayor deuda legacy: `type` vs `tournament_type`, `format` text vs enum `tournament_format`, `gender` text vs enum `tournament_gender`, `category_id` vs `category`, `start_date` vs `starts_on`, `end_date` vs `ends_on`, `signup_deadline` vs `registration_deadline`, `rules_json` vs `rules`. `segment` normaliza el segmento competitivo (`LIBRES`, `MENORES`, `VETERANOS`) que antes podía aparecer como `rules_json.segment_type`.
 - Multiples policies se solapan y usan criterios distintos (`status` vs `approved_at`).
 - Dos triggers de `updated_at` y dos triggers de sincronizacion legacy/deadlines agregan complejidad.
 

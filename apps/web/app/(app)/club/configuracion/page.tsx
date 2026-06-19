@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import {
@@ -90,9 +90,9 @@ function Banner({ banner }: { banner: BannerState }) {
       color: '#8f1d1d',
     },
     info: {
-      background: '#eef8ff',
-      border: '1px solid #b8dff1',
-      color: '#164e63',
+      background: '#f8fafc',
+      border: '1px solid rgba(15,23,42,.10)',
+      color: '#334155',
     },
   } as const
 
@@ -160,6 +160,16 @@ export default function ClubConfiguracionPage() {
 
   const selectedTheme = useMemo(() => getClubTheme(v.theme_key), [v.theme_key])
   const canChooseTheme = !v.theme_locked
+  const themeStyle = useMemo(
+    () =>
+      ({
+        '--club-admin-accent': selectedTheme.vars.accent,
+        '--club-admin-accent-2': selectedTheme.vars.accent2,
+        '--club-admin-soft': selectedTheme.vars.soft,
+        '--club-admin-glow': selectedTheme.vars.glow,
+      }) as CSSProperties,
+    [selectedTheme]
+  )
 
   async function loadClubData(clubId: string) {
     const { data: sessionData } = await supabase.auth.getSession()
@@ -388,9 +398,19 @@ export default function ClubConfiguracionPage() {
 
   return (
     <div className="club-shell">
-      <div className="club-panel">
-        <h1 className="club-title">Configuración</h1>
-        <p className="club-sub">Datos del club, branding, contacto y reglamento PDF.</p>
+      <div className="club-panel club-config" style={themeStyle}>
+        <div className="club-configHead">
+          <div>
+            <span className="club-kicker">Club Core</span>
+            <h1 className="club-title">Configuración</h1>
+            <p className="club-sub">Datos del club, branding, contacto y reglamento PDF.</p>
+          </div>
+          <div className="club-configStats">
+            <span><b>{getStatusLabel(review?.status)}</b> estado</span>
+            <span><b>{CLUB_THEME_LABELS[selectedTheme.key]}</b> identidad</span>
+            <span><b>{v.theme_locked ? 'Fijada' : 'Editable'}</b> marca</span>
+          </div>
+        </div>
 
         {review ? (
           <div
@@ -425,14 +445,14 @@ export default function ClubConfiguracionPage() {
             Cargando datos del club…
           </div>
         ) : (
-          <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
+          <div className="club-configStack">
             <div className="px-card px-card--flat">
               <div className="px-sectionTitle">Branding</div>
 
               <div
+                className="club-configBrandGrid"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'minmax(250px,300px) 1fr',
                   gap: 20,
                   marginTop: 10,
                 }}
@@ -484,7 +504,7 @@ export default function ClubConfiguracionPage() {
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            background: 'rgba(83,199,217,0.14)',
+                            background: selectedTheme.vars.soft,
                             color: '#17253f',
                             fontWeight: 900,
                             fontSize: 24,
@@ -571,7 +591,7 @@ export default function ClubConfiguracionPage() {
                     />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="club-configTwoGrid">
                     <div className="px-field">
                       <div className="px-label">URL logo</div>
                       <input
@@ -782,9 +802,9 @@ export default function ClubConfiguracionPage() {
             <div className="px-card px-card--flat">
               <div className="px-sectionTitle">Identidad y contacto</div>
               <div
+                className="club-configTwoGrid"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
                   gap: 12,
                   marginTop: 10,
                 }}
@@ -829,9 +849,9 @@ export default function ClubConfiguracionPage() {
             <div className="px-card px-card--flat">
               <div className="px-sectionTitle">Ubicación y operación</div>
               <div
+                className="club-configTwoGrid"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
                   gap: 12,
                   marginTop: 10,
                 }}
@@ -875,7 +895,7 @@ export default function ClubConfiguracionPage() {
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button
-                className="px-btn"
+                className="px-btn club-saveBtn"
                 type="button"
                 onClick={save}
                 disabled={saving || uploadingLogo || uploadingRules}
@@ -886,6 +906,79 @@ export default function ClubConfiguracionPage() {
           </div>
         )}
       </div>
+      <style>{`
+        .club-config {
+          background: #fff;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 24px;
+          box-shadow: 0 24px 64px rgba(15,23,42,.09);
+          min-width: 0;
+          overflow: hidden;
+          padding: 22px;
+          position: relative;
+        }
+        .club-config::before {
+          background: linear-gradient(90deg, var(--club-admin-accent), var(--club-admin-accent-2));
+          content: "";
+          height: 4px;
+          left: 0;
+          position: absolute;
+          right: 0;
+          top: 0;
+        }
+        .club-configHead {
+          align-items: flex-start;
+          background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-admin-soft));
+          border: 1px solid rgba(15,23,42,.07);
+          border-radius: 20px;
+          display: flex;
+          gap: 14px;
+          justify-content: space-between;
+          padding: 18px;
+        }
+        .club-kicker { color: var(--club-admin-accent); font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+        .club-configStats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+        .club-configStats span { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 16%, transparent); border-radius: 999px; color: #475569; font-size: 13px; font-weight: 800; padding: 8px 10px; white-space: nowrap; }
+        .club-configStats b { color: #17253f; }
+        .club-configStack { display: grid; gap: 12px; margin-top: 14px; min-width: 0; }
+        .club-config .px-card {
+          background: rgba(255,255,255,.96);
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 20px;
+          box-shadow: 0 16px 42px rgba(15,23,42,.055);
+          min-width: 0;
+        }
+        .club-config .px-sectionTitle { color: #061b3a; letter-spacing: .02em; }
+        .club-config .px-input {
+          border-color: rgba(15,23,42,.10);
+          border-radius: 12px;
+        }
+        .club-config .px-input:focus {
+          border-color: color-mix(in srgb, var(--club-admin-accent) 45%, transparent);
+          box-shadow: 0 0 0 3px var(--club-admin-soft);
+          outline: none;
+        }
+        .club-configBrandGrid { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); }
+        .club-configTwoGrid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .club-saveBtn {
+          background: #061b3a;
+          border: 1px solid color-mix(in srgb, var(--club-admin-accent) 38%, transparent);
+          border-radius: 999px;
+          box-shadow: 0 12px 28px var(--club-admin-glow);
+          color: #fff;
+          font-weight: 950;
+          min-height: 40px;
+          padding: 9px 16px;
+          transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+        }
+        .club-saveBtn:hover:not(:disabled) { box-shadow: 0 16px 34px var(--club-admin-glow); transform: translateY(-1px); }
+        @media (max-width: 760px) {
+          .club-config { padding: 16px; }
+          .club-configHead { display: grid; }
+          .club-configStats { justify-content: flex-start; }
+          .club-configBrandGrid, .club-configTwoGrid { grid-template-columns: 1fr; }
+        }
+      `}</style>
     </div>
   )
 }

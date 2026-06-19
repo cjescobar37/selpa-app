@@ -20,6 +20,7 @@ type UpdateDraftInput = {
   name?: unknown
   type?: unknown
   gender?: unknown
+  segment?: unknown
   category_id?: unknown
   segment_type?: unknown
   public_description?: unknown
@@ -118,7 +119,7 @@ function buildFlyerRules(value: unknown) {
 }
 
 function buildTournamentConfigRules(value: UpdateDraftInput) {
-  const segmentType = normalizeText(value.segment_type) ?? 'LIBRES'
+  const segmentType = normalizeText(value.segment_type ?? value.segment) ?? 'LIBRES'
   const publicDescription = normalizeText(value.public_description)
   const competitionSystem = normalizeText(value.competition_system) ?? 'GROUPS_PLAYOFF'
   const venueName = normalizeText(value.venue_name)
@@ -407,6 +408,7 @@ export async function PATCH(
         type: draft.type,
         tournament_type: draft.type,
         gender: draft.gender,
+        segment: tournamentConfigRules.segment_type,
         category_id: draft.categoryId,
         category: draft.categoryId,
         category_rule: 'FIXED_CATEGORY',
@@ -439,7 +441,7 @@ export async function PATCH(
         .update(payload)
         .eq('id', tournamentId)
         .eq('club_id', clubId)
-        .select('id,club_id,name,status,type,tournament_type,gender,category_id,category,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,updated_at')
+        .select('id,club_id,name,status,type,tournament_type,gender,segment,category_id,category,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,updated_at')
         .maybeSingle()
 
       if (updateError) {

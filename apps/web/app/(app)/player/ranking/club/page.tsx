@@ -1,12 +1,17 @@
 'use client'
 
-import Image from 'next/image'
-import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Trophy } from 'lucide-react'
+import Link from 'next/link'
+import { Search } from 'lucide-react'
+import RankingBoard, { type RankingBoardRow } from '@/components/ranking/RankingBoard'
 import { useSession } from '@/components/session/SessionProvider'
-import { getClubInitials } from '@/lib/clubAssets'
-import { getClubTheme } from '@/lib/clubThemes'
+import {
+  filterRankingRows,
+  formatRankingCategory,
+  normalizeRankingGender,
+  sortRankingRows,
+  withRankingPositions,
+} from '@/lib/ranking'
 import { supabase } from '@/lib/supabaseClient'
 
 type RankingRow = {
@@ -30,44 +35,14 @@ type RankingResponse = {
 const categories = ['all', '1', '2', '3', '4', '5', '6', '7']
 const genders = [
   { value: 'all', label: 'Todos' },
-  { value: 'M', label: 'Masculino' },
-  { value: 'F', label: 'Femenino' },
+  { value: 'M', label: 'Caballeros' },
+  { value: 'F', label: 'Damas' },
   { value: 'MIXED', label: 'Mixto' },
 ]
 
-function normalizeGender(value?: string | null) {
-  const normalized = String(value ?? '').toUpperCase()
-  if (normalized === 'MALE') return 'M'
-  if (normalized === 'FEMALE') return 'F'
-  return normalized || 'UNKNOWN'
-}
-
-function formatGender(value?: string | null) {
-  const normalized = normalizeGender(value)
-  if (normalized === 'M') return 'Masculino'
-  if (normalized === 'F') return 'Femenino'
-  if (normalized === 'MIXED' || normalized === 'MIXTO') return 'Mixto'
-  return 'Sin rama'
-}
-
-function PlayerAvatar({ name, src }: { name: string; src?: string | null }) {
-  return (
-    <span className="playerClubRankAvatar">
-      {src ? <Image src={src} alt="" fill sizes="46px" /> : getClubInitials(name)}
-    </span>
-  )
-}
-
-function withVisualPositions(rows: RankingRow[]) {
-  let lastPoints: number | null = null
-  let lastPosition = 0
-  return rows.map((row, index) => {
-    const position = lastPoints === row.ranking_points ? lastPosition : index + 1
-    lastPoints = row.ranking_points
-    lastPosition = position
-    return { ...row, visualPosition: position, isTied: rows.filter((item) => item.ranking_points === row.ranking_points).length > 1 }
-  })
-}
+const PAMP_CYAN = '#06b6d4'
+const PAMP_MAGENTA = '#ec4899'
+const PAMP_GLOW = 'rgba(6, 182, 212, 0.18)'
 
 export default function PlayerClubRankingPage() {
   const session = useSession()
@@ -77,30 +52,6 @@ export default function PlayerClubRankingPage() {
   const [data, setData] = useState<RankingResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
-  const [themeKey, setThemeKey] = useState<string | null>(null)
-  const theme = getClubTheme(themeKey)
-
-  useEffect(() => {
-    let alive = true
-
-    async function loadTheme() {
-      if (!session.activeClub?.id) {
-        setThemeKey(null)
-        return
-      }
-      const { data: club } = await supabase
-        .from('clubs')
-        .select('theme_key')
-        .eq('id', session.activeClub.id)
-        .maybeSingle()
-      if (alive) setThemeKey((club?.theme_key as string | null) ?? null)
-    }
-
-    void loadTheme()
-    return () => {
-      alive = false
-    }
-  }, [session.activeClub?.id])
 
   useEffect(() => {
     let alive = true
@@ -145,12 +96,7 @@ export default function PlayerClubRankingPage() {
   }, [session.activeClub?.id, session.status])
 
   const filtered = useMemo(() => {
-    const search = query.trim().toLowerCase()
-    return (data?.individual ?? [])
-      .filter((row) => category === 'all' || String(row.category ?? '') === category)
-      .filter((row) => gender === 'all' || normalizeGender(row.gender) === gender)
-      .filter((row) => !search || `${row.full_name} ${row.email ?? ''}`.toLowerCase().includes(search))
-      .sort((a, b) => b.ranking_points - a.ranking_points || a.full_name.localeCompare(b.full_name))
+    return sortRankingRows(filterRankingRows(data?.individual ?? [], { category, gender, query }))
   }, [category, data?.individual, gender, query])
 
   const columns = useMemo(() => {
@@ -159,34 +105,38 @@ export default function PlayerClubRankingPage() {
     return ['M', 'F'] as const
   }, [gender])
 
-  function renderRow(player: ReturnType<typeof withVisualPositions>[number]) {
-    return (
-      <Link className={`playerClubRankRow ${player.visualPosition <= 10 ? 'is-top' : ''}`} href={`/club/jugadores/${player.player_id}`} key={player.player_id}>
-        <strong className="playerClubRankPos">#{player.visualPosition}</strong>
-        <PlayerAvatar name={player.full_name} src={player.avatar_url} />
-        <div className="playerClubRankName">
-          <b>{player.full_name}</b>
-          <span>{player.category ? `${player.category}ta` : 'Sin categoría'} · {formatGender(player.gender)}{player.isTied ? ' · Empate' : ''}</span>
-        </div>
-        <div className="playerClubRankPts"><b>{player.ranking_points}</b><span>pts</span></div>
-      </Link>
-    )
-  }
+  const rankingBoardColumns = useMemo(() => {
+    return columns.map((column) => ({
+      gender: column,
+      rows: withRankingPositions(filtered.filter((row) => normalizeRankingGender(row.gender) === column), 'visualPosition').map((player) => ({
+        id: player.player_id,
+        name: player.full_name,
+        avatarUrl: player.avatar_url,
+        category: player.category,
+        gender: player.gender,
+        points: player.ranking_points,
+        position: player.visualPosition,
+        isTied: player.isTied,
+        href: `/club/jugadores/${player.player_id}`,
+      } satisfies RankingBoardRow)),
+    }))
+  }, [columns, filtered])
 
   return (
     <main
       className="playerClubRankShell"
       style={{
-        ['--rank-accent' as string]: theme.vars.accent,
-        ['--rank-accent-2' as string]: theme.vars.accent2,
-        ['--rank-glow' as string]: theme.vars.glow,
+        ['--rank-accent' as string]: PAMP_CYAN,
+        ['--rank-accent-2' as string]: PAMP_MAGENTA,
+        ['--rank-glow' as string]: PAMP_GLOW,
+        ['--rank-mobile-glow' as string]: PAMP_GLOW,
       }}
     >
       <section className="playerClubRankHero">
         <div>
           <span>Ranking del club</span>
           <h1>{session.activeClub?.name ?? 'Club activo'}</h1>
-          <p>Masculino y femenino viven como filtros y columnas dentro de esta vista.</p>
+          <p>Caballeros y Damas viven como filtros y columnas dentro de esta vista.</p>
         </div>
         <Link href="/player/ranking">Mi ranking</Link>
       </section>
@@ -199,7 +149,7 @@ export default function PlayerClubRankingPage() {
             <label>
               <span>Categoría</span>
               <select value={category} onChange={(event) => setCategory(event.target.value)}>
-                {categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : `${item}ta`}</option>)}
+                {categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : formatRankingCategory(Number(item))}</option>)}
               </select>
             </label>
             <label>
@@ -218,24 +168,7 @@ export default function PlayerClubRankingPage() {
           {message ? <div className="playerClubRankEmpty playerClubRankEmpty--danger">{message}</div> : null}
 
           {!loading && !message ? (
-            <section className={`playerClubRankBoard ${columns.length === 1 ? 'is-single' : ''}`}>
-              {columns.map((column) => {
-                const rows = withVisualPositions(filtered.filter((row) => normalizeGender(row.gender) === column))
-                return (
-                  <article className={`playerClubRankColumn playerClubRankColumn--${column === 'M' ? 'cyan' : 'magenta'}`} key={column}>
-                    <header>
-                      <div><span>Ranking</span><strong>{column === 'M' ? 'Masculino' : 'Femenino'}</strong></div>
-                      <em>{rows.length} jugadores</em>
-                    </header>
-                    <div>
-                      {rows.length ? rows.map(renderRow) : (
-                        <div className="playerClubRankEmpty playerClubRankEmpty--small"><Trophy size={17} /> Sin jugadores para estos filtros.</div>
-                      )}
-                    </div>
-                  </article>
-                )
-              })}
-            </section>
+            <RankingBoard columns={rankingBoardColumns} />
           ) : null}
         </>
       )}
@@ -256,11 +189,13 @@ export default function PlayerClubRankingPage() {
         .playerClubRankBoard { align-items: start; display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .playerClubRankBoard.is-single { grid-template-columns: 1fr; }
         .playerClubRankColumn { align-content: start; align-self: start; display: grid; gap: 10px; min-height: 0; overflow: visible; padding: 12px; }
-        .playerClubRankColumn header { align-items: center; background: rgba(248,250,252,.96); border-radius: 16px; display: flex; justify-content: space-between; padding: 12px; position: sticky; top: 76px; z-index: 2; backdrop-filter: blur(10px); }
-        .playerClubRankColumn--cyan header { border-top: 3px solid #06b6d4; }
-        .playerClubRankColumn--magenta header { border-top: 3px solid #ec4899; }
+        .playerClubRankColumn header { align-items: center; background: linear-gradient(135deg, color-mix(in srgb, var(--rank-accent) 16%, white), rgba(255,255,255,.98)); border: 1px solid color-mix(in srgb, var(--rank-accent) 32%, #e2e8f0); border-radius: 14px; border-top: 3px solid var(--rank-accent); box-shadow: 0 10px 22px rgba(15,23,42,.07); display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; justify-content: space-between; padding: 12px; position: relative; z-index: 2; backdrop-filter: blur(10px); }
+        .playerClubRankColumn--secondary header { background: linear-gradient(135deg, color-mix(in srgb, var(--rank-accent-2) 16%, white), rgba(255,255,255,.98)); border-color: color-mix(in srgb, var(--rank-accent-2) 32%, #e2e8f0); border-top-color: var(--rank-accent-2); }
         .playerClubRankColumn header strong { display: block; font-size: 20px; font-weight: 950; }
-        .playerClubRankColumn header em { color: #64748b; font-size: 12px; font-style: normal; font-weight: 850; }
+        .playerClubRankColumn header em { background: rgba(255,255,255,.86); border: 1px solid color-mix(in srgb, var(--rank-accent) 24%, #dbe5ef); border-radius: 999px; color: #334155; font-size: 12px; font-style: normal; font-weight: 850; padding: 6px 9px; }
+        .playerClubRankColumn--secondary header em { border-color: color-mix(in srgb, var(--rank-accent-2) 24%, #dbe5ef); }
+        .playerClubRankLabels { background: linear-gradient(135deg, color-mix(in srgb, var(--rank-accent) 10%, white), #fff); border: 1px solid color-mix(in srgb, var(--rank-accent) 20%, #e2e8f0); border-radius: 12px; box-shadow: 0 10px 24px rgba(15,23,42,.08); color: #64748b; display: grid; font-size: 10px; font-weight: 950; gap: 8px; grid-template-columns: 42px minmax(0, 1fr) 72px 56px; margin: 0 2px; padding: 7px 9px; position: sticky; text-transform: uppercase; top: 76px; z-index: 40; }
+        .playerClubRankColumn--secondary .playerClubRankLabels { background: linear-gradient(135deg, color-mix(in srgb, var(--rank-accent-2) 10%, white), #fff); border-color: color-mix(in srgb, var(--rank-accent-2) 20%, #e2e8f0); }
         .playerClubRankColumn > div { align-content: start; display: grid; gap: 8px; min-height: 0; }
         .playerClubRankRow { align-items: center; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; color: #061b3a; display: grid; gap: 9px; grid-template-columns: 42px 40px minmax(0, 1fr) auto; min-width: 0; padding: 8px 10px; text-decoration: none; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
         .playerClubRankRow:hover { border-color: color-mix(in srgb, var(--rank-accent) 30%, #e2e8f0); transform: translateY(-1px); }
@@ -294,11 +229,36 @@ export default function PlayerClubRankingPage() {
         @media (max-width: 820px) {
           .playerClubRankShell { padding: 12px; }
           .playerClubRankHero, .playerClubRankFilters, .playerClubRankBoard { display: grid; grid-template-columns: 1fr; }
-          .playerClubRankColumn header { top: 64px; }
+          .playerClubRankBoard.mobile-gender-M .playerClubRankColumn[data-ranking-gender="F"],
+          .playerClubRankBoard.mobile-gender-F .playerClubRankColumn[data-ranking-gender="M"] { display: none; }
+          .playerClubRankLabels { top: 64px; }
         }
         @media (max-width: 520px) {
-          .playerClubRankRow, .playerClubRankRow.is-top { grid-template-columns: 42px 42px minmax(0, 1fr); }
-          .playerClubRankPts { grid-column: 2 / -1; text-align: left; }
+          .playerClubRankColumn { padding: 10px; }
+          .playerClubRankLabels { gap: 6px; grid-template-columns: 32px minmax(0, 1fr) 54px 64px; padding: 6px 8px; }
+          .playerClubRankRow, .playerClubRankRow.is-top {
+            border-radius: 13px;
+            gap: 7px;
+            grid-template-columns: 22px 28px minmax(0, 1fr) minmax(84px, max-content);
+            min-height: 46px;
+            overflow: visible;
+            padding: 6px 7px;
+          }
+          .playerClubRankAvatar,
+          .playerClubRankRow.is-top .playerClubRankAvatar {
+            border-width: 2px;
+            height: 28px;
+            width: 28px;
+          }
+          .playerClubRankRow.is-top .playerClubRankPos,
+          .playerClubRankPos { font-size: 14px; }
+          .playerClubRankRow.is-top .playerClubRankName b,
+          .playerClubRankName b { font-size: 13px; overflow: visible; text-overflow: clip; white-space: normal; }
+          .playerClubRankRow.is-top .playerClubRankName span,
+          .playerClubRankName span { font-size: 11px; }
+          .playerClubRankPts { grid-column: 4; grid-row: 1; min-width: 84px; text-align: right; white-space: nowrap; }
+          .playerClubRankPts b,
+          .playerClubRankRow.is-top .playerClubRankPts b { font-size: 14px; }
         }
       `}</style>
     </main>

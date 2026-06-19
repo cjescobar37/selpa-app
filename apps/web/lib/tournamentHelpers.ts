@@ -6,6 +6,7 @@ export type TournamentView = {
   type: string
   format: string
   gender: string
+  segment: string
   category: number | null
   startDate: string | null
   endDate: string | null
@@ -15,6 +16,7 @@ export type TournamentView = {
   pricePerPlayer: number | null
   pointsTotal: number | null
   rules: Record<string, unknown> | null
+  rules_json?: Record<string, unknown> | null
   createdAt: string | null
   updatedAt: string | null
 }
@@ -39,6 +41,7 @@ export function toTournamentView(row: Record<string, any> | null | undefined): T
     type: String(row.tournament_type ?? row.type ?? 'OPEN'),
     format: String(row.format ?? 'GROUPS_ELIMINATION'),
     gender: String(row.gender ?? 'MALE'),
+    segment: String(row.segment ?? row.rules_json?.segment_type ?? row.rules?.segment_type ?? 'LIBRES'),
     category: asNumber(row.category ?? row.category_id),
     startDate: (row.starts_on ?? row.start_date ?? null) as string | null,
     endDate: (row.ends_on ?? row.end_date ?? null) as string | null,
@@ -48,6 +51,7 @@ export function toTournamentView(row: Record<string, any> | null | undefined): T
     pricePerPlayer: asNumber(row.price_per_player),
     pointsTotal: asNumber(row.points_total),
     rules: (row.rules_json ?? row.rules ?? null) as Record<string, unknown> | null,
+    rules_json: (row.rules_json ?? row.rules ?? null) as Record<string, unknown> | null,
     createdAt: (row.created_at ?? null) as string | null,
     updatedAt: (row.updated_at ?? null) as string | null,
   }
@@ -62,6 +66,7 @@ export const TOURNAMENT_SELECT = [
   'tournament_type',
   'format',
   'gender',
+  'segment',
   'category_id',
   'category',
   'start_date',

@@ -58,6 +58,31 @@ type PaymentRow = {
   created_at: string
 }
 
+type TournamentPaymentRow = {
+  id: string
+  registration_id: string | null
+  team_id: string | null
+  method: string | null
+  status: string | null
+  amount: number | null
+  requested_at: string | null
+  approved_at: string | null
+  paid_at: string | null
+  created_at: string
+}
+
+type RegistrationChangeRequestRow = {
+  id: string
+  registration_id: string | null
+  type: string
+  status: string
+  reason: string | null
+  refund_percent: number | null
+  refund_policy_label: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
 type SeedSnapshotRow = {
   id: string
   tournament_id: string
@@ -114,6 +139,18 @@ function derivePaymentStatus(payments: PaymentRow[]): PaymentStatus {
   if (payments.some((payment) => payment.status === 'pending')) return 'PENDIENTE'
   if (payments.some((payment) => payment.status === 'failed' || payment.status === 'refunded')) return 'FALLIDO'
   return 'SIN_PAGO'
+}
+
+function deriveTournamentPaymentStatus(payments: TournamentPaymentRow[]): PaymentStatus {
+  if (payments.some((payment) => ['APPROVED', 'PAID'].includes(String(payment.status ?? '').toUpperCase()))) return 'PAGADO'
+  if (payments.some((payment) => String(payment.status ?? '').toUpperCase() === 'PENDING')) return 'PENDIENTE'
+  if (payments.some((payment) => ['REJECTED', 'CANCELLED'].includes(String(payment.status ?? '').toUpperCase()))) return 'FALLIDO'
+  return 'SIN_PAGO'
+}
+
+function isMissingSchemaObjectError(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? '').toLowerCase()
+  return error?.code === '42703' || error?.code === '42P01' || error?.code === 'PGRST205' || message.includes('does not exist') || message.includes('schema cache')
 }
 
 function isAdmissionEligible(admissionStatus: AdmissionStatus) {
@@ -245,8 +282,29 @@ export async function GET(
       clubPlayers = new Map(((clubPlayerRows ?? []) as ClubPlayerRow[]).map((clubPlayer) => [clubPlayer.user_id, clubPlayer]))
     }
 
+    let tournamentPaymentsByRegistration = new Map<string, TournamentPaymentRow[]>()
     let paymentsByRegistration = new Map<string, PaymentRow[]>()
+    let changeRequestsByRegistration = new Map<string, RegistrationChangeRequestRow>()
     if (registrationIds.length > 0) {
+      const { data: tournamentPaymentRows, error: tournamentPaymentsError } = await supabaseAdmin
+        .from('tournament_payments')
+        .select('id,registration_id,team_id,method,status,amount,requested_at,approved_at,paid_at,created_at')
+        .in('registration_id', registrationIds)
+        .neq('status', 'CANCELLED')
+        .order('created_at', { ascending: false })
+
+      if (tournamentPaymentsError && !isMissingSchemaObjectError(tournamentPaymentsError)) {
+        return NextResponse.json({ error: tournamentPaymentsError.message }, { status: 500 })
+      }
+
+      tournamentPaymentsByRegistration = ((tournamentPaymentRows ?? []) as TournamentPaymentRow[]).reduce((map, payment) => {
+        if (!payment.registration_id) return map
+        const current = map.get(payment.registration_id) ?? []
+        current.push(payment)
+        map.set(payment.registration_id, current)
+        return map
+      }, new Map<string, TournamentPaymentRow[]>())
+
       const { data: paymentRows, error: paymentsError } = await supabaseAdmin
         .from('payments')
         .select('id,registration_id,status,source_type,amount,refunded_amount,paid_at,created_at')
@@ -264,6 +322,23 @@ export async function GET(
         map.set(payment.registration_id, current)
         return map
       }, new Map<string, PaymentRow[]>())
+
+      const { data: changeRequestRows, error: changeRequestsError } = await supabaseAdmin
+        .from('tournament_registration_change_requests')
+        .select('id,registration_id,type,status,reason,refund_percent,refund_policy_label,created_at,resolved_at')
+        .in('registration_id', registrationIds)
+        .eq('type', 'CANCEL_REGISTRATION')
+        .order('created_at', { ascending: false })
+
+      if (changeRequestsError && !isMissingSchemaObjectError(changeRequestsError)) {
+        return NextResponse.json({ error: changeRequestsError.message }, { status: 500 })
+      }
+
+      changeRequestsByRegistration = ((changeRequestRows ?? []) as RegistrationChangeRequestRow[]).reduce((map, request) => {
+        if (!request.registration_id || map.has(request.registration_id)) return map
+        map.set(request.registration_id, request)
+        return map
+      }, new Map<string, RegistrationChangeRequestRow>())
     }
 
     let seedRows: SeedSnapshotRow[] = []
@@ -382,8 +457,12 @@ export async function GET(
         const player2 = team ? profiles.get(team.player2_user_id) ?? null : null
         const player1ClubPlayer = team ? clubPlayers.get(team.player1_user_id) ?? null : null
         const player2ClubPlayer = team ? clubPlayers.get(team.player2_user_id) ?? null : null
+        const tournamentPaymentRows = tournamentPaymentsByRegistration.get(registration.id) ?? []
         const paymentRows = paymentsByRegistration.get(registration.id) ?? []
-        const paymentStatus = derivePaymentStatus(paymentRows)
+        const changeRequest = changeRequestsByRegistration.get(registration.id) ?? null
+        const paymentStatus = tournamentPaymentRows.length
+          ? deriveTournamentPaymentStatus(tournamentPaymentRows)
+          : derivePaymentStatus(paymentRows)
         const eligible = deriveEligible(registration, paymentStatus)
         const player1Points = Number.isFinite(player1ClubPlayer?.ranking_points ?? NaN) ? Number(player1ClubPlayer?.ranking_points ?? 0) : 0
         const player2Points = Number.isFinite(player2ClubPlayer?.ranking_points ?? NaN) ? Number(player2ClubPlayer?.ranking_points ?? 0) : 0
@@ -400,6 +479,31 @@ export async function GET(
           admission_at: registration.admission_at,
           eligibility_blocked_reason: registration.eligibility_blocked_reason,
           payment_status: paymentStatus,
+          payment_method: tournamentPaymentRows[0]?.method ?? null,
+          operational_payment: tournamentPaymentRows[0]
+            ? {
+                id: tournamentPaymentRows[0].id,
+                method: tournamentPaymentRows[0].method,
+                status: tournamentPaymentRows[0].status,
+                amount: tournamentPaymentRows[0].amount,
+                requested_at: tournamentPaymentRows[0].requested_at,
+                approved_at: tournamentPaymentRows[0].approved_at,
+                paid_at: tournamentPaymentRows[0].paid_at,
+                created_at: tournamentPaymentRows[0].created_at,
+              }
+            : null,
+          registration_change_request: changeRequest
+            ? {
+                id: changeRequest.id,
+                type: changeRequest.type,
+                status: changeRequest.status,
+                reason: changeRequest.reason,
+                refund_percent: changeRequest.refund_percent,
+                refund_policy_label: changeRequest.refund_policy_label,
+                created_at: changeRequest.created_at,
+                resolved_at: changeRequest.resolved_at,
+              }
+            : null,
           eligible,
           alerts: buildEligibilityAlerts(registration, paymentStatus),
           estimated_team_score: player1Points + player2Points,

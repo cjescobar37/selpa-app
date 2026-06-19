@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import { resolveStorageUrl } from '@/lib/clubAssets'
+import { getClubTheme } from '@/lib/clubThemes'
 
 type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
 
@@ -173,14 +174,26 @@ export default function ClubPage() {
   const { role, activeClub } = useSession()
   const [summary, setSummary] = useState<ClubSummary | null>(null)
   const [clubForPlayer, setClubForPlayer] = useState<ClubData | null>(null)
+  const [themeKey, setThemeKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
+  const themeStyle = useMemo(
+    () => ({
+      '--club-admin-accent': theme.vars.accent,
+      '--club-admin-accent-2': theme.vars.accent2,
+      '--club-admin-soft': theme.vars.soft,
+      '--club-admin-glow': theme.vars.glow,
+    }) as CSSProperties,
+    [theme]
+  )
 
   useEffect(() => {
     let alive = true
 
     ;(async () => {
       if (!activeClub?.id) {
+        setThemeKey(null)
         setLoading(false)
         return
       }
@@ -206,7 +219,10 @@ export default function ClubPage() {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       })
-      const json = await response.json().catch(() => ({}))
+      const [json, clubThemeResult] = await Promise.all([
+        response.json().catch(() => ({})),
+        supabase.from('clubs').select('theme_key').eq('id', activeClub.id).maybeSingle(),
+      ])
 
       if (!alive) return
 
@@ -226,6 +242,7 @@ export default function ClubPage() {
         setSummary(json as ClubSummary)
         setClubForPlayer(null)
       }
+      setThemeKey((clubThemeResult.data?.theme_key as string | null) ?? null)
 
       setLoading(false)
     })()
@@ -273,9 +290,10 @@ export default function ClubPage() {
 
   return (
     <div className="px-wrap">
-      <div className="club-panel club-dashboard">
+      <div className="club-panel club-dashboard" style={themeStyle}>
         <div className="club-dashboardHead">
           <div>
+            <span className="club-kicker">Resumen operativo</span>
             <h1 className="club-title">Dashboard del club</h1>
             <p className="club-sub">{club.name} · {[club.city, club.province].filter(Boolean).join(' · ') || 'Sin ubicación cargada'}</p>
           </div>
@@ -328,15 +346,42 @@ export default function ClubPage() {
               <Link href="/club/jugadores" className="club-action">Jugadores y solicitudes</Link>
               <Link href="/club/configuracion" className="club-action">Configuración del club</Link>
               <Link href="/club/torneos" className={`club-action ${!isActive ? 'is-muted' : ''}`}>Torneos</Link>
-              <Link href="/mensajes?to=platform" className="club-action">Contactar superadmin</Link>
+              <Link href="/club/mensajes" className="club-action">Contactar superadmin</Link>
             </div>
           </div>
         </section>
       </div>
 
       <style>{`
-        .club-dashboard { overflow: hidden; }
-        .club-dashboardHead { align-items: flex-start; display: flex; gap: 14px; justify-content: space-between; }
+        .club-dashboard {
+          background: #fff;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 24px;
+          box-shadow: 0 24px 64px rgba(15,23,42,.09);
+          min-width: 0;
+          overflow: hidden;
+          padding: 22px;
+          position: relative;
+        }
+        .club-dashboard::before {
+          background: linear-gradient(90deg, var(--club-admin-accent), var(--club-admin-accent-2));
+          content: "";
+          height: 4px;
+          left: 0;
+          position: absolute;
+          right: 0;
+          top: 0;
+        }
+        .club-dashboardHead {
+          align-items: flex-start;
+          background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-admin-soft));
+          border: 1px solid rgba(15,23,42,.07);
+          border-radius: 20px;
+          display: flex;
+          gap: 14px;
+          justify-content: space-between;
+          padding: 18px;
+        }
         .club-mainBadge, .club-statusBadge {
           border: 1px solid rgba(15, 23, 42, 0.10);
           border-radius: 999px;
@@ -346,27 +391,36 @@ export default function ClubPage() {
           padding: 8px 10px;
           white-space: nowrap;
         }
-        .club-mainBadge--success { background: #ecfdf3; }
-        .club-mainBadge--info { background: #eef8ff; }
-        .club-mainBadge--warning { background: #fff7df; }
-        .club-mainBadge--danger { background: #fff0f0; }
+        .club-mainBadge {
+          background: #061b3a;
+          border-color: color-mix(in srgb, var(--club-admin-accent) 34%, transparent);
+          box-shadow: 0 12px 28px var(--club-admin-glow);
+          color: #fff;
+        }
+        .club-mainBadge--success,
+        .club-mainBadge--info,
+        .club-mainBadge--warning,
+        .club-mainBadge--danger { background: #061b3a; }
         .club-statusPanel {
           border: 1px solid rgba(15, 23, 42, 0.10);
-          border-radius: 16px;
+          border-radius: 18px;
           display: grid;
           gap: 12px;
           margin-top: 16px;
           padding: 14px;
         }
-        .club-statusPanel--info { background: rgba(239, 246, 255, 0.88); border-color: rgba(37, 99, 235, 0.18); }
-        .club-statusPanel--success { background: rgba(240, 253, 244, 0.88); border-color: rgba(22, 163, 74, 0.18); }
+        .club-statusPanel--info,
+        .club-statusPanel--success {
+          background: linear-gradient(135deg, rgba(255,255,255,.96), var(--club-admin-soft));
+          border-color: color-mix(in srgb, var(--club-admin-accent) 20%, transparent);
+        }
         .club-statusPanel--warning { background: rgba(255, 251, 235, 0.88); border-color: rgba(217, 119, 6, 0.22); }
         .club-statusPanel--danger { background: rgba(254, 242, 242, 0.88); border-color: rgba(220, 38, 38, 0.20); }
         .club-statusPanelHead { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
         .club-minBlock { display: grid; gap: 5px; min-width: 0; }
         .club-minBlock strong { color: #17253f; font-size: 18px; font-weight: 950; line-height: 1.15; }
         .club-minBlock p { color: #334155; line-height: 1.4; margin: 0; }
-        .club-kicker { color: #64748b; font-size: 11px; font-weight: 950; letter-spacing: 0; text-transform: uppercase; }
+        .club-kicker { color: var(--club-admin-accent); font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
         .club-reviewReason { background: rgba(255,255,255,.72); border: 1px solid rgba(15,23,42,.08); border-radius: 12px; color: #17253f; line-height: 1.4; padding: 10px; }
         .club-statusLists { display: grid; gap: 10px; }
         .club-statusLists b { color: #17253f; }
@@ -375,28 +429,71 @@ export default function ClubPage() {
         .club-metric {
           background: #fff;
           border: 1px solid rgba(15,23,42,.08);
-          border-radius: 12px;
+          border-radius: 16px;
           color: #17253f;
           display: grid;
           gap: 4px;
           min-width: 0;
-          padding: 12px;
+          padding: 14px;
           text-decoration: none;
+          transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+        }
+        .club-metric:hover {
+          border-color: color-mix(in srgb, var(--club-admin-accent) 28%, transparent);
+          box-shadow: 0 14px 34px var(--club-admin-glow);
+          transform: translateY(-1px);
         }
         .club-metric span { color: #64748b; font-size: 12px; font-weight: 800; }
         .club-metric strong { font-size: 26px; font-weight: 950; line-height: 1; }
         .club-dashboardGrid { display: grid; gap: 14px; margin-top: 14px; }
-        .club-card { background: rgba(255,255,255,.92); border: 1px solid rgba(15,23,42,.08); border-radius: 16px; display: grid; gap: 12px; min-width: 0; padding: 14px; }
+        .club-card {
+          background: rgba(255,255,255,.96);
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 20px;
+          box-shadow: 0 16px 42px rgba(15,23,42,.055);
+          display: grid;
+          gap: 12px;
+          min-width: 0;
+          padding: 16px;
+        }
         .club-cardHead { align-items: flex-start; display: flex; gap: 10px; justify-content: space-between; }
         .club-cardHead h2 { color: #17253f; font-size: 18px; line-height: 1.15; margin: 2px 0 0; }
-        .club-cardLink { color: #0f8ea0; font-size: 13px; font-weight: 900; text-decoration: none; white-space: nowrap; }
+        .club-cardLink {
+          border: 1px solid color-mix(in srgb, var(--club-admin-accent) 26%, transparent);
+          border-radius: 999px;
+          color: #061b3a;
+          font-size: 12px;
+          font-weight: 950;
+          min-height: 34px;
+          padding: 8px 12px;
+          text-decoration: none;
+          white-space: nowrap;
+        }
         .club-list { display: grid; gap: 8px; min-width: 0; }
-        .club-listRow { border: 1px solid rgba(15,23,42,.07); border-radius: 12px; padding: 10px; min-width: 0; }
+        .club-listRow { background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 14px; padding: 10px; min-width: 0; }
         .club-listMain { display: grid; gap: 3px; min-width: 0; }
         .club-listMain strong { color: #17253f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-listMain span { color: #64748b; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-actionsGrid { display: grid; gap: 8px; grid-template-columns: 1fr; }
-        .club-action { border: 1px solid rgba(83,199,217,.36); border-radius: 10px; color: #0f8ea0; font-weight: 900; padding: 10px 12px; text-decoration: none; }
+        .club-action {
+          align-items: center;
+          background: #fff;
+          border: 1px solid color-mix(in srgb, var(--club-admin-accent) 28%, transparent);
+          border-radius: 999px;
+          color: #061b3a;
+          display: inline-flex;
+          font-weight: 950;
+          justify-content: center;
+          min-height: 42px;
+          padding: 10px 13px;
+          text-decoration: none;
+          transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+        }
+        .club-action:hover {
+          border-color: color-mix(in srgb, var(--club-admin-accent) 46%, transparent);
+          box-shadow: 0 14px 30px var(--club-admin-glow);
+          transform: translateY(-1px);
+        }
         .club-action.is-muted { opacity: .62; }
         .club-publicGrid { display: grid; gap: 14px; margin-top: 16px; }
         .club-logoBox { align-items: center; display: flex; justify-content: center; min-height: 150px; }

@@ -22,12 +22,23 @@ export default async function TorneosPublicPage() {
 
   const tournamentViews = (tournamentRows ?? []).map((row: any) => toTournamentView(row)).filter(Boolean)
   const clubIds = Array.from(new Set(tournamentViews.map((item: any) => item.club_id).filter(Boolean)))
+  const tournamentIds = tournamentViews.map((item: any) => item.id).filter(Boolean)
 
-  const { data: clubRows } = clubIds.length
-    ? await supabaseAdmin.from('clubs').select('id,name,logo_url,theme_key').in('id', clubIds)
-    : { data: [] }
+  const [{ data: clubRows }, { data: registrationRows }] = await Promise.all([
+    clubIds.length
+      ? supabaseAdmin.from('clubs').select('id,name,logo_url,theme_key').in('id', clubIds)
+      : Promise.resolve({ data: [] }),
+    tournamentIds.length
+      ? supabaseAdmin.from('tournament_registrations').select('tournament_id,status').in('tournament_id', tournamentIds)
+      : Promise.resolve({ data: [] }),
+  ])
 
   const clubsById = new Map(((clubRows ?? []) as ClubRow[]).map((club) => [club.id, club]))
+  const registrationsByTournamentId = new Map<string, number>()
+  for (const row of (registrationRows ?? []) as Array<{ tournament_id: string | null; status: string | null }>) {
+    if (!row.tournament_id || String(row.status ?? '').toUpperCase() === 'CANCELLED') continue
+    registrationsByTournamentId.set(row.tournament_id, (registrationsByTournamentId.get(row.tournament_id) ?? 0) + 1)
+  }
   const tournaments: PublicTournamentItem[] = tournamentViews.map((item: any) => {
     const club = clubsById.get(item.club_id)
     return {
@@ -38,12 +49,17 @@ export default async function TorneosPublicPage() {
       clubThemeKey: club?.theme_key ?? null,
       name: item.name,
       status: item.status,
+      type: item.type,
       gender: item.gender,
+      segment: item.segment,
       category: item.category,
       startDate: item.startDate,
+      endDate: item.endDate,
       registrationDeadline: item.registrationDeadline,
       maxPairs: item.maxPairs,
+      registeredPairs: registrationsByTournamentId.get(item.id) ?? 0,
       pricePerPlayer: item.pricePerPlayer,
+      rules: item.rules,
     }
   })
 

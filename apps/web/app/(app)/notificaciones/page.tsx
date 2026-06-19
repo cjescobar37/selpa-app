@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
+import { Bell, CheckCheck } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
-import { PLATFORM_NOTIFICATION_TYPES } from '@/lib/notificationScope'
-import { platformNotificationBadgeClass, platformNotificationTypeLabel } from '@/lib/platformStatus'
+import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 
 type NotificationRow = {
@@ -14,6 +14,7 @@ type NotificationRow = {
   message: string
   read: boolean
   link: string | null
+  href?: string | null
   created_at: string
   metadata?: Record<string, any> | null
 }
@@ -31,20 +32,62 @@ function formatDate(value: string) {
   }
 }
 
+function relativeDate(value: string) {
+  try {
+    const diff = Date.now() - new Date(value).getTime()
+    const minute = 60_000
+    const hour = 60 * minute
+    const day = 24 * hour
+    if (diff < minute) return 'Ahora'
+    if (diff < hour) return `Hace ${Math.max(1, Math.floor(diff / minute))} min`
+    if (diff < day) return `Hace ${Math.floor(diff / hour)} h`
+    if (diff < day * 7) return `Hace ${Math.floor(diff / day)} d`
+    return formatDate(value)
+  } catch {
+    return formatDate(value)
+  }
+}
+
 function previewText(value: string, max = 120) {
   const clean = (value || '').replace(/\s+/g, ' ').trim()
   if (clean.length <= max) return clean
   return `${clean.slice(0, max - 1)}…`
 }
 
+function isMissingColumnError(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? '').toLowerCase()
+  return error?.code === '42703' || error?.code === 'PGRST204' || message.includes('column') || message.includes('schema cache')
+}
+
+function notificationIconLabel(type: string) {
+  const key = String(type ?? '').toLowerCase()
+  if (key.includes('payment') || key.includes('pago')) return '$'
+  if (key.includes('message') || key.includes('mensaje')) return 'M'
+  if (key.includes('registration') || key.includes('inscrip')) return 'I'
+  if (key.includes('cancel') || key.includes('baja')) return 'B'
+  if (key.includes('club')) return 'C'
+  return 'P'
+}
+
 export default function NotificacionesPage() {
   const router = useRouter()
-  const { role } = useSession()
+  const { role, activeClub } = useSession()
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<NotificationRow[]>([])
   const [msg, setMsg] = useState('')
   const [currentUserId, setCurrentUserId] = useState('')
   const [selected, setSelected] = useState<NotificationRow | null>(null)
+  const [themeKey, setThemeKey] = useState<string | null>(null)
+  const theme = useMemo(() => getClubTheme(role === 'platform' ? null : themeKey), [role, themeKey])
+  const themeStyle = useMemo(
+    () => ({
+      '--px-notifications-accent': theme.vars.accent,
+      '--px-notifications-accent-2': theme.vars.accent2,
+      '--px-notifications-soft': theme.vars.soft,
+      '--px-notifications-glow': theme.vars.glow,
+    }) as CSSProperties,
+    [theme]
+  )
 
   async function load() {
     setLoading(true)
@@ -60,19 +103,20 @@ export default function NotificacionesPage() {
 
     setCurrentUserId(me.id)
 
-    let notificationsQuery = supabase
+    const buildNotificationsQuery = (select: string) => supabase
       .from('notifications')
-      .select('id, type, title, message, read, link, created_at, metadata')
+      .select(select)
       .eq('user_id', me.id)
       .neq('type', 'message')
       .order('created_at', { ascending: false })
       .limit(100)
 
-    if (role === 'platform') {
-      notificationsQuery = notificationsQuery.in('type', PLATFORM_NOTIFICATION_TYPES as unknown as string[])
+    let { data, error } = await buildNotificationsQuery('id, type, title, message, read, link, href, created_at, metadata')
+    if (error && isMissingColumnError(error)) {
+      const legacyRes = await buildNotificationsQuery('id, type, title, message, read, link, created_at, metadata')
+      data = legacyRes.data
+      error = legacyRes.error
     }
-
-    const { data, error } = await notificationsQuery
 
     if (error) {
       setMsg(error.message)
@@ -80,7 +124,7 @@ export default function NotificacionesPage() {
       return
     }
 
-    setRows((data ?? []) as NotificationRow[])
+    setRows((data ?? []) as unknown as NotificationRow[])
     setLoading(false)
   }
 
@@ -97,10 +141,6 @@ export default function NotificacionesPage() {
       .eq('read', false)
       .neq('type', 'message')
 
-    if (role === 'platform') {
-      markAllQuery = markAllQuery.in('type', PLATFORM_NOTIFICATION_TYPES as unknown as string[])
-    }
-
     await markAllQuery
     setRows((cur) => cur.map((row) => ({ ...row, read: true })))
   }
@@ -110,8 +150,9 @@ export default function NotificacionesPage() {
       await markRead(n.id)
     }
 
-    if (n.link) {
-      router.push(n.link)
+    const destination = n.href || n.link
+    if (destination) {
+      router.push(destination)
       return
     }
 
@@ -122,6 +163,25 @@ export default function NotificacionesPage() {
     load()
   }, [role])
 
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      if (!activeClub?.id || role === 'platform') {
+        setThemeKey(null)
+        return
+      }
+      const { data } = await supabase
+        .from('clubs')
+        .select('theme_key')
+        .eq('id', activeClub.id)
+        .maybeSingle()
+      if (alive) setThemeKey((data?.theme_key as string | null) ?? null)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [activeClub?.id, role])
+
   const unread = rows.filter((r) => !r.read).length
   const pageTitle = role === 'platform' ? 'Notificaciones platform' : 'Notificaciones'
   const pageSub = role === 'platform'
@@ -129,56 +189,56 @@ export default function NotificacionesPage() {
     : 'Aprobaciones, rechazos, avisos del sistema y novedades generales.'
 
   return (
-    <div className="platform-shell">
-      <div className="px-platform px-platform--notifications">
-      <div className="px-platformHead">
+    <main className="px-notificationsPage" style={themeStyle}>
+      <section className="px-notificationsCard">
+      <div className="px-notificationsHead">
         <div>
-          <h1 className="px-platformTitle">{pageTitle}</h1>
-          <div className="px-platformSub">{pageSub}</div>
+          <span>Centro de novedades</span>
+          <h1>{pageTitle}</h1>
+          <p>{pageSub}</p>
         </div>
 
-        <div className="px-toolbar">
-          <span className="px-pill">{unread} sin leer</span>
-          <button type="button" onClick={markAllRead} className="px-btn px-btn--ghost">
+        <div className="px-notificationsActions">
+          <span>{unread} sin leer</span>
+          <button type="button" onClick={markAllRead} disabled={unread === 0}>
+            <CheckCheck size={16} />
             Marcar todo leído
           </button>
         </div>
       </div>
 
       {msg ? (
-        <div className="px-help" style={{ marginTop: 14 }}>
+        <div className="px-notificationsMsg">
           {msg}
         </div>
       ) : null}
 
-      <div className="px-platformNotificationList">
+      <div className="px-notificationsList">
         {loading ? (
-          <div className="px-help">Cargando notificaciones…</div>
+          <div className="px-notificationsEmpty">Cargando notificaciones...</div>
         ) : rows.length === 0 ? (
-          <div className="px-help">No tenés notificaciones todavía.</div>
+          <div className="px-notificationsEmpty">
+            <Bell size={30} />
+            <strong>No tenés notificaciones todavía.</strong>
+            <p>Cuando haya novedades de torneos, pagos, clubes o mensajes, van a aparecer acá.</p>
+          </div>
         ) : (
           rows.map((n) => (
             <button
               key={n.id}
               type="button"
               onClick={() => openNotification(n)}
-              className={`px-platformNotificationCard${n.read ? '' : ' is-unread'}`}
+              className={`px-notificationRow${n.read ? '' : ' is-unread'}`}
             >
-              <div className="px-platformNotificationHead">
-                <div className="px-platformNotificationMain">
-                  <div className="px-platformNotificationMeta">
-                    <span className={`px-statusBadge ${platformNotificationBadgeClass(n.type)}`}>
-                      {platformNotificationTypeLabel(n.type)}
-                    </span>
-                    <span className="px-platformNotificationDate">{formatDate(n.created_at)}</span>
-                  </div>
-                  <div className="px-platformNotificationTitle">{n.title}</div>
-                  <div className="px-platformNotificationText">{previewText(n.message)}</div>
+              <span className="px-notificationIcon" aria-hidden="true">{notificationIconLabel(n.type)}</span>
+              <div className="px-notificationMain">
+                <div className="px-notificationMeta">
+                  <strong>{n.title}</strong>
+                  <span>{relativeDate(n.created_at)}</span>
                 </div>
-                <div className="px-platformNotificationAside">
-                  {!n.read ? <span className="px-platformUnreadDot" /> : null}
-                </div>
+                <p>{previewText(n.message, 170)}</p>
               </div>
+              {!n.read ? <span className="px-notificationUnread" aria-label="No leída" /> : null}
             </button>
           ))
         )}
@@ -200,149 +260,271 @@ export default function NotificacionesPage() {
       ) : null}
 
       <style jsx>{`
-        .px-platformHead {
-          gap: 14px;
+        .px-notificationsPage {
+          display: grid;
+          margin: 0 auto;
+          max-width: 1040px;
+          min-width: 0;
+          padding: 24px clamp(12px, 3vw, 28px) 44px;
+          width: 100%;
         }
 
-        .px-platformNotificationList {
+        .px-notificationsCard {
+          background: #fff;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 24px;
+          box-shadow: 0 24px 64px rgba(15,23,42,.09);
+          min-width: 0;
+          overflow: hidden;
+          position: relative;
+        }
+
+        .px-notificationsCard::before {
+          background: linear-gradient(90deg, var(--px-notifications-accent) 0%, var(--px-notifications-accent-2) 100%);
+          content: "";
+          height: 4px;
+          left: 0;
+          position: absolute;
+          right: 0;
+          top: 0;
+        }
+
+        .px-notificationsHead {
+          align-items: center;
+          background: linear-gradient(135deg, rgba(248,250,252,.98), var(--px-notifications-soft));
+          border-bottom: 1px solid rgba(15,23,42,.08);
+          display: flex;
+          gap: 16px;
+          justify-content: space-between;
+          min-width: 0;
+          padding: 24px;
+        }
+
+        .px-notificationsHead span {
+          color: #0e7490;
+          display: inline-block;
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: .08em;
+          margin-bottom: 5px;
+          text-transform: uppercase;
+        }
+
+        .px-notificationsHead h1 {
+          color: #061b3a;
+          font-size: clamp(30px, 4vw, 46px);
+          font-weight: 950;
+          line-height: .98;
+          margin: 0;
+        }
+
+        .px-notificationsHead p {
+          color: #64748b;
+          font-size: 14px;
+          font-weight: 780;
+          margin: 8px 0 0;
+          max-width: 620px;
+        }
+
+        .px-notificationsActions {
+          align-items: end;
+          display: grid;
+          gap: 8px;
+          justify-items: end;
+          flex: 0 0 auto;
+        }
+
+        .px-notificationsActions > span {
+          background: color-mix(in srgb, var(--px-notifications-accent) 12%, white);
+          border: 1px solid color-mix(in srgb, var(--px-notifications-accent) 20%, transparent);
+          border-radius: 999px;
+          color: #0e7490;
+          font-size: 12px;
+          font-weight: 950;
+          margin: 0;
+          padding: 6px 10px;
+          text-transform: none;
+          letter-spacing: 0;
+        }
+
+        .px-notificationsActions button {
+          align-items: center;
+          background: #061b3a;
+          border: 1px solid color-mix(in srgb, var(--px-notifications-accent) 28%, transparent);
+          border-radius: 999px;
+          box-shadow: 0 12px 28px var(--px-notifications-glow);
+          color: #fff;
+          cursor: pointer;
+          display: inline-flex;
+          font-size: 12px;
+          font-weight: 950;
+          gap: 8px;
+          min-height: 40px;
+          padding: 0 14px;
+          transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease;
+        }
+
+        .px-notificationsActions button:hover:not(:disabled) {
+          box-shadow: 0 16px 34px var(--px-notifications-glow);
+          transform: translateY(-1px);
+        }
+
+        .px-notificationsActions button:disabled {
+          cursor: not-allowed;
+          opacity: .48;
+        }
+
+        .px-notificationsMsg {
+          background: #fff7df;
+          border: 1px solid rgba(217,119,6,.22);
+          border-radius: 14px;
+          color: #854d0e;
+          font-size: 13px;
+          font-weight: 850;
+          margin: 16px 18px 0;
+          padding: 12px 14px;
+        }
+
+        .px-notificationsList {
+          display: grid;
+          gap: 10px;
+          padding: 18px;
+        }
+
+        .px-notificationRow {
+          align-items: center;
           display: grid;
           gap: 12px;
-          margin-top: 16px;
-        }
-
-        .px-platformNotificationCard {
+          grid-template-columns: auto minmax(0, 1fr) auto;
           width: 100%;
           text-align: left;
-          padding: 16px;
-          border: 1px solid rgba(148, 163, 184, 0.22);
-          border-radius: 8px;
-          background: rgba(255, 255, 255, 0.98);
+          padding: 14px;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 18px;
+          background: #fff;
           cursor: pointer;
-          color: #17253f;
+          color: #061b3a;
           transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
         }
 
-        .px-platformNotificationCard:hover,
-        .px-platformNotificationCard:focus-visible {
+        .px-notificationRow:hover,
+        .px-notificationRow:focus-visible {
           transform: translateY(-1px);
-          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-          border-color: rgba(14, 116, 144, 0.32);
+          box-shadow: 0 14px 34px var(--px-notifications-glow);
+          border-color: color-mix(in srgb, var(--px-notifications-accent) 28%, transparent);
           outline: none;
         }
 
-        .px-platformNotificationCard.is-unread {
-          background: rgba(248, 250, 252, 0.98);
-          border-color: rgba(14, 116, 144, 0.22);
+        .px-notificationRow.is-unread {
+          background: linear-gradient(135deg, rgba(255,255,255,.98), var(--px-notifications-soft));
+          border-color: color-mix(in srgb, var(--px-notifications-accent) 24%, transparent);
         }
 
-        .px-platformNotificationHead {
-          display: flex;
-          justify-content: space-between;
-          gap: 16px;
-          align-items: flex-start;
+        .px-notificationIcon {
+          align-items: center;
+          background: linear-gradient(135deg, #061b3a, var(--px-notifications-accent));
+          border: 1px solid color-mix(in srgb, var(--px-notifications-accent-2) 28%, transparent);
+          border-radius: 999px;
+          box-shadow: 0 10px 24px var(--px-notifications-glow);
+          color: #fff;
+          display: inline-flex;
+          font-size: 12px;
+          font-weight: 950;
+          height: 42px;
+          justify-content: center;
+          width: 42px;
         }
 
-        .px-platformNotificationMain,
-        .px-platformNotificationAside {
+        .px-notificationMain {
           min-width: 0;
         }
 
-        .px-platformNotificationMain {
-          display: grid;
-          gap: 8px;
-          flex: 1;
-        }
-
-        .px-platformNotificationMeta {
+        .px-notificationMeta {
+          align-items: baseline;
           display: flex;
-          flex-wrap: wrap;
           gap: 10px;
-          align-items: center;
+          justify-content: space-between;
+          min-width: 0;
         }
 
-        .px-platformNotificationDate {
-          color: #64748b;
-          font-size: 0.82rem;
+        .px-notificationMeta strong {
+          color: #061b3a;
+          font-size: 15px;
+          font-weight: 950;
+          line-height: 1.18;
+          min-width: 0;
+          overflow-wrap: anywhere;
         }
 
-        .px-platformNotificationTitle {
-          color: #0f172a;
-          font-size: 1rem;
-          font-weight: 800;
-          line-height: 1.2;
-        }
-
-        .px-platformNotificationText {
-          color: #475569;
-          font-size: 0.92rem;
-          line-height: 1.45;
-        }
-
-        .px-platformNotificationAside {
-          display: flex;
-          justify-content: flex-end;
+        .px-notificationMeta span {
+          color: #94a3b8;
           flex: 0 0 auto;
-          padding-top: 4px;
+          font-size: 12px;
+          font-weight: 850;
         }
 
-        .px-platformUnreadDot {
-          width: 10px;
-          height: 10px;
-          border-radius: 999px;
+        .px-notificationMain p {
+          color: #64748b;
+          font-size: 13px;
+          font-weight: 760;
+          line-height: 1.42;
+          margin: 5px 0 0;
+          overflow-wrap: anywhere;
+        }
+
+        .px-notificationUnread {
           background: #e11d48;
-          display: inline-block;
-        }
-
-        :global(.px-statusBadge) {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 28px;
-          padding: 0 10px;
           border-radius: 999px;
-          font-size: 0.78rem;
-          font-weight: 700;
-          line-height: 1;
-          white-space: nowrap;
-          border: 1px solid transparent;
+          box-shadow: 0 0 0 5px rgba(225,29,72,.10);
+          height: 10px;
+          width: 10px;
         }
 
-        :global(.px-statusBadge.is-success) {
-          background: rgba(22, 163, 74, 0.12);
-          color: #166534;
-          border-color: rgba(22, 163, 74, 0.18);
+        .px-notificationsEmpty {
+          align-items: center;
+          color: #64748b;
+          display: grid;
+          gap: 7px;
+          justify-items: center;
+          padding: 42px 18px;
+          text-align: center;
         }
 
-        :global(.px-statusBadge.is-warning) {
-          background: rgba(245, 158, 11, 0.14);
-          color: #92400e;
-          border-color: rgba(245, 158, 11, 0.2);
+        .px-notificationsEmpty strong {
+          color: #061b3a;
+          font-size: 18px;
+          font-weight: 950;
         }
 
-        :global(.px-statusBadge.is-danger) {
-          background: rgba(239, 68, 68, 0.12);
-          color: #b91c1c;
-          border-color: rgba(239, 68, 68, 0.18);
-        }
-
-        :global(.px-statusBadge.is-neutral) {
-          background: rgba(71, 85, 105, 0.14);
-          color: #334155;
-          border-color: rgba(71, 85, 105, 0.16);
+        .px-notificationsEmpty p {
+          font-size: 14px;
+          font-weight: 760;
+          margin: 0;
+          max-width: 440px;
         }
 
         @media (max-width: 640px) {
-          .px-platformNotificationHead {
+          .px-notificationsHead {
+            align-items: flex-start;
             flex-direction: column;
           }
 
-          .px-platformNotificationAside {
-            justify-content: flex-start;
-            padding-top: 0;
+          .px-notificationsActions {
+            align-items: start;
+            justify-items: start;
+          }
+
+          .px-notificationRow {
+            align-items: start;
+            grid-template-columns: auto minmax(0, 1fr);
+          }
+
+          .px-notificationUnread {
+            grid-column: 2;
           }
         }
       `}</style>
-      </div>
-    </div>
+    </section>
+    </main>
   )
 }

@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
+import { getClubTheme } from '@/lib/clubThemes'
 import type { ClubRole } from '@/lib/clubMembershipRules'
 import {
   CLUB_CAPABILITY_GROUPS,
@@ -241,6 +242,7 @@ export default function ClubUsuariosPage() {
   const [message, setMessage] = useState('')
   const [schemaWarning, setSchemaWarning] = useState('')
   const [staffWarning, setStaffWarning] = useState('')
+  const [themeKey, setThemeKey] = useState<string | null>(null)
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [invites, setInvites] = useState<ClubInvite[]>([])
   const [email, setEmail] = useState('')
@@ -310,6 +312,17 @@ export default function ClubUsuariosPage() {
   }, [staff])
 
   const ownerOnly = clubRole === 'OWNER'
+  const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
+  const themeStyle = useMemo(
+    () =>
+      ({
+        '--club-admin-accent': theme.vars.accent,
+        '--club-admin-accent-2': theme.vars.accent2,
+        '--club-admin-soft': theme.vars.soft,
+        '--club-admin-glow': theme.vars.glow,
+      }) as CSSProperties,
+    [theme]
+  )
 
   async function getToken() {
     const { data } = await supabase.auth.getSession()
@@ -346,6 +359,7 @@ export default function ClubUsuariosPage() {
     if (!activeClub?.id) {
       setStaff([])
       setInvites([])
+      setThemeKey(null)
       setLoading(false)
       return
     }
@@ -362,7 +376,14 @@ export default function ClubUsuariosPage() {
       return
     }
 
-    await Promise.allSettled([loadInternalUsers(token)])
+    const [, clubThemeResult] = await Promise.allSettled([
+      loadInternalUsers(token),
+      supabase.from('clubs').select('theme_key').eq('id', activeClub.id).maybeSingle(),
+    ])
+
+    if (clubThemeResult.status === 'fulfilled') {
+      setThemeKey((clubThemeResult.value.data?.theme_key as string | null) ?? null)
+    }
     setLoading(false)
   }
 
@@ -765,7 +786,7 @@ export default function ClubUsuariosPage() {
 
   return (
     <div className="px-wrap">
-      <div className="club-panel club-users">
+      <div className="club-panel club-users" style={themeStyle}>
         <div className="club-usersHead">
           <div>
             <span className="club-kicker">Club Core</span>
@@ -815,31 +836,51 @@ export default function ClubUsuariosPage() {
       </div>
 
       <style>{`
-        .club-users { overflow: hidden; }
-        .club-usersHead { align-items: flex-start; display: flex; gap: 14px; justify-content: space-between; }
+        .club-users {
+          background: #fff;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 24px;
+          box-shadow: 0 24px 64px rgba(15,23,42,.09);
+          min-width: 0;
+          overflow: hidden;
+          padding: 22px;
+          position: relative;
+        }
+        .club-users::before {
+          background: linear-gradient(90deg, var(--club-admin-accent), var(--club-admin-accent-2));
+          content: "";
+          height: 4px;
+          left: 0;
+          position: absolute;
+          right: 0;
+          top: 0;
+        }
+        .club-usersHead { align-items: flex-start; background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-admin-soft)); border: 1px solid rgba(15,23,42,.07); border-radius: 20px; display: flex; gap: 14px; justify-content: space-between; padding: 18px; }
         .club-usersStats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-        .club-usersStats span { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 999px; color: #475569; font-size: 13px; font-weight: 800; padding: 8px 10px; white-space: nowrap; }
+        .club-usersStats span { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 16%, transparent); border-radius: 999px; color: #475569; font-size: 13px; font-weight: 800; padding: 8px 10px; white-space: nowrap; }
         .club-usersStats b { color: #17253f; }
         .club-message, .club-warning, .club-note { border-radius: 12px; font-weight: 800; padding: 10px 12px; }
-        .club-message, .club-note { background: #eef8ff; border: 1px solid #b8dff1; color: #164e63; }
+        .club-message, .club-note { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 24%, transparent); color: #061b3a; }
         .club-warning { background: #fff7df; border: 1px solid rgba(217,119,6,.24); color: #854d0e; margin-top: 12px; }
         .club-teamTabs { align-items: center; background: #f8fafc; border: 1px solid rgba(15,23,42,.08); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 14px; padding: 4px; }
         .club-teamTab { align-items: center; background: transparent; border: 1px solid transparent; border-radius: 9px; color: #64748b; cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 950; gap: 7px; min-height: 34px; padding: 7px 10px; }
         .club-teamTab span { align-items: center; background: rgba(100,116,139,.10); border-radius: 999px; display: inline-flex; font-size: 11px; justify-content: center; min-width: 22px; padding: 2px 6px; }
-        .club-teamTab--active { background: #fff; border-color: rgba(83,199,217,.42); box-shadow: 0 8px 18px rgba(15,23,42,.06); color: #0f8ea0; }
+        .club-teamTab:hover { background: #fff; border-color: color-mix(in srgb, var(--club-admin-accent) 24%, transparent); color: #061b3a; }
+        .club-teamTab--active { background: #fff; border-color: color-mix(in srgb, var(--club-admin-accent) 42%, transparent); box-shadow: 0 8px 18px var(--club-admin-glow); color: #061b3a; }
         .club-teamGrid { display: grid; gap: 14px; margin-top: 14px; }
-        .club-card { background: rgba(255,255,255,.94); border: 1px solid rgba(15,23,42,.08); border-radius: 16px; display: grid; gap: 12px; margin-top: 14px; min-width: 0; padding: 14px; }
+        .club-card { background: rgba(255,255,255,.96); border: 1px solid rgba(15,23,42,.08); border-radius: 20px; box-shadow: 0 16px 42px rgba(15,23,42,.055); display: grid; gap: 12px; margin-top: 14px; min-width: 0; padding: 16px; }
         .club-teamGrid .club-card { margin-top: 0; }
         .club-cardHead { align-items: flex-start; display: flex; gap: 10px; justify-content: space-between; }
         .club-cardHead h2 { color: #17253f; font-size: 18px; line-height: 1.15; margin: 2px 0 0; }
         .club-cardHead p { color: #64748b; font-size: 12px; font-weight: 800; margin: 5px 0 0; }
-        .club-kicker { color: #64748b; font-size: 11px; font-weight: 950; letter-spacing: 0; text-transform: uppercase; }
+        .club-kicker { color: var(--club-admin-accent); font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
         .club-inviteForm { display: grid; gap: 10px; }
         .club-inviteForm label { color: #17253f; display: grid; font-size: 13px; font-weight: 900; gap: 6px; min-width: 0; }
         .club-inviteForm small { color: #64748b; font-size: 12px; font-weight: 700; }
-        .club-primaryBtn, .club-secondaryBtn { border-radius: 8px; cursor: pointer; font-weight: 950; min-height: 36px; padding: 8px 12px; }
-        .club-primaryBtn { background: #69dfe3; border: 1px solid rgba(15,23,42,.10); color: #102538; }
-        .club-secondaryBtn { background: #fff; border: 1px solid rgba(83,199,217,.36); color: #0f8ea0; }
+        .club-primaryBtn, .club-secondaryBtn { border-radius: 999px; cursor: pointer; font-weight: 950; min-height: 36px; padding: 8px 13px; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+        .club-primaryBtn { background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 38%, transparent); box-shadow: 0 10px 22px var(--club-admin-glow); color: #fff; }
+        .club-secondaryBtn { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 34%, transparent); color: #061b3a; }
+        .club-primaryBtn:hover:not(:disabled), .club-secondaryBtn:hover:not(:disabled) { box-shadow: 0 12px 26px var(--club-admin-glow); transform: translateY(-1px); }
         .club-primaryBtn:disabled, .club-secondaryBtn:disabled { cursor: not-allowed; opacity: .65; }
         .club-staffLayout { display: grid; gap: 14px; margin-top: 14px; }
         .club-staffLayout .club-card { margin-top: 0; }
@@ -873,10 +914,10 @@ export default function ClubUsuariosPage() {
         .club-staffMetaGrid strong { color: #17253f; font-size: 12px; font-weight: 850; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-permissionChips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
         .club-permissionChip {
-          background: #eef8ff;
-          border: 1px solid rgba(83,199,217,.24);
+          background: color-mix(in srgb, var(--club-admin-accent) 10%, white);
+          border: 1px solid color-mix(in srgb, var(--club-admin-accent) 24%, transparent);
           border-radius: 999px;
-          color: #164e63;
+          color: #061b3a;
           font-size: 11px;
           font-weight: 850;
           line-height: 1;
@@ -900,7 +941,7 @@ export default function ClubUsuariosPage() {
         .club-rowMeta small { color: #64748b; font-size: 11px; font-weight: 800; }
         .club-roleBadge, .club-statusBadge, .club-statusPill { border-radius: 999px; font-size: 12px; font-weight: 950; padding: 6px 8px; text-align: center; white-space: nowrap; width: fit-content; }
         .club-roleBadge--owner { background: #fff7df; color: #854d0e; }
-        .club-roleBadge--admin { background: #eef8ff; color: #164e63; }
+        .club-roleBadge--admin { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); color: #061b3a; }
         .club-roleBadge--planillero { background: #ecfdf3; color: #166534; }
         .club-roleBadge--operativo { background: #fff0f5; color: #9d174d; }
         .club-roleBadge--operador { background: #fff0f5; color: #9d174d; }
@@ -923,10 +964,10 @@ export default function ClubUsuariosPage() {
         .club-emptyState span { color: #64748b; font-size: 12px; font-weight: 800; }
         .club-permissionsPanel { align-content: start; }
         .club-permissionsNote, .club-permissionsPlayerNote {
-          background: #eef8ff;
-          border: 1px solid rgba(83,199,217,.24);
+          background: color-mix(in srgb, var(--club-admin-accent) 9%, white);
+          border: 1px solid color-mix(in srgb, var(--club-admin-accent) 22%, transparent);
           border-radius: 12px;
-          color: #164e63;
+          color: #061b3a;
           font-size: 12px;
           font-weight: 850;
           line-height: 1.35;
@@ -988,7 +1029,7 @@ export default function ClubUsuariosPage() {
           justify-self: center;
           width: 24px;
         }
-        .club-matrixCheck.is-on { background: #e9fbff; color: #0f8ea0; }
+        .club-matrixCheck.is-on { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); color: #061b3a; }
         .club-permissionsPlayerNote { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
         .club-permissionsPlayerNote strong { color: #17253f; font-size: 12px; font-weight: 950; white-space: nowrap; }
         .club-permissionsPlayerNote span { color: #475569; }
@@ -999,13 +1040,13 @@ export default function ClubUsuariosPage() {
         .club-permissionRow > span { color: #334155; font-size: 12px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-permissionRow > div { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
         .club-permissionDot { background: #f1f5f9; border-radius: 999px; color: #94a3b8; font-size: 10px; font-weight: 950; padding: 3px 5px; }
-        .club-permissionDot.is-on { background: #e9fbff; color: #0f8ea0; }
+        .club-permissionDot.is-on { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); color: #061b3a; }
         .club-activityPanel { align-content: start; }
         .club-activityNote {
-          background: #eef8ff;
-          border: 1px solid rgba(83,199,217,.24);
+          background: color-mix(in srgb, var(--club-admin-accent) 9%, white);
+          border: 1px solid color-mix(in srgb, var(--club-admin-accent) 22%, transparent);
           border-radius: 12px;
-          color: #164e63;
+          color: #061b3a;
           font-size: 12px;
           font-weight: 850;
           line-height: 1.35;
@@ -1016,7 +1057,7 @@ export default function ClubUsuariosPage() {
         .club-activityPlaceholder span { color: #64748b; font-size: 13px; font-weight: 800; }
         .club-activityTimeline { display: grid; gap: 0; min-width: 0; padding-left: 10px; position: relative; }
         .club-activityTimeline::before {
-          background: rgba(83,199,217,.24);
+          background: color-mix(in srgb, var(--club-admin-accent) 24%, transparent);
           bottom: 12px;
           content: '';
           left: 17px;
@@ -1033,8 +1074,8 @@ export default function ClubUsuariosPage() {
           position: relative;
         }
         .club-activityIcon {
-          background: #e9fbff;
-          border: 2px solid #53c7d9;
+          background: color-mix(in srgb, var(--club-admin-accent) 14%, white);
+          border: 2px solid var(--club-admin-accent);
           border-radius: 999px;
           height: 14px;
           margin-top: 12px;

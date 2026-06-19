@@ -77,13 +77,16 @@ function isMissingRelationMessage(message?: string | null) {
 
 export async function listPublishedContent() {
   const now = new Date().toISOString()
-  const [newsRes, adsRes, sponsorsRes] = await Promise.all([
-    supabaseAdmin
+  const newsQuery = supabaseAdmin
       .from('platform_news')
       .select('*')
       .eq('status', 'PUBLISHED')
+      .is('club_id', null)
       .order('published_at', { ascending: false })
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+
+  const [initialNewsRes, adsRes, sponsorsRes] = await Promise.all([
+    newsQuery,
     supabaseAdmin
       .from('platform_ad_campaigns')
       .select('*')
@@ -99,6 +102,17 @@ export async function listPublishedContent() {
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false }),
   ])
+
+  const newsRes = initialNewsRes.error && isMissingRelationMessage(initialNewsRes.error.message)
+    ? initialNewsRes
+    : initialNewsRes.error && String(initialNewsRes.error.message || '').toLowerCase().includes('club_id')
+      ? await supabaseAdmin
+        .from('platform_news')
+        .select('*')
+        .eq('status', 'PUBLISHED')
+        .order('published_at', { ascending: false })
+        .order('created_at', { ascending: false })
+      : initialNewsRes
 
   if (newsRes.error && !isMissingRelationMessage(newsRes.error.message)) throw newsRes.error
   if (adsRes.error && !isMissingRelationMessage(adsRes.error.message)) throw adsRes.error

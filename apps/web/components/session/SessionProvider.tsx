@@ -11,7 +11,7 @@ import {
 } from '@/lib/clubMembershipRules'
 
 export type AppRole = 'guest' | 'player' | 'club' | 'platform'
-export type PostLoginDestination = '/login' | '/seleccionar-club' | '/club' | '/player' | '/platform'
+export type PostLoginDestination = '/login' | '/seleccionar-club' | '/club' | '/player' | '/platform' | `/clubs/${string}`
 
 export type ClubMini = {
   id: string
@@ -85,7 +85,7 @@ function getPostLoginDestination(ctx: Pick<SessionCtx, 'role' | 'user' | 'active
   if (!ctx.user) return '/login'
   if (ctx.role === 'platform') return '/platform'
   if (!ctx.activeClub || !ctx.isApprovedMember) return '/seleccionar-club'
-  if (ctx.role === 'club') return '/club'
+  if (ctx.role === 'club') return `/clubs/${ctx.activeClub.id}`
   return '/player'
 }
 
@@ -162,22 +162,28 @@ async function resolveContext() {
         postLoginDestination: '/login' as const,
       }
     }
-    const response = await fetch('/api/clubs/member-clubs', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    })
-    const json = await response.json().catch(() => ({}))
+    try {
+      const response = await fetch('/api/clubs/member-clubs', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: 'no-store',
+      })
+      const json = await response.json().catch(() => ({}))
 
-    if (response.ok) {
-      clubs = await Promise.all(
-        (((json?.clubs ?? []) as ClubRow[]).filter((club) => approvedClubIds.includes(club.id))).map(async (c) => ({
-          id: c.id,
-          name: c.name,
-          logoUrl: buildAssetProxyUrl(c.logo_url ?? null),
-        }))
-      )
+      if (response.ok) {
+        clubs = await Promise.all(
+          (((json?.clubs ?? []) as ClubRow[]).filter((club) => approvedClubIds.includes(club.id))).map(async (c) => ({
+            id: c.id,
+            name: c.name,
+            logoUrl: buildAssetProxyUrl(c.logo_url ?? null),
+          }))
+        )
+      } else {
+        console.warn('[SessionProvider] No pude cargar clubes miembro.', json?.error ?? response.statusText)
+      }
+    } catch (error) {
+      console.warn('[SessionProvider] Falló fetch /api/clubs/member-clubs.', error)
     }
   }
 
@@ -278,20 +284,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async (options?: RefreshOptions) => {
     if (!options?.silent && !hasResolvedContextRef.current) setStatus('loading')
-    const r = await resolveContext()
-    setRole(r.role)
-    setIsPlatformAdmin(r.isPlatformAdmin)
-    setUser(r.user)
-    setActiveClubState(r.activeClub)
-    setActiveClubId(r.activeClubId)
-    setClubs(r.clubs)
-    setIsApprovedMember(r.isApprovedMember)
-    setClubRole(r.clubRole)
-    setMembershipStatus(r.membershipStatus)
-    setMembershipApprovedAt(r.membershipApprovedAt)
-    setPostLoginDestination(r.postLoginDestination)
-    hasResolvedContextRef.current = true
-    setStatus('ready')
+    try {
+      const r = await resolveContext()
+      setRole(r.role)
+      setIsPlatformAdmin(r.isPlatformAdmin)
+      setUser(r.user)
+      setActiveClubState(r.activeClub)
+      setActiveClubId(r.activeClubId)
+      setClubs(r.clubs)
+      setIsApprovedMember(r.isApprovedMember)
+      setClubRole(r.clubRole)
+      setMembershipStatus(r.membershipStatus)
+      setMembershipApprovedAt(r.membershipApprovedAt)
+      setPostLoginDestination(r.postLoginDestination)
+      hasResolvedContextRef.current = true
+    } catch (error) {
+      console.warn('[SessionProvider] No pude refrescar la sesión. Mantengo el contexto actual.', error)
+    } finally {
+      setStatus('ready')
+    }
   }, [])
 
   const setActiveClub = useCallback(

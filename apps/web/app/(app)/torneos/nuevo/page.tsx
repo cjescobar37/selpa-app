@@ -28,6 +28,7 @@ export default function NuevoTorneoPage() {
   const [type, setType] = useState<string>('OPEN')
   const [format, setFormat] = useState<string>('GROUPS_ELIMINATION')
   const [gender, setGender] = useState<string>('MALE')
+  const [segment, setSegment] = useState<string>('LIBRES')
 
   const [categories, setCategories] = useState<Category[]>([])
   const [categoryId, setCategoryId] = useState<number>(0)
@@ -147,6 +148,7 @@ export default function NuevoTorneoPage() {
     const rulesPayload = {
       wo_tolerance_minutes: 10,
       wo_score: '6-0 6-0',
+      segment_type: segment,
     }
 
     const payload: Record<string, unknown> = {
@@ -156,6 +158,7 @@ export default function NuevoTorneoPage() {
       tournament_type: type,
       format,
       gender,
+      segment,
       category_id: categoryId,
       category: categoryId,
       category_rule: 'FIXED_CATEGORY',
@@ -238,6 +241,15 @@ export default function NuevoTorneoPage() {
               <option value="MALE">Masculino</option>
               <option value="FEMALE">Femenino</option>
               <option value="MIXED">Mixto</option>
+            </select>
+          </label>
+
+          <label style={label}>
+            Segmento
+            <select style={input} value={segment} onChange={(e) => setSegment(e.target.value)}>
+              <option value="LIBRES">Libres</option>
+              <option value="MENORES">Menores</option>
+              <option value="VETERANOS">Veteranos</option>
             </select>
           </label>
 

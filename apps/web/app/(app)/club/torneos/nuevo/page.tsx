@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
+import { getClubTheme } from '@/lib/clubThemes'
 import { calculateScheduleCapacity, type ScheduleMode } from '@/lib/tournamentSchedule'
 import {
   buildGroupTiebreakerPayload,
@@ -250,6 +251,7 @@ export default function ClubNuevoTorneoPage() {
   const [courtDraft, setCourtDraft] = useState<CourtDraftState>(initialCourtDraft)
   const [complexOptions, setComplexOptions] = useState<ClubComplexOption[]>([])
   const [loadingComplexes, setLoadingComplexes] = useState(true)
+  const [themeKey, setThemeKey] = useState<string | null>(null)
   const [flyerConfig, setFlyerConfig] = useState<FlyerConfig>(defaultFlyerConfig)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -290,6 +292,17 @@ export default function ClubNuevoTorneoPage() {
       }),
     [form.groupsEndTime, form.groupsStartTime, form.matchDurationMinutes, form.tournamentCourts.length]
   )
+  const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
+  const themeStyle = useMemo(
+    () =>
+      ({
+        '--club-admin-accent': theme.vars.accent,
+        '--club-admin-accent-2': theme.vars.accent2,
+        '--club-admin-soft': theme.vars.soft,
+        '--club-admin-glow': theme.vars.glow,
+      }) as CSSProperties,
+    [theme]
+  )
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -313,6 +326,7 @@ export default function ClubNuevoTorneoPage() {
   async function loadComplexOptions() {
     if (!activeClub?.id) {
       setComplexOptions([])
+      setThemeKey(null)
       setLoadingComplexes(false)
       return
     }
@@ -320,17 +334,21 @@ export default function ClubNuevoTorneoPage() {
     setLoadingComplexes(true)
     const { data, error } = await supabase
       .from('clubs')
-      .select('id,name,courts_count,is_active')
+      .select('id,name,courts_count,is_active,theme_key')
       .eq('is_active', true)
       .order('name')
 
     if (error) {
+      setThemeKey(null)
       setComplexOptions([{ id: activeClub.id, name: activeClub.name ?? 'Club actual', courtsCount: 0 }])
       setLoadingComplexes(false)
       return
     }
 
-    const nextOptions = ((data ?? []) as Array<{ id: string; name: string; courts_count: number | null }>)
+    const clubRows = (data ?? []) as Array<{ id: string; name: string; courts_count: number | null; theme_key?: string | null }>
+    setThemeKey(clubRows.find((club) => club.id === activeClub.id)?.theme_key ?? null)
+
+    const nextOptions = clubRows
       .map((club) => ({
         id: club.id,
         name: club.name,
@@ -441,6 +459,7 @@ export default function ClubNuevoTorneoPage() {
         gender: form.gender,
         category_id: Number(form.categoryId),
         segment_type: tournamentConfig.segment_type,
+        segment: tournamentConfig.segment_type,
         public_description: tournamentConfig.public_description,
         competition_system: tournamentConfig.competition_system,
         venue_name: tournamentConfig.venue_name,
@@ -471,9 +490,10 @@ export default function ClubNuevoTorneoPage() {
 
   return (
     <div className="px-wrap">
-      <div className="club-panel club-newTournament">
+      <div className="club-panel club-newTournament" style={themeStyle}>
         <div className="club-newHead">
           <div>
+            <span className="club-kicker">Club Torneos</span>
             <h1 className="club-title">Crear torneo</h1>
             <p className="club-sub">Alta rápida para {activeClub?.name ?? 'tu club'}. El torneo queda como borrador.</p>
           </div>
@@ -485,8 +505,8 @@ export default function ClubNuevoTorneoPage() {
         <form className="club-formCard" onSubmit={submit}>
           <section className="club-formSection">
             <div className="club-formSectionHead">
-              <span className="club-kicker">Datos principales</span>
-              <p>La base del torneo para dejarlo listo y prolijo desde el borrador.</p>
+              <span className="club-kicker">1. Identidad del torneo</span>
+              <p>Nombre y descripción pública breve para presentar el torneo.</p>
             </div>
             <div className="club-formSectionGrid">
               <label className="club-field club-field--span6">
@@ -500,6 +520,26 @@ export default function ClubNuevoTorneoPage() {
                 />
               </label>
 
+              <label className="club-field club-field--span6">
+                <span>Descripción pública</span>
+                <textarea
+                  className="club-textarea club-textarea--compact"
+                  value={form.publicDescription}
+                  onChange={(event) => updateField('publicDescription', event.target.value)}
+                  placeholder="Premios, condiciones o aclaraciones visibles."
+                  maxLength={280}
+                  rows={2}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="club-formSection club-formSection--soft">
+            <div className="club-formSectionHead">
+              <span className="club-kicker">2. Categoría y formato</span>
+              <p>Segmento deportivo, rama y sistema competitivo del torneo.</p>
+            </div>
+            <div className="club-formSectionGrid">
               <label className="club-field club-field--span3">
                 <span>Tipo</span>
                 <select className="px-input" value={form.type} onChange={(event) => updateField('type', event.target.value as TournamentType)}>
@@ -508,7 +548,7 @@ export default function ClubNuevoTorneoPage() {
               </label>
 
               <label className="club-field club-field--span3">
-                <span>Segmento / Rama</span>
+                <span>Segmento</span>
                 <select className="px-input" value={form.segmentType} onChange={(event) => updateField('segmentType', event.target.value as TournamentSegment)}>
                   {segmentOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
@@ -539,8 +579,8 @@ export default function ClubNuevoTorneoPage() {
 
           <section className="club-formSection">
             <div className="club-formSectionHead">
-              <span className="club-kicker">Fechas, cupos y costo</span>
-              <p>Definí calendario y cupos con una carga más compacta y clara.</p>
+              <span className="club-kicker">3. Fechas e inscripción</span>
+              <p>Calendario, cierre, cupos y costo de inscripción.</p>
             </div>
             <div className="club-formSectionGrid">
               <label className="club-field club-field--span3 club-field--compact">
@@ -575,29 +615,10 @@ export default function ClubNuevoTorneoPage() {
             </div>
           </section>
 
-          <section className="club-formSection club-formSection--soft">
-            <div className="club-formSectionHead">
-              <span className="club-kicker">Descripción / Observaciones públicas</span>
-              <p>Opcional. Usala solo si necesitás mostrar premios, reglas visibles o aclaraciones.</p>
-            </div>
-            <div className="club-formSectionGrid">
-              <label className="club-field club-field--wide">
-                <textarea
-                  className="club-textarea club-textarea--compact"
-                  value={form.publicDescription}
-                  onChange={(event) => updateField('publicDescription', event.target.value)}
-                  placeholder="Agregar una descripción pública breve para el torneo."
-                  maxLength={280}
-                  rows={2}
-                />
-              </label>
-            </div>
-          </section>
-
           <section className="club-formSection club-formSection--highlight">
             <div className="club-formSectionHead">
-              <span className="club-kicker">Sede y canchas</span>
-              <p>Podés configurar las canchas más adelante.</p>
+              <span className="club-kicker">4. Sede, canchas y cupos</span>
+              <p>Elegí el complejo principal y, si querés, dejá canchas preconfiguradas.</p>
             </div>
             <div className="club-formSectionGrid club-venueRow">
               <label className="club-field club-field--span8">
@@ -686,7 +707,7 @@ export default function ClubNuevoTorneoPage() {
 
           <section className="club-formSection">
             <div className="club-formSectionHead">
-              <span className="club-kicker">Planificación de partidos</span>
+              <span className="club-kicker">5. Reglas / puntos / premios</span>
               <p>Definí la ventana operativa para automatizar cruces de grupos con horarios y canchas.</p>
             </div>
             <div className="club-formSectionGrid">
@@ -893,23 +914,41 @@ export default function ClubNuevoTorneoPage() {
       </div>
 
       <style>{`
-        .club-newTournament { overflow: hidden; }
-        .club-newHead { align-items: flex-start; display: flex; gap: 14px; justify-content: space-between; }
+        .club-newTournament {
+          background: #fff;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 24px;
+          box-shadow: 0 24px 64px rgba(15,23,42,.09);
+          min-width: 0;
+          overflow: hidden;
+          padding: 22px;
+          position: relative;
+        }
+        .club-newTournament::before {
+          background: linear-gradient(90deg, var(--club-admin-accent), var(--club-admin-accent-2));
+          content: "";
+          height: 4px;
+          left: 0;
+          position: absolute;
+          right: 0;
+          top: 0;
+        }
+        .club-newHead { align-items: flex-start; background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-admin-soft)); border: 1px solid rgba(15,23,42,.07); border-radius: 20px; display: flex; gap: 14px; justify-content: space-between; padding: 18px; }
         .club-message { background: #fff7df; border: 1px solid rgba(217,119,6,.24); border-radius: 12px; color: #854d0e; font-weight: 800; margin-top: 12px; padding: 10px 12px; }
-        .club-formCard { background: rgba(255,255,255,.96); border: 1px solid rgba(15,23,42,.07); border-radius: 16px; display: grid; gap: 9px; margin-top: 12px; min-width: 0; padding: 10px; }
-        .club-formSection { background: rgba(255,255,255,.82); border: 0; border-top: 1px solid rgba(15,23,42,.08); display: grid; gap: 9px; padding: 11px 2px 8px; }
-        .club-formSection:first-child { border-top: 0; padding-top: 2px; }
-        .club-formSection--soft { background: rgba(248,252,253,.72); border: 1px solid rgba(83,199,217,.14); border-radius: 12px; padding: 9px; }
-        .club-formSection--highlight { background: rgba(248,252,253,.9); border: 1px solid rgba(83,199,217,.18); border-radius: 12px; padding: 10px; }
+        .club-formCard { background: rgba(248,250,252,.72); border: 1px solid rgba(15,23,42,.07); border-radius: 20px; display: grid; gap: 12px; margin-top: 14px; min-width: 0; padding: 12px; }
+        .club-formSection { background: rgba(255,255,255,.96); border: 1px solid rgba(15,23,42,.08); border-radius: 18px; box-shadow: 0 14px 34px rgba(15,23,42,.045); display: grid; gap: 12px; padding: 16px; }
+        .club-formSection--soft { background: linear-gradient(135deg, #fff, color-mix(in srgb, var(--club-admin-accent) 5%, white)); border-color: color-mix(in srgb, var(--club-admin-accent) 16%, transparent); }
+        .club-formSection--highlight { background: linear-gradient(135deg, color-mix(in srgb, var(--club-admin-accent) 6%, white), #fff); border-color: color-mix(in srgb, var(--club-admin-accent) 20%, transparent); }
         .club-formSectionHead { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
         .club-formSectionHead p { color: #64748b; font-size: 12px; font-weight: 780; line-height: 1.4; margin: 0; max-width: 420px; }
         .club-formSectionGrid { display: grid; gap: 8px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
         .club-formSectionGrid--nested { margin-top: 8px; }
-        .club-formSection--soft { background: #f8fafc; border-color: rgba(14,116,144,.16); }
         .club-tiebreakerGrid { display: grid; gap: 8px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
         .club-inlineNote--compact { margin-top: 8px; padding: 8px 10px; }
         .club-field { color: #17253f; display: grid; font-size: 13px; font-weight: 900; gap: 6px; min-width: 0; }
-        .club-field .px-input { background: #fff; min-height: 34px; }
+        .club-kicker { color: var(--club-admin-accent); font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+        .club-field .px-input { background: #fff; border-color: rgba(15,23,42,.10); border-radius: 12px; min-height: 36px; }
+        .club-field .px-input:focus { border-color: color-mix(in srgb, var(--club-admin-accent) 45%, transparent); box-shadow: 0 0 0 3px var(--club-admin-soft); outline: none; }
         .club-field--compact .px-input { min-height: 32px; padding-block: 6px; }
         .club-field--wide { grid-column: 1 / -1; }
         .club-field--span2 { grid-column: span 2; }
@@ -919,18 +958,18 @@ export default function ClubNuevoTorneoPage() {
         .club-field--span8 { grid-column: span 8; }
         .club-textarea { background: #fff; border: 1px solid rgba(15,23,42,.12); border-radius: 10px; color: #17253f; font: inherit; font-size: 13px; font-weight: 700; min-height: 46px; max-height: 84px; outline: none; padding: 8px 10px; resize: vertical; width: 100%; }
         .club-textarea--compact { min-height: 52px; }
-        .club-textarea:focus { border-color: rgba(83,199,217,.70); box-shadow: 0 0 0 3px rgba(83,199,217,.12); }
+        .club-textarea:focus { border-color: color-mix(in srgb, var(--club-admin-accent) 45%, transparent); box-shadow: 0 0 0 3px var(--club-admin-soft); }
         .club-checkRow--wide { grid-column: 1 / -1; }
         .club-disclosure { background: rgba(255,255,255,.76); border: 1px solid rgba(15,23,42,.08); border-radius: 12px; padding: 8px 10px; }
         .club-disclosure--button { align-self: end; background: transparent; border: 0; padding: 0; }
         .club-disclosure--button[open] { grid-column: 1 / -1; }
-        .club-disclosure--button > summary { background: #fff; border: 1px solid rgba(83,199,217,.36); border-radius: 10px; color: #0f8ea0; min-height: 34px; padding: 7px 10px; }
-        .club-disclosure--button[open] > summary { border-color: rgba(83,199,217,.62); box-shadow: 0 0 0 3px rgba(83,199,217,.10); justify-self: end; min-width: 220px; }
+        .club-disclosure--button > summary { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 34%, transparent); border-radius: 999px; color: #061b3a; min-height: 36px; padding: 7px 12px; }
+        .club-disclosure--button[open] > summary { border-color: color-mix(in srgb, var(--club-admin-accent) 54%, transparent); box-shadow: 0 0 0 3px var(--club-admin-soft); justify-self: end; min-width: 220px; }
         .club-disclosureSection { padding: 10px; }
         .club-disclosure > summary, .club-disclosureSection > summary { align-items: center; cursor: pointer; display: flex; gap: 10px; justify-content: space-between; list-style: none; }
         .club-disclosure > summary::-webkit-details-marker, .club-disclosureSection > summary::-webkit-details-marker { display: none; }
         .club-disclosure summary span, .club-disclosureSection summary span { color: #17253f; font-size: 13px; font-weight: 950; }
-        .club-disclosure summary small, .club-disclosureSection summary small { background: #e9fbff; border-radius: 999px; color: #0f7180; font-size: 11px; font-weight: 900; padding: 4px 8px; }
+        .club-disclosure summary small, .club-disclosureSection summary small { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); border-radius: 999px; color: #061b3a; font-size: 11px; font-weight: 900; padding: 4px 8px; }
         .club-disclosure p { color: #64748b; font-size: 12px; font-weight: 800; line-height: 1.35; margin: 8px 0 0; }
         .club-pointsGrid { display: grid; gap: 8px; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .club-pointsToolbar, .club-courtComposer { align-items: center; display: flex; flex-wrap: wrap; justify-content: space-between; }
@@ -938,36 +977,37 @@ export default function ClubNuevoTorneoPage() {
         .club-pointsSummary { display: flex; flex-wrap: wrap; gap: 8px; }
         .club-pointsSummary span { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 999px; color: #64748b; font-size: 12px; font-weight: 900; padding: 6px 9px; }
         .club-pointsSummary strong { color: #17253f; margin-left: 4px; }
-        .club-scheduleCapacity { align-content: center; background: #f8fdff; border: 1px solid rgba(83,199,217,.18); border-radius: 12px; padding: 8px 10px; }
+        .club-scheduleCapacity { align-content: center; background: color-mix(in srgb, var(--club-admin-accent) 7%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 18%, transparent); border-radius: 12px; padding: 8px 10px; }
         .club-scheduleCapacity strong { color: #17253f; font-size: 16px; line-height: 1; }
         .club-scheduleCapacity small { color: #64748b; font-size: 12px; font-weight: 800; }
         .club-scheduleWindows { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .club-scheduleWindow { align-items: end; background: rgba(248,250,252,.64); border: 1px solid rgba(15,23,42,.06); border-radius: 12px; display: grid; gap: 8px; grid-template-columns: auto minmax(132px, 1fr) minmax(84px, .55fr) minmax(84px, .55fr); padding: 8px; }
-        .club-scheduleWindow > strong { align-self: center; color: #0f7180; font-size: 11px; font-weight: 950; }
+        .club-scheduleWindow > strong { align-self: center; color: var(--club-admin-accent); font-size: 11px; font-weight: 950; }
         .club-courtList { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
         .club-courtChip { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 12px; display: grid; gap: 4px; grid-template-columns: minmax(0, 1fr) auto; padding: 10px 12px; }
         .club-courtChip strong { color: #17253f; display: block; font-size: 13px; }
         .club-courtChip span { color: #64748b; font-size: 12px; font-weight: 700; }
-        .club-courtChip small { background: rgba(83,199,217,.12); border-radius: 999px; color: #0f8ea0; font-size: 11px; font-weight: 900; padding: 4px 8px; }
+        .club-courtChip small { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); border-radius: 999px; color: #061b3a; font-size: 11px; font-weight: 900; padding: 4px 8px; }
         .club-chipRemove { background: none; border: none; color: #c2410c; cursor: pointer; font-size: 12px; font-weight: 900; justify-self: end; padding: 0; }
         .club-emptyInline { background: rgba(248,250,252,.9); border: 1px dashed rgba(148,163,184,.36); border-radius: 12px; color: #64748b; font-size: 13px; font-weight: 800; padding: 12px; }
         .club-formActions { display: flex; flex-wrap: wrap; gap: 8px; grid-column: 1 / -1; justify-content: flex-end; padding-top: 4px; }
-        .club-primaryBtn, .club-secondaryBtn { align-items: center; border-radius: 8px; cursor: pointer; display: inline-flex; font-weight: 950; justify-content: center; min-height: 36px; padding: 8px 12px; text-decoration: none; white-space: nowrap; }
-        .club-primaryBtn { background: #69dfe3; border: 1px solid rgba(15,23,42,.10); color: #102538; }
-        .club-secondaryBtn { background: #fff; border: 1px solid rgba(83,199,217,.36); color: #0f8ea0; }
+        .club-primaryBtn, .club-secondaryBtn { align-items: center; border-radius: 999px; cursor: pointer; display: inline-flex; font-weight: 950; justify-content: center; min-height: 38px; padding: 8px 14px; text-decoration: none; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; white-space: nowrap; }
+        .club-primaryBtn { background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 38%, transparent); box-shadow: 0 12px 28px var(--club-admin-glow); color: #fff; }
+        .club-secondaryBtn { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 34%, transparent); color: #061b3a; }
+        .club-primaryBtn:hover:not(:disabled), .club-secondaryBtn:hover:not(:disabled) { box-shadow: 0 14px 30px var(--club-admin-glow); transform: translateY(-1px); }
         .club-secondaryBtn--compact { min-height: 32px; padding: 6px 11px; }
         .club-pointsGrid .px-input:disabled { background: #eef2f7; border-color: rgba(148,163,184,.22); color: #42526b; cursor: not-allowed; }
         .club-pointsGrid .px-input:not(:disabled) { background: #fff; cursor: text; }
         .club-primaryBtn:disabled { cursor: not-allowed; opacity: .65; }
-        .flyerCard { background: linear-gradient(180deg, rgba(248,250,252,.98) 0%, rgba(241,245,249,.94) 100%); border: 1px solid rgba(83,199,217,.18); border-radius: 16px; display: grid; gap: 14px; padding: 14px; }
+        .flyerCard { background: linear-gradient(180deg, rgba(248,250,252,.98) 0%, rgba(241,245,249,.94) 100%); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 18%, transparent); border-radius: 18px; display: grid; gap: 14px; padding: 14px; }
         .flyerBlockHead { align-items: start; display: flex; gap: 16px; justify-content: space-between; }
         .flyerBlockHead h2 { color: #17253f; font-size: 22px; line-height: 1.1; margin: 4px 0 0; }
         .flyerBlockHead p { color: #5b6b84; font-size: 12px; font-weight: 800; line-height: 1.45; margin: 0; max-width: 360px; }
         .flyerKicker, .flyerControlTitle, .flyerPreviewLabel { color: #64748b; font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
         .flyerModeSwitch { display: flex; flex-wrap: wrap; gap: 8px; }
         .flyerModeChip { background: #fff; border: 1px solid rgba(148,163,184,.26); border-radius: 999px; color: #274159; cursor: pointer; font-size: 13px; font-weight: 900; min-height: 38px; padding: 0 14px; transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; }
-        .flyerModeChip:hover { border-color: rgba(15,142,160,.38); color: #0f8ea0; }
-        .flyerModeChip.is-active { background: #e6fbff; border-color: rgba(83,199,217,.52); box-shadow: inset 0 0 0 1px rgba(83,199,217,.14); color: #0f8ea0; }
+        .flyerModeChip:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 38%, transparent); color: #061b3a; }
+        .flyerModeChip.is-active { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border-color: color-mix(in srgb, var(--club-admin-accent) 52%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--club-admin-accent) 14%, transparent); color: #061b3a; }
         .flyerLayout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); }
         .flyerControls { display: grid; gap: 14px; min-width: 0; }
         .flyerControlSection, .flyerPlaceholder { background: rgba(255,255,255,.82); border: 1px solid rgba(148,163,184,.16); border-radius: 14px; padding: 14px; }
@@ -977,8 +1017,8 @@ export default function ClubNuevoTorneoPage() {
         .flyerLayout--compact { grid-template-columns: minmax(0, 1fr); }
         .flyerBackgroundGrid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); margin-top: 10px; }
         .flyerBackgroundOption { background: rgba(255,255,255,.92); border: 1px solid rgba(148,163,184,.18); border-radius: 12px; cursor: pointer; display: grid; gap: 8px; padding: 8px; text-align: left; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
-        .flyerBackgroundOption:hover { border-color: rgba(83,199,217,.5); box-shadow: 0 8px 18px rgba(15,23,42,.08); transform: translateY(-1px); }
-        .flyerBackgroundOption.is-selected { border-color: rgba(83,199,217,.8); box-shadow: 0 0 0 2px rgba(83,199,217,.12); }
+        .flyerBackgroundOption:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 50%, transparent); box-shadow: 0 8px 18px rgba(15,23,42,.08); transform: translateY(-1px); }
+        .flyerBackgroundOption.is-selected { border-color: color-mix(in srgb, var(--club-admin-accent) 80%, transparent); box-shadow: 0 0 0 2px var(--club-admin-soft); }
         .flyerBackgroundOption span:last-child { color: #30455f; font-size: 11px; font-weight: 900; }
         .flyerBackgroundSwatch { aspect-ratio: 1.12; border-radius: 10px; display: block; min-width: 0; }
         .flyerControlRow { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }

@@ -78,6 +78,7 @@ type TournamentSummary = {
     status: string
     type: string | null
     gender: string | null
+    segment: string | null
     category_id: number | null
     start_date: string | null
     end_date: string | null
@@ -281,7 +282,11 @@ function formFromSummary(summary: TournamentSummary, rules?: Record<string, unkn
     type: toTournamentType(tournament.type),
     gender: toTournamentGender(tournament.gender),
     categoryId: String(tournament.category_id ?? 7),
-    segmentType: safeRules.segment_type === 'MENORES' || safeRules.segment_type === 'VETERANOS' ? safeRules.segment_type : 'LIBRES',
+    segmentType: tournament.segment === 'MENORES' || tournament.segment === 'VETERANOS'
+      ? tournament.segment
+      : safeRules.segment_type === 'MENORES' || safeRules.segment_type === 'VETERANOS'
+        ? safeRules.segment_type
+        : 'LIBRES',
     competitionSystem: safeRules.competition_system === 'ROUND_ROBIN' || safeRules.competition_system === 'SINGLE_ELIMINATION'
       ? safeRules.competition_system
       : 'GROUPS_PLAYOFF',
@@ -570,6 +575,7 @@ export default function EditClubTournamentPage() {
         gender: form.gender,
         category_id: Number(form.categoryId),
         segment_type: tournamentConfig.segment_type,
+        segment: tournamentConfig.segment_type,
         public_description: tournamentConfig.public_description,
         competition_system: tournamentConfig.competition_system,
         venue_name: tournamentConfig.venue_name,
@@ -681,7 +687,7 @@ export default function EditClubTournamentPage() {
                 </label>
 
                 <label className="club-field club-field--span3">
-                  <span>Segmento / Rama</span>
+                <span>Segmento</span>
                   <select className="px-input" value={form.segmentType} onChange={(event) => updateField('segmentType', event.target.value as TournamentSegment)}>
                     {segmentOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
@@ -1134,8 +1140,8 @@ export default function EditClubTournamentPage() {
         .club-blockedCard p { color: #64748b; font-size: 13px; font-weight: 800; line-height: 1.35; margin: 0 0 4px; max-width: 680px; }
         .club-kicker { color: #64748b; font-size: 11px; font-weight: 950; letter-spacing: 0; text-transform: uppercase; }
         .club-primaryBtn, .club-secondaryBtn { align-items: center; border-radius: 8px; cursor: pointer; display: inline-flex; font-weight: 950; justify-content: center; min-height: 36px; padding: 8px 12px; text-decoration: none; transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
-        .club-primaryBtn { background: #69dfe3; border: 1px solid rgba(15,23,42,.10); color: #102538; }
-        .club-primaryBtn:hover:not(:disabled) { background: #7be8eb; border-color: rgba(15,23,42,.18); box-shadow: 0 8px 18px rgba(15,142,160,.14); transform: translateY(-1px); }
+        .club-primaryBtn { background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent, #22d3ee) 38%, transparent); color: #fff; }
+        .club-primaryBtn:hover:not(:disabled) { background: #061b3a; border-color: color-mix(in srgb, var(--club-admin-accent, #22d3ee) 54%, transparent); box-shadow: 0 8px 18px var(--club-admin-glow, rgba(15,142,160,.14)); color: #fff; transform: translateY(-1px); }
         .club-secondaryBtn { background: #fff; border: 1px solid rgba(83,199,217,.36); color: #0f8ea0; }
         .club-secondaryBtn--compact { min-height: 32px; padding: 6px 11px; }
         .club-secondaryBtn:hover { background: #f0fcff; border-color: rgba(15,142,160,.45); box-shadow: 0 8px 18px rgba(15,142,160,.10); transform: translateY(-1px); }

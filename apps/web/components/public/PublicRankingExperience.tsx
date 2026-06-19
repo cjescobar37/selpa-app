@@ -1,9 +1,17 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ArrowLeft, Crown, Search, UsersRound } from 'lucide-react'
+import { ArrowLeft, Search } from 'lucide-react'
+import RankingBoard, { type RankingBoardRow } from '@/components/ranking/RankingBoard'
 import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
+import {
+  filterRankingRows,
+  formatRankingCategory,
+  normalizeRankingGender,
+  sortRankingRows,
+  withRankingPositions,
+} from '@/lib/ranking'
 
 export type PublicRankingPlayer = {
   id: string
@@ -18,34 +26,20 @@ export type PublicRankingPlayer = {
   points: number
 }
 
+type PublicRankingRow = PublicRankingPlayer & {
+  full_name: string
+  ranking_points: number
+  email: string | null
+}
+
 const categories = ['all', '1', '2', '3', '4', '5', '6', '7']
 const genders = [
   { value: 'all', label: 'Todos' },
-  { value: 'M', label: 'Masculino' },
-  { value: 'F', label: 'Femenino' },
+  { value: 'M', label: 'Caballeros' },
+  { value: 'F', label: 'Damas' },
 ]
 
-function normalizeGender(value?: string | null) {
-  const normalized = String(value ?? '').toUpperCase()
-  if (normalized === 'MALE') return 'M'
-  if (normalized === 'FEMALE') return 'F'
-  return normalized || 'UNKNOWN'
-}
-
-function formatGender(value?: string | null) {
-  const normalized = normalizeGender(value)
-  if (normalized === 'M') return 'Masculino'
-  if (normalized === 'F') return 'Femenino'
-  return 'Sin rama'
-}
-
-function formatCategory(value?: number | null) {
-  return value ? `${value}ta` : 'Sin categoría'
-}
-
-function initials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'PX'
-}
+const PAMP_GLOW = 'rgba(6, 182, 212, 0.18)'
 
 export default function PublicRankingExperience({ players, clubs }: { players: PublicRankingPlayer[]; clubs: string[] }) {
   const [selectedClub, setSelectedClub] = useState<string | null>(null)
@@ -57,15 +51,9 @@ export default function PublicRankingExperience({ players, clubs }: { players: P
     return clubs.map((clubName) => {
       const clubPlayers = players.filter((player) => player.clubName === clubName)
       const first = clubPlayers[0]
-      const maleCount = clubPlayers.filter((player) => normalizeGender(player.gender) === 'M').length
-      const femaleCount = clubPlayers.filter((player) => normalizeGender(player.gender) === 'F').length
-      const categories = Array.from(new Set(clubPlayers.map((player) => player.category).filter(Boolean))).sort((a, b) => Number(a) - Number(b))
       return {
         clubName,
         count: clubPlayers.length,
-        maleCount,
-        femaleCount,
-        categories,
         logoUrl: first?.clubLogoUrl ?? null,
         themeKey: first?.clubThemeKey ?? null,
       }
@@ -75,99 +63,80 @@ export default function PublicRankingExperience({ players, clubs }: { players: P
   const selectedClubCard = selectedClub ? clubCards.find((item) => item.clubName === selectedClub) ?? null : null
 
   const filtered = useMemo(() => {
-    const search = query.trim().toLowerCase()
-    return players
-      .filter((player) => !selectedClub || player.clubName === selectedClub)
-      .filter((player) => category === 'all' || String(player.category ?? '') === category)
-      .filter((player) => gender === 'all' || normalizeGender(player.gender) === gender)
-      .filter((player) => !search || `${player.name} ${player.clubName}`.toLowerCase().includes(search))
-      .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
+    const rows: PublicRankingRow[] = players.map((player) => ({
+      ...player,
+      full_name: player.name,
+      ranking_points: player.points,
+      email: player.clubName,
+    }))
+    return sortRankingRows(
+      filterRankingRows(
+        rows.filter((player) => !selectedClub || player.clubName === selectedClub),
+        { category, gender, query },
+      ),
+    )
   }, [category, gender, players, query, selectedClub])
 
-  const columns = useMemo(() => {
-    const withPositions: Array<PublicRankingPlayer & { position: number }> = []
-    filtered.forEach((player, index) => {
-      const previous = withPositions[index - 1]
-      const position = previous && previous.points === player.points ? previous.position : index + 1
-      withPositions.push({ ...player, position })
-    })
-    return [
-      { key: 'M', label: 'Masculino', accent: '#06b6d4', items: withPositions.filter((player) => normalizeGender(player.gender) === 'M') },
-      { key: 'F', label: 'Femenino', accent: '#ec4899', items: withPositions.filter((player) => normalizeGender(player.gender) === 'F') },
-    ]
-  }, [filtered])
+  const rankingBoardColumns = useMemo(() => {
+    const visibleGenders = gender === 'M' || gender === 'F' ? [gender] as const : ['M', 'F'] as const
+    return visibleGenders.map((columnGender) => ({
+      gender: columnGender,
+      rows: withRankingPositions(filtered.filter((player) => normalizeRankingGender(player.gender) === columnGender), 'position').map((player) => ({
+        id: player.id,
+        name: player.name,
+        avatarUrl: buildAssetProxyUrl(player.avatarUrl),
+        category: player.category,
+        gender: player.gender,
+        points: player.points,
+        position: player.position,
+        isTied: player.isTied,
+        href: `/club/jugadores/${player.id}`,
+        subtitle: player.clubName,
+      } satisfies RankingBoardRow)),
+    }))
+  }, [filtered, gender])
 
   function renderClubCard(card: (typeof clubCards)[number]) {
-    const theme = getClubTheme(card.themeKey)
     const logo = buildAssetProxyUrl(card.logoUrl)
+    const theme = getClubTheme(card.themeKey)
     return (
       <article
-        className="publicRankingClubCard"
+        className="publicRankingPickerCard"
         key={card.clubName}
+        role="button"
+        tabIndex={0}
+        onClick={() => setSelectedClub(card.clubName)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            setSelectedClub(card.clubName)
+          }
+        }}
         style={{
           ['--accent' as string]: theme.vars.accent,
           ['--accent2' as string]: theme.vars.accent2,
-          ['--soft' as string]: theme.vars.soft,
           ['--glow' as string]: theme.vars.glow,
-          ['--club-logo' as string]: logo ? `url("${logo}")` : undefined,
         }}
       >
-        <div className={`publicRankingClubLogo ${logo ? 'has-image' : ''}`}>{logo ? null : getClubInitials(card.clubName)}</div>
-        <div className="publicRankingClubBody">
-          <span>Ranking Anual</span>
+        <div className={`publicRankingPickerLogo ${logo ? 'has-image' : ''}`}>
+          {logo ? <img src={logo} alt="" loading="lazy" decoding="async" /> : getClubInitials(card.clubName)}
+        </div>
+        <div className="publicRankingPickerBody">
           <h2>{card.clubName}</h2>
-          <p>Masculino y Femenino · 2026</p>
-          <div>
-            <em><UsersRound size={12} /> {card.count} jugadores</em>
-            <em>Masculino</em>
-            <em>Femenino</em>
-            <em>2026</em>
-            {card.categories.length ? <em>{card.categories.map((item) => `${item}ta`).join(' · ')}</em> : null}
-          </div>
+          <span className="publicRankingPickerLine" aria-hidden="true" />
+          <p>Ranking oficial del club</p>
         </div>
-        <button type="button" onClick={() => setSelectedClub(card.clubName)}>Ver ranking</button>
-      </article>
-    )
-  }
-
-  function renderPlayer(player: PublicRankingPlayer & { position: number }, index: number) {
-    const theme = getClubTheme(player.clubThemeKey)
-    const top = index < 10
-    const avatar = buildAssetProxyUrl(player.avatarUrl)
-    const clubLogo = buildAssetProxyUrl(player.clubLogoUrl)
-
-    return (
-      <article
-        className={`publicRankingRow ${top ? 'is-top' : 'is-compact'}`}
-        key={player.id}
-        style={{
-          ['--accent' as string]: theme.vars.accent,
-          ['--accent2' as string]: theme.vars.accent2,
-          ['--soft' as string]: theme.vars.soft,
-          ['--avatar' as string]: avatar ? `url("${avatar}")` : undefined,
-          ['--club-logo' as string]: clubLogo ? `url("${clubLogo}")` : undefined,
-        }}
-      >
-        <div className="publicRankingPlace">
-          {player.position === 1 ? <Crown size={16} /> : null}
-          <strong>#{player.position}</strong>
-        </div>
-        <div className={`publicRankingAvatar ${avatar ? 'has-image' : ''}`}>{avatar ? null : initials(player.name)}</div>
-        <div className="publicRankingInfo">
-          <strong>{player.name}</strong>
-          <span>{formatCategory(player.category)} · {formatGender(player.gender)}</span>
-          <em><i className={clubLogo ? 'has-image' : ''}>{clubLogo ? null : getClubInitials(player.clubName)}</i>{player.clubName}</em>
-        </div>
-        <div className="publicRankingPoints">
-          <strong>{player.points}</strong>
-          <span>pts</span>
+        <span className="publicRankingPickerCta" aria-hidden="true">Ver ranking <b>→</b></span>
+        <div className="publicRankingPickerWatermark" aria-hidden="true">
+          <span><i /><i /><i /></span>
+          <b />
         </div>
       </article>
     )
   }
 
   return (
-    <main className="publicRankingShell">
+    <main className="publicRankingShell" style={{ ['--rank-mobile-glow' as string]: PAMP_GLOW }}>
       <section className="publicRankingHero">
         <span>Ranking público</span>
         <h1>Ranking Pamprax</h1>
@@ -175,7 +144,7 @@ export default function PublicRankingExperience({ players, clubs }: { players: P
       </section>
 
       {!selectedClub ? (
-        <section className="publicRankingClubGrid">
+        <section className="publicRankingPickerGrid">
           {clubCards.length ? clubCards.map(renderClubCard) : (
             <div className="publicRankingEmpty">
               <strong>Sin rankings públicos</strong>
@@ -190,62 +159,53 @@ export default function PublicRankingExperience({ players, clubs }: { players: P
             <div>
               <span>Ranking Anual</span>
               <strong>{selectedClub}</strong>
-              <p>{selectedClubCard?.count ?? 0} jugadores · Masculino y Femenino · 2026</p>
+              <p>{selectedClubCard?.count ?? 0} jugadores · Caballeros y Damas · 2026</p>
             </div>
           </section>
 
           <section className="publicRankingFilters">
-            <label><span>Categoría</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : `${item}ta`}</option>)}</select></label>
+            <label><span>Categoría</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : formatRankingCategory(Number(item))}</option>)}</select></label>
             <label><span>Género</span><select value={gender} onChange={(event) => setGender(event.target.value)}>{genders.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
             <label className="publicRankingSearch"><span>Buscar</span><div><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Jugador" /></div></label>
           </section>
 
-          <section className={`publicRankingBoard ${gender !== 'all' ? 'is-single' : ''}`}>
-            {columns.filter((column) => gender === 'all' || column.key === gender).map((column) => (
-              <div className="publicRankingColumn" key={column.key}>
-                <header style={{ ['--column-accent' as string]: column.accent }}>
-                  <div>
-                    <span>Ranking</span>
-                    <strong>{column.label}</strong>
-                  </div>
-                  <small>{column.items.length} jugadores</small>
-                </header>
-                <div className="publicRankingList">
-                  {column.items.length ? column.items.map(renderPlayer) : (
-                    <div className="publicRankingEmpty">
-                      <strong>Sin jugadores</strong>
-                      <p>No hay ranking para estos filtros.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </section>
+          <RankingBoard columns={rankingBoardColumns} />
         </>
       )}
 
       <style jsx>{`
         .publicRankingShell { color: #061b3a; display: grid; gap: 16px; margin: 0 auto; max-width: 1180px; width: 100%; }
-        .publicRankingHero { background: radial-gradient(circle at 14% 0%, rgba(34,211,238,.22), transparent 34%), radial-gradient(circle at 92% 8%, rgba(236,72,153,.08), transparent 28%), linear-gradient(135deg, #082f73 0%, #061b3a 58%, #020617 100%); border: 1px solid rgba(103,232,249,.14); border-radius: 22px; box-shadow: 0 22px 58px rgba(2,6,23,.16); color: #fff; min-height: 220px; overflow: hidden; padding: clamp(24px, 4.5vw, 42px); position: relative; }
-        .publicRankingHero::before { background: linear-gradient(90deg, rgba(255,255,255,.08), transparent 32%, rgba(34,211,238,.09)); content: ""; inset: 0; pointer-events: none; position: absolute; }
-        .publicRankingHero::after { background: linear-gradient(90deg, #22d3ee, rgba(34,211,238,.82), rgba(236,72,153,.42)); bottom: 0; content: ""; height: 4px; left: 28px; position: absolute; right: 28px; }
-        .publicRankingHero span { color: #67e8f9; font-size: 12px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
-        .publicRankingHero h1 { font-size: clamp(38px, 6vw, 68px); font-weight: 950; letter-spacing: -.06em; line-height: .92; margin: 8px 0; }
-        .publicRankingHero p { color: rgba(255,255,255,.78); font-size: 16px; font-weight: 750; margin: 0; max-width: 620px; }
-        .publicRankingClubGrid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .publicRankingClubCard { align-items: center; background: radial-gradient(circle at 0 0, var(--soft), transparent 32%), rgba(255,255,255,.92); border: 1px solid color-mix(in srgb, var(--accent) 24%, #e2e8f0); border-radius: 24px; box-shadow: 0 18px 44px rgba(15,23,42,.075); display: grid; gap: 14px; grid-template-columns: 64px minmax(0, 1fr) auto; overflow: hidden; padding: 16px; position: relative; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
-        .publicRankingClubCard::before { background: linear-gradient(180deg, var(--accent), var(--accent2)); bottom: 16px; content: ""; left: 0; position: absolute; top: 16px; width: 4px; }
-        .publicRankingClubCard:hover { border-color: color-mix(in srgb, var(--accent) 42%, #e2e8f0); box-shadow: 0 24px 60px rgba(15,23,42,.11), 0 0 0 5px var(--glow); transform: translateY(-2px); }
-        .publicRankingClubLogo { align-items: center; background: linear-gradient(135deg, #061b3a, #0f274a); border: 3px solid #fff; border-radius: 18px; box-shadow: 0 14px 30px rgba(2,132,199,.14); color: #fff; display: flex; font-size: 14px; font-weight: 950; height: 64px; justify-content: center; overflow: hidden; width: 64px; }
-        .publicRankingClubLogo.has-image { background-color: #fff; background-image: var(--club-logo); background-position: center; background-repeat: no-repeat; background-size: cover; border: 1px solid color-mix(in srgb, var(--accent) 28%, #e2e8f0); }
-        .publicRankingClubBody { min-width: 0; }
-        .publicRankingClubBody > span, .publicRankingSelected span { color: var(--accent, #06b6d4); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
-        .publicRankingClubBody h2 { color: #061b3a; font-size: clamp(22px, 3vw, 30px); font-weight: 950; letter-spacing: -.05em; line-height: .96; margin: 4px 0; overflow-wrap: anywhere; }
-        .publicRankingClubBody p, .publicRankingSelected p { color: #64748b; font-size: 13px; font-weight: 850; margin: 0 0 10px; }
-        .publicRankingClubBody div { display: flex; flex-wrap: wrap; gap: 7px; }
-        .publicRankingClubBody em { align-items: center; background: color-mix(in srgb, var(--accent) 8%, white); border: 1px solid color-mix(in srgb, var(--accent) 22%, white); border-radius: 999px; color: #075985; display: inline-flex; font-size: 11px; font-style: normal; font-weight: 950; gap: 5px; padding: 5px 8px; }
-        .publicRankingClubCard button, .publicRankingSelected button { background: linear-gradient(135deg, var(--accent, #06b6d4), var(--accent2, #ec4899)); border: 0; border-radius: 999px; box-shadow: 0 12px 24px color-mix(in srgb, var(--accent, #06b6d4) 18%, transparent); color: #fff; cursor: pointer; font: inherit; font-size: 12px; font-weight: 950; padding: 11px 15px; transition: transform .16s ease, filter .16s ease; white-space: nowrap; }
-        .publicRankingClubCard button:hover, .publicRankingSelected button:hover { filter: saturate(1.08); transform: translateY(-1px); }
+        .publicRankingHero { background: radial-gradient(circle at 10% 0%, rgba(34,211,238,.16), transparent 34%), radial-gradient(circle at 96% 6%, rgba(236,72,153,.12), transparent 30%), linear-gradient(135deg, rgba(255,255,255,.98), #f8fafc); border: 1px solid rgba(15,23,42,.08); border-radius: 22px; box-shadow: 0 22px 58px rgba(15,23,42,.08); color: #061b3a; min-height: 220px; overflow: hidden; padding: clamp(24px, 4.5vw, 42px); position: relative; }
+        .publicRankingHero::before { background: linear-gradient(135deg, rgba(6,182,212,.18), rgba(236,72,153,.12)); border-radius: 999px; content: ""; height: 8px; opacity: .55; pointer-events: none; position: absolute; right: 58px; top: 58px; transform: rotate(-24deg); width: 190px; }
+        .publicRankingHero::after { background: linear-gradient(90deg, #22d3ee, rgba(34,211,238,.82), rgba(236,72,153,.48)); bottom: 0; content: ""; height: 4px; left: 28px; position: absolute; right: 28px; }
+        .publicRankingHero span { color: #0891b2; font-size: 12px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
+        .publicRankingHero h1 { color: #061b3a; font-size: clamp(38px, 6vw, 68px); font-weight: 950; letter-spacing: -.06em; line-height: .92; margin: 8px 0; }
+        .publicRankingHero p { color: #475569; font-size: 16px; font-weight: 750; margin: 0; max-width: 620px; }
+        .publicRankingPickerGrid { display: grid; gap: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .publicRankingPickerCard { align-items: center; background: linear-gradient(#fff, #fff) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--accent) 54%, #dbeafe), color-mix(in srgb, var(--accent2) 48%, #fce7f3)) border-box; border: 1.5px solid transparent; border-radius: 22px; box-shadow: 0 16px 36px rgba(15,23,42,.08); color: #061b3a; cursor: pointer; display: grid; gap: 18px; grid-template-columns: 88px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; min-height: 190px; min-width: 0; overflow: hidden; padding: 24px; position: relative; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+        .publicRankingPickerCard:hover { box-shadow: 0 22px 48px rgba(15,23,42,.12), 0 0 0 4px var(--glow); transform: translateY(-3px); }
+        .publicRankingPickerLogo { align-items: center; align-self: start; background: linear-gradient(#fff, #fff) padding-box, linear-gradient(135deg, var(--accent), var(--accent2)) border-box; border: 2px solid transparent; border-radius: 18px; box-shadow: 0 14px 26px color-mix(in srgb, var(--accent) 14%, transparent); color: #061b3a; display: flex; font-size: 17px; font-weight: 950; grid-row: 1 / span 2; height: 88px; justify-content: center; min-width: 88px; overflow: hidden; padding: 7px; position: relative; width: 88px; z-index: 1; }
+        .publicRankingPickerLogo:not(.has-image) { background: linear-gradient(#061b3a, #061b3a) padding-box, linear-gradient(135deg, var(--accent), var(--accent2)) border-box; color: #fff; padding: 0; }
+        .publicRankingPickerLogo img { display: block; height: 100%; object-fit: contain; width: 100%; }
+        .publicRankingPickerBody { align-self: center; display: grid; gap: 9px; min-width: 0; position: relative; z-index: 1; }
+        .publicRankingPickerBody h2 { color: #061b3a; display: -webkit-box; font-size: clamp(22px, 2vw, 29px); font-weight: 950; letter-spacing: -.02em; line-height: 1.06; margin: 0; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        .publicRankingPickerLine { background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 999px; display: block; height: 3px; width: 58px; }
+        .publicRankingPickerBody p { color: #64748b; font-size: 14px; font-weight: 850; line-height: 1.25; margin: 0; }
+        .publicRankingPickerCta { align-items: center; align-self: end; color: #061b3a; display: inline-flex; font-size: 12px; font-weight: 950; grid-column: 2; justify-self: end; line-height: 1; position: relative; text-transform: uppercase; transition: transform .2s ease; white-space: nowrap; z-index: 1; }
+        .publicRankingPickerCta b { color: var(--accent2); font-size: 16px; line-height: 1; margin-left: 5px; }
+        .publicRankingPickerCard:hover .publicRankingPickerCta { transform: translateX(4px); }
+        .publicRankingPickerWatermark { bottom: 14px; height: 90px; opacity: .12; pointer-events: none; position: absolute; right: 14px; width: 124px; z-index: 0; }
+        .publicRankingPickerWatermark span { align-items: end; bottom: 10px; display: flex; gap: 7px; height: 58px; position: absolute; right: 0; }
+        .publicRankingPickerWatermark i { background: linear-gradient(180deg, var(--accent), var(--accent2)); border-radius: 7px 7px 2px 2px; display: block; width: 17px; }
+        .publicRankingPickerWatermark i:nth-child(1) { height: 28px; }
+        .publicRankingPickerWatermark i:nth-child(2) { height: 42px; }
+        .publicRankingPickerWatermark i:nth-child(3) { height: 56px; }
+        .publicRankingPickerWatermark b { background: #061b3a; border-radius: 999px; height: 7px; position: absolute; right: 6px; top: 16px; transform: rotate(-28deg); transform-origin: right center; width: 96px; }
+        .publicRankingPickerWatermark b::after { border-bottom: 13px solid transparent; border-left: 19px solid #061b3a; border-top: 13px solid transparent; content: ""; position: absolute; right: -16px; top: 50%; transform: translateY(-50%); }
+        .publicRankingSelected span { color: var(--accent, #06b6d4); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
+        .publicRankingSelected p { color: #64748b; font-size: 13px; font-weight: 850; margin: 0; }
+        .publicRankingSelected button { background: linear-gradient(135deg, var(--accent, #06b6d4), var(--accent2, #ec4899)); border: 0; border-radius: 999px; box-shadow: 0 12px 24px color-mix(in srgb, var(--accent, #06b6d4) 18%, transparent); color: #fff; cursor: pointer; font: inherit; font-size: 12px; font-weight: 950; padding: 11px 15px; transition: transform .16s ease, filter .16s ease; white-space: nowrap; }
+        .publicRankingSelected button:hover { filter: saturate(1.08); transform: translateY(-1px); }
         .publicRankingSelected { align-items: center; background: rgba(255,255,255,.94); border: 1px solid #e2e8f0; border-radius: 20px; box-shadow: 0 14px 34px rgba(15,23,42,.06); display: flex; gap: 14px; justify-content: space-between; padding: 14px; }
         .publicRankingSelected button { align-items: center; background: #fff; border: 1px solid #dbe6f0; color: #075985; display: inline-flex; gap: 7px; }
         .publicRankingSelected strong { display: block; font-size: 24px; font-weight: 950; letter-spacing: -.04em; }
@@ -258,47 +218,95 @@ export default function PublicRankingExperience({ players, clubs }: { players: P
         .publicRankingBoard { align-items: start; display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0,1fr)); }
         .publicRankingBoard.is-single { grid-template-columns: minmax(0,1fr); }
         .publicRankingColumn { display: grid; gap: 10px; min-width: 0; }
-        .publicRankingColumn header { align-items: center; background: rgba(255,255,255,.92); border: 1px solid color-mix(in srgb, var(--column-accent) 26%, #e2e8f0); border-radius: 18px; box-shadow: 0 12px 34px rgba(15,23,42,.06); display: flex; justify-content: space-between; gap: 10px; padding: 13px; position: sticky; top: 76px; z-index: 2; }
+        .publicRankingColumn header { align-items: center; background: linear-gradient(135deg, color-mix(in srgb, var(--column-accent) 16%, white), rgba(255,255,255,.98)); border: 1px solid color-mix(in srgb, var(--column-accent) 32%, #e2e8f0); border-radius: 14px; border-top: 3px solid var(--column-accent); box-shadow: 0 10px 22px rgba(15,23,42,.07); display: grid; justify-content: space-between; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; padding: 12px; position: relative; z-index: 2; backdrop-filter: blur(10px); }
         .publicRankingColumn header span { color: var(--column-accent); display: block; font-size: 11px; font-weight: 950; text-transform: uppercase; }
         .publicRankingColumn header strong { display: block; font-size: 22px; font-weight: 950; letter-spacing: -.035em; }
-        .publicRankingColumn header small { color: #64748b; font-size: 12px; font-weight: 900; }
+        .publicRankingColumn header small { background: rgba(255,255,255,.86); border: 1px solid color-mix(in srgb, var(--column-accent) 24%, #dbe5ef); border-radius: 999px; color: #334155; font-size: 12px; font-weight: 900; padding: 6px 9px; }
+        .publicRankingLabels { background: linear-gradient(135deg, color-mix(in srgb, var(--column-accent) 10%, white), #fff); border: 1px solid color-mix(in srgb, var(--column-accent) 20%, #e2e8f0); border-radius: 12px; box-shadow: 0 10px 24px rgba(15,23,42,.08); color: #64748b; display: grid; font-size: 10px; font-weight: 950; gap: 8px; grid-template-columns: 54px minmax(0, 1fr) 78px 58px; margin: 0 2px; padding: 7px 10px; position: sticky; text-transform: uppercase; top: 76px; z-index: 40; }
         .publicRankingList { display: grid; gap: 9px; }
         .publicRankingRow, .publicRankingEmpty { background: rgba(255,255,255,.94); border: 1px solid #e2e8f0; border-radius: 18px; box-shadow: 0 14px 38px rgba(15,23,42,.06); }
-        .publicRankingRow { align-items: center; background: radial-gradient(circle at 0 0, var(--soft), transparent 36%), rgba(255,255,255,.96); border-color: color-mix(in srgb, var(--accent) 18%, #e2e8f0); display: grid; gap: 11px; grid-template-columns: 62px 56px minmax(0,1fr) auto; padding: 12px; }
-        .publicRankingRow.is-top { min-height: 92px; }
-        .publicRankingRow.is-compact { grid-template-columns: 52px 44px minmax(0,1fr) auto; padding: 9px 10px; }
+        .publicRankingRow { align-items: center; background: radial-gradient(circle at 0 0, var(--soft), transparent 36%), rgba(255,255,255,.96); border-color: color-mix(in srgb, var(--accent) 18%, #e2e8f0); display: grid; gap: 14px; grid-template-columns: 64px 78px minmax(0,1fr) 92px; padding: 14px; }
+        .publicRankingRow.is-top { min-height: 112px; }
+        .publicRankingRow.is-compact { grid-template-columns: 54px 68px minmax(0,1fr) 86px; min-height: 92px; padding: 12px; }
         .publicRankingPlace { color: #061b3a; display: grid; justify-items: center; }
         .publicRankingPlace svg { color: #f59e0b; }
         .publicRankingPlace strong { font-size: 25px; font-weight: 950; letter-spacing: -.06em; }
         .publicRankingRow.is-compact .publicRankingPlace strong { font-size: 19px; }
-        .publicRankingAvatar { align-items: center; background: linear-gradient(135deg, #e0f2fe, #fae8ff); border: 3px solid #fff; border-radius: 999px; box-shadow: 0 12px 26px rgba(2,132,199,.16); color: #061b3a; display: flex; font-size: 14px; font-weight: 950; height: 56px; justify-content: center; overflow: hidden; width: 56px; }
+        .publicRankingAvatar { align-items: center; background: linear-gradient(135deg, #e0f2fe, #fae8ff); border: 4px solid #fff; border-radius: 999px; box-shadow: 0 16px 34px rgba(2,132,199,.2), 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent); color: #061b3a; display: flex; font-family: "Outfit", Inter, system-ui, sans-serif; font-size: 18px; font-weight: 950; height: 78px; justify-content: center; overflow: hidden; width: 78px; }
         .publicRankingAvatar.has-image { background-image: var(--avatar); background-position: center; background-size: cover; }
-        .publicRankingRow.is-compact .publicRankingAvatar { height: 44px; width: 44px; }
+        .publicRankingRow.is-compact .publicRankingAvatar { height: 68px; width: 68px; }
         .publicRankingInfo { display: grid; gap: 4px; min-width: 0; }
-        .publicRankingInfo > strong { font-size: 16px; font-weight: 950; line-height: 1.08; overflow-wrap: anywhere; }
+        .publicRankingInfo > strong { font-family: "Outfit", Inter, system-ui, sans-serif; font-size: 18px; font-weight: 950; line-height: 1.08; overflow-wrap: anywhere; }
         .publicRankingInfo > span { color: #64748b; font-size: 12px; font-weight: 850; }
         .publicRankingInfo em { align-items: center; color: #475569; display: inline-flex; font-size: 11px; font-style: normal; font-weight: 900; gap: 5px; min-width: 0; }
         .publicRankingInfo i { align-items: center; background: #061b3a; border-radius: 999px; color: #fff; display: inline-flex; font-size: 7px; font-style: normal; font-weight: 950; height: 18px; justify-content: center; width: 18px; }
         .publicRankingInfo i.has-image { background-image: var(--club-logo); background-position: center; background-size: cover; }
         .publicRankingRow img { display: none !important; height: 0 !important; max-height: 0 !important; max-width: 0 !important; width: 0 !important; }
-        .publicRankingPoints { color: #061b3a; display: grid; justify-items: end; min-width: 72px; }
-        .publicRankingPoints strong { font-size: 22px; font-weight: 950; letter-spacing: -.05em; }
-        .publicRankingPoints span { color: #64748b; font-size: 11px; font-weight: 900; text-transform: uppercase; }
+        .publicRankingPoints { align-self: stretch; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, white), rgba(255,255,255,.96)); border: 1px solid color-mix(in srgb, var(--accent) 24%, #dbe6f0); border-radius: 16px; color: #061b3a; display: grid; justify-content: center; justify-items: end; min-width: 86px; padding: 8px 10px; place-content: center end; }
+        .publicRankingPoints strong { font-family: "Rajdhani", "Outfit", Inter, system-ui, sans-serif; font-size: 34px; font-weight: 950; letter-spacing: -.04em; line-height: .82; }
+        .publicRankingPoints span { color: #334155; font-family: "Rajdhani", Inter, system-ui, sans-serif; font-size: 12px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
         .publicRankingEmpty { color: #64748b; display: grid; gap: 6px; padding: 18px; }
         .publicRankingEmpty strong { color: #061b3a; font-weight: 950; }
         .publicRankingEmpty p { margin: 0; }
+        @media (max-width: 1120px) {
+          .publicRankingPickerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
         @media (max-width: 920px) {
-          .publicRankingClubGrid, .publicRankingFilters, .publicRankingBoard { grid-template-columns: 1fr; }
-          .publicRankingColumn header { top: 64px; }
+          .publicRankingPickerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .publicRankingFilters, .publicRankingBoard { grid-template-columns: 1fr; }
+          .publicRankingLabels { top: 64px; }
+        }
+        @media (max-width: 820px) {
+          .publicRankingBoard.mobile-gender-M .publicRankingColumn[data-ranking-gender="F"],
+          .publicRankingBoard.mobile-gender-F .publicRankingColumn[data-ranking-gender="M"] { display: none; }
         }
         @media (max-width: 640px) {
           .publicRankingHero { border-radius: 20px; min-height: 180px; padding: 24px 18px; }
-          .publicRankingClubCard { grid-template-columns: 58px minmax(0,1fr); }
-          .publicRankingClubLogo { border-radius: 15px; height: 58px; width: 58px; }
-          .publicRankingClubCard button { grid-column: 1 / -1; justify-self: start; }
+          .publicRankingPickerGrid { grid-template-columns: 1fr; }
+          .publicRankingPickerCard { gap: 8px 12px; grid-template-columns: 64px minmax(0, 1fr); grid-template-rows: auto auto; min-height: 112px; padding: 14px; }
+          .publicRankingPickerLogo { border-radius: 16px; font-size: 12px; height: 64px; min-width: 64px; padding: 4px; width: 64px; }
+          .publicRankingPickerBody { gap: 4px; grid-column: 2; grid-row: 1; }
+          .publicRankingPickerBody h2 { font-size: 20px; line-height: 1.06; }
+          .publicRankingPickerLine { height: 2px; width: 46px; }
+          .publicRankingPickerBody p { font-size: 11px; line-height: 1.15; }
+          .publicRankingPickerCta { font-size: 11px; grid-column: 2; grid-row: 2; height: 22px; justify-self: end; padding: 0; }
+          .publicRankingPickerWatermark { display: none; }
           .publicRankingSelected { align-items: start; flex-direction: column; }
-          .publicRankingRow, .publicRankingRow.is-compact { grid-template-columns: 46px 44px minmax(0,1fr); }
-          .publicRankingPoints { grid-column: 2 / 4; justify-items: start; padding-left: 2px; }
+          .publicRankingRow,
+          .publicRankingRow.is-top,
+          .publicRankingRow.is-compact {
+            gap: 7px;
+            grid-template-columns: 22px 28px minmax(0,1fr) minmax(84px, max-content);
+            min-height: 46px;
+            overflow: visible;
+            padding: 6px 7px;
+          }
+          .publicRankingAvatar,
+          .publicRankingRow.is-compact .publicRankingAvatar {
+            height: 28px;
+            width: 28px;
+          }
+          .publicRankingPlace strong,
+          .publicRankingRow.is-compact .publicRankingPlace strong {
+            font-size: 14px;
+          }
+          .publicRankingInfo > strong {
+            font-size: 13px;
+            line-height: 1.12;
+            overflow: visible;
+            white-space: normal;
+          }
+          .publicRankingInfo em,
+          .publicRankingPlace svg {
+            display: none;
+          }
+          .publicRankingLabels {
+            gap: 6px;
+            grid-template-columns: 32px minmax(0, 1fr) 56px 64px;
+            padding: 6px 8px;
+          }
+          .publicRankingPoints { grid-column: 4; grid-row: 1; justify-items: end; min-width: 84px; padding-left: 0; white-space: nowrap; }
+          .publicRankingPoints strong { font-size: 15px; }
         }
       `}</style>
     </main>

@@ -10,7 +10,6 @@ import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
 import { hasAnyClubPermission } from '@/lib/clubPermissions'
 import { getClubTheme } from '@/lib/clubThemes'
-import { PLATFORM_NOTIFICATION_TYPES } from '@/lib/notificationScope'
 import { supabase } from '@/lib/supabaseClient'
 
 type PreviewNotification = {
@@ -20,6 +19,7 @@ type PreviewNotification = {
   message: string
   read: boolean
   link: string | null
+  href?: string | null
   created_at: string
   metadata?: Record<string, any> | null
 }
@@ -94,10 +94,62 @@ function formatDate(value: string) {
   }
 }
 
+function relativeDate(value: string) {
+  try {
+    const diff = Date.now() - new Date(value).getTime()
+    const minute = 60_000
+    const hour = 60 * minute
+    const day = 24 * hour
+    if (diff < minute) return 'Ahora'
+    if (diff < hour) return `${Math.max(1, Math.floor(diff / minute))} min`
+    if (diff < day) return `${Math.floor(diff / hour)} h`
+    if (diff < day * 7) return `${Math.floor(diff / day)} d`
+    return formatDate(value)
+  } catch {
+    return formatDate(value)
+  }
+}
+
 function previewText(value: string, max = 78) {
   const clean = (value || '').replace(/\s+/g, ' ').trim()
   if (clean.length <= max) return clean
   return `${clean.slice(0, max - 1)}…`
+}
+
+function notificationIconLabel(type: string) {
+  const key = String(type ?? '').toLowerCase()
+  if (key.includes('payment') || key.includes('pago')) return '$'
+  if (key.includes('message') || key.includes('mensaje')) return 'M'
+  if (key.includes('registration') || key.includes('inscrip')) return 'I'
+  if (key.includes('cancel') || key.includes('baja')) return 'B'
+  if (key.includes('club')) return 'C'
+  return 'P'
+}
+
+function isMissingColumnError(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? '').toLowerCase()
+  return error?.code === '42703' || error?.code === 'PGRST204' || message.includes('column') || message.includes('schema cache')
+}
+
+function messageHrefForRole(role: string | null | undefined) {
+  if (role === 'club') return '/club/mensajes'
+  if (role === 'platform') return '/platform/mensajes'
+  if (role === 'player') return '/player/mensajes'
+  return '/mensajes'
+}
+
+type NavSearchResult = {
+  type: 'jugador' | 'torneo' | 'club' | 'noticia'
+  title: string
+  subtitle: string
+  href: string
+}
+
+const searchTypeLabels: Record<NavSearchResult['type'], string> = {
+  jugador: 'Jugadores',
+  torneo: 'Torneos',
+  club: 'Clubes',
+  noticia: 'Noticias',
 }
 
 function canShowClubNavItem(clubRole: string | null | undefined, item: NavItem) {
@@ -126,6 +178,7 @@ export default function AppNavbarClient() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const navCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -156,16 +209,16 @@ export default function AppNavbarClient() {
   const { role, clubRole, user, activeClub, clubs, setActiveClub, signOut } = useSession()
   const currentSearch = searchParams.toString()
   const cfg = useMemo(() => NAV_CONFIG[role || 'guest'], [role])
-  const nav = useMemo(() => {
-    const items = cfg.main as NavItem[]
-    return role === 'club' ? filterClubNavItems(items, clubRole) : items
-  }, [cfg.main, clubRole, role])
 
   const [navOpenIndex, setNavOpenIndex] = useState<number | null>(null)
   const [userOpen, setUserOpen] = useState(false)
   const [clubOpen, setClubOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<NavSearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
   const [notificationPreview, setNotificationPreview] = useState<PreviewNotification[]>([])
   const [previewModal, setPreviewModal] = useState<PreviewNotification | null>(null)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
@@ -176,6 +229,14 @@ export default function AppNavbarClient() {
   const showRight = cfg.right || {}
   const displayClub = activeClub ?? clubs?.[0] ?? null
   const displayClubName = displayClub?.name?.trim() ? displayClub.name : 'Mi Club'
+  const clubPublicHomeHref = displayClub?.id ? `/clubs/${displayClub.id}` : '/club'
+  const nav = useMemo(() => {
+    const items = cfg.main as NavItem[]
+    const contextualItems = role === 'club'
+      ? items.map((item) => item.label === 'Inicio' ? { ...item, href: clubPublicHomeHref } : item)
+      : items
+    return role === 'club' ? filterClubNavItems(contextualItems, clubRole) : contextualItems
+  }, [cfg.main, clubPublicHomeHref, clubRole, role])
   const activeClubTheme = useMemo(() => getClubTheme(activeClubThemeKey), [activeClubThemeKey])
   const clubThemeStyle = useMemo(
     () => ({
@@ -222,6 +283,7 @@ export default function AppNavbarClient() {
         setClubOpen(false)
         setMobileMenuOpen(false)
         setNotificationsOpen(false)
+        setSearchOpen(false)
       }
     }
 
@@ -232,6 +294,7 @@ export default function AppNavbarClient() {
         setClubOpen(false)
         setMobileMenuOpen(false)
         setNotificationsOpen(false)
+        setSearchOpen(false)
         setPreviewModal(null)
       }
     }
@@ -253,8 +316,15 @@ export default function AppNavbarClient() {
     setClubOpen(false)
     setMobileMenuOpen(false)
     setNotificationsOpen(false)
+    setSearchOpen(false)
     setPreviewModal(null)
   }, [currentSearch, pathname])
+
+  useEffect(() => {
+    if (!searchOpen) return
+    const timeout = window.setTimeout(() => searchInputRef.current?.focus(), 40)
+    return () => window.clearTimeout(timeout)
+  }, [searchOpen])
 
   async function loadPreviewData() {
     if (!isAuthed || !user?.id) {
@@ -273,18 +343,13 @@ export default function AppNavbarClient() {
 
     let previewNotificationsQuery = supabase
       .from('notifications')
-      .select('id, type, title, message, read, link, created_at, metadata')
+      .select('id, type, title, message, read, link, href, created_at, metadata')
       .eq('user_id', user.id)
       .neq('type', 'message')
       .order('created_at', { ascending: false })
-      .limit(3)
+      .limit(10)
 
-    if (role === 'platform') {
-      unreadNotificationsQuery = unreadNotificationsQuery.in('type', PLATFORM_NOTIFICATION_TYPES as unknown as string[])
-      previewNotificationsQuery = previewNotificationsQuery.in('type', PLATFORM_NOTIFICATION_TYPES as unknown as string[])
-    }
-
-    const [{ count: nCount }, { count: mCount }, previewRes] = await Promise.all([
+    const [{ count: nCount }, { count: mCount }, previewInitialRes] = await Promise.all([
       unreadNotificationsQuery,
       supabase
         .from('messages')
@@ -293,6 +358,17 @@ export default function AppNavbarClient() {
         .eq('read', false),
       previewNotificationsQuery,
     ])
+    let previewRes: any = previewInitialRes
+
+    if (previewRes.error && isMissingColumnError(previewRes.error)) {
+      previewRes = await supabase
+        .from('notifications')
+        .select('id, type, title, message, read, link, created_at, metadata')
+        .eq('user_id', user.id)
+        .neq('type', 'message')
+        .order('created_at', { ascending: false })
+        .limit(10)
+    }
 
     setUnreadNotifications(nCount ?? 0)
     setUnreadMessages(mCount ?? 0)
@@ -318,6 +394,115 @@ export default function AppNavbarClient() {
     setClubOpen(false)
     setMobileMenuOpen(false)
     setNotificationsOpen(false)
+    setSearchOpen(false)
+  }
+
+  function toggleSearch() {
+    setSearchOpen((value) => !value)
+    setNavOpenIndex(null)
+    setUserOpen(false)
+    setClubOpen(false)
+    setNotificationsOpen(false)
+  }
+
+  useEffect(() => {
+    const q = searchQuery.trim()
+    if (!searchOpen || q.length < 2) {
+      setSearchResults([])
+      setSearchLoading(false)
+      return
+    }
+
+    let alive = true
+    setSearchLoading(true)
+    const timeout = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&context=${encodeURIComponent(role || 'guest')}`, {
+          cache: 'no-store',
+        })
+        const data = await res.json().catch(() => [])
+        if (alive) setSearchResults(Array.isArray(data) ? data : [])
+      } catch {
+        if (alive) setSearchResults([])
+      } finally {
+        if (alive) setSearchLoading(false)
+      }
+    }, 250)
+
+    return () => {
+      alive = false
+      window.clearTimeout(timeout)
+    }
+  }, [role, searchOpen, searchQuery])
+
+  function submitSearch() {
+    const q = searchQuery.trim()
+    if (!q) return
+    const destination = searchResults[0]?.href
+    if (!destination) return
+    setSearchOpen(false)
+    router.push(destination)
+  }
+
+  function openSearchResult(href: string) {
+    setSearchOpen(false)
+    router.push(href)
+  }
+
+  function renderSearchPanel() {
+    if (!searchOpen) return null
+    const groupedResults = searchResults.reduce<Record<string, NavSearchResult[]>>((acc, item) => {
+      ;(acc[item.type] ??= []).push(item)
+      return acc
+    }, {})
+    const orderedTypes: NavSearchResult['type'][] = ['jugador', 'torneo', 'club', 'noticia']
+
+    return (
+      <div className="px-searchPanel" role="search">
+        <form
+          className="px-searchBox"
+          onSubmit={(event) => {
+            event.preventDefault()
+            submitSearch()
+          }}
+        >
+          <Search size={17} aria-hidden="true" />
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Buscar torneos, jugadores, clubes, noticias..."
+            aria-label="Buscar torneos, jugadores, clubes, noticias"
+          />
+          <button type="button" onClick={() => { setSearchQuery(''); setSearchOpen(false) }} aria-label="Cerrar búsqueda">
+            <X size={16} />
+          </button>
+        </form>
+        {searchQuery.trim() ? (
+          <div className="px-searchResults" aria-label="Resultados de búsqueda">
+            {searchLoading ? <div className="px-searchEmpty">Buscando...</div> : null}
+            {!searchLoading && searchQuery.trim().length >= 2 && searchResults.length ? orderedTypes.map((type) => {
+              const items = groupedResults[type] ?? []
+              if (!items.length) return null
+              return (
+                <div className="px-searchGroup" key={type}>
+                  <span>{searchTypeLabels[type]}</span>
+                  {items.map((item) => (
+                    <button key={`${item.type}-${item.href}`} type="button" onClick={() => openSearchResult(item.href)}>
+                      <strong>{item.title}</strong>
+                      <small>{item.subtitle}</small>
+                    </button>
+                  ))}
+                </div>
+              )
+            }) : null}
+            {!searchLoading && searchQuery.trim().length >= 2 && !searchResults.length ? (
+              <div className="px-searchEmpty">Sin resultados</div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    )
   }
 
   async function openNotification(item: PreviewNotification) {
@@ -329,8 +514,9 @@ export default function AppNavbarClient() {
 
     setNotificationsOpen(false)
 
-    if (item.link) {
-      router.push(item.link)
+    const destination = item.href || item.link
+    if (destination) {
+      router.push(destination)
       return
     }
 
@@ -359,8 +545,11 @@ export default function AppNavbarClient() {
     if (role === 'club') {
       return (
         <div className="px-navDropdown px-navDropdown--right" role="menu">
-          <Link className="px-ddItem" href="/club/configuracion">Configuración del club</Link>
-          <Link className="px-ddItem" href="/ajustes">Preferencias</Link>
+          <Link className="px-ddItem" href="/club/configuracion">Preferencias</Link>
+          <button className="px-ddItem px-ddItem--disabled" type="button" disabled>Auditoría / actividad <span>Próximamente</span></button>
+          <Link className="px-ddItem" href="/club/usuarios">Seguridad y permisos</Link>
+          <button className="px-ddItem px-ddItem--disabled" type="button" disabled>Soporte <span>Próximamente</span></button>
+          <Link className="px-ddItem" href={clubPublicHomeHref}>Ver home pública del club</Link>
           <button className="px-ddItem px-ddItem--danger" onClick={signOut}>Cerrar sesión</button>
         </div>
       )
@@ -434,7 +623,7 @@ export default function AppNavbarClient() {
         <div className="px-left">
           <div className="px-dd px-clubWrap">
             {cfg.leftMode === 'club-static' ? (
-              <Link href="/club" className="px-clubBtn px-clubBtn--themed" style={clubThemeStyle} aria-label="Inicio del club">
+              <Link href={clubPublicHomeHref} className="px-clubBtn px-clubBtn--themed" style={clubThemeStyle} aria-label="Inicio público del club">
                 {clubHomeContent}
               </Link>
             ) : (
@@ -539,7 +728,11 @@ export default function AppNavbarClient() {
         </div>
 
         {notificationPreview.length === 0 ? (
-          <div className="px-notifPreview__empty">No tenés notificaciones nuevas.</div>
+          <div className="px-notifPreview__empty">
+            <span className="px-notifPreview__emptyIcon">N</span>
+            <strong>No tenés notificaciones todavía.</strong>
+            <p>Cuando haya novedades importantes van a aparecer acá.</p>
+          </div>
         ) : (
           notificationPreview.map((item) => (
             <button
@@ -548,14 +741,22 @@ export default function AppNavbarClient() {
               className={`px-notifPreview__item ${item.read ? 'is-read' : 'is-unread'}`}
               onClick={() => openNotification(item)}
             >
-              <div className="px-notifPreview__row">
-                <div className="px-notifPreview__title">{item.title}</div>
-                <div className="px-notifPreview__date">{formatDate(item.created_at)}</div>
+              <span className="px-notifPreview__icon" aria-hidden="true">{notificationIconLabel(item.type)}</span>
+              <div className="px-notifPreview__body">
+                <div className="px-notifPreview__row">
+                  <div className="px-notifPreview__title">{item.title}</div>
+                  <div className="px-notifPreview__date">{relativeDate(item.created_at)}</div>
+                </div>
+                <div className="px-notifPreview__msg">{previewText(item.message)}</div>
               </div>
-              <div className="px-notifPreview__msg">{previewText(item.message)}</div>
+              {!item.read ? <span className="px-notifPreview__dot" aria-label="No leída" /> : null}
             </button>
           ))
         )}
+
+        <Link href="/notificaciones" className="px-notifPreview__footer" onClick={() => setNotificationsOpen(false)}>
+          Ver todas las notificaciones
+        </Link>
       </div>
     )
   }
@@ -565,7 +766,7 @@ export default function AppNavbarClient() {
       <div className="px-right">
         <div className="px-icons">
           {showRight.search ? (
-            <button className="px-iconBtn" aria-label="Buscar" onClick={() => router.push('/buscar')}><Search size={18} /></button>
+            <button className={`px-iconBtn ${searchOpen ? 'is-active' : ''}`} aria-label="Buscar" aria-expanded={searchOpen} onClick={toggleSearch}><Search size={18} /></button>
           ) : null}
           {showRight.notifications ? (
             <div className="px-dd" style={{ position: 'relative' }}>
@@ -577,7 +778,7 @@ export default function AppNavbarClient() {
             </div>
           ) : null}
           {showRight.messages ? (
-            <Link className="px-iconBtn" href="/mensajes" aria-label="Mensajes">
+            <Link className="px-iconBtn" href={messageHrefForRole(role)} aria-label="Mensajes">
               <Mail size={18} />
               {unreadMessages > 0 ? <span className="px-iconBadge">{unreadMessages > 99 ? '99+' : unreadMessages}</span> : null}
             </Link>
@@ -651,7 +852,7 @@ export default function AppNavbarClient() {
     if (role === 'guest') {
       return (
         <div className="px-mobileActions">
-          <button className="px-iconBtn" aria-label="Buscar" onClick={() => router.push('/buscar')}><Search size={17} /></button>
+          <button className={`px-iconBtn ${searchOpen ? 'is-active' : ''}`} aria-label="Buscar" aria-expanded={searchOpen} onClick={toggleSearch}><Search size={17} /></button>
           <button
             type="button"
             className="px-burger"
@@ -667,8 +868,13 @@ export default function AppNavbarClient() {
 
     return (
       <div className="px-mobileActions">
+        {showRight.search ? (
+          <button className={`px-iconBtn ${searchOpen ? 'is-active' : ''}`} aria-label="Buscar" aria-expanded={searchOpen} onClick={toggleSearch}>
+            <Search size={17} />
+          </button>
+        ) : null}
         {showRight.messages ? (
-          <Link className="px-iconBtn" href="/mensajes" aria-label="Mensajes">
+          <Link className="px-iconBtn" href={messageHrefForRole(role)} aria-label="Mensajes">
             <Mail size={17} />
             {unreadMessages > 0 ? <span className="px-iconBadge">{unreadMessages > 99 ? '99+' : unreadMessages}</span> : null}
           </Link>
@@ -697,7 +903,7 @@ export default function AppNavbarClient() {
     return (
       <div className="px-mobileMenu" role="dialog" aria-label="Menú móvil">
         {role !== 'guest' ? (
-          <button className="px-mobileLink" type="button" onClick={() => { closeAllMenus(); router.push('/buscar') }}>
+          <button className="px-mobileLink" type="button" onClick={() => { setMobileMenuOpen(false); setSearchOpen(true) }}>
             Buscar
           </button>
         ) : null}
@@ -729,7 +935,7 @@ export default function AppNavbarClient() {
 
   return (
     <>
-      <header className="px-nav" ref={rootRef}>
+      <header className="px-nav" ref={rootRef} style={clubThemeStyle}>
         <div className="px-navgrid px-desktopBar">
           {renderDesktopLeft()}
           {renderDesktopCenter()}
@@ -743,6 +949,7 @@ export default function AppNavbarClient() {
         </div>
 
         {renderMobileMenu()}
+        {renderSearchPanel()}
       </header>
 
       {previewModal ? (

@@ -19,6 +19,7 @@ type TournamentRow = {
   tournament_type: string | null
   format: string | null
   gender: string | null
+  segment: string | null
   category_id: number | null
   category: number | null
   fixed_category_id: number | null
@@ -206,7 +207,7 @@ export async function GET(
 
     const { data: tournament, error: tournamentError } = await supabaseAdmin
       .from('tournaments')
-      .select('id,club_id,name,status,type,tournament_type,format,gender,category_id,category,fixed_category_id,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,points_total,created_at,updated_at')
+      .select('id,club_id,name,status,type,tournament_type,format,gender,segment,category_id,category,fixed_category_id,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,points_total,created_at,updated_at')
       .eq('id', tournamentId)
       .eq('club_id', clubId)
       .maybeSingle()
@@ -354,6 +355,7 @@ export async function GET(
         type: getTournamentType(tournamentRow),
         format: tournamentRow.format,
         gender: tournamentRow.gender,
+        segment: tournamentRow.segment ?? 'LIBRES',
         category_id: categoryId,
         category_name: categoryName,
         start_date: getDate(tournamentRow.starts_on, tournamentRow.start_date),

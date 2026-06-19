@@ -13,6 +13,7 @@ type TournamentRow = {
   tournament_type: string | null
   format: string | null
   gender: string | null
+  segment: string | null
   category_id: number | null
   category: number | null
   start_date: string | null
@@ -38,6 +39,7 @@ type CreateTournamentInput = {
   name?: unknown
   type?: unknown
   gender?: unknown
+  segment?: unknown
   category_id?: unknown
   segment_type?: unknown
   public_description?: unknown
@@ -152,7 +154,7 @@ function buildFlyerRules(value: unknown) {
 }
 
 function buildTournamentConfigRules(value: CreateTournamentInput) {
-  const segmentType = normalizeText(value.segment_type) ?? 'LIBRES'
+  const segmentType = normalizeText(value.segment_type ?? value.segment) ?? 'LIBRES'
   const publicDescription = normalizeText(value.public_description)
   const competitionSystem = normalizeText(value.competition_system) ?? 'GROUPS_PLAYOFF'
   const venueName = normalizeText(value.venue_name)
@@ -209,7 +211,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
 
     const { data: tournaments, error: tournamentsError } = await supabaseAdmin
       .from('tournaments')
-      .select('id,club_id,name,status,type,tournament_type,format,gender,category_id,category,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,rules_json,created_at,updated_at')
+      .select('id,club_id,name,status,type,tournament_type,format,gender,segment,category_id,category,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,rules_json,created_at,updated_at')
       .eq('club_id', clubId)
       .order('start_date', { ascending: false })
       .limit(100)
@@ -245,6 +247,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
           type: getTournamentType(row),
           format: row.format,
           gender: row.gender,
+          segment: row.segment ?? row.rules_json?.segment_type ?? 'LIBRES',
           category_id: categoryId,
           category_name: categoryId ? categories.get(categoryId) ?? `Categoría ${categoryId}` : null,
           start_date: getStartDate(row),
@@ -347,6 +350,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
       tournament_type: type,
       format: 'GROUPS_ELIMINATION',
       gender,
+      segment: tournamentConfigRules.segment_type,
       category_id: categoryId,
       category: categoryId,
       category_rule: 'FIXED_CATEGORY',
@@ -381,7 +385,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
     const { data, error } = await supabaseAdmin
       .from('tournaments')
       .insert(payload)
-      .select('id,name,status,type,tournament_type,gender,category_id,category,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,created_at,updated_at')
+      .select('id,name,status,type,tournament_type,gender,segment,category_id,category,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,created_at,updated_at')
       .maybeSingle()
 
     if (error) {

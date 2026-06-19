@@ -1,12 +1,17 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Crown, TrendingUp } from 'lucide-react'
+import RankingPlayerAvatar from '@/components/ranking/RankingPlayerAvatar'
 import { useSession } from '@/components/session/SessionProvider'
-import { getClubInitials } from '@/lib/clubAssets'
-import { getClubTheme } from '@/lib/clubThemes'
+import {
+  formatRankingCategory,
+  formatRankingGender,
+  normalizeRankingGender,
+  sortRankingRows,
+  withRankingPositions,
+} from '@/lib/ranking'
 import { supabase } from '@/lib/supabaseClient'
 
 type RankingRow = {
@@ -30,47 +35,13 @@ type RankingResponse = {
   error?: string
 }
 
-function formatGender(value?: string | null) {
-  const normalized = normalizeGender(value)
-  if (normalized === 'M' || normalized === 'MALE') return 'Masculino'
-  if (normalized === 'F' || normalized === 'FEMALE') return 'Femenino'
-  if (normalized === 'MIXED' || normalized === 'MIXTO') return 'Mixto'
-  return 'Sin rama'
-}
-
-function normalizeGender(value?: string | null) {
-  const normalized = String(value ?? '').toUpperCase()
-  if (normalized === 'MALE') return 'M'
-  if (normalized === 'FEMALE') return 'F'
-  return normalized || 'UNKNOWN'
-}
-
-function formatCategory(value?: number | null) {
-  return value ? `${value}ta` : 'Sin categoría'
-}
+const PAMP_CYAN = '#06b6d4'
+const PAMP_MAGENTA = '#ec4899'
+const PAMP_GLOW = 'rgba(6, 182, 212, 0.18)'
 
 function formatDate(value?: string | null) {
   if (!value) return 'Sin fecha'
   return new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value))
-}
-
-function withContextPositions(rows: RankingRow[]) {
-  let lastPoints: number | null = null
-  let lastPosition = 0
-  return rows.map((row, index) => {
-    const contextualPosition = lastPoints === row.ranking_points ? lastPosition : index + 1
-    lastPoints = row.ranking_points
-    lastPosition = contextualPosition
-    return { ...row, contextualPosition }
-  })
-}
-
-function PlayerAvatar({ name, src }: { name: string; src?: string | null }) {
-  return (
-    <span className="playerRankAvatar">
-      {src ? <Image src={src} alt="" fill sizes="74px" /> : getClubInitials(name)}
-    </span>
-  )
 }
 
 export default function PlayerMyRankingPage() {
@@ -78,30 +49,6 @@ export default function PlayerMyRankingPage() {
   const [data, setData] = useState<RankingResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
-  const [themeKey, setThemeKey] = useState<string | null>(null)
-  const theme = getClubTheme(themeKey)
-
-  useEffect(() => {
-    let alive = true
-
-    async function loadTheme() {
-      if (!session.activeClub?.id) {
-        setThemeKey(null)
-        return
-      }
-      const { data: club } = await supabase
-        .from('clubs')
-        .select('theme_key')
-        .eq('id', session.activeClub.id)
-        .maybeSingle()
-      if (alive) setThemeKey((club?.theme_key as string | null) ?? null)
-    }
-
-    void loadTheme()
-    return () => {
-      alive = false
-    }
-  }, [session.activeClub?.id])
 
   useEffect(() => {
     let alive = true
@@ -151,10 +98,12 @@ export default function PlayerMyRankingPage() {
 
   const contextualRanking = useMemo(() => {
     if (!myRow) return []
-    return withContextPositions(
-      (data?.individual ?? [])
-        .filter((row) => row.category === myRow.category && normalizeGender(row.gender) === normalizeGender(myRow.gender))
-        .sort((a, b) => b.ranking_points - a.ranking_points || a.full_name.localeCompare(b.full_name))
+    return withRankingPositions(
+      sortRankingRows(
+        (data?.individual ?? [])
+          .filter((row) => row.category === myRow.category && normalizeRankingGender(row.gender) === normalizeRankingGender(myRow.gender))
+      ),
+      'contextualPosition',
     )
   }, [data?.individual, myRow])
 
@@ -184,9 +133,9 @@ export default function PlayerMyRankingPage() {
     <main
       className="playerRankShell"
       style={{
-        ['--rank-accent' as string]: theme.vars.accent,
-        ['--rank-accent-2' as string]: theme.vars.accent2,
-        ['--rank-glow' as string]: theme.vars.glow,
+        ['--rank-accent' as string]: PAMP_CYAN,
+        ['--rank-accent-2' as string]: PAMP_MAGENTA,
+        ['--rank-glow' as string]: PAMP_GLOW,
       }}
     >
       <section className="playerRankHero">
@@ -195,7 +144,7 @@ export default function PlayerMyRankingPage() {
           <h1>Mi ranking</h1>
           <p>
             {session.activeClub?.name ?? 'Club activo'}
-            {myRow ? ` · ${formatCategory(myRow.category)} · ${formatGender(myRow.gender)}` : ' · Situación deportiva actual'}
+            {myRow ? ` · ${formatRankingCategory(myRow.category)} · ${formatRankingGender(myRow.gender)}` : ' · Situación deportiva actual'}
           </p>
         </div>
         <Link href="/player/ranking/club">Ver ranking del club <ArrowRight size={16} /></Link>
@@ -211,14 +160,14 @@ export default function PlayerMyRankingPage() {
         <>
           <section className="playerRankCard">
             <div className="playerRankMain">
-              <PlayerAvatar name={myRow.full_name} src={myRow.avatar_url} />
+              <RankingPlayerAvatar className="playerRankAvatar" name={myRow.full_name} src={myRow.avatar_url} sizes="74px" />
               <div>
                 <span>Posición actual</span>
                 <div className="playerRankIdentityLine">
                   <strong>#{myContextRow?.contextualPosition ?? myRow.position}</strong>
                   <div>
                     <p>{myRow.full_name}</p>
-                    <small>{formatCategory(myRow.category)} · {formatGender(myRow.gender)}</small>
+                    <small>{formatRankingCategory(myRow.category)} · {formatRankingGender(myRow.gender)}</small>
                     <span className="playerRankBadges">
                       <em>Vos</em>
                       {(myContextRow?.contextualPosition ?? myRow.position) === 1 ? <i>Líder</i> : null}
@@ -230,7 +179,7 @@ export default function PlayerMyRankingPage() {
             <div className="playerRankPoints">
               <span>Puntos</span>
               <strong>{myRow.ranking_points}</strong>
-              <small>{formatCategory(myRow.category)} · {formatGender(myRow.gender)}</small>
+              <small>{formatRankingCategory(myRow.category)} · {formatRankingGender(myRow.gender)}</small>
             </div>
           </section>
 
@@ -242,8 +191,14 @@ export default function PlayerMyRankingPage() {
           <section className="playerRankContext">
             <header>
               <span>Ranking contextual</span>
-              <h2>{formatCategory(myRow.category)} · {formatGender(myRow.gender)}</h2>
+              <h2>{formatRankingCategory(myRow.category)} · {formatRankingGender(myRow.gender)}</h2>
             </header>
+            <div className="playerRankContextLabels" aria-hidden="true">
+              <span>Pos.</span>
+              <span>Jugador</span>
+              <span>Categoría</span>
+              <span>Puntos</span>
+            </div>
             <div className="playerRankContextList">
               {contextualWindow.map((player) => {
                 const isMe = player.user_id === session.user?.id
@@ -254,10 +209,10 @@ export default function PlayerMyRankingPage() {
                     key={player.player_id}
                   >
                     <strong className="playerRankContextPlace">#{player.contextualPosition}</strong>
-                    <PlayerAvatar name={player.full_name} src={player.avatar_url} />
+                    <RankingPlayerAvatar className="playerRankAvatar" name={player.full_name} src={player.avatar_url} sizes="50px" />
                     <div>
                       <b>{player.full_name}</b>
-                      <span>{formatCategory(player.category)} · {formatGender(player.gender)}</span>
+                      <span>{formatRankingCategory(player.category)} · {formatRankingGender(player.gender)}</span>
                     </div>
                     {isMe ? <em>Vos</em> : null}
                     <i>{player.ranking_points} pts</i>
@@ -325,6 +280,7 @@ export default function PlayerMyRankingPage() {
         .playerRankContext header { align-items: end; display: flex; justify-content: space-between; gap: 12px; }
         .playerRankContext header span { color: var(--rank-accent); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
         .playerRankContext h2 { font-size: 22px; font-weight: 950; letter-spacing: -.02em; margin: 0; }
+        .playerRankContextLabels { background: linear-gradient(135deg, color-mix(in srgb, var(--rank-accent) 16%, white), rgba(255,255,255,.98)); border: 1px solid color-mix(in srgb, var(--rank-accent) 32%, #e2e8f0); border-radius: 999px; box-shadow: 0 12px 28px rgba(15,23,42,.08); color: #64748b; display: grid; font-size: 10px; font-weight: 950; gap: 10px; grid-template-columns: 58px minmax(0, 1fr) 92px 72px; padding: 7px 12px; position: sticky; text-transform: uppercase; top: 76px; z-index: 30; backdrop-filter: blur(10px); }
         .playerRankContextList { display: grid; gap: 8px; }
         .playerRankContextRow { align-items: center; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; color: #061b3a; display: grid; gap: 10px; grid-template-columns: 58px 50px minmax(0, 1fr) auto auto; padding: 10px 12px; text-decoration: none; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
         .playerRankContextRow:hover { border-color: color-mix(in srgb, var(--rank-accent) 36%, #e2e8f0); transform: translateY(-1px); }
@@ -348,12 +304,13 @@ export default function PlayerMyRankingPage() {
           .playerRankPoints { border-left: 0; border-top: 1px solid #e2e8f0; justify-items: start; padding-left: 0; padding-top: 14px; text-align: left; }
           .playerRankStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .playerRankContext header { align-items: start; display: grid; }
-          .playerRankContextRow { grid-template-columns: 44px 44px minmax(0, 1fr); }
-          .playerRankContextRow em { justify-self: start; }
-          .playerRankContextRow i { grid-column: 3; }
-        }
-        @media (max-width: 420px) {
-          .playerRankStats { grid-template-columns: 1fr; }
+          .playerRankContextLabels { grid-template-columns: 32px minmax(0, 1fr) 56px 64px; top: 64px; }
+          .playerRankContextRow { border-radius: 12px; gap: 7px; grid-template-columns: 22px 28px minmax(0, 1fr) minmax(84px, max-content); min-height: 46px; padding: 6px 7px; }
+          .playerRankContextRow .playerRankAvatar { height: 28px; width: 28px; }
+          .playerRankContextRow b { overflow: visible; text-overflow: clip; white-space: normal; }
+          .playerRankContextRow span { font-size: 11px; line-height: 1.15; }
+          .playerRankContextRow em { display: none; }
+          .playerRankContextRow i { grid-column: 4; grid-row: 1; justify-self: end; min-width: 84px; text-align: right; white-space: nowrap; }
         }
       `}</style>
     </main>

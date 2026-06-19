@@ -1,11 +1,16 @@
 'use client'
 
-import Image from 'next/image'
-import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import RankingBoard, { type RankingBoardRow } from '@/components/ranking/RankingBoard'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
-import { getClubInitials } from '@/lib/clubAssets'
+import { getClubTheme } from '@/lib/clubThemes'
+import {
+  filterRankingRows,
+  normalizeRankingGender,
+  sortRankingRows,
+  withRankingPositions,
+} from '@/lib/ranking'
 
 type IndividualRankingRow = {
   position: number
@@ -71,67 +76,15 @@ const categoryOptions = [
 
 const genderOptions = [
   { value: 'all', label: 'Todos' },
-  { value: 'M', label: 'Masculino' },
-  { value: 'F', label: 'Femenino' },
+  { value: 'M', label: 'Caballeros' },
+  { value: 'F', label: 'Damas' },
   { value: 'MIXED', label: 'Mixto' },
 ]
 
-function formatCategory(value?: number | null) {
-  if (!value) return 'Sin categoría'
-  return categoryOptions.find((option) => option.value === String(value))?.label ?? `${value}`
-}
-
-function formatGender(value?: string | null) {
-  const normalized = String(value ?? '').toUpperCase()
-  if (normalized === 'M' || normalized === 'MALE') return 'Masculino'
-  if (normalized === 'F' || normalized === 'FEMALE') return 'Femenino'
-  if (normalized === 'MIXED') return 'Mixto'
-  return 'Sin género'
-}
-
-function normalizeGender(value?: string | null) {
-  const normalized = String(value ?? '').toUpperCase()
-  if (normalized === 'MALE') return 'M'
-  if (normalized === 'FEMALE') return 'F'
-  return normalized || 'UNKNOWN'
-}
-
-function matchesSearch(value: string, query: string) {
-  return value.toLowerCase().includes(query.trim().toLowerCase())
-}
-
-function PlayerAvatar({ name, src }: { name: string; src?: string | null }) {
-  return (
-    <span className="club-rankingAvatar">
-      {src ? <Image src={src} alt={name} fill sizes="38px" /> : getClubInitials(name)}
-    </span>
-  )
-}
-
-function getTopBadge(position: number) {
-  if (position === 1) return 'Líder'
-  if (position <= 3) return 'Podio'
-  if (position <= 10) return 'Top 10'
-  return null
-}
-
-function withVisualPositions(rows: IndividualRankingRow[]) {
-  const pointCounts = new Map<number, number>()
-  rows.forEach((row) => pointCounts.set(row.ranking_points, (pointCounts.get(row.ranking_points) ?? 0) + 1))
-
-  let lastPoints: number | null = null
-  let lastPosition = 0
-  return rows.map((row, index) => {
-    const position = lastPoints === row.ranking_points ? lastPosition : index + 1
-    lastPoints = row.ranking_points
-    lastPosition = position
-    return {
-      ...row,
-      genderPosition: position,
-      isTied: (pointCounts.get(row.ranking_points) ?? 0) > 1,
-    }
-  })
-}
+const PAMP_CYAN = '#06b6d4'
+const PAMP_MAGENTA = '#ec4899'
+const PAMP_SOFT = 'rgba(6, 182, 212, 0.12)'
+const PAMP_GLOW = 'rgba(6, 182, 212, 0.18)'
 
 function formatUpdatedAt(value?: string | null) {
   if (!value) return 'Sin fecha'
@@ -139,10 +92,6 @@ function formatUpdatedAt(value?: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
-}
-
-function getGenderColumnLabel(gender: 'M' | 'F') {
-  return gender === 'M' ? 'Masculino' : 'Femenino'
 }
 
 export default function ClubRankingPage() {
@@ -153,7 +102,8 @@ export default function ClubRankingPage() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [data, setData] = useState<RankingResponse | null>(null)
-  const showTechnicalWarnings = process.env.NODE_ENV === 'development'
+  const [themeKey, setThemeKey] = useState<string | null>(null)
+  const theme = getClubTheme(themeKey)
 
   async function getToken() {
     const { data: sessionData } = await supabase.auth.getSession()
@@ -198,14 +148,29 @@ export default function ClubRankingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClub?.id])
 
+  useEffect(() => {
+    let alive = true
+    async function loadTheme() {
+      if (!activeClub?.id) {
+        setThemeKey(null)
+        return
+      }
+      const { data: club } = await supabase
+        .from('clubs')
+        .select('theme_key')
+        .eq('id', activeClub.id)
+        .maybeSingle()
+      if (alive) setThemeKey((club?.theme_key as string | null) ?? null)
+    }
+    void loadTheme()
+    return () => {
+      alive = false
+    }
+  }, [activeClub?.id])
+
   const filteredIndividual = useMemo(() => {
     const rows = data?.individual ?? []
-    return rows.filter((row) => {
-      if (category !== 'all' && String(row.category ?? '') !== category) return false
-      if (gender !== 'all' && normalizeGender(row.gender) !== gender) return false
-      if (query.trim() && !matchesSearch(`${row.full_name} ${row.email ?? ''}`, query)) return false
-      return true
-    })
+    return filterRankingRows(rows, { category, gender, query })
   }, [data?.individual, category, gender, query])
 
   const summary = useMemo(() => {
@@ -228,65 +193,56 @@ export default function ClubRankingPage() {
   const rankingsByGender = useMemo(() => {
     return {
       M: filteredIndividual
-        .filter((player) => normalizeGender(player.gender) === 'M')
-        .sort((a, b) => b.ranking_points - a.ranking_points || a.full_name.localeCompare(b.full_name)),
+        .filter((player) => normalizeRankingGender(player.gender) === 'M'),
       F: filteredIndividual
-        .filter((player) => normalizeGender(player.gender) === 'F')
-        .sort((a, b) => b.ranking_points - a.ranking_points || a.full_name.localeCompare(b.full_name)),
-    }
+        .filter((player) => normalizeRankingGender(player.gender) === 'F'),
+    } satisfies Record<'M' | 'F', IndividualRankingRow[]>
   }, [filteredIndividual])
 
-  function renderPlayerRow(player: IndividualRankingRow & { genderPosition: number; isTied: boolean }, accent: 'cyan' | 'pink') {
-    const topBadge = getTopBadge(player.genderPosition)
-    const isTopTen = player.genderPosition <= 10
+  const sortedRankingsByGender = useMemo(() => {
+    return {
+      M: sortRankingRows(rankingsByGender.M),
+      F: sortRankingRows(rankingsByGender.F),
+    }
+  }, [rankingsByGender])
 
-    return (
-      <Link
-        href={`/club/jugadores/${player.user_id}`}
-        className={[
-          'club-rankingPlayerRow',
-          `club-rankingPlayerRow--${accent}`,
-          isTopTen ? 'is-top10' : 'is-compact',
-          player.genderPosition === 1 ? 'is-leader' : '',
-          player.genderPosition <= 3 ? 'is-podium' : '',
-        ].filter(Boolean).join(' ')}
-        key={player.user_id}
-      >
-        <div className="club-rankingPlace">
-          <strong>{player.genderPosition}</strong>
-          <span>—</span>
-        </div>
-
-        <PlayerAvatar name={player.full_name} src={player.avatar_url} />
-
-        <div className="club-rankingPlayerMain">
-          <div className="club-rankingPlayerTitle">
-            <strong>{player.full_name}</strong>
-            {player.genderPosition === 1 ? <span className="club-rankingCrown">#1</span> : null}
-            {topBadge && player.genderPosition !== 1 ? <span className="club-rankingTopBadge">{topBadge}</span> : null}
-            {player.isTied ? <span className="club-rankingTieBadge">Empate</span> : null}
-          </div>
-          <div className="club-rankingPlayerMeta">
-            <span>{formatCategory(player.category)}</span>
-            <span>{formatGender(player.gender)}</span>
-          </div>
-        </div>
-
-        <div className="club-rankingPoints">
-          <strong>{player.ranking_points}</strong>
-          <span>pts</span>
-        </div>
-      </Link>
-    )
-  }
+  const rankingBoardColumns = useMemo(() => {
+    return visibleColumns.map((columnGender) => ({
+      gender: columnGender,
+      rows: withRankingPositions(sortedRankingsByGender[columnGender], 'genderPosition').map((player) => ({
+        id: player.user_id,
+        name: player.full_name,
+        avatarUrl: player.avatar_url,
+        category: player.category,
+        gender: player.gender,
+        points: player.ranking_points,
+        position: player.genderPosition,
+        isTied: player.isTied,
+        href: `/club/jugadores/${player.user_id}`,
+      } satisfies RankingBoardRow)),
+    }))
+  }, [sortedRankingsByGender, visibleColumns])
 
   return (
     <div className="club-shell">
-      <div className="club-panel club-rankingPage">
+      <div
+        className="club-panel club-rankingPage"
+        style={{
+          ['--club-ranking-accent' as string]: PAMP_CYAN,
+          ['--club-ranking-accent-2' as string]: PAMP_MAGENTA,
+          ['--club-ranking-soft' as string]: PAMP_SOFT,
+          ['--club-ranking-glow' as string]: PAMP_GLOW,
+          ['--rank-mobile-glow' as string]: PAMP_GLOW,
+          ['--club-theme-accent' as string]: theme.vars.accent,
+          ['--club-theme-accent-2' as string]: theme.vars.accent2,
+          ['--club-theme-soft' as string]: theme.vars.soft,
+          ['--club-theme-glow' as string]: theme.vars.glow,
+        }}
+      >
         <header className="club-rankingHero">
           <div>
             <span className="club-kicker">Ranking derivado</span>
-            <h1 className="club-title">Ranking interno</h1>
+            <h1 className="club-title">Ranking del club</h1>
             <p className="club-sub">
               {activeClub?.name ?? 'Club'} · Actualizado {formatUpdatedAt(data?.meta?.generatedAt)}
             </p>
@@ -303,26 +259,18 @@ export default function ClubRankingPage() {
           <>
             {message ? <div className="club-rankingAlert club-rankingAlert--danger">{message}</div> : null}
 
-            {showTechnicalWarnings && (data?.meta?.warnings ?? []).length > 0 ? (
-              <div className="club-rankingAlert">
-                {(data?.meta?.warnings ?? []).map((warning) => (
-                  <p key={warning}>{warning}</p>
-                ))}
-              </div>
-            ) : null}
-
             <section className="club-rankingStats" aria-label="Resumen de ranking">
               <article>
                 <span>Total jugadores</span>
                 <strong>{summary.players}</strong>
               </article>
               <article>
-                <span>Masculino</span>
-                <strong>{rankingsByGender.M.length}</strong>
+                <span>Caballeros</span>
+                <strong>{sortedRankingsByGender.M.length}</strong>
               </article>
               <article>
-                <span>Femenino</span>
-                <strong>{rankingsByGender.F.length}</strong>
+                <span>Damas</span>
+                <strong>{sortedRankingsByGender.F.length}</strong>
               </article>
               <article>
                 <span>Puntos totales</span>
@@ -358,30 +306,7 @@ export default function ClubRankingPage() {
             {loading ? (
               <div className="px-empty">Cargando ranking...</div>
             ) : (
-              <section className={`club-rankingBoard ${visibleColumns.length === 1 ? 'is-single' : ''}`} aria-label="Ranking individual por género">
-                {visibleColumns.map((columnGender) => {
-                  const accent = columnGender === 'M' ? 'cyan' : 'pink'
-                  const rows = withVisualPositions(rankingsByGender[columnGender])
-                  return (
-                    <article className={`club-rankingColumn club-rankingColumn--${accent}`} key={columnGender}>
-                      <header className="club-rankingColumnHeader">
-                        <div>
-                          <span>Ranking</span>
-                          <strong>{getGenderColumnLabel(columnGender)}</strong>
-                        </div>
-                        <em>{rows.length} jugadores</em>
-                      </header>
-                      <div className="club-rankingColumnList">
-                        {rows.length === 0 ? (
-                          <div className="px-empty">Sin jugadores para los filtros seleccionados.</div>
-                        ) : (
-                          rows.map((player) => renderPlayerRow(player, accent))
-                        )}
-                      </div>
-                    </article>
-                  )
-                })}
-              </section>
+              <RankingBoard columns={rankingBoardColumns} />
             )}
 
             <footer className="club-rankingFootnote">
@@ -396,25 +321,58 @@ export default function ClubRankingPage() {
         .club-rankingPage {
           display: grid;
           gap: 16px;
+          background: rgba(255,255,255,.96);
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 22px;
+          box-shadow: 0 22px 60px rgba(15,23,42,.08);
+          overflow: visible;
+          position: relative;
+        }
+
+        .club-rankingPage::before {
+          background: linear-gradient(90deg, var(--club-theme-accent), var(--club-theme-accent-2));
+          content: "";
+          height: 5px;
+          inset: 0 0 auto;
+          position: absolute;
+          z-index: 1;
         }
 
         .club-rankingHero {
           align-items: flex-start;
+          background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-theme-soft));
+          border: 1px solid rgba(15,23,42,.06);
+          border-radius: 18px;
           display: flex;
           gap: 16px;
           justify-content: space-between;
+          margin-top: 6px;
+          padding: 18px;
+        }
+
+        .club-rankingHero .club-kicker {
+          color: var(--club-theme-accent);
         }
 
         .club-rankingRefresh {
-          background: #d7f9ff;
-          border: 1px solid #7dd9e8;
-          border-radius: 10px;
-          color: #063449;
+          background: #061b3a;
+          border: 1px solid color-mix(in srgb, var(--club-theme-accent) 42%, transparent);
+          border-radius: 999px;
+          box-shadow: 0 12px 28px var(--club-theme-glow);
+          color: #fff;
           cursor: pointer;
           font: inherit;
           font-size: 0.86rem;
-          font-weight: 850;
-          padding: 10px 13px;
+          font-weight: 950;
+          min-height: 40px;
+          padding: 0 15px;
+          transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+        }
+
+        .club-rankingRefresh:hover:not(:disabled) {
+          border-color: var(--club-theme-accent);
+          box-shadow: 0 16px 34px var(--club-theme-glow);
+          transform: translateY(-1px);
         }
 
         .club-rankingRefresh:disabled {
@@ -431,8 +389,8 @@ export default function ClubRankingPage() {
         }
 
         .club-rankingAlert {
-          background: #effaff;
-          border: 1px solid #bfecf7;
+          background: color-mix(in srgb, var(--club-ranking-accent) 8%, white);
+          border: 1px solid color-mix(in srgb, var(--club-ranking-accent) 22%, transparent);
           border-radius: 12px;
           color: #17435a;
           display: grid;
@@ -466,8 +424,8 @@ export default function ClubRankingPage() {
         .club-rankingCard,
         .club-rankingFootnote {
           background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 14px;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 16px;
           box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
         }
 
@@ -475,6 +433,17 @@ export default function ClubRankingPage() {
           display: grid;
           gap: 5px;
           padding: 13px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .club-rankingStats article::before {
+          background: linear-gradient(180deg, var(--club-ranking-accent), var(--club-ranking-accent-2));
+          border-radius: 999px;
+          content: "";
+          inset: 12px auto 12px 0;
+          position: absolute;
+          width: 4px;
         }
 
         .club-rankingStats span {
@@ -486,7 +455,7 @@ export default function ClubRankingPage() {
         .club-rankingStats strong {
           color: #061b3a;
           font-size: 1.45rem;
-          font-weight: 850;
+          font-weight: 950;
           line-height: 1;
         }
 
@@ -556,6 +525,13 @@ export default function ClubRankingPage() {
           padding: 9px 10px;
         }
 
+        .club-rankingFilters select:focus,
+        .club-rankingFilters input:focus {
+          border-color: color-mix(in srgb, var(--club-ranking-accent) 45%, transparent);
+          box-shadow: 0 0 0 3px var(--club-ranking-soft);
+          outline: none;
+        }
+
         .club-rankingList {
           display: grid;
           gap: 12px;
@@ -573,42 +549,74 @@ export default function ClubRankingPage() {
 
         .club-rankingColumn {
           background: #ffffff;
-          border: 1px solid #e2e8f0;
+          border: 1px solid rgba(15,23,42,.08);
           border-radius: 18px;
           box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07);
+          display: grid;
+          gap: 10px;
           min-width: 0;
           overflow: visible;
+          padding: 12px;
           position: relative;
         }
 
         .club-rankingColumn::before {
-          border-radius: 18px 18px 0 0;
-          content: "";
-          height: 4px;
-          inset: 0 0 auto;
-          position: absolute;
+          display: none;
         }
 
         .club-rankingColumn--cyan::before {
-          background: #35d3e4;
+          background: linear-gradient(90deg, var(--club-ranking-accent), var(--club-ranking-accent-2));
         }
 
         .club-rankingColumn--pink::before {
-          background: #f05aa9;
+          background: linear-gradient(90deg, var(--club-ranking-accent-2), var(--club-ranking-accent));
         }
 
         .club-rankingColumnHeader {
           align-items: center;
-          background: rgba(255, 255, 255, 0.92);
-          border-bottom: 1px solid #e2e8f0;
-          border-radius: 18px 18px 0 0;
-          display: flex;
+          background: linear-gradient(135deg, color-mix(in srgb, var(--club-ranking-accent) 16%, white), rgba(255, 255, 255, 0.98));
+          border: 1px solid color-mix(in srgb, var(--club-ranking-accent) 32%, #e2e8f0);
+          border-top: 3px solid var(--club-ranking-accent);
+          border-radius: 14px;
+          box-shadow: 0 10px 22px rgba(15, 23, 42, 0.07);
+          display: grid;
           gap: 12px;
+          grid-template-columns: minmax(0, 1fr) auto;
           justify-content: space-between;
-          padding: 18px 18px 14px;
+          padding: 14px;
+          position: relative;
+          z-index: 2;
+          backdrop-filter: blur(12px);
+        }
+
+        .club-rankingColumn--pink .club-rankingColumnHeader {
+          background: linear-gradient(135deg, color-mix(in srgb, var(--club-ranking-accent-2) 16%, white), rgba(255, 255, 255, 0.98));
+          border-color: color-mix(in srgb, var(--club-ranking-accent-2) 32%, #e2e8f0);
+          border-top-color: var(--club-ranking-accent-2);
+        }
+
+        .club-rankingColumnLabels {
+          background: linear-gradient(135deg, color-mix(in srgb, var(--club-ranking-accent) 10%, white), #fff);
+          border: 1px solid color-mix(in srgb, var(--club-ranking-accent) 20%, #e2e8f0);
+          border-radius: 12px;
+          color: #64748b;
+          display: grid;
+          font-size: 0.66rem;
+          font-weight: 950;
+          gap: 8px;
+          grid-template-columns: 48px minmax(0, 1fr) 82px 64px;
+          margin: 0;
+          padding: 7px 10px;
           position: sticky;
-          top: 84px;
-          z-index: 3;
+          top: 76px;
+          text-transform: uppercase;
+          z-index: 40;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .club-rankingColumn--pink .club-rankingColumnLabels {
+          background: linear-gradient(135deg, color-mix(in srgb, var(--club-ranking-accent-2) 10%, white), #fff);
+          border-color: color-mix(in srgb, var(--club-ranking-accent-2) 20%, #e2e8f0);
         }
 
         .club-rankingColumnHeader span {
@@ -629,10 +637,10 @@ export default function ClubRankingPage() {
         }
 
         .club-rankingColumnHeader em {
-          background: #f8fafc;
-          border: 1px solid #dbe5ef;
+          background: rgba(255,255,255,.86);
+          border: 1px solid color-mix(in srgb, var(--club-ranking-accent) 24%, #dbe5ef);
           border-radius: 999px;
-          color: #475569;
+          color: #334155;
           font-size: 0.72rem;
           font-style: normal;
           font-weight: 850;
@@ -640,10 +648,26 @@ export default function ClubRankingPage() {
           white-space: nowrap;
         }
 
+        .club-rankingColumn--pink .club-rankingColumnHeader em {
+          border-color: color-mix(in srgb, var(--club-ranking-accent-2) 24%, #dbe5ef);
+        }
+
         .club-rankingColumnList {
           display: grid;
           gap: 9px;
-          padding: 12px;
+          padding: 0;
+        }
+
+        .club-rankingColumnList .px-empty {
+          align-items: center;
+          background: rgba(255,255,255,.94);
+          border: 1px solid #e2e8f0;
+          border-radius: 14px;
+          color: #64748b;
+          display: flex;
+          font-weight: 850;
+          min-height: 64px;
+          padding: 14px 12px;
         }
 
         .club-rankingPlayerRow {
@@ -708,31 +732,34 @@ export default function ClubRankingPage() {
         }
 
         .club-rankingPlayerRow:hover {
-          border-color: #9ee7f0;
-          box-shadow: 0 16px 34px rgba(15, 23, 42, 0.11);
+          border-color: color-mix(in srgb, var(--club-ranking-accent) 36%, #e2e8f0);
+          box-shadow: 0 16px 34px var(--club-ranking-glow);
           transform: translateY(-1px);
         }
 
         .club-rankingPlayerRow--pink:hover {
-          border-color: #f7b2d8;
+          border-color: color-mix(in srgb, var(--club-ranking-accent-2) 36%, #e2e8f0);
         }
 
         .club-rankingPlayerRow.is-podium {
-          border-color: #bfeaf1;
+          border-color: color-mix(in srgb, var(--club-ranking-accent) 42%, #e2e8f0);
+          background:
+            radial-gradient(circle at 0 0, var(--club-ranking-soft), transparent 42%),
+            #fff;
         }
 
         .club-rankingPlayerRow--pink.is-podium {
-          border-color: #f6c4dd;
+          border-color: color-mix(in srgb, var(--club-ranking-accent-2) 42%, #e2e8f0);
         }
 
         .club-rankingPlayerRow.is-leader {
           background: #fbfeff;
-          box-shadow: inset 0 0 0 1px rgba(53, 211, 228, 0.35), 0 14px 36px rgba(15, 23, 42, 0.08);
+          box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--club-ranking-accent) 34%, transparent), 0 16px 38px var(--club-ranking-glow);
         }
 
         .club-rankingPlayerRow--pink.is-leader {
           background: #fffafd;
-          box-shadow: inset 0 0 0 1px rgba(240, 90, 169, 0.28), 0 14px 36px rgba(15, 23, 42, 0.08);
+          box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--club-ranking-accent-2) 34%, transparent), 0 16px 38px var(--club-ranking-glow);
         }
 
         .club-rankingPairRail {
@@ -814,8 +841,8 @@ export default function ClubRankingPage() {
         }
 
         .club-rankingTopBadge {
-          background: #eafaff;
-          color: #08758f;
+          background: color-mix(in srgb, var(--club-ranking-accent) 10%, white);
+          color: var(--club-ranking-accent);
         }
 
         .club-rankingTieBadge {
@@ -825,8 +852,8 @@ export default function ClubRankingPage() {
         }
 
         .club-rankingPlayerRow--pink .club-rankingTopBadge {
-          background: #fff0f7;
-          color: #be185d;
+          background: color-mix(in srgb, var(--club-ranking-accent-2) 10%, white);
+          color: var(--club-ranking-accent-2);
         }
 
         .club-rankingPlayerMeta {
@@ -1149,10 +1176,6 @@ export default function ClubRankingPage() {
             grid-template-columns: 1fr;
           }
 
-          .club-rankingColumnHeader {
-            top: 72px;
-          }
-
           .club-rankingCard,
           .club-rankingCard--pair {
             grid-template-columns: 84px 1fr;
@@ -1169,9 +1192,16 @@ export default function ClubRankingPage() {
           }
         }
 
+        @media (max-width: 820px) {
+          .club-rankingBoard.mobile-gender-M .club-rankingColumn[data-ranking-gender="F"],
+          .club-rankingBoard.mobile-gender-F .club-rankingColumn[data-ranking-gender="M"] {
+            display: none;
+          }
+        }
+
         @media (max-width: 560px) {
           .club-rankingStats {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
           .club-rankingTabs {
@@ -1191,23 +1221,69 @@ export default function ClubRankingPage() {
 
           .club-rankingColumnHeader {
             padding: 15px 14px 12px;
+          }
+
+          .club-rankingColumnLabels {
+            gap: 6px;
+            grid-template-columns: 32px minmax(0, 1fr) 56px 64px;
+            padding: 6px 8px;
             top: 64px;
           }
 
           .club-rankingPlayerRow {
-            grid-template-columns: 42px 48px minmax(0, 1fr);
+            border-radius: 12px;
+            gap: 7px;
+            grid-template-columns: 22px 28px minmax(0, 1fr) minmax(84px, max-content);
+            min-height: 46px;
+            overflow: visible;
+            padding: 6px 7px;
           }
 
           .club-rankingPlayerRow .club-rankingAvatar {
-            border-radius: 14px;
-            flex-basis: 48px;
-            height: 48px;
-            width: 48px;
+            border-radius: 12px;
+            flex-basis: 28px;
+            height: 28px;
+            width: 28px;
+          }
+
+          .club-rankingPlace strong {
+            font-size: 1rem;
+          }
+
+          .club-rankingPlace span,
+          .club-rankingCrown,
+          .club-rankingTopBadge,
+          .club-rankingTieBadge {
+            display: none;
           }
 
           .club-rankingPoints {
-            grid-column: 3;
-            justify-items: start;
+            grid-column: 4;
+            grid-row: 1;
+            justify-items: end;
+            min-width: 84px;
+            white-space: nowrap;
+          }
+
+          .club-rankingPoints strong {
+            font-size: 1rem;
+          }
+
+          .club-rankingPoints span {
+            font-size: 0.6rem;
+          }
+
+          .club-rankingPlayerTitle strong {
+            font-size: 0.8rem;
+            line-height: 1.12;
+            overflow: visible;
+            text-overflow: clip;
+            white-space: normal;
+          }
+
+          .club-rankingPlayerMeta span {
+            font-size: 0.6rem;
+            padding: 3px 5px;
           }
 
           .club-rankingRank,
