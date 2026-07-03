@@ -11,6 +11,9 @@ import { getClubInitials } from '@/lib/clubAssets'
 import { hasAnyClubPermission } from '@/lib/clubPermissions'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
+import { BRAND } from '@/lib/branding'
+
+const SELPA_WORDMARK = '/brand/selpa-wordmark-clean.png'
 
 type PreviewNotification = {
   id: string
@@ -28,6 +31,13 @@ function shorten(text?: string, max = 16) {
   const value = (text || '').trim()
   if (!value) return ''
   return value.length > max ? `${value.slice(0, max - 1)}…` : value
+}
+
+function toTitleCaseName(text?: string) {
+  return (text || 'Usuario')
+    .trim()
+    .toLocaleLowerCase('es-AR')
+    .replace(/(^|\s|-)(\p{L})/gu, (match) => match.toLocaleUpperCase('es-AR'))
 }
 
 function normalizePath(p?: string | null) {
@@ -224,10 +234,12 @@ export default function AppNavbarClient() {
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [activeClubThemeKey, setActiveClubThemeKey] = useState<string | null>(null)
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null)
 
   const isAuthed = (role || 'guest') !== 'guest'
   const showRight = cfg.right || {}
   const displayClub = activeClub ?? clubs?.[0] ?? null
+  const isGlobalPublicNav = !isAuthed && !displayClub?.id
   const displayClubName = displayClub?.name?.trim() ? displayClub.name : 'Mi Club'
   const clubPublicHomeHref = displayClub?.id ? `/clubs/${displayClub.id}` : '/club'
   const nav = useMemo(() => {
@@ -247,6 +259,38 @@ export default function AppNavbarClient() {
     }) as React.CSSProperties,
     [activeClubTheme]
   )
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--px-active-club-accent', activeClubTheme.vars.accent)
+    return () => {
+      document.documentElement.style.removeProperty('--px-active-club-accent')
+    }
+  }, [activeClubTheme.vars.accent])
+
+  useEffect(() => {
+    let alive = true
+
+    ;(async () => {
+      if (!user?.id) {
+        setProfileAvatarUrl(null)
+        return
+      }
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (alive) {
+        setProfileAvatarUrl((data?.avatar_url as string | null) ?? null)
+      }
+    })()
+
+    return () => {
+      alive = false
+    }
+  }, [user?.id])
 
   useEffect(() => {
     let alive = true
@@ -533,8 +577,14 @@ export default function AppNavbarClient() {
 
   function UserAvatar() {
     const [broken, setBroken] = useState(false)
-    if (user?.avatarUrl && !broken) {
-      return <img src={user.avatarUrl} alt="" onError={() => setBroken(true)} />
+    const avatarSrc = profileAvatarUrl || user?.avatarUrl || null
+
+    useEffect(() => {
+      setBroken(false)
+    }, [avatarSrc])
+
+    if (avatarSrc && !broken) {
+      return <img src={avatarSrc} alt="" onError={() => setBroken(true)} />
     }
     return <span>{getClubInitials(user?.name || 'Usuario')}</span>
   }
@@ -646,8 +696,7 @@ export default function AppNavbarClient() {
     return (
       <div className="px-left">
         <Link href="/" className="px-brand">
-          <span className="px-brandLogo" aria-hidden="true">PX</span>
-          <span className="px-brandText">PAMPRAX</span>
+          <img className="px-brandImage" src={SELPA_WORDMARK} alt={BRAND.name.toUpperCase()} />
         </Link>
       </div>
     )
@@ -791,7 +840,7 @@ export default function AppNavbarClient() {
           <div className="px-userWrap px-dd">
             <button type="button" className="px-userBtn" onClick={() => setUserOpen((v) => !v)}>
               <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
-              <span className="px-userName">{shorten(user?.name || 'Usuario', 14)}</span>
+              <span className="px-userName">{shorten(toTitleCaseName(user?.name), 14)}</span>
               <ChevronDown size={16} className="px-caret" />
             </button>
             {renderUserMenu()}
@@ -804,8 +853,8 @@ export default function AppNavbarClient() {
   function renderMobileLeft() {
     if (role === 'guest') {
       return (
-        <Link href="/" className="px-mobileBrand" aria-label="PAMPRAX">
-          <span className="px-brandLogo" aria-hidden="true">PX</span>
+        <Link href="/" className="px-mobileBrand" aria-label={BRAND.name}>
+          <img className="px-mobileBrandImage" src={SELPA_WORDMARK} alt={BRAND.name.toUpperCase()} />
         </Link>
       )
     }
@@ -935,7 +984,7 @@ export default function AppNavbarClient() {
 
   return (
     <>
-      <header className="px-nav" ref={rootRef} style={clubThemeStyle}>
+      <header className={`px-nav${isGlobalPublicNav ? ' px-nav--global' : ''}`} ref={rootRef} style={clubThemeStyle}>
         <div className="px-navgrid px-desktopBar">
           {renderDesktopLeft()}
           {renderDesktopCenter()}

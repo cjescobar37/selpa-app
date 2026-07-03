@@ -1,14 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { CalendarDays, Crown, Sparkles, Trophy, UsersRound } from 'lucide-react'
 import { buildAssetProxyUrl } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
+import { BRAND } from '@/lib/branding'
 import PampraxHero from '@/components/ui/PampraxHero'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
-import { formatRankingGender, formatRankingPoints, normalizeRankingGender } from '@/lib/ranking'
+import { formatRankingPoints, normalizeRankingGender } from '@/lib/ranking'
 
 export type PublicClubCampaign = {
   id: string
@@ -44,6 +45,9 @@ export type PublicClubRankingSummary = {
   gender: string
   players: number
   leaderName: string
+  leaderPhotoUrl?: string | null
+  partnerName?: string | null
+  partnerPhotoUrl?: string | null
   leaderPoints: number
 }
 
@@ -87,6 +91,121 @@ const sponsorSlots = [
   { id: 'HOME_FOOTER_STRIP', title: 'Banner inferior', ratio: '12x2' },
 ] as const
 
+const PLACEHOLDER_TEXT = new Set(['adsasd', 'sdfsf', 'asdf', 'asdasd', 'test', 'testing', 'prueba', 'lorem', 'demo'])
+
+function validExternalUrl(value?: string | null) {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function hasMeaningfulCommercialText(value?: string | null) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized.length < 3) return false
+  if (PLACEHOLDER_TEXT.has(normalized)) return false
+  if (/^(.)\1{2,}$/.test(normalized)) return false
+  return true
+}
+
+function sponsorInitials(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('') || 'SP'
+}
+
+function playerInitials(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('') || 'SE'
+}
+
+function formatClubRankingBranch(value?: string | null) {
+  const normalized = normalizeRankingGender(value)
+  if (normalized === 'M') return 'Caballeros'
+  if (normalized === 'F') return 'Damas'
+  if (normalized === 'MIXED') return 'Mixto'
+  return 'Rama por definir'
+}
+
+function rankingBranchTone(value?: string | null) {
+  const normalized = normalizeRankingGender(value)
+  if (normalized === 'F') return 'magenta'
+  if (normalized === 'MIXED') return 'mixed'
+  if (normalized === 'M') return 'cyan'
+  return 'neutral'
+}
+
+function rankingBranchOrder(value?: string | null) {
+  const normalized = normalizeRankingGender(value)
+  if (normalized === 'M') return 1
+  if (normalized === 'F') return 2
+  if (normalized === 'MIXED') return 3
+  return 4
+}
+
+function demoRankingCategory(label = '6ta'): { label: string; isDemo: true; branches: PublicClubRankingSummary[] } {
+  return {
+    label,
+    isDemo: true,
+    branches: [
+    {
+      key: `demo-${label}-caballeros`,
+      label,
+      gender: 'M',
+      players: 42,
+      leaderName: 'Joaquín Pereyra',
+      partnerName: 'Marcos Díaz',
+      leaderPoints: 1280,
+    },
+    {
+      key: `demo-${label}-damas`,
+      label,
+      gender: 'F',
+      players: 36,
+      leaderName: 'Lucía Galarza',
+      partnerName: 'Sofía Núñez',
+      leaderPoints: 1215,
+    },
+  ],
+  }
+}
+
+function mergeDemoBranches(realGroup: { label: string; isDemo: boolean; branches: PublicClubRankingSummary[] }) {
+  const demoGroup = demoRankingCategory(realGroup.label)
+  const byGender = new Map<string, PublicClubRankingSummary>()
+  for (const branch of demoGroup.branches) byGender.set(normalizeRankingGender(branch.gender), branch)
+  for (const branch of realGroup.branches) byGender.set(normalizeRankingGender(branch.gender), branch)
+  return {
+    ...realGroup,
+    isDemo: true,
+    branches: Array.from(byGender.values()).sort((current, next) => rankingBranchOrder(current.gender) - rankingBranchOrder(next.gender)).slice(0, 2),
+  }
+}
+
+function splitPlayerName(value?: string | null) {
+  const parts = String(value ?? '').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return { first: 'Por', last: 'confirmar' }
+  if (parts.length === 1) return { first: parts[0], last: '' }
+  return { first: parts.slice(0, -1).join(' '), last: parts[parts.length - 1] }
+}
+
+function rankingCategoryHref(clubId: string, categoryLabel: string) {
+  const category = categoryLabel.match(/\d+/)?.[0]
+  const params = new URLSearchParams({ clubId })
+  if (category) params.set('category', category)
+  return `/ranking?${params.toString()}`
+}
+
 function formatDate(value?: string | null) {
   if (!value) return 'Fecha a confirmar'
   const date = new Date(value)
@@ -117,27 +236,31 @@ function CampaignSlot({
   hero?: boolean
 }) {
   const image = buildAssetProxyUrl(campaign?.imageUrl)
+  const targetUrl = validExternalUrl(campaign?.targetUrl)
+  const badge = campaign ? 'Publicidad en este club' : 'Espacio disponible'
+  const meta = campaign?.sponsorName ?? `Formato ${ratio} · Disponible`
   const body = (
     <>
       {image ? <img src={image} alt={campaign?.title ?? title} /> : null}
       <div className="clubPublicAdBody">
-        <span>{title}</span>
+        <span>{badge}</span>
         <strong>{campaign?.title ?? 'Este espacio puede ser tuyo'}</strong>
         <p>{campaign?.description ?? 'Presencia comercial premium dentro de la actividad pública del club.'}</p>
-        <em>{campaign?.sponsorName ?? `Formato ${ratio} · Disponible`}</em>
+        <em>{targetUrl ? <>Conocer más <b aria-hidden="true">→</b></> : meta}</em>
       </div>
     </>
   )
+  const className = `clubPublicAd ${hero ? 'is-hero' : ''} ${image ? 'has-image' : ''} ${campaign ? 'has-campaign' : 'is-empty'}`
 
-  if (campaign?.targetUrl) {
+  if (targetUrl) {
     return (
-      <a className={`clubPublicAd ${hero ? 'is-hero' : ''} ${image ? 'has-image' : ''}`} href={campaign.targetUrl} target="_blank" rel="noreferrer">
+      <a className={className} href={targetUrl} target="_blank" rel="noreferrer">
         {body}
       </a>
     )
   }
 
-  return <div className={`clubPublicAd ${hero ? 'is-hero' : ''} ${image ? 'has-image' : ''}`}>{body}</div>
+  return <div className={className}>{body}</div>
 }
 
 function SectionTitle({ kicker, title, action }: { kicker: string; title: string; action?: ReactNode }) {
@@ -163,7 +286,7 @@ export default function PublicClubHomeExperience({
   news = [],
 }: PublicClubHomeProps) {
   const theme = getClubTheme(club.themeKey)
-  const location = [club.city, club.province].filter(Boolean).join(' · ') || club.country || 'Club Pamprax'
+  const location = [club.city, club.province].filter(Boolean).join(' · ') || club.country || `Club ${BRAND.name}`
   const featuredNews = news.length
     ? news.slice(0, 3).map((item) => ({
       title: item.title,
@@ -190,7 +313,7 @@ export default function PublicClubHomeExperience({
       {
         title: 'Historias de jugadores y torneos',
         excerpt: 'La cobertura del circuito interno quedará integrada con la identidad visual del club.',
-        date: 'Pamprax',
+        date: BRAND.name,
         coverUrl: null,
         href: null,
       },
@@ -202,6 +325,89 @@ export default function PublicClubHomeExperience({
       return new Date(a.startDate ?? '2999-12-31').getTime() - new Date(b.startDate ?? '2999-12-31').getTime()
     })
     .slice(0, 4)
+  const rankingCategories = useMemo(() => {
+    const groups = new Map<string, { label: string; branches: PublicClubRankingSummary[] }>()
+    for (const item of rankingSummary) {
+      const key = item.label || 'Categoría por definir'
+      const current = groups.get(key) ?? { label: key, branches: [] }
+      current.branches.push(item)
+      groups.set(key, current)
+    }
+    const realGroups = Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        isDemo: false,
+        branches: group.branches
+          .sort((current, next) => rankingBranchOrder(current.gender) - rankingBranchOrder(next.gender))
+          .slice(0, 2),
+      }))
+
+    const hasCompleteRealCategory = realGroups.some((group) => {
+      const genders = new Set(group.branches.map((branch) => normalizeRankingGender(branch.gender)))
+      return genders.has('M') && genders.has('F')
+    })
+
+    const groupsForDisplay = hasCompleteRealCategory
+      ? realGroups
+      : realGroups.length
+        ? [mergeDemoBranches(realGroups[0]), ...realGroups.slice(1)]
+        : [demoRankingCategory()]
+    return groupsForDisplay
+      .slice(0, 6)
+  }, [rankingSummary])
+  const sponsorCampaigns = useMemo(() => {
+    return sponsorSlots
+      .map((slot) => {
+        const campaign = campaignsBySlot[slot.id] ?? null
+        if (!campaign) {
+          return {
+            id: `available-${slot.id}`,
+            displayTitle: 'Este espacio puede ser tuyo',
+            displayDescription: `Formato ${slot.ratio} disponible para marcas del club.`,
+            displayImage: null,
+            displayUrl: null,
+            isPlaceholder: true,
+          }
+        }
+        const title = hasMeaningfulCommercialText(campaign.sponsorName) ? campaign.sponsorName! : campaign.title
+        if (!hasMeaningfulCommercialText(title)) {
+          return {
+            id: `available-${slot.id}`,
+            displayTitle: 'Este espacio puede ser tuyo',
+            displayDescription: `Formato ${slot.ratio} disponible para marcas del club.`,
+            displayImage: null,
+            displayUrl: null,
+            isPlaceholder: true,
+          }
+        }
+        return {
+          id: campaign.id,
+          displayTitle: title.trim(),
+          displayDescription: hasMeaningfulCommercialText(campaign.description) ? campaign.description?.trim() ?? null : null,
+          displayImage: buildAssetProxyUrl(campaign.imageUrl),
+          displayUrl: validExternalUrl(campaign.targetUrl),
+          isPlaceholder: false,
+        }
+      })
+      .slice(0, 8)
+  }, [campaignsBySlot])
+  const [isSponsorCarouselPaused, setIsSponsorCarouselPaused] = useState(false)
+  const sponsorCarouselRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!sponsorCampaigns.length || isSponsorCarouselPaused) return
+    const carousel = sponsorCarouselRef.current
+    if (!carousel) return
+    const interval = window.setInterval(() => {
+      const maxScrollLeft = carousel.scrollWidth - carousel.clientWidth
+      if (maxScrollLeft <= 0) return
+      const nextScrollLeft = carousel.scrollLeft + Math.min(280, carousel.clientWidth * 0.72)
+      carousel.scrollTo({
+        left: nextScrollLeft >= maxScrollLeft - 8 ? 0 : nextScrollLeft,
+        behavior: 'smooth',
+      })
+    }, 4200)
+    return () => window.clearInterval(interval)
+  }, [isSponsorCarouselPaused, sponsorCampaigns.length])
   const style = {
     ['--club-accent' as string]: theme.vars.accent,
     ['--club-accent-2' as string]: theme.vars.accent2,
@@ -259,6 +465,75 @@ export default function PublicClubHomeExperience({
         <CampaignSlot campaign={heroCampaign} title="Publicitá en este club" ratio="6x3" hero />
       </section>
 
+      <section>
+        <SectionTitle
+          kicker="Ranking del club"
+          title="Los números 1 del club por categoría"
+          action={<Link className="clubPublicSectionLink" href={`/ranking?clubId=${club.id}`}>Ver todos los rankings</Link>}
+        />
+        <div className="clubPublicRankingGrid">
+          {rankingCategories.length ? rankingCategories.map((category) => (
+            <Link
+              className={`clubPublicRankingCard ${category.isDemo ? 'is-demo' : ''}`}
+              href={rankingCategoryHref(club.id, category.label)}
+              key={`${category.isDemo ? 'demo' : 'real'}-${category.label}`}
+              aria-label={`Ver ranking de ${club.name} en ${category.label}`}
+            >
+              <div className="clubPublicRankingCategoryHead">
+                <small>Categoría</small>
+                <span>{category.label}</span>
+                {category.isDemo ? <small className="is-demo-label">Vista demo</small> : null}
+              </div>
+              <div className={`clubPublicRankingBranches ${category.branches.length === 1 ? 'is-single' : ''}`}>
+                {category.branches.map((item) => {
+                  const branchTone = rankingBranchTone(item.gender)
+                  const hasLeader = Boolean(item.leaderName && item.leaderName.trim())
+                  const leaderName = hasLeader ? item.leaderName : 'Ranking en formación'
+                  const partnerName = item.partnerName?.trim() || null
+                  const branchLabel = formatClubRankingBranch(item.gender)
+                  const leaderParts = splitPlayerName(leaderName)
+                  const partnerParts = splitPlayerName(partnerName)
+                  return (
+                    <div className={`clubPublicRankingBranch is-${branchTone}`} key={item.key}>
+                      <div className="clubPublicRankingBranchTop">
+                        <span>{branchLabel}</span>
+                        <b><i>#1</i><em>{formatRankingPoints(item.leaderPoints)}</em></b>
+                      </div>
+                      <div className="clubPublicRankingPair">
+                        <div className="clubPublicRankingPlayer">
+                          <RankingAvatar name={hasLeader ? leaderName : null} photoUrl={item.leaderPhotoUrl} tone={branchTone} />
+                          <strong><span>{leaderParts.first}</span><span>{leaderParts.last}</span></strong>
+                        </div>
+                        {partnerName || item.partnerPhotoUrl ? (
+                          <div className="clubPublicRankingPlayer">
+                            <RankingAvatar name={partnerName} photoUrl={item.partnerPhotoUrl} fallback="P2" tone={branchTone} secondary />
+                            <strong><span>{partnerParts.first}</span><span>{partnerParts.last}</span></strong>
+                          </div>
+                        ) : (
+                          <div className="clubPublicRankingPlayer is-pending">
+                            <RankingAvatar name={null} photoUrl={null} fallback="P2" tone="neutral" secondary />
+                            <span>Pareja por confirmar</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="clubPublicRankingFooter">
+                Ver ranking completo de {category.label} <span aria-hidden="true">→</span>
+              </div>
+            </Link>
+          )) : (
+            <div className="clubPublicEmpty">
+              <Sparkles size={24} />
+              <strong>Ranking en preparación</strong>
+              <p>Faltan jugadores aprobados o puntos registrados para mostrar el resumen público.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
       <section className="clubPublicNewsSection">
         <SectionTitle kicker="Noticias del club" title="Actualidad deportiva" />
         <div className="clubPublicNewsGrid">
@@ -288,47 +563,72 @@ export default function PublicClubHomeExperience({
         </div>
       </section>
 
-      <section>
-        <SectionTitle
-          kicker="Ranking del club"
-          title="Categorías y ramas activas"
-          action={<Link className="clubPublicSectionLink" href="/ranking">Ver ranking completo</Link>}
-        />
-        <div className="clubPublicRankingGrid">
-          {rankingSummary.length ? rankingSummary.map((item) => (
-            <article className={`clubPublicRankingCard clubPublicRankingCard--${normalizeRankingGender(item.gender) === 'F' ? 'magenta' : 'cyan'}`} key={item.key}>
-              <span>{formatRankingGender(item.gender)}</span>
-              <h3>{item.label}</h3>
-              <p>{item.players} jugadores</p>
-              <div>
-                <em>Líder</em>
-                <strong>{item.leaderName}</strong>
-                <small>{formatRankingPoints(item.leaderPoints)}</small>
-              </div>
-            </article>
-          )) : (
-            <div className="clubPublicEmpty">
-              <Sparkles size={24} />
-              <strong>Ranking en preparación</strong>
-              <p>Faltan jugadores aprobados o puntos registrados para mostrar el resumen público.</p>
-            </div>
-          )}
+      <section className="clubPublicSponsorsPanel" aria-label="Sponsors del club">
+        <div className="clubPublicSponsorsIntro">
+          <span>Marcas que acompañan {club.name}</span>
+          <h2>Aliados que impulsan la comunidad.</h2>
+          <p>Sponsors y marcas presentes en la actividad pública del club.</p>
+          <button type="button">Conocé los aliados</button>
         </div>
-      </section>
-
-      <section>
-        <SectionTitle kicker="Sponsors y publicidad" title="Espacios comerciales del club" />
-        <div className="clubPublicSponsorGrid">
-          {sponsorSlots.map((slot) => (
-            <CampaignSlot
-              key={slot.id}
-              campaign={campaignsBySlot[slot.id] ?? null}
-              title={slot.title}
-              ratio={slot.ratio}
-            />
-          ))}
+        <div
+          className="clubPublicSponsorCarousel"
+          ref={sponsorCarouselRef}
+          onMouseEnter={() => setIsSponsorCarouselPaused(true)}
+          onMouseLeave={() => setIsSponsorCarouselPaused(false)}
+          onFocus={() => setIsSponsorCarouselPaused(true)}
+          onBlur={() => setIsSponsorCarouselPaused(false)}
+          onPointerDown={() => setIsSponsorCarouselPaused(true)}
+          onPointerUp={() => setIsSponsorCarouselPaused(false)}
+        >
+          {sponsorCampaigns.map((item, index) => {
+            const badge = item.isPlaceholder ? 'Espacio disponible' : index === 0 ? 'Sponsor principal' : 'Sponsor oficial'
+            const content = (
+              <>
+                <span className="clubPublicSponsorBadge">{badge}</span>
+                <span className={`clubPublicSponsorLogo ${item.displayImage ? 'has-image' : ''}`}>
+                  {item.displayImage ? <img src={item.displayImage} alt="" loading="lazy" decoding="async" /> : sponsorInitials(item.displayTitle)}
+                </span>
+                <span className="clubPublicSponsorBody">
+                  <strong>{item.displayTitle}</strong>
+                  {item.displayDescription ? <p>{item.displayDescription}</p> : null}
+                  {item.displayUrl ? <em>Conocer más <b aria-hidden="true">→</b></em> : null}
+                </span>
+              </>
+            )
+            return item.displayUrl ? (
+              <a className="clubPublicSponsorCard" href={item.displayUrl} target="_blank" rel="noreferrer" key={item.id}>
+                {content}
+              </a>
+            ) : (
+              <article className="clubPublicSponsorCard" key={item.id}>
+                {content}
+              </article>
+            )
+          })}
         </div>
       </section>
     </main>
+  )
+}
+
+function RankingAvatar({
+  name,
+  photoUrl,
+  fallback = 'SE',
+  tone = 'cyan',
+  secondary = false,
+}: {
+  name?: string | null
+  photoUrl?: string | null
+  fallback?: string
+  tone?: string
+  secondary?: boolean
+}) {
+  const image = buildAssetProxyUrl(photoUrl)
+  const label = name?.trim() || fallback
+  return (
+    <span className={`clubPublicRankingAvatar is-${tone} ${secondary ? 'is-secondary' : ''} ${image ? 'has-image' : ''}`}>
+      {image ? <img src={image} alt={label} loading="lazy" decoding="async" /> : playerInitials(label)}
+    </span>
   )
 }

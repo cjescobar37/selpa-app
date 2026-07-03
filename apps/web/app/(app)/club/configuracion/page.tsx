@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
-import {
-  buildLocalPreview,
-  getClubInitials,
-} from '@/lib/clubAssets'
-import { CLUB_THEMES, CLUB_THEME_LABELS, getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
+import { buildLocalPreview } from '@/lib/clubAssets'
+import { CLUB_THEMES, getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
+import { BrandingCard } from './_components/BrandingCard'
+import { SportsSettingsCard } from './_components/SportsSettingsCard'
+import { ThemeSelectorCard } from './_components/ThemeSelectorCard'
 
 type ClubForm = {
   name: string
@@ -69,7 +69,31 @@ const empty: ClubForm = {
   theme_locked: false,
 }
 
-const THEME_OPTIONS = Object.values(CLUB_THEMES)
+const visibleThemeKeys: ClubThemeKey[] = [
+  'forest',
+  'ocean',
+  'terracotta',
+  'royal',
+  'titanium',
+  'emerald',
+  'crimson',
+  'sunset',
+  'sand',
+  'violet',
+  'copper',
+  'midnight',
+  'lava',
+  'arctic',
+  'petrol',
+  'wine',
+  'olive',
+  'graphite',
+  'clay',
+  'lagoon',
+  'purpleRain',
+]
+
+const THEME_OPTIONS = visibleThemeKeys.map((key) => CLUB_THEMES[key])
 
 type BannerState =
   | { type: 'success' | 'error' | 'info'; text: string }
@@ -131,12 +155,46 @@ function getStatusLabel(status?: ClubStatus | null) {
   return 'Pendiente de aprobación'
 }
 
-function getReviewReason(review?: ClubReview | null) {
-  if (!review) return null
-  if (review.status === 'REJECTED') return review.rejection_reason
-  if (review.status === 'SUSPENDED') return review.suspension_reason
-  if (review.status === 'PENDING_APPROVAL') return review.correction_reason
-  return null
+const openingHourSections = [
+  { key: 'weekdays', label: 'Lunes a viernes' },
+  { key: 'saturday', label: 'Sábado' },
+  { key: 'sunday', label: 'Domingo' },
+] as const
+
+type OpeningHourKey = typeof openingHourSections[number]['key']
+type OpeningHourValues = Record<OpeningHourKey, string>
+
+function parseOpeningHours(value: string): OpeningHourValues {
+  const result: OpeningHourValues = { weekdays: '', saturday: '', sunday: '' }
+  const raw = value.trim()
+  if (!raw) return result
+
+  const parts = raw.split(/\s*[|;]\s*/).filter(Boolean)
+  for (const part of parts) {
+    const [label, ...rest] = part.split(':')
+    const normalizedLabel = label.trim().toLowerCase()
+    const content = rest.join(':').trim()
+    if (!content) continue
+    if (normalizedLabel.includes('lunes') || normalizedLabel.includes('viernes')) result.weekdays = content
+    else if (normalizedLabel.includes('sábado') || normalizedLabel.includes('sabado')) result.saturday = content
+    else if (normalizedLabel.includes('domingo')) result.sunday = content
+  }
+
+  if (!result.weekdays && !result.saturday && !result.sunday) {
+    result.weekdays = raw
+  }
+
+  return result
+}
+
+function serializeOpeningHours(values: OpeningHourValues) {
+  return openingHourSections
+    .map((section) => {
+      const value = values[section.key].trim()
+      return value ? `${section.label}: ${value}` : ''
+    })
+    .filter(Boolean)
+    .join(' | ')
 }
 
 export default function ClubConfiguracionPage() {
@@ -151,6 +209,7 @@ export default function ClubConfiguracionPage() {
   const [review, setReview] = useState<ClubReview | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [selectedRulesName, setSelectedRulesName] = useState<string>('')
+  const [pendingThemeKey, setPendingThemeKey] = useState<ClubThemeKey | null>(null)
 
   const displayLogo = useMemo(() => {
     if (logoPreview) return logoPreview
@@ -250,8 +309,18 @@ export default function ClubConfiguracionPage() {
     }
   }, [activeClub?.id])
 
+  useEffect(() => {
+    if (!activeClub?.id || typeof window === 'undefined') return
+    const stored = window.localStorage.getItem(`club-theme-request:${activeClub.id}`)
+    setPendingThemeKey(stored ? getClubTheme(stored).key : null)
+  }, [activeClub?.id])
+
   const onChange = (k: keyof ClubForm, value: string) =>
     setV((prev) => ({ ...prev, [k]: value }))
+  const openingHourValues = useMemo(() => parseOpeningHours(v.opening_hours), [v.opening_hours])
+  const onOpeningHourChange = (key: OpeningHourKey, value: string) => {
+    onChange('opening_hours', serializeOpeningHours({ ...openingHourValues, [key]: value }))
+  }
 
   async function hardSyncBranding() {
     await refresh()
@@ -360,10 +429,6 @@ export default function ClubConfiguracionPage() {
       rules_pdf_url: normalizeUrl(v.rules_pdf_url) || null,
       notes: v.notes || null,
     }
-    if (!v.theme_locked) {
-      payload.theme_key = getClubTheme(v.theme_key).key
-    }
-
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData?.session?.access_token
 
@@ -396,6 +461,21 @@ export default function ClubConfiguracionPage() {
     setBanner({ type: 'success', text: 'Cambios guardados.' })
   }
 
+  function submitThemeRequest(themeKey: ClubThemeKey) {
+    setPendingThemeKey(themeKey)
+    if (activeClub?.id && typeof window !== 'undefined') {
+      window.localStorage.setItem(`club-theme-request:${activeClub.id}`, themeKey)
+    }
+    setBanner({ type: 'success', text: 'Solicitud enviada para revisión.' })
+  }
+
+  function showMissingSportsModel() {
+    setBanner({
+      type: 'info',
+      text: 'Para activar esta configuración falta un modelo real en DB: categorías/ramas por club, segmentos, tipos, sistemas y catálogo de canchas.',
+    })
+  }
+
   return (
     <div className="club-shell">
       <div className="club-panel club-config" style={themeStyle}>
@@ -405,38 +485,13 @@ export default function ClubConfiguracionPage() {
             <h1 className="club-title">Configuración</h1>
             <p className="club-sub">Datos del club, branding, contacto y reglamento PDF.</p>
           </div>
-          <div className="club-configStats">
-            <span><b>{getStatusLabel(review?.status)}</b> estado</span>
-            <span><b>{CLUB_THEME_LABELS[selectedTheme.key]}</b> identidad</span>
-            <span><b>{v.theme_locked ? 'Fijada' : 'Editable'}</b> marca</span>
+          <div className="club-configOps">
+            <div>
+              <span>Estado del club</span>
+              <strong>{getStatusLabel(review?.status)}</strong>
+            </div>
           </div>
         </div>
-
-        {review ? (
-          <div
-            style={{
-              background: review.status === 'ACTIVE' ? '#ecfdf3' : '#fff7ed',
-              border: review.status === 'ACTIVE' ? '1px solid #b7ebc6' : '1px solid #fed7aa',
-              borderRadius: 14,
-              color: review.status === 'ACTIVE' ? '#166534' : '#9a3412',
-              display: 'grid',
-              gap: 6,
-              marginTop: 14,
-              padding: 12,
-            }}
-          >
-            <div style={{ fontWeight: 900 }}>Estado del club: {getStatusLabel(review.status)}</div>
-            {getReviewReason(review) ? (
-              <div style={{ lineHeight: 1.45 }}>
-                <b>{review.status === 'PENDING_APPROVAL' ? 'Corrección solicitada' : 'Motivo'}:</b> {getReviewReason(review)}
-              </div>
-            ) : review.status !== 'ACTIVE' ? (
-              <div style={{ lineHeight: 1.45 }}>
-                Podés completar datos mientras plataforma revisa el club. La visibilidad pública se habilita después de la aprobación.
-              </div>
-            ) : null}
-          </div>
-        ) : null}
 
         <Banner banner={banner} />
 
@@ -446,452 +501,50 @@ export default function ClubConfiguracionPage() {
           </div>
         ) : (
           <div className="club-configStack">
-            <div className="px-card px-card--flat">
-              <div className="px-sectionTitle">Branding</div>
+            <BrandingCard
+              value={v}
+              activeClubName={activeClub?.name}
+              displayLogo={displayLogo}
+              selectedThemeSoft={selectedTheme.vars.soft}
+              uploadingLogo={uploadingLogo}
+              uploadingRules={uploadingRules}
+              selectedRulesName={selectedRulesName}
+              onChange={onChange}
+              onLogoFileChange={onLogoFileChange}
+              onRulesFileChange={onRulesFileChange}
+            />
 
-              <div
-                className="club-configBrandGrid"
-                style={{
-                  display: 'grid',
-                  gap: 20,
-                  marginTop: 10,
-                }}
-              >
-                <div style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
-                  <label
-                    style={{
-                      border: '1px dashed rgba(23,37,63,.16)',
-                      borderRadius: 18,
-                      padding: 18,
-                      background: 'rgba(255,255,255,.55)',
-                      display: 'grid',
-                      gap: 12,
-                      justifyItems: 'center',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 180,
-                        height: 110,
-                        borderRadius: 22,
-                        background: 'rgba(255,255,255,.90)',
-                        border: '1px solid rgba(23,37,63,.08)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                        padding: 12,
-                      }}
-                    >
-                      {displayLogo ? (
-                        <img
-                          src={displayLogo}
-                          alt="Logo del club"
-                          style={{
-                            maxWidth: '100%',
-                            maxHeight: '100%',
-                            objectFit: 'contain',
-                            display: 'block',
-                          }}
-                        />
-                      ) : (
-                        <span
-                          style={{
-                            width: 74,
-                            height: 74,
-                            borderRadius: 20,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: selectedTheme.vars.soft,
-                            color: '#17253f',
-                            fontWeight: 900,
-                            fontSize: 24,
-                          }}
-                        >
-                          {getClubInitials(v.name || activeClub?.name || 'Club')}
-                        </span>
-                      )}
-                    </div>
-
-                    <span className="px-help" style={{ textAlign: 'center' }}>
-                      {uploadingLogo
-                        ? 'Subiendo logo…'
-                        : 'Elegí una imagen para usar como logo del club.'}
-                    </span>
-
-                    <div
-                      style={{
-                        padding: '10px 14px',
-                        borderRadius: 12,
-                        background: 'rgba(255,255,255,.90)',
-                        border: '1px solid rgba(23,37,63,.10)',
-                        fontWeight: 700,
-                        color: '#17253f',
-                      }}
-                    >
-                      Seleccionar imagen
-                    </div>
-
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => onLogoFileChange(e.target.files?.[0] ?? null)}
-                      style={{ display: 'none' }}
-                    />
-                  </label>
-
-                  <label
-                    style={{
-                      border: '1px dashed rgba(23,37,63,.16)',
-                      borderRadius: 16,
-                      padding: 14,
-                      background: 'rgba(255,255,255,.55)',
-                      display: 'grid',
-                      gap: 10,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div className="px-label">Reglamento PDF</div>
-
-                    <div
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: 12,
-                        background: 'rgba(255,255,255,.90)',
-                        border: '1px solid rgba(23,37,63,.08)',
-                        color: '#17253f',
-                        fontWeight: 700,
-                      }}
-                    >
-                      {uploadingRules
-                        ? 'Subiendo PDF…'
-                        : selectedRulesName || 'Seleccionar archivo PDF'}
-                    </div>
-
-                    <div className="px-help">Solo se aceptan archivos PDF.</div>
-
-                    <input
-                      type="file"
-                      accept="application/pdf,.pdf"
-                      onChange={(e) => onRulesFileChange(e.target.files?.[0] ?? null)}
-                      style={{ display: 'none' }}
-                    />
-                  </label>
-                </div>
-
-                <div style={{ display: 'grid', gap: 12 }}>
-                  <div className="px-field">
-                    <div className="px-label">Nombre</div>
+            <section className="px-card px-card--flat club-hoursCard">
+              <div style={{ alignItems: 'baseline', display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between' }}>
+                <div className="px-sectionTitle">Horarios operativos</div>
+                <span className="px-help" style={{ fontSize: 12 }}>Se guardan en el campo actual del club.</span>
+              </div>
+              <div className="club-hoursGrid">
+                {openingHourSections.map((section) => (
+                  <label key={section.key} className="px-field" style={{ gap: 4 }}>
+                    <span className="px-label" style={{ fontSize: 10 }}>{section.label}</span>
                     <input
                       className="px-input"
-                      value={v.name}
-                      onChange={(e) => onChange('name', e.target.value)}
+                      value={openingHourValues[section.key]}
+                      onChange={(event) => onOpeningHourChange(section.key, event.target.value)}
+                      placeholder="Ej: 08:00 - 23:00"
+                      style={{ minHeight: 36 }}
                     />
-                  </div>
-
-                  <div className="club-configTwoGrid">
-                    <div className="px-field">
-                      <div className="px-label">URL logo</div>
-                      <input
-                        className="px-input"
-                        value={v.logo_url}
-                        readOnly
-                      />
-                    </div>
-
-                    <div className="px-field">
-                      <div className="px-label">URL reglamento PDF</div>
-                      <input
-                        className="px-input"
-                        value={v.rules_pdf_url}
-                        readOnly
-                      />
-                    </div>
-                  </div>
-
-                  {isRealUrl(v.rules_pdf_url) ? (
-                    <div className="px-help">
-                      Reglamento actual:{' '}
-                      <a
-                        href={v.rules_pdf_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-link"
-                      >
-                        abrir PDF
-                      </a>
-                    </div>
-                  ) : null}
-
-                  <div className="px-field">
-                    <div className="px-label">Notas</div>
-                    <textarea
-                      className="px-input"
-                      rows={3}
-                      value={v.notes}
-                      onChange={(e) => onChange('notes', e.target.value)}
-                    />
-                  </div>
-                </div>
+                  </label>
+                ))}
               </div>
-            </div>
+            </section>
 
-            <div className="px-card px-card--flat">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <div>
-                  <div className="px-sectionTitle">Identidad visual</div>
-                  <p className="px-help" style={{ marginTop: 6 }}>
-                    {canChooseTheme
-                      ? 'Elegí una identidad Pamprax curada para que el modo jugador del club tenga un acento propio.'
-                      : 'La identidad visual del club queda fija para mantener consistencia de marca.'}
-                  </p>
-                </div>
-                {v.theme_locked ? (
-                  <span
-                    style={{
-                      borderRadius: 999,
-                      background: selectedTheme.vars.soft,
-                      color: selectedTheme.vars.accent,
-                      fontSize: 12,
-                      fontWeight: 900,
-                      padding: '8px 11px',
-                    }}
-                  >
-                    Identidad fijada
-                  </span>
-                ) : null}
-              </div>
+            <ThemeSelectorCard
+              themes={THEME_OPTIONS}
+              selectedTheme={selectedTheme}
+              themeLocked={v.theme_locked}
+              canChooseTheme={canChooseTheme}
+              pendingThemeKey={pendingThemeKey}
+              onSubmitThemeRequest={submitThemeRequest}
+            />
 
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-                  gap: 12,
-                  marginTop: 12,
-                }}
-              >
-                {THEME_OPTIONS.map((theme) => {
-                  const isSelected = theme.key === selectedTheme.key
-                  const isDisabled = !canChooseTheme
-
-                  return (
-                    <button
-                      key={theme.key}
-                      type="button"
-                      disabled={isDisabled}
-                      onClick={() => onChange('theme_key', theme.key)}
-                      aria-pressed={isSelected}
-                      style={{
-                        border: isSelected ? `2px solid ${theme.vars.accent}` : '1px solid rgba(23,37,63,.10)',
-                        borderRadius: 18,
-                        background: '#fff',
-                        boxShadow: isSelected
-                          ? `0 20px 46px ${theme.vars.glow}, 0 0 0 4px ${theme.vars.soft}`
-                          : '0 12px 30px rgba(15,23,42,.06)',
-                        cursor: isDisabled ? 'default' : 'pointer',
-                        display: 'grid',
-                        gap: 10,
-                        overflow: 'hidden',
-                        opacity: !canChooseTheme && !isSelected ? 0.46 : 1,
-                        padding: 0,
-                        textAlign: 'left',
-                        transition: 'transform .16s ease, box-shadow .16s ease, border-color .16s ease',
-                      }}
-                      onMouseEnter={(event) => {
-                        if (!isDisabled) event.currentTarget.style.transform = 'translateY(-2px)'
-                      }}
-                      onMouseLeave={(event) => {
-                        event.currentTarget.style.transform = 'translateY(0)'
-                      }}
-                    >
-                      <div
-                        style={{
-                          minHeight: 84,
-                          padding: 12,
-                          background: `linear-gradient(135deg, ${theme.vars.hero})`,
-                          position: 'relative',
-                        }}
-                      >
-                        <div
-                          style={{
-                            position: 'absolute',
-                            inset: 0,
-                            background: `radial-gradient(circle at 18% 24%, ${theme.vars.soft}, transparent 34%), radial-gradient(circle at 82% 20%, rgba(255,255,255,.16), transparent 28%)`,
-                          }}
-                        />
-                        <div
-                          style={{
-                            position: 'relative',
-                            display: 'grid',
-                            gap: 8,
-                            maxWidth: 126,
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: 56,
-                              height: 10,
-                              borderRadius: 999,
-                              background: `linear-gradient(90deg, ${theme.vars.accent}, ${theme.vars.accent2})`,
-                              boxShadow: `0 0 20px ${theme.vars.glow}`,
-                            }}
-                          />
-                          <div
-                            style={{
-                              borderRadius: 14,
-                              border: '1px solid rgba(255,255,255,.24)',
-                              background: 'rgba(255,255,255,.16)',
-                              height: 34,
-                              backdropFilter: 'blur(10px)',
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'grid', gap: 8, padding: '0 14px 14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                          <strong style={{ color: '#17253f', fontSize: 14 }}>{CLUB_THEME_LABELS[theme.key]}</strong>
-                          {isSelected ? (
-                            <span
-                              style={{
-                                borderRadius: 999,
-                                background: theme.vars.soft,
-                                color: theme.vars.accent,
-                                fontSize: 11,
-                                fontWeight: 900,
-                                padding: '5px 8px',
-                              }}
-                            >
-                              {v.theme_locked ? 'FIJADO' : 'ACTIVO'}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <span
-                            style={{
-                              width: 18,
-                              height: 18,
-                              borderRadius: 999,
-                              background: theme.vars.accent,
-                              boxShadow: `0 0 18px ${theme.vars.glow}`,
-                            }}
-                          />
-                          <span
-                            style={{
-                              width: 18,
-                              height: 18,
-                              borderRadius: 999,
-                              background: theme.vars.accent2,
-                              opacity: 0.9,
-                            }}
-                          />
-                          <span className="px-help" style={{ marginLeft: 2 }}>
-                            Glow y acento Pamprax
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="px-card px-card--flat">
-              <div className="px-sectionTitle">Identidad y contacto</div>
-              <div
-                className="club-configTwoGrid"
-                style={{
-                  display: 'grid',
-                  gap: 12,
-                  marginTop: 10,
-                }}
-              >
-                <div className="px-field">
-                  <div className="px-label">Nombre comercial</div>
-                  <input className="px-input" value={v.brand_name} onChange={e => onChange('brand_name', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">Razón social</div>
-                  <input className="px-input" value={v.legal_name} onChange={e => onChange('legal_name', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">CUIT</div>
-                  <input className="px-input" value={v.cuit} onChange={e => onChange('cuit', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">Email contacto</div>
-                  <input className="px-input" value={v.contact_email} onChange={e => onChange('contact_email', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">Teléfono</div>
-                  <input className="px-input" value={v.phone} onChange={e => onChange('phone', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">Website</div>
-                  <input className="px-input" value={v.website} onChange={e => onChange('website', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">Instagram</div>
-                  <input className="px-input" value={v.instagram} onChange={e => onChange('instagram', e.target.value)} />
-                </div>
-              </div>
-            </div>
-
-            <div className="px-card px-card--flat">
-              <div className="px-sectionTitle">Ubicación y operación</div>
-              <div
-                className="club-configTwoGrid"
-                style={{
-                  display: 'grid',
-                  gap: 12,
-                  marginTop: 10,
-                }}
-              >
-                <div className="px-field">
-                  <div className="px-label">Ciudad</div>
-                  <input className="px-input" value={v.city} onChange={e => onChange('city', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">Provincia</div>
-                  <input className="px-input" value={v.province} onChange={e => onChange('province', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">País</div>
-                  <input className="px-input" value={v.country} onChange={e => onChange('country', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">Dirección</div>
-                  <input className="px-input" value={v.address} onChange={e => onChange('address', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">Cantidad de canchas</div>
-                  <input className="px-input" value={v.courts_count} onChange={e => onChange('courts_count', e.target.value)} />
-                </div>
-
-                <div className="px-field">
-                  <div className="px-label">Superficie</div>
-                  <input className="px-input" value={v.courts_surface} onChange={e => onChange('courts_surface', e.target.value)} />
-                </div>
-
-                <div className="px-field" style={{ gridColumn: '1 / -1' }}>
-                  <div className="px-label">Horarios</div>
-                  <input className="px-input" value={v.opening_hours} onChange={e => onChange('opening_hours', e.target.value)} />
-                </div>
-              </div>
-            </div>
+            <SportsSettingsCard courtsCount={v.courts_count} onActivate={showMissingSportsModel} />
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button
@@ -937,9 +590,35 @@ export default function ClubConfiguracionPage() {
           padding: 18px;
         }
         .club-kicker { color: var(--club-admin-accent); font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
-        .club-configStats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-        .club-configStats span { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 16%, transparent); border-radius: 999px; color: #475569; font-size: 13px; font-weight: 800; padding: 8px 10px; white-space: nowrap; }
-        .club-configStats b { color: #17253f; }
+        .club-configOps {
+          background: #fff;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 16px;
+          display: grid;
+          gap: 8px;
+          grid-template-columns: minmax(132px, 1fr);
+          min-width: min(100%, 190px);
+          padding: 10px;
+        }
+        .club-configOps div,
+        .club-configOps label {
+          display: grid;
+          gap: 4px;
+          margin: 0;
+          min-width: 0;
+        }
+        .club-configOps span {
+          color: #64748b;
+          font-size: 10px;
+          font-weight: 950;
+          letter-spacing: .04em;
+          text-transform: uppercase;
+        }
+        .club-configOps strong {
+          color: #061b3a;
+          font-size: 13px;
+          font-weight: 950;
+        }
         .club-configStack { display: grid; gap: 12px; margin-top: 14px; min-width: 0; }
         .club-config .px-card {
           background: rgba(255,255,255,.96);
@@ -958,7 +637,22 @@ export default function ClubConfiguracionPage() {
           box-shadow: 0 0 0 3px var(--club-admin-soft);
           outline: none;
         }
-        .club-configBrandGrid { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); }
+        .club-hoursCard {
+          display: grid;
+          gap: 10px;
+          padding: 14px;
+        }
+        .club-hoursGrid {
+          background: rgba(248,250,252,.72);
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 14px;
+          display: grid;
+          gap: 8px;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          padding: 10px;
+        }
+        .club-themePaletteGrid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+        .club-configBrandGrid { grid-template-columns: 220px minmax(0, 1fr); }
         .club-configTwoGrid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .club-saveBtn {
           background: #061b3a;
@@ -972,11 +666,16 @@ export default function ClubConfiguracionPage() {
           transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
         }
         .club-saveBtn:hover:not(:disabled) { box-shadow: 0 16px 34px var(--club-admin-glow); transform: translateY(-1px); }
+        @media (max-width: 1100px) {
+          .club-themePaletteGrid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+        }
         @media (max-width: 760px) {
           .club-config { padding: 16px; }
           .club-configHead { display: grid; }
-          .club-configStats { justify-content: flex-start; }
-          .club-configBrandGrid, .club-configTwoGrid { grid-template-columns: 1fr; }
+          .club-configOps { grid-template-columns: 1fr; min-width: 0; }
+          .club-hoursGrid { grid-template-columns: 1fr; }
+          .club-configBrandGrid, .club-configBrandFields, .club-configTwoGrid { grid-template-columns: 1fr !important; }
+          .club-themePaletteGrid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
         }
       `}</style>
     </div>

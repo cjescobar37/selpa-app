@@ -671,7 +671,7 @@ export default function ClubUsuariosPage() {
         </div>
 
         <div className="club-permissionsNote">
-          Los permisos se aplican desde la capa interna de PAMPrax. La edición personalizada por club llegará en una etapa futura.
+          Los permisos se aplican desde la capa interna de SELPA. La edición personalizada por club llegará en una etapa futura.
         </div>
 
         <div className="club-roleCards" aria-label="Roles administrativos del club">

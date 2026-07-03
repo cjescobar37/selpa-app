@@ -1,17 +1,48 @@
 :root {
-  --px-nav-bg: #2e5493;
+  --px-nav-bg: rgba(49, 59, 76, 0.94);
   --px-nav-accent: #ff4e72;
   --px-nav-text: rgba(255, 255, 255, 0.94);
   --px-nav-stroke: rgba(255, 255, 255, 0.16);
-  --px-nav-surface: rgba(255, 255, 255, 0.1);
+  --px-nav-surface: rgba(255, 255, 255, 0.08);
 }
 
 .px-nav {
   position: sticky;
   top: 0;
   z-index: 1000;
-  background: var(--px-nav-bg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at 18% 0, color-mix(in srgb, var(--px-club-accent, #22d3ee) 8%, transparent), transparent 36%),
+    var(--px-nav-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--px-club-accent, #22d3ee) 14%, transparent) inset,
+    0 18px 38px rgba(2, 6, 23, 0.20),
+    0 2px 10px rgba(2, 6, 23, 0.12),
+    0 0 26px color-mix(in srgb, var(--px-club-accent, #22d3ee) 5%, transparent);
+}
+
+.px-nav::before {
+  background: var(--px-club-accent, #22d3ee);
+  content: "";
+  height: 3px;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.px-nav--global::before {
+  background: linear-gradient(90deg, #22d3ee 0%, #2563eb 52%, #ec4899 100%);
+  height: 2px;
+  opacity: .72;
+}
+
+.px-nav--global {
+  --px-selpa-gradient: linear-gradient(90deg, #22d3ee 0%, #2563eb 50%, #ec4899 100%);
+  --px-selpa-glow: rgba(34, 211, 238, 0.16);
 }
 
 .px-nav,
@@ -48,6 +79,7 @@
 .px-left { justify-content: flex-start; min-width: 0; }
 .px-right { justify-content: flex-end; gap: 12px; min-width: 0; flex-shrink: 0; }
 .px-icons { gap: 10px; }
+.px-right .px-userWrap { margin-left: 4px; }
 
 .px-brand,
 .px-clubBtn,
@@ -81,11 +113,26 @@
 
 .px-clubBtn--themed {
   overflow: hidden;
-  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 42%, rgba(255, 255, 255, 0.18));
+  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 29%, rgba(255, 255, 255, 0.18));
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--px-club-accent, #22d3ee) 18%, transparent), transparent 42%),
+    linear-gradient(90deg, color-mix(in srgb, var(--px-club-accent, #22d3ee) 8.5%, transparent), transparent 42%),
     var(--px-nav-surface);
-  box-shadow: 0 10px 30px color-mix(in srgb, var(--px-club-accent, #22d3ee) 22%, transparent);
+  box-shadow:
+    0 10px 30px color-mix(in srgb, var(--px-club-accent, #22d3ee) 11%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--px-club-accent, #22d3ee) 7%, transparent);
+}
+
+.px-userBtn {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--px-club-accent, #22d3ee) 5%, transparent), transparent 62%),
+    rgba(255, 255, 255, .055);
+  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 22%, rgba(255, 255, 255, .10));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--px-club-accent, #22d3ee) 5%, transparent),
+    0 10px 22px color-mix(in srgb, var(--px-club-accent, #22d3ee) 5%, transparent);
+  gap: 8px;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .px-clubBtn--themed::before {
@@ -114,11 +161,56 @@
 
 .px-clubBtn--themed:hover {
   background:
-    radial-gradient(circle at 16% 50%, var(--px-club-soft, rgba(103, 232, 249, 0.18)), transparent 44%),
+    radial-gradient(circle at 16% 50%, color-mix(in srgb, var(--px-club-accent, #22d3ee) 12%, transparent), transparent 44%),
     rgba(255, 255, 255, 0.14);
-  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 64%, rgba(255, 255, 255, 0.24));
-  box-shadow: 0 16px 38px color-mix(in srgb, var(--px-club-accent, #22d3ee) 28%, transparent);
+  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 43%, rgba(255, 255, 255, 0.24));
+  box-shadow: 0 16px 38px color-mix(in srgb, var(--px-club-accent, #22d3ee) 18%, transparent);
   transform: translateY(-1px);
+}
+
+.px-nav--global .px-brand,
+.px-nav--global .px-mobileBrand {
+  background: rgba(255, 255, 255, .075);
+  border: 1px solid rgba(255, 255, 255, .15);
+  box-shadow:
+    0 10px 24px rgba(2, 6, 23, .12),
+    0 0 0 1px rgba(255, 255, 255, .035) inset;
+}
+
+.px-nav--global .px-brand:hover,
+.px-nav--global .px-mobileBrand:hover,
+.px-nav--global .px-brand:focus-visible,
+.px-nav--global .px-mobileBrand:focus-visible {
+  background: rgba(255, 255, 255, .105);
+  border-color: rgba(255, 255, 255, .22);
+  box-shadow:
+    0 12px 28px rgba(2, 6, 23, .16),
+    0 0 0 1px rgba(34, 211, 238, .08) inset,
+    0 0 18px rgba(34, 211, 238, .055);
+}
+
+.px-nav--global .px-brandLogo,
+.px-nav--global .px-mobileBrand .px-brandLogo {
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, .20), rgba(255, 255, 255, .08));
+  border: 1px solid rgba(125, 211, 252, .30);
+  box-shadow: 0 0 14px rgba(34,211,238,.08);
+}
+
+.px-brandImage,
+.px-mobileBrandImage {
+  display: block;
+  object-fit: contain;
+}
+
+.px-brandImage {
+  height: 26px;
+  width: 126px;
+}
+
+.px-mobileBrandImage {
+  height: 22px;
+  width: 104px;
 }
 
 .px-brand:hover,
@@ -130,17 +222,31 @@
 .px-mobileClubBtn:hover,
 .px-mobileUserBtn:hover,
 .px-mobileBadge:hover,
-.px-mobileBrand:hover {
-  background: rgba(255, 45, 109, 0.16);
-  border-color: rgba(255, 45, 109, 0.28);
+.px-mobileBrand:hover,
+.px-brand:focus-visible,
+.px-clubBtn:focus-visible,
+.px-userBtn:focus-visible,
+.px-loginBtn:focus-visible,
+.px-iconBtn:focus-visible,
+.px-burger:focus-visible,
+.px-mobileClubBtn:focus-visible,
+.px-mobileUserBtn:focus-visible,
+.px-mobileBadge:focus-visible,
+.px-mobileBrand:focus-visible {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--px-club-accent, #22d3ee) 8%, transparent), transparent),
+    rgba(255, 255, 255, 0.11);
+  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 30%, rgba(255, 255, 255, 0.18));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--px-club-accent, #22d3ee) 10%, transparent);
+  outline: none;
 }
 
 .px-clubBtn--themed:hover {
   background:
-    radial-gradient(circle at 16% 50%, var(--px-club-soft, rgba(103, 232, 249, 0.18)), transparent 44%),
+    radial-gradient(circle at 16% 50%, color-mix(in srgb, var(--px-club-accent, #22d3ee) 12%, transparent), transparent 44%),
     rgba(255, 255, 255, 0.14);
-  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 64%, rgba(255, 255, 255, 0.24));
-  box-shadow: 0 16px 38px color-mix(in srgb, var(--px-club-accent, #22d3ee) 28%, transparent);
+  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 43%, rgba(255, 255, 255, 0.24));
+  box-shadow: 0 16px 38px color-mix(in srgb, var(--px-club-accent, #22d3ee) 18%, transparent);
   transform: translateY(-1px);
 }
 
@@ -161,12 +267,22 @@
 }
 
 .px-clubBtn--themed .px-clubLogo {
-  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 52%, rgba(255, 255, 255, 0.24));
-  box-shadow: 0 0 18px color-mix(in srgb, var(--px-club-accent, #22d3ee) 32%, transparent);
+  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 44%, rgba(255, 255, 255, 0.24));
+  box-shadow: 0 0 16px color-mix(in srgb, var(--px-club-accent, #22d3ee) 20%, transparent);
   background: var(--px-club-soft, rgba(81, 211, 225, 0.22));
 }
 
-.px-avatar { background: rgba(255, 255, 255, 0.14); }
+.px-avatar {
+  border-radius: 999px;
+  font-weight: 850;
+}
+
+.px-userBtn .px-avatar {
+  background: color-mix(in srgb, var(--px-club-accent, #22d3ee) 12%, rgba(255, 255, 255, .12));
+  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 30%, rgba(255, 255, 255, .16));
+}
+
+.px-avatar { background: rgba(255, 255, 255, 0.12); }
 
 .px-brandLogo img,
 .px-clubLogo img,
@@ -174,6 +290,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
 }
 
 .px-brandText,
@@ -187,6 +304,17 @@
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+
+.px-mobileBrand .px-brandText {
+  display: none;
+}
+
+.px-userName {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .px-navlinks {
@@ -247,9 +375,16 @@
   bottom: 3px;
   height: 3px;
   border-radius: 999px;
-  background: var(--px-nav-accent);
+  background: var(--px-club-accent, var(--px-nav-accent));
   transform: scaleX(0);
   transition: transform 0.16s ease;
+}
+
+.px-nav--global .px-navlink::after {
+  background: var(--px-selpa-gradient);
+  box-shadow: 0 0 8px rgba(34,211,238,.10);
+  height: 2px;
+  opacity: .78;
 }
 
 .px-navlink:hover::after,
@@ -440,6 +575,21 @@
   text-transform: uppercase;
 }
 
+.px-nav--global .px-loginBtn {
+  background: rgba(255, 255, 255, .065);
+  border: 1px solid rgba(255, 255, 255, .16);
+  box-shadow: 0 10px 24px rgba(2,6,23,.10);
+}
+
+.px-nav--global .px-loginBtn:hover,
+.px-nav--global .px-loginBtn:focus-visible {
+  background: rgba(255, 255, 255, .10);
+  border-color: rgba(255, 255, 255, .24);
+  box-shadow:
+    0 12px 26px rgba(2,6,23,.15),
+    0 0 16px rgba(34,211,238,.055);
+}
+
 .px-iconBadge {
   position: absolute;
   top: -6px;
@@ -507,8 +657,12 @@
   text-align: left;
 }
 
-.px-ddItem:hover { background: rgba(255, 255, 255, 0.08); }
-.px-ddItem.is-active { background: rgba(255, 45, 109, 0.16); }
+.px-ddItem:hover,
+.px-ddItem:focus-visible {
+  background: color-mix(in srgb, var(--px-club-accent, #22d3ee) 8%, rgba(255, 255, 255, 0.08));
+  outline: none;
+}
+.px-ddItem.is-active { background: color-mix(in srgb, var(--px-club-accent, #22d3ee) 14%, rgba(255, 255, 255, 0.08)); }
 .px-ddItem--disabled,
 .px-ddItem--disabled:hover {
   background: transparent;
@@ -578,7 +732,7 @@
     grid-template-columns: auto auto minmax(0, 1fr);
     align-items: center;
     gap: 8px;
-    min-height: 58px;
+    min-height: 52px;
     padding-left: 14px;
     padding-right: 14px;
     overflow: visible;
@@ -620,7 +774,9 @@
   }
 
   .px-mobileLogin {
-    min-width: 78px;
+    min-width: 70px;
+    height: 34px;
+    padding: 0 12px;
   }
 
   .px-mobileUserBtn,
@@ -634,14 +790,14 @@
   .px-iconBtn,
   .px-burger,
   .px-mobileBrand {
-    width: 36px;
-    min-width: 36px;
-    height: 36px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
   }
 
   .px-mobileUserBtn,
   .px-mobileClubBtn {
-    min-height: 36px;
+    min-height: 34px;
   }
 
   .px-iconBadge {
@@ -656,15 +812,22 @@
   .px-mobileUserBtn .px-avatar,
   .px-mobileClubBtn .px-clubLogo,
   .px-mobileBrand .px-brandLogo {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 9px;
   }
 
   .px-mobileBrand {
-    width: 36px;
-    min-width: 36px;
-    padding: 0;
+    gap: 7px;
+    min-width: 0;
+    padding: 0 9px;
+    width: auto;
+  }
+
+  .px-mobileBrand .px-brandText {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: .02em;
   }
 
   .px-mobileMenu {
@@ -697,7 +860,7 @@
 
   .px-mobileLink.is-active,
   .px-mobileChild.is-active {
-    background: rgba(255, 45, 109, 0.18);
+    background: color-mix(in srgb, var(--px-club-accent, #22d3ee) 14%, rgba(255, 255, 255, 0.08));
   }
 
   .px-mobileChildren {
@@ -733,8 +896,8 @@
   .px-mobileBar {
     grid-template-columns: auto auto minmax(0, 1fr);
     gap: 6px;
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   .px-mobileBar__right,
@@ -966,6 +1129,97 @@
 .px-notifPreview__footer:hover{
   box-shadow: 0 16px 34px var(--px-club-glow, rgba(14,165,233,.24));
   transform: translateY(-1px);
+}
+
+@media (max-width: 430px) {
+  .px-mobileBar {
+    gap: 5px;
+    min-height: 50px;
+  }
+
+  .px-mobileBrand {
+    padding-right: 7px;
+  }
+
+  .px-mobileBrandImage {
+    height: 20px;
+    width: 96px;
+  }
+
+  .px-mobileBrand .px-brandText {
+    font-size: 10.5px;
+  }
+
+  .px-mobileLogin {
+    min-width: 66px;
+    padding: 0 10px;
+  }
+}
+
+@media (max-width: 390px) {
+  .px-mobileBar {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .px-mobileActions {
+    gap: 3px;
+  }
+
+  .px-iconBtn,
+  .px-burger {
+    height: 33px;
+    min-width: 33px;
+    width: 33px;
+  }
+}
+
+@media (max-width: 360px) {
+  .px-mobileBrand {
+    padding: 0 6px;
+  }
+
+  .px-mobileBrandImage {
+    height: 18px;
+    width: 88px;
+  }
+
+  .px-mobileLogin {
+    min-width: 64px;
+  }
+}
+
+.px-right {
+  column-gap: 14px;
+}
+
+.px-right .px-icons {
+  gap: 10px;
+}
+
+.px-right .px-userWrap {
+  margin-left: 8px;
+}
+
+.px-right .px-iconBtn:hover,
+.px-right .px-iconBtn:focus-visible {
+  background: rgba(255, 255, 255, .09);
+  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 58%, rgba(255, 255, 255, .14));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--px-club-accent, #22d3ee) 18%, transparent);
+  outline: none;
+}
+
+.px-right .px-userBtn:hover,
+.px-right .px-userBtn:focus-visible {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--px-club-accent, #22d3ee) 8%, transparent), transparent 62%),
+    rgba(255, 255, 255, .09);
+  border-color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 32%, rgba(255, 255, 255, .14));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--px-club-accent, #22d3ee) 12%, transparent),
+    0 10px 24px color-mix(in srgb, var(--px-club-accent, #22d3ee) 7%, transparent);
+  outline: none;
+  transform: none;
 }
 
 @media (max-width: 440px){

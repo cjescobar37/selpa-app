@@ -27,6 +27,11 @@ import {
   isTournamentRegistrationOpen,
   type OperationalStage,
 } from '@/lib/tournamentDisplayStatus'
+import {
+  formatBranchLabel,
+  formatTournamentSystemLabel,
+  formatTournamentTypeLabel,
+} from '@/lib/tournamentLabels'
 
 type TournamentSummary = {
   tournament: {
@@ -376,12 +381,6 @@ const stageLabels: Record<OperationalStage, string> = {
   GRUPOS: 'Grupos',
   PLAYOFF: 'Playoff',
   FINALIZADO: 'Finalizado',
-}
-
-const genderLabels: Record<string, string> = {
-  MALE: 'Masculino',
-  FEMALE: 'Femenino',
-  MIXED: 'Mixto',
 }
 
 const statusLabels: Record<string, string> = {
@@ -825,9 +824,7 @@ function formatSegmentLabel(value: TournamentDisplayConfig['segmentType']) {
 }
 
 function formatCompetitionSystemLabel(value: TournamentDisplayConfig['competitionSystem']) {
-  if (value === 'ROUND_ROBIN') return 'Liga todos contra todos'
-  if (value === 'SINGLE_ELIMINATION') return 'Eliminación directa'
-  return 'Zona + Playoff'
+  return formatTournamentSystemLabel(value)
 }
 
 function statusTone(status: string) {
@@ -900,11 +897,7 @@ function formatPlayerCategory(value?: number | null) {
 }
 
 function formatPlayerGender(value?: string | null) {
-  const cleanValue = (value ?? '').toUpperCase()
-  if (cleanValue === 'M' || cleanValue === 'MALE') return 'Masculino'
-  if (cleanValue === 'F' || cleanValue === 'FEMALE') return 'Femenino'
-  if (cleanValue === 'MIXED') return 'Mixto'
-  return value ?? 'Sin género'
+  return formatBranchLabel(value)
 }
 
 function otherManualField(field: ManualPlayerField): ManualPlayerField {
@@ -1885,8 +1878,8 @@ export default function ClubTournamentDetailPage() {
   const flyerPreviewData = useMemo(() => ({
     clubName: activeClub?.name ?? '',
     name: summary?.tournament.name ?? '',
-    type: summary?.tournament.type ?? summary?.tournament.tournament_type ?? 'Open',
-    gender: summary?.tournament.gender ? genderLabels[summary.tournament.gender] ?? summary.tournament.gender : 'Genero por definir',
+    type: formatTournamentTypeLabel(summary?.tournament.type ?? summary?.tournament.tournament_type ?? 'OPEN'),
+    gender: formatBranchLabel(summary?.tournament.gender),
     categoryLabel: summary?.tournament.category_name ?? (summary?.tournament.category_id ? `Categoria ${summary.tournament.category_id}` : 'Categoria por definir'),
     segmentLabel: formatSegmentLabel(tournamentDisplayConfig.segmentType),
     competitionSystemLabel: formatCompetitionSystemLabel(tournamentDisplayConfig.competitionSystem),
@@ -3925,10 +3918,10 @@ export default function ClubTournamentDetailPage() {
                 <span className="club-kicker">Centro de control</span>
                 <h1 className="club-title">{summary.tournament.name}</h1>
                 <div className="club-metaLine">
-                  <span>{summary.tournament.type ?? 'Sin tipo'}</span>
+                  <span>{formatTournamentTypeLabel(summary.tournament.type ?? summary.tournament.tournament_type)}</span>
                   <span>{summary.tournament.category_name ?? 'Sin categoría'}</span>
-                  <span>{summary.tournament.gender ? genderLabels[summary.tournament.gender] ?? summary.tournament.gender : 'Sin género'}</span>
-                  <span>{summary.tournament.format ?? 'Sin formato'}</span>
+                  <span>{formatBranchLabel(summary.tournament.gender)}</span>
+                  <span>{formatTournamentSystemLabel(summary.tournament.format ?? tournamentDisplayConfig.competitionSystem)}</span>
                 </div>
               </div>
 
@@ -5694,12 +5687,29 @@ export default function ClubTournamentDetailPage() {
         }
         .club-detailTopbar { align-items: center; display: flex; gap: 10px; justify-content: space-between; margin-bottom: 12px; }
         .club-topbarActions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-        .club-backBtn { align-items: center; background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 28%, transparent); border-radius: 999px; color: #061b3a; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; min-height: 38px; padding: 8px 13px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
+        .club-backBtn { align-items: center; appearance: none; background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 28%, transparent); border-radius: 999px; color: #061b3a; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; line-height: 1.15; min-height: 38px; padding: 8px 13px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
         .club-backBtn:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 46%, transparent); box-shadow: 0 10px 24px var(--club-admin-glow); transform: translateY(-1px); }
-        .club-editBtn { align-items: center; background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 34%, transparent); border-radius: 999px; color: #061b3a; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; min-height: 38px; padding: 8px 13px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
+        .club-editBtn { align-items: center; appearance: none; background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 34%, transparent); border-radius: 999px; color: #061b3a; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; line-height: 1.15; min-height: 38px; padding: 8px 13px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
         .club-editBtn:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 50%, transparent); box-shadow: 0 10px 24px var(--club-admin-glow); transform: translateY(-1px); }
         .club-editBtn:disabled { cursor: not-allowed; opacity: .58; }
         .club-editBtn:disabled:hover { box-shadow: none; transform: none; }
+        .club-detailTopbar .club-backBtn,
+        .club-topbarActions .club-editBtn {
+          background: #fff;
+          border-color: color-mix(in srgb, var(--club-admin-accent) 34%, rgba(15,23,42,.14));
+          color: #061b3a;
+          min-width: max-content;
+        }
+        .club-topbarActions .club-primaryBtn {
+          background: #061b3a;
+          border-color: color-mix(in srgb, var(--club-admin-accent) 48%, rgba(255,255,255,.16));
+          color: #fff;
+          min-width: max-content;
+        }
+        .club-detailTopbar button:empty,
+        .club-detailTopbar a:empty {
+          display: none;
+        }
         .club-deleteBtn { align-items: center; background: #fff1f2; border: 1px solid rgba(190,18,60,.22); border-radius: 8px; color: #be123c; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; min-height: 36px; padding: 8px 12px; text-decoration: none; transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
         .club-deleteBtn:hover { background: #ffe4e6; border-color: rgba(190,18,60,.42); box-shadow: 0 8px 18px rgba(190,18,60,.12); transform: translateY(-1px); }
         .club-deleteBtn:disabled { cursor: not-allowed; opacity: .58; }
@@ -5794,8 +5804,12 @@ export default function ClubTournamentDetailPage() {
         .club-flyerPreviewButton:focus-visible { outline: 2px solid var(--club-admin-accent); outline-offset: 3px; }
         .flyerPreviewShell { display: grid; height: 100%; min-width: 0; }
         .flyerPreview { border-radius: 18px; box-shadow: 0 16px 34px rgba(15,23,42,.13); min-height: 360px; overflow: hidden; padding: 18px; position: relative; }
+        .flyerPreview--manual { background-color: #020617; display: grid; place-items: center; }
         .flyerPreview::after { background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(2,6,23,.24) 100%); content: ''; inset: 0; pointer-events: none; position: absolute; }
+        .flyerPreview--manual::after { background: radial-gradient(circle at center, rgba(255,255,255,.08), transparent 62%); }
         .flyerPreview > * { position: relative; z-index: 1; }
+        .flyerManualImageFrame { align-items: center; display: flex; inset: 12px; justify-content: center; position: absolute; z-index: 1; }
+        .flyerManualImageFrame img { border-radius: 14px; box-shadow: 0 18px 44px rgba(0,0,0,.34); display: block; height: 100%; max-height: 100%; max-width: 100%; object-fit: contain; width: 100%; }
         .flyerPreviewTop { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
         .flyerPreviewClub { backdrop-filter: blur(12px); background: rgba(15,23,42,.42); border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: #f8fafc; display: inline-flex; font-size: 12px; letter-spacing: .04em; max-width: min(62%, 260px); overflow: hidden; padding: 7px 11px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
         .flyerPreviewType { backdrop-filter: blur(12px); background: rgba(15,23,42,.34); border: 1px solid rgba(255,255,255,.22); border-radius: 999px; box-shadow: 0 10px 24px rgba(15,23,42,.16); font-size: 13px; letter-spacing: .04em; padding: 9px 14px; text-transform: uppercase; }
@@ -5874,6 +5888,34 @@ export default function ClubTournamentDetailPage() {
         .club-generateGroupsBtn:hover:not(:disabled) { background: color-mix(in srgb, var(--club-admin-accent) 8%, white); border-color: color-mix(in srgb, var(--club-admin-accent) 48%, transparent); }
         .club-generateMatchesBtn:hover:not(:disabled) { background: #ffe4f1; border-color: rgba(190,24,93,.36); }
         .club-generateSeedBtn:disabled, .club-generateGroupsBtn:disabled, .club-generateMatchesBtn:disabled { cursor: not-allowed; opacity: .58; }
+        .club-tournamentDetail .club-editBtn,
+        .club-tournamentDetail .club-backBtn,
+        .club-tournamentDetail .club-secondaryBtn,
+        .club-tournamentDetail .club-generateGroupsBtn,
+        .club-tournamentDetail .club-generateMatchesBtn,
+        .club-tournamentDetail .club-viewBtn,
+        .club-tournamentDetail .club-chipRemove,
+        .club-tournamentDetail .club-modalClose {
+          color: #061b3a !important;
+          -webkit-text-fill-color: #061b3a !important;
+        }
+        .club-tournamentDetail .club-editBtn:disabled,
+        .club-tournamentDetail .club-backBtn:disabled,
+        .club-tournamentDetail .club-secondaryBtn:disabled,
+        .club-tournamentDetail .club-generateGroupsBtn:disabled,
+        .club-tournamentDetail .club-generateMatchesBtn:disabled,
+        .club-tournamentDetail .club-viewBtn:disabled,
+        .club-tournamentDetail .club-chipRemove:disabled,
+        .club-tournamentDetail .club-modalClose:disabled {
+          color: #061b3a !important;
+          -webkit-text-fill-color: #061b3a !important;
+          opacity: .72;
+        }
+        .club-tournamentDetail .club-primaryBtn:not(.club-publishBtn):not(.club-dangerConfirmBtn),
+        .club-tournamentDetail .club-generateSeedBtn {
+          color: #fff;
+          -webkit-text-fill-color: #fff;
+        }
         .club-registrationsPanel, .club-placeholderPanel { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 16px; display: grid; gap: 10px; min-width: 0; padding: 12px; }
         .club-operationalCenter { background: linear-gradient(135deg, rgba(255,255,255,.98), color-mix(in srgb, var(--club-admin-accent) 8%, white)); border-color: color-mix(in srgb, var(--club-admin-accent) 18%, transparent); box-shadow: 0 16px 36px rgba(15,23,42,.06); }
         .club-operationalCenterGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
@@ -6162,7 +6204,7 @@ export default function ClubTournamentDetailPage() {
         .club-playoffRoundTab { background: #f8fafc; border: 1px solid rgba(15,23,42,.08); border-radius: 999px; color: #64748b; cursor: pointer; font-size: 12px; font-weight: 900; min-height: 32px; padding: 0 10px; white-space: nowrap; }
         .club-playoffRoundTab--active { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border-color: color-mix(in srgb, var(--club-admin-accent) 34%, transparent); color: #061b3a; }
         .club-playoffRoundMatches--mobile { grid-template-columns: 1fr; }
-        .club-primaryBtn, .club-secondaryBtn { align-items: center; border-radius: 999px; cursor: pointer; display: inline-flex; font-weight: 950; justify-content: center; min-height: 38px; padding: 8px 14px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
+        .club-primaryBtn, .club-secondaryBtn { align-items: center; appearance: none; border-radius: 999px; cursor: pointer; display: inline-flex; font-weight: 950; justify-content: center; line-height: 1.15; min-height: 38px; padding: 8px 14px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
         .club-primaryBtn { background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 38%, transparent); box-shadow: 0 12px 28px var(--club-admin-glow); color: #fff; }
         .club-primaryBtn:hover { box-shadow: 0 16px 34px var(--club-admin-glow); transform: translateY(-1px); }
         .club-primaryBtn:disabled { cursor: not-allowed; opacity: .58; }

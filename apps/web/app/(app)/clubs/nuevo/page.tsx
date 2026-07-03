@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
 import { useSession } from '@/components/session/SessionProvider'
 import { CLUB_THEMES, CLUB_THEME_LABELS, getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
+import { BRAND } from '@/lib/branding'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
@@ -339,7 +340,7 @@ export default function CreateClubPage() {
 
           <section className="px-card px-glass clubOnboardingSection">
             <div className="px-sectionTitle">Identidad visual *</div>
-            <p className="clubSectionHelp">Elegí una paleta Pamprax. Una vez creado el club, esta identidad queda fija para mantener consistencia de marca.</p>
+            <p className="clubSectionHelp">Elegí una paleta {BRAND.name}. Una vez creado el club, esta identidad queda fija para mantener consistencia de marca.</p>
             <div className="clubThemeGrid">
               {themeOptions.map((theme) => {
                 const selected = getClubTheme(v.theme_key).key === theme.key
@@ -360,7 +361,7 @@ export default function CreateClubPage() {
                     </span>
                     <span className="clubThemeMeta">
                       <strong>{CLUB_THEME_LABELS[theme.key]}</strong>
-                      {selected ? <em style={{ color: theme.vars.accent }}>Seleccionado</em> : <em>Theme Pamprax</em>}
+                      {selected ? <em style={{ color: theme.vars.accent }}>Seleccionado</em> : <em>Identidad SELPA</em>}
                     </span>
                   </button>
                 )

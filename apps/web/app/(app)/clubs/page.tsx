@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubInitials } from '@/lib/clubAssets'
+import { BRAND } from '@/lib/branding'
 
 type Club = {
   id: string
@@ -91,7 +92,7 @@ export default function ClubsPage() {
         <div>
           <h1 style={{ fontSize: 30, fontWeight: 900, marginBottom: 6 }}>Clubes activos</h1>
           <p style={{ opacity: 0.8 }}>
-            Explorá todos los clubes activos de PAMPRAX y solicitá tu alta como jugador en el que quieras.
+            Explorá todos los clubes activos de {BRAND.name} y solicitá tu alta como jugador en el que quieras.
           </p>
         </div>
 

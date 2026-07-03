@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BRAND } from '@/lib/branding'
 
 export default function TorneosCalendarioPage() {
   return (
@@ -13,7 +14,7 @@ export default function TorneosCalendarioPage() {
         <div className="px-list" style={{ marginTop: 12 }}>
           {[
             ['Open LA33', '22–24 Mar · Santa Rosa'],
-            ['Copa PAMPRAX', '05–07 Abr · General Pico'],
+            [`Copa ${BRAND.name}`, '05–07 Abr · General Pico'],
             ['Night Cup', '12–13 Abr · Toay'],
           ].map(([name, meta]) => (
             <div key={name} className="px-card px-card--flat">

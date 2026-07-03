@@ -60,7 +60,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
         <div className="px-authCard">
           <div className="px-authTop">
             <div className="px-authBrand">
-              <div className="px-authLogo">PX</div>
+              <div className="px-authLogo"><img src="/brand/selpa-isotipo.png" alt="SELPA" /></div>
               <div className="px-authBrandText">
                 <h1 className="px-authTitle">Accediendo…</h1>
                 <p className="px-authSub">Verificando permisos y club activo</p>

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import { BRAND } from '@/lib/branding'
 
 type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string } | null
 
@@ -87,14 +88,15 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="px-auth">
+    <div className="px-auth px-authModern">
       <div className="px-authCard">
         <div className="px-authTop">
           <div className="px-authBrand">
-            <div className="px-authLogo">PX</div>
             <div className="px-authBrandText">
-              <h1 className="px-authTitle">Crear cuenta</h1>
-              <p className="px-authSub">Registrate con tus datos y empezá a jugar.</p>
+              <span className="px-authMark" aria-label={`${BRAND.name} logo`}>
+                <img src="/brand/selpa-wordmark-clean-dark.png" alt={BRAND.name.toUpperCase()} />
+              </span>
+              <p className="px-authSub">Ingresá a tu comunidad deportiva.</p>
             </div>
           </div>
         </div>
@@ -144,7 +146,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="px-field">
-            <label className="px-label">Repetir contraseña</label>
+            <label className="px-label">Confirmar contraseña</label>
             <input
               className="px-input"
               type="password"

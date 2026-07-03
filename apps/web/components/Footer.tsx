@@ -1,3 +1,5 @@
+import { BRAND } from '@/lib/branding'
+
 export default function Footer() {
   return (
     <footer className="px-footer">
@@ -5,8 +7,7 @@ export default function Footer() {
         <div className="px-footer-inner">
 
           <div className="px-footer-brand">
-            <div className="px-footer-logo">PX</div>
-            <div className="px-footer-title">PAMPRAX</div>
+            <img className="px-footer-logoImage" src="/brand/selpa-logo-horizontal.png" alt={BRAND.name.toUpperCase()} />
           </div>
 
           <p className="px-footer-text">
@@ -24,7 +25,7 @@ export default function Footer() {
       </div>
 
       <div className="px-footer-legal">
-        © 2026 PAMPRAX · Privacidad · Términos · Cookies
+        © 2026 {BRAND.company} · Privacidad · Términos · Cookies
       </div>
     </footer>
   )

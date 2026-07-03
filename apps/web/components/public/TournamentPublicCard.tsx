@@ -6,6 +6,7 @@ import { ArrowRight, CalendarDays } from 'lucide-react'
 import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
+import { BRAND } from '@/lib/branding'
 import { getTournamentFlyerUrl } from '@/lib/tournamentFlyers'
 import { formatCategoryLabel, formatGenderLabel, formatSegmentLabel } from '@/lib/tournamentLabels'
 
@@ -67,6 +68,12 @@ function getTournamentType(value: TournamentPublicCardData) {
   return 'OPEN'
 }
 
+function isManualFlyer(value: TournamentPublicCardData) {
+  const mode = String(value.rules?.flyer_mode ?? '').trim().toUpperCase()
+  const manualUrl = String(value.rules?.flyer_manual_url ?? '').trim()
+  return mode === 'MANUAL' && Boolean(manualUrl || value.flyerUrl)
+}
+
 function formatTournamentType(value: string) {
   if (value === 'MASTER_FINAL') return 'Master Final'
   if (value === 'CHALLENGER') return 'Challenger'
@@ -86,6 +93,7 @@ export default function TournamentPublicCard({
   const parts = dateParts(tournament.startDate)
   const displayStatus = getTournamentDisplayStatus(tournament)
   const flyer = resolveFlyerUrl(tournament.flyerUrl ?? getTournamentFlyerUrl(tournament))
+  const manualFlyer = isManualFlyer(tournament)
   const logo = buildAssetProxyUrl(tournament.clubLogoUrl)
   const price = formatMoney(tournament.pricePerPlayer)
   const categoryLabel = formatCategoryLabel(tournament.category)
@@ -103,19 +111,21 @@ export default function TournamentPublicCard({
   } as CSSProperties
 
   return (
-    <article className={`TournamentPublicCard ${flyer ? 'has-flyer' : ''}`} style={style}>
+    <article className={`TournamentPublicCard ${flyer ? 'has-flyer' : ''}${manualFlyer ? ' is-manual-flyer' : ''}`} style={style}>
       <Link className="TournamentPublicCard__hitArea" href={`/torneos/${tournament.id}`} aria-label={`Entrar al torneo ${tournament.name}`} />
       <div className="TournamentPublicCard__poster">
         {flyer ? <img src={flyer} alt="" /> : null}
-        <div className="TournamentPublicCard__posterMeta">
-          <small>{formatTournamentType(tournamentType).toUpperCase()}</small>
-          <div>
-            <strong>{categoryLabel}</strong>
-            <em>{genderLabel}</em>
-            <i>{segmentLabel}</i>
+        {!manualFlyer ? (
+          <div className="TournamentPublicCard__posterMeta">
+            <small>{formatTournamentType(tournamentType).toUpperCase()}</small>
+            <div>
+              <strong>{categoryLabel}</strong>
+              <em>{genderLabel}</em>
+              <i>{segmentLabel}</i>
+            </div>
+            {price ? <b>Valor: {price}</b> : null}
           </div>
-          {price ? <b>Valor: {price}</b> : null}
-        </div>
+        ) : null}
       </div>
       <div className="TournamentPublicCard__body">
         <div className="TournamentPublicCard__top">
@@ -132,9 +142,9 @@ export default function TournamentPublicCard({
               className={`TournamentPublicCard__clubLogo ${logo ? 'has-image' : ''}`}
               style={logo ? { ['--club-logo' as string]: `url("${logo}")` } : undefined}
             >
-              {logo ? null : getClubInitials(tournament.clubName || 'PX')}
+              {logo ? null : getClubInitials(tournament.clubName || 'SELPA')}
             </span>
-            <b>{tournament.clubName || 'Club Pamprax'}</b>
+            <b>{tournament.clubName || `Club ${BRAND.name}`}</b>
           </div>
         ) : null}
         <h3>{tournament.name}</h3>

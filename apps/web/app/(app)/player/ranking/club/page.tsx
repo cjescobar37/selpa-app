@@ -176,11 +176,11 @@ export default function PlayerClubRankingPage() {
       <style>{`
         .playerClubRankShell { background: radial-gradient(circle at 8% 0%, var(--rank-glow), transparent 34%), #f3f7fb; color: #061b3a; display: grid; gap: 16px; margin: 0 auto; max-width: 1180px; padding: 18px; width: 100%; }
         .playerClubRankHero, .playerClubRankFilters, .playerClubRankColumn, .playerClubRankEmpty { background: rgba(255,255,255,.9); border: 1px solid #e2e8f0; border-radius: 22px; box-shadow: 0 18px 48px rgba(15,23,42,.07); }
-        .playerClubRankHero { align-items: center; display: flex; gap: 16px; justify-content: space-between; padding: 22px; }
+        .playerClubRankHero { align-items: center; display: flex; gap: 14px; justify-content: space-between; padding: 16px 18px; }
         .playerClubRankHero span, .playerClubRankFilters span, .playerClubRankColumn header span { color: var(--rank-accent); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
-        .playerClubRankHero h1 { font-size: clamp(32px, 5vw, 54px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 5px 0 7px; }
-        .playerClubRankHero p { color: #64748b; font-weight: 800; margin: 0; }
-        .playerClubRankHero a { background: linear-gradient(135deg, var(--rank-accent), var(--rank-accent-2)); border-radius: 999px; color: #fff; font-weight: 950; padding: 10px 13px; text-decoration: none; white-space: nowrap; }
+        .playerClubRankHero h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 4px 0 5px; }
+        .playerClubRankHero p { color: #64748b; font-size: 13px; font-weight: 800; margin: 0; }
+        .playerClubRankHero a { background: linear-gradient(135deg, var(--rank-accent), var(--rank-accent-2)); border-radius: 999px; color: #fff; font-weight: 950; min-height: 38px; padding: 0 13px; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; }
         .playerClubRankFilters { display: grid; gap: 12px; grid-template-columns: 160px 160px minmax(0, 1fr); padding: 13px; }
         .playerClubRankFilters label { display: grid; gap: 6px; }
         .playerClubRankFilters select, .playerClubRankFilters input { background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; color: #061b3a; font: inherit; font-weight: 850; min-width: 0; padding: 10px 11px; }

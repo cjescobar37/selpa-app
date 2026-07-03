@@ -6,6 +6,9 @@ import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import { resolveStorageUrl } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
+import { BRAND } from '@/lib/branding'
+import PublicHomeEmbed from '@/components/public/PublicHomeEmbed'
+import ModeSegmentedControl, { type HomeMode } from '@/components/ModeSegmentedControl'
 
 type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
 
@@ -70,7 +73,7 @@ const statusCopy: Record<ClubStatus, {
     label: 'Activo',
     tone: 'success',
     title: 'El club está activo',
-    body: 'El club ya puede operar normalmente dentro de Pamprax.',
+    body: `El club ya puede operar normalmente dentro de ${BRAND.name}.`,
     ownerCan: ['Gestionar jugadores.', 'Administrar torneos.', 'Actualizar datos del club.'],
     locked: [],
   },
@@ -177,6 +180,7 @@ export default function ClubPage() {
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [homeMode, setHomeMode] = useState<HomeMode>('space')
   const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
   const themeStyle = useMemo(
     () => ({
@@ -290,6 +294,11 @@ export default function ClubPage() {
 
   return (
     <div className="px-wrap">
+      <ModeSegmentedControl value={homeMode} onChange={setHomeMode} />
+      <div className={`clubModePane${homeMode === 'community' ? ' is-community' : ''}`}>
+      {homeMode === 'community' ? (
+        <PublicHomeEmbed />
+      ) : (
       <div className="club-panel club-dashboard" style={themeStyle}>
         <div className="club-dashboardHead">
           <div>
@@ -351,8 +360,34 @@ export default function ClubPage() {
           </div>
         </section>
       </div>
+      )}
+      </div>
 
       <style>{`
+        .clubModePane {
+          animation: modeFadeIn .22s ease both;
+          margin-top: 14px;
+          min-width: 0;
+        }
+        .clubModePane.is-community {
+          margin-left: -18px;
+          margin-right: -18px;
+        }
+        .modePublicHomeEmbed {
+          animation: modeFadeIn .22s ease both;
+        }
+        .modeEmbedState {
+          background: rgba(255,255,255,.86);
+          border: 1px solid rgba(226,232,240,.86);
+          border-radius: 18px;
+          color: #475569;
+          font-weight: 850;
+          padding: 18px;
+        }
+        @keyframes modeFadeIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         .club-dashboard {
           background: #fff;
           border: 1px solid rgba(15,23,42,.08);

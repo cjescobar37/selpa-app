@@ -13,7 +13,7 @@ type PlatformSettings = {
 const DEFAULT_SETTINGS: PlatformSettings = {
   default_commission_bps: 1000,
   default_currency: 'ARS',
-  platform_public_name: 'PAMPrax',
+  platform_public_name: 'SELPA',
   contact_email: '',
 }
 

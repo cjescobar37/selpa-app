@@ -1,6 +1,7 @@
 import PublicTournamentsExperience, { type PublicTournamentItem } from '@/components/public/PublicTournamentsExperience'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
+import { BRAND } from '@/lib/branding'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,10 @@ type ClubRow = {
   name: string
   logo_url: string | null
   theme_key: string | null
+}
+
+function normalizeBrandText(value: string) {
+  return value.replace(/PAMPRAX|PAMPrax|Pamprax|pamprax/g, BRAND.name.toUpperCase())
 }
 
 export default async function TorneosPublicPage() {
@@ -44,10 +49,10 @@ export default async function TorneosPublicPage() {
     return {
       id: item.id,
       club_id: item.club_id,
-      clubName: club?.name ?? 'Club Pamprax',
+      clubName: club?.name ?? `Club ${BRAND.name}`,
       clubLogoUrl: club?.logo_url ?? null,
       clubThemeKey: club?.theme_key ?? null,
-      name: item.name,
+      name: normalizeBrandText(item.name),
       status: item.status,
       type: item.type,
       gender: item.gender,

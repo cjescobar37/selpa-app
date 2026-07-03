@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { calculateScheduleCapacity, normalizeScheduleConfig, type ScheduleMode } from '@/lib/tournamentSchedule'
+import { uploadTournamentFlyer } from '@/lib/clubAssets'
 import {
   buildGroupTiebreakerPayload,
   groupTiebreakerCriterionOptions,
@@ -15,7 +16,7 @@ import {
   type GroupTiebreakerCriterion,
   type GroupTiebreakerFinal,
 } from '@/lib/tournamentTiebreakers'
-import { TournamentFlyerConfigurator, defaultFlyerConfig, readFlyerConfigFromRules, type FlyerConfig } from '../../_components/TournamentFlyerConfigurator'
+import { TournamentFlyerConfigurator, defaultFlyerConfig, readFlyerConfigFromRules, resolveAutoFlyerConfig, type FlyerConfig } from '../../_components/TournamentFlyerConfigurator'
 
 type TournamentType = 'OPEN' | 'CHALLENGER' | 'MASTER' | 'MASTER_FINAL'
 type TournamentGender = 'MALE' | 'FEMALE' | 'MIXED'
@@ -170,16 +171,56 @@ const scheduleModeOptions: Array<{ value: ScheduleMode; label: string }> = [
 ]
 
 function buildFlyerPayload(config: FlyerConfig) {
+  const manualUrl = config.manualFlyer?.publicUrl ?? null
   return {
     flyer_mode: config.mode,
     flyer_background: config.backgroundId,
     flyer_title_color: config.titleColor,
     flyer_text_color: config.textColor,
     flyer_accent_color: config.accentColor,
+    flyer_badge_color: config.badgeColor,
+    flyer_date_block_color: config.dateBlockColor,
+    flyer_data_card_color: config.dataCardColor,
+    flyer_data_card_opacity: config.dataCardOpacity,
+    flyer_data_card_radius: config.dataCardRadius,
+    flyer_data_style: config.dataStyle,
+    flyer_title_size: config.titleSize,
+    flyer_visible_fields: config.visibleFields,
     flyer_font: config.fontFamily,
     flyer_font_weight: config.fontWeight,
     flyer_style: config.style,
     flyer_text_align: config.textAlign,
+    flyer_manual_url: manualUrl,
+    flyer_url: config.mode === 'MANUAL' ? manualUrl : null,
+    poster_url: config.mode === 'MANUAL' ? manualUrl : null,
+    flyer_manual_name: config.manualFlyer?.name ?? null,
+    flyer_manual_size: config.manualFlyer?.size ?? null,
+    flyer_manual_width: config.manualFlyer?.width ?? null,
+    flyer_manual_height: config.manualFlyer?.height ?? null,
+  }
+}
+
+async function prepareFlyerConfigForSubmit(config: FlyerConfig, clubId: string, tournamentId: string, tournamentTypeLabel: string) {
+  const resolvedConfig = resolveAutoFlyerConfig(config, tournamentTypeLabel)
+  const manualFlyer = resolvedConfig.manualFlyer
+
+  if (resolvedConfig.mode !== 'MANUAL' || !manualFlyer?.file || manualFlyer.publicUrl) {
+    return resolvedConfig
+  }
+
+  const uploaded = await uploadTournamentFlyer({
+    file: manualFlyer.file,
+    clubId,
+    tournamentId,
+  })
+
+  return {
+    ...resolvedConfig,
+    manualFlyer: {
+      ...manualFlyer,
+      previewUrl: uploaded.publicUrl,
+      publicUrl: uploaded.publicUrl,
+    },
   }
 }
 
@@ -561,6 +602,23 @@ export default function EditClubTournamentPage() {
       return
     }
 
+    const tournamentTypeLabel = typeOptions.find((option) => option.value === form.type)?.label ?? form.type
+    const tournamentGenderLabel = genderOptions.find((option) => option.value === form.gender)?.label ?? form.gender
+    let preparedFlyerConfig: FlyerConfig
+    try {
+      preparedFlyerConfig = await prepareFlyerConfigForSubmit(
+        flyerConfig,
+        activeClub.id,
+        tournamentId,
+        `${tournamentTypeLabel} ${tournamentGenderLabel}`
+      )
+      if (preparedFlyerConfig !== flyerConfig) setFlyerConfig(preparedFlyerConfig)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pude subir el flyer manual.')
+      setSaving(false)
+      return
+    }
+
     const tournamentConfig = buildTournamentConfigPayload(form)
     const res = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}`, {
       method: 'PATCH',
@@ -589,7 +647,7 @@ export default function EditClubTournamentPage() {
         price_per_player: form.pricePerPlayer,
         min_pairs: form.minPairs,
         max_pairs: form.maxPairs || null,
-        flyer: buildFlyerPayload(flyerConfig),
+        flyer: buildFlyerPayload(preparedFlyerConfig),
       }),
     })
     const json = await res.json().catch(() => ({})) as { error?: string; code?: string }
@@ -1052,6 +1110,7 @@ export default function EditClubTournamentPage() {
                   type: typeOptions.find((option) => option.value === form.type)?.label ?? form.type,
                   gender: genderOptions.find((option) => option.value === form.gender)?.label ?? form.gender,
                   categoryLabel: `Categoria ${form.categoryId || '7'}`,
+                  publicDescription: form.publicDescription,
                   segmentLabel: segmentOptions.find((option) => option.value === form.segmentType)?.label ?? form.segmentType,
                   competitionSystemLabel: competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label ?? form.competitionSystem,
                   venueName: form.venueName || activeClub?.name || '',
@@ -1163,6 +1222,22 @@ export default function EditClubTournamentPage() {
         .flyerPlaceholder strong { color: #17253f; display: block; font-size: 15px; margin-bottom: 6px; }
         .flyerPlaceholder p { color: #64748b; font-size: 13px; font-weight: 700; line-height: 1.45; margin: 0; }
         .flyerPlaceholder--compact { min-height: 0; padding: 12px; }
+        .flyerManualUploader { background: rgba(255,255,255,.86); border: 1px solid rgba(148,163,184,.16); border-radius: 14px; display: grid; gap: 10px; padding: 12px; }
+        .flyerManualDropzone { align-items: center; background: linear-gradient(135deg, #ffffff, rgba(230,251,255,.74)); border: 1px dashed rgba(83,199,217,.52); border-radius: 14px; cursor: pointer; display: grid; gap: 5px; justify-items: center; min-height: 126px; padding: 18px; text-align: center; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+        .flyerManualDropzone:hover { border-color: rgba(15,142,160,.70); box-shadow: 0 14px 30px rgba(15,23,42,.08); transform: translateY(-1px); }
+        .flyerManualDropzone input, .flyerManualActions input { display: none !important; }
+        .flyerManualDropzone span { color: #061b3a; display: block; font-size: 16px; font-weight: 950; line-height: 1.1; }
+        .flyerManualDropzone strong { color: #30455f; display: block; font-size: 12px; font-weight: 900; line-height: 1.25; }
+        .flyerManualDropzone small { color: #64748b; display: block; font-size: 11px; font-weight: 800; line-height: 1.25; }
+        .flyerManualDropzone.has-file { min-height: 96px; }
+        .flyerManualMessage { border-radius: 12px; font-size: 12px; font-weight: 850; line-height: 1.35; margin: 0; padding: 9px 10px; }
+        .flyerManualMessage--error { background: #fff1f2; border: 1px solid rgba(244,63,94,.22); color: #be123c; }
+        .flyerManualMessage--warning { background: #fffbeb; border: 1px solid rgba(245,158,11,.26); color: #92400e; }
+        .flyerManualFile { align-items: center; background: rgba(248,250,252,.92); border: 1px solid rgba(148,163,184,.18); border-radius: 14px; display: flex; gap: 10px; justify-content: space-between; padding: 10px; }
+        .flyerManualFile strong { color: #17253f; display: block; font-size: 13px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .flyerManualFile span { color: #64748b; display: block; font-size: 12px; font-weight: 800; margin-top: 2px; }
+        .flyerManualActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+        .flyerManualActions label { cursor: pointer; }
         .flyerLayout--compact { grid-template-columns: minmax(0, 1fr); }
         .flyerBackgroundGrid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); margin-top: 10px; }
         .flyerBackgroundOption { background: rgba(255,255,255,.92); border: 1px solid rgba(148,163,184,.18); border-radius: 12px; cursor: pointer; display: grid; gap: 8px; padding: 8px; text-align: left; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
@@ -1179,8 +1254,12 @@ export default function EditClubTournamentPage() {
         .flyerPreviewShell { display: grid; gap: 8px; }
         .flyerPreview { border-radius: 22px; box-shadow: 0 28px 60px rgba(15,23,42,.18); min-height: 100%; overflow: hidden; padding: 18px; position: relative; }
         .flyerPreview--editor { min-height: 360px; }
+        .flyerPreview--manual { background-color: #020617; display: grid; min-height: 420px; place-items: center; }
         .flyerPreview::after { background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(2,6,23,.24) 100%); content: ''; inset: 0; pointer-events: none; position: absolute; }
+        .flyerPreview--manual::after { background: radial-gradient(circle at center, rgba(255,255,255,.08), transparent 62%); }
         .flyerPreview > * { position: relative; z-index: 1; }
+        .flyerManualImageFrame { align-items: center; display: flex; inset: 14px; justify-content: center; position: absolute; z-index: 1; }
+        .flyerManualImageFrame img { border-radius: 16px; box-shadow: 0 18px 44px rgba(0,0,0,.34); display: block; height: 100%; max-height: 100%; max-width: 100%; object-fit: contain; width: 100%; }
         .flyerPreviewTop { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
         .flyerPreviewClub { backdrop-filter: blur(12px); background: rgba(15,23,42,.42); border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: #f8fafc; display: inline-flex; font-size: 12px; letter-spacing: .04em; max-width: min(62%, 260px); overflow: hidden; padding: 7px 11px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
         .flyerPreviewType { backdrop-filter: blur(12px); background: rgba(15,23,42,.34); border: 1px solid rgba(255,255,255,.22); border-radius: 999px; box-shadow: 0 10px 24px rgba(15,23,42,.16); font-size: 13px; letter-spacing: .04em; padding: 9px 14px; text-transform: uppercase; }

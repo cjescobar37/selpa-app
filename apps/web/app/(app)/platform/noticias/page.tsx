@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AuthAlert from '@/components/AuthAlert'
 import PlatformModuleShell from '@/components/platform/PlatformModuleShell'
 import { supabase } from '@/lib/supabaseClient'
+import { BRAND } from '@/lib/branding'
 
 type NewsStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
 type NewsPlacement = 'HERO' | 'GRID' | 'ARCHIVE'
@@ -479,7 +480,7 @@ export default function PlatformNewsPage() {
 
   return (
     <PlatformModuleShell
-      title="Noticias Pamprax"
+      title={`Noticias ${BRAND.name}`}
       subtitle="Gestioná contenido institucional con hero, galería y previews reales antes de publicar."
       metrics={metrics}
       actions={
@@ -769,7 +770,7 @@ export default function PlatformNewsPage() {
                 <div className="px-page">
                   <div className="px-pageHead px-previewPageHead">
                     <h1 className="px-pageTitle">Noticias</h1>
-                    <p className="px-pageSub">Últimas noticias, comunicados y archivo histórico real cargado desde PAMPRAX.</p>
+                    <p className="px-pageSub">Últimas noticias, comunicados y archivo histórico real cargado desde {BRAND.name}.</p>
                   </div>
 
                   <div className="px-previewPublicStack">

@@ -131,9 +131,9 @@ export default function RankingBoard({ columns, className, stickyTop = 76 }: Ran
         .rankingBoardColumn {
           align-content: start;
           background: #fff;
-          border: 1px solid rgba(15, 23, 42, .08);
+          border: 1px solid rgba(15, 23, 42, .1);
           border-radius: 18px;
-          box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
+          box-shadow: 0 16px 36px rgba(15, 23, 42, .06);
           display: grid;
           gap: 10px;
           min-width: 0;
@@ -153,11 +153,11 @@ export default function RankingBoard({ columns, className, stickyTop = 76 }: Ran
 
         .rankingBoardHeader {
           align-items: center;
-          background: linear-gradient(135deg, color-mix(in srgb, var(--ranking-accent) 16%, white), rgba(255, 255, 255, .98));
-          border: 1px solid color-mix(in srgb, var(--ranking-accent) 32%, #e2e8f0);
+          background: #fff;
+          border: 1px solid color-mix(in srgb, var(--ranking-accent) 26%, #dbe3ec);
           border-radius: 14px;
           border-top: 3px solid var(--ranking-accent);
-          box-shadow: 0 10px 22px rgba(15, 23, 42, .07);
+          box-shadow: 0 10px 20px rgba(15, 23, 42, .045);
           display: grid;
           gap: 10px;
           grid-template-columns: minmax(0, 1fr) auto;
@@ -183,8 +183,8 @@ export default function RankingBoard({ columns, className, stickyTop = 76 }: Ran
         }
 
         .rankingBoardHeader em {
-          background: rgba(255, 255, 255, .86);
-          border: 1px solid color-mix(in srgb, var(--ranking-accent) 24%, #dbe5ef);
+          background: #f8fafc;
+          border: 1px solid color-mix(in srgb, var(--ranking-accent) 18%, #dbe5ef);
           border-radius: 999px;
           color: #334155;
           font-size: 12px;
@@ -195,10 +195,10 @@ export default function RankingBoard({ columns, className, stickyTop = 76 }: Ran
         }
 
         .rankingBoardLabels {
-          background: linear-gradient(135deg, color-mix(in srgb, var(--ranking-accent) 10%, white), #fff);
-          border: 1px solid color-mix(in srgb, var(--ranking-accent) 20%, #e2e8f0);
+          background: #fbfdff;
+          border: 1px solid color-mix(in srgb, var(--ranking-accent) 14%, #e2e8f0);
           border-radius: 12px;
-          box-shadow: 0 10px 24px rgba(15, 23, 42, .08);
+          box-shadow: 0 8px 18px rgba(15, 23, 42, .045);
           color: #64748b;
           display: grid;
           font-size: 10px;
@@ -310,8 +310,8 @@ function RankingCardStyles() {
     <style jsx global>{`
       .rankingCard {
         align-items: center;
-        background: radial-gradient(circle at 0 0, var(--ranking-soft), transparent 36%), rgba(255, 255, 255, .96);
-        border: 1px solid color-mix(in srgb, var(--ranking-accent) 18%, #e2e8f0);
+        background: #fff;
+        border: 1px solid color-mix(in srgb, var(--ranking-accent) 14%, #e2e8f0);
         border-radius: 15px;
         color: #061b3a;
         cursor: pointer;
@@ -322,14 +322,15 @@ function RankingCardStyles() {
         min-height: 94px;
         padding: 12px 14px;
         text-decoration: none;
+        box-shadow: 0 10px 22px rgba(15, 23, 42, .04);
         transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
       }
 
       .rankingCard:hover {
-        background: radial-gradient(circle at 0 0, color-mix(in srgb, var(--ranking-accent) 18%, transparent), transparent 42%), rgba(255, 255, 255, .99);
-        border-color: color-mix(in srgb, var(--ranking-accent) 34%, #e2e8f0);
-        box-shadow: 0 18px 40px color-mix(in srgb, var(--ranking-accent) 16%, transparent), 0 0 0 3px color-mix(in srgb, var(--ranking-accent) 12%, transparent);
-        transform: translateY(-2px) scale(1.006);
+        background: #fbfdff;
+        border-color: color-mix(in srgb, var(--ranking-accent) 26%, #dbe5ef);
+        box-shadow: 0 16px 34px rgba(15, 23, 42, .075);
+        transform: translateY(-1px);
       }
 
       .rankingCardPosition {
@@ -344,12 +345,12 @@ function RankingCardStyles() {
 
       .rankingCardAvatar {
         align-items: center;
-        background: linear-gradient(135deg, var(--ranking-accent), #172554);
+        background: #0f274a;
         border: 4px solid #fff;
         border-radius: 999px;
         color: #fff;
         display: flex;
-        box-shadow: 0 16px 34px color-mix(in srgb, var(--ranking-accent) 20%, transparent), 0 0 0 1px color-mix(in srgb, var(--ranking-accent) 24%, transparent);
+        box-shadow: 0 12px 24px rgba(15, 23, 42, .12), 0 0 0 2px color-mix(in srgb, var(--ranking-accent) 30%, transparent);
         font-family: "Outfit", Inter, system-ui, sans-serif;
         font-size: 18px;
         font-weight: 950;
@@ -391,8 +392,8 @@ function RankingCardStyles() {
 
       .rankingCardPoints {
         align-self: stretch;
-        background: linear-gradient(135deg, color-mix(in srgb, var(--ranking-accent) 10%, white), rgba(255, 255, 255, .96));
-        border: 1px solid color-mix(in srgb, var(--ranking-accent) 24%, #dbe6f0);
+        background: #f8fafc;
+        border: 1px solid color-mix(in srgb, var(--ranking-accent) 18%, #dbe6f0);
         border-radius: 16px;
         display: grid;
         justify-content: center;
@@ -405,14 +406,14 @@ function RankingCardStyles() {
       }
 
       .rankingCard:hover .rankingCardAvatar {
-        box-shadow: 0 18px 38px color-mix(in srgb, var(--ranking-accent) 28%, transparent), 0 0 0 2px color-mix(in srgb, var(--ranking-accent) 24%, transparent);
-        transform: scale(1.035);
+        box-shadow: 0 14px 28px rgba(15, 23, 42, .16), 0 0 0 2px color-mix(in srgb, var(--ranking-accent) 42%, transparent);
+        transform: scale(1.018);
       }
 
       .rankingCard:hover .rankingCardPoints {
-        border-color: color-mix(in srgb, var(--ranking-accent) 38%, #dbe6f0);
-        box-shadow: 0 10px 24px color-mix(in srgb, var(--ranking-accent) 14%, transparent);
-        transform: translateX(-2px);
+        border-color: color-mix(in srgb, var(--ranking-accent) 28%, #dbe6f0);
+        box-shadow: 0 10px 20px rgba(15, 23, 42, .06);
+        transform: translateX(-1px);
       }
 
       .rankingCardPoints b {
@@ -441,7 +442,7 @@ function RankingCardStyles() {
 
       .rankingCard.is-compact .rankingCardAvatar {
         border-width: 2px;
-        box-shadow: 0 10px 22px color-mix(in srgb, var(--ranking-accent) 15%, transparent);
+        box-shadow: 0 8px 18px rgba(15, 23, 42, .12), 0 0 0 1px color-mix(in srgb, var(--ranking-accent) 28%, transparent);
         font-size: 12px;
         height: 48px;
         width: 48px;

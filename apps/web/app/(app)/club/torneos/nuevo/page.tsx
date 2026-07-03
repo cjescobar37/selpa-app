@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
 import { calculateScheduleCapacity, type ScheduleMode } from '@/lib/tournamentSchedule'
+import { uploadTournamentFlyer } from '@/lib/clubAssets'
 import {
   buildGroupTiebreakerPayload,
   defaultGroupTiebreakerConfig,
@@ -15,7 +16,7 @@ import {
   type GroupTiebreakerCriterion,
   type GroupTiebreakerFinal,
 } from '@/lib/tournamentTiebreakers'
-import { TournamentFlyerConfigurator, defaultFlyerConfig, type FlyerConfig } from '../_components/TournamentFlyerConfigurator'
+import { TournamentFlyerConfigurator, defaultFlyerConfig, resolveAutoFlyerConfig, type FlyerConfig } from '../_components/TournamentFlyerConfigurator'
 
 type TournamentType = 'OPEN' | 'CHALLENGER' | 'MASTER' | 'MASTER_FINAL'
 type TournamentGender = 'MALE' | 'FEMALE' | 'MIXED'
@@ -176,17 +177,57 @@ const scheduleModeOptions: Array<{ value: ScheduleMode; label: string }> = [
   { value: 'MANUAL', label: 'Manual' },
 ]
 
-function buildFlyerPayload(config: FlyerConfig) {
+function buildFlyerPayload(config: FlyerConfig, tournamentTypeLabel: string) {
+  const resolvedConfig = resolveAutoFlyerConfig(config, tournamentTypeLabel)
+  const manualUrl = resolvedConfig.manualFlyer?.publicUrl ?? null
   return {
-    flyer_mode: config.mode,
-    flyer_background: config.backgroundId,
-    flyer_title_color: config.titleColor,
-    flyer_text_color: config.textColor,
-    flyer_accent_color: config.accentColor,
-    flyer_font: config.fontFamily,
-    flyer_font_weight: config.fontWeight,
-    flyer_style: config.style,
-    flyer_text_align: config.textAlign,
+    flyer_mode: resolvedConfig.mode,
+    flyer_background: resolvedConfig.backgroundId,
+    flyer_title_color: resolvedConfig.titleColor,
+    flyer_text_color: resolvedConfig.textColor,
+    flyer_accent_color: resolvedConfig.accentColor,
+    flyer_badge_color: resolvedConfig.badgeColor,
+    flyer_date_block_color: resolvedConfig.dateBlockColor,
+    flyer_data_card_color: resolvedConfig.dataCardColor,
+    flyer_data_card_opacity: resolvedConfig.dataCardOpacity,
+    flyer_data_card_radius: resolvedConfig.dataCardRadius,
+    flyer_data_style: resolvedConfig.dataStyle,
+    flyer_title_size: resolvedConfig.titleSize,
+    flyer_visible_fields: resolvedConfig.visibleFields,
+    flyer_font: resolvedConfig.fontFamily,
+    flyer_font_weight: resolvedConfig.fontWeight,
+    flyer_style: resolvedConfig.style,
+    flyer_text_align: resolvedConfig.textAlign,
+    flyer_manual_url: manualUrl,
+    flyer_url: resolvedConfig.mode === 'MANUAL' ? manualUrl : null,
+    poster_url: resolvedConfig.mode === 'MANUAL' ? manualUrl : null,
+    flyer_manual_name: resolvedConfig.manualFlyer?.name ?? null,
+    flyer_manual_size: resolvedConfig.manualFlyer?.size ?? null,
+    flyer_manual_width: resolvedConfig.manualFlyer?.width ?? null,
+    flyer_manual_height: resolvedConfig.manualFlyer?.height ?? null,
+  }
+}
+
+async function prepareFlyerConfigForSubmit(config: FlyerConfig, clubId: string, tournamentTypeLabel: string) {
+  const resolvedConfig = resolveAutoFlyerConfig(config, tournamentTypeLabel)
+  const manualFlyer = resolvedConfig.manualFlyer
+
+  if (resolvedConfig.mode !== 'MANUAL' || !manualFlyer?.file || manualFlyer.publicUrl) {
+    return resolvedConfig
+  }
+
+  const uploaded = await uploadTournamentFlyer({
+    file: manualFlyer.file,
+    clubId,
+  })
+
+  return {
+    ...resolvedConfig,
+    manualFlyer: {
+      ...manualFlyer,
+      previewUrl: uploaded.publicUrl,
+      publicUrl: uploaded.publicUrl,
+    },
   }
 }
 
@@ -253,6 +294,7 @@ export default function ClubNuevoTorneoPage() {
   const [loadingComplexes, setLoadingComplexes] = useState(true)
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const [flyerConfig, setFlyerConfig] = useState<FlyerConfig>(defaultFlyerConfig)
+  const [courtsExpanded, setCourtsExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -446,6 +488,22 @@ export default function ClubNuevoTorneoPage() {
       return
     }
 
+    const tournamentTypeLabel = typeOptions.find((option) => option.value === form.type)?.label ?? form.type
+    const tournamentGenderLabel = genderOptions.find((option) => option.value === form.gender)?.label ?? form.gender
+    let preparedFlyerConfig: FlyerConfig
+    try {
+      preparedFlyerConfig = await prepareFlyerConfigForSubmit(
+        flyerConfig,
+        activeClub.id,
+        `${tournamentTypeLabel} ${tournamentGenderLabel}`
+      )
+      if (preparedFlyerConfig !== flyerConfig) setFlyerConfig(preparedFlyerConfig)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pude subir el flyer manual.')
+      setSaving(false)
+      return
+    }
+
     const tournamentConfig = buildTournamentConfigPayload(form)
     const res = await fetch(`/api/clubs/${activeClub.id}/tournaments`, {
       method: 'POST',
@@ -473,7 +531,7 @@ export default function ClubNuevoTorneoPage() {
         price_per_player: form.pricePerPlayer,
         min_pairs: form.minPairs,
         max_pairs: form.maxPairs || null,
-        flyer: buildFlyerPayload(flyerConfig),
+        flyer: buildFlyerPayload(preparedFlyerConfig, `${tournamentTypeLabel} ${tournamentGenderLabel}`),
       }),
     })
     const json = await res.json().catch(() => ({}))
@@ -633,13 +691,22 @@ export default function ClubNuevoTorneoPage() {
                 </select>
               </label>
 
-              <details className="club-disclosure club-disclosure--button club-field--span4">
-                <summary>
+              <div className="club-field club-field--span4 club-courtsToggle">
+                <button
+                  type="button"
+                  className="club-courtsToggleButton"
+                  aria-expanded={courtsExpanded}
+                  onClick={() => setCourtsExpanded((current) => !current)}
+                >
                   <span>Configurar canchas</span>
                   <small>{form.tournamentCourts.length ? `${form.tournamentCourts.length} cancha${form.tournamentCourts.length === 1 ? '' : 's'}` : 'Opcional'}</small>
-                </summary>
-                <p>Podés configurar canchas ahora o más adelante desde Grupos/Agenda.</p>
-                <div className="club-formSectionGrid club-formSectionGrid--nested">
+                </button>
+              </div>
+
+              {courtsExpanded ? (
+                <div className="club-courtsPanel club-field--wide">
+                  <p>Podés configurar canchas ahora o más adelante desde Grupos/Agenda.</p>
+                  <div className="club-formSectionGrid club-formSectionGrid--nested">
                   <label className="club-field club-field--span4">
                     <span>Complejo / Sede</span>
                     <select className="px-input" value={courtDraft.complexId} onChange={(event) => setCourtDraft({ complexId: event.target.value, courtName: '' })}>
@@ -701,7 +768,8 @@ export default function ClubNuevoTorneoPage() {
                   </div>
                   ) : null}
                 </div>
-              </details>
+                </div>
+              ) : null}
             </div>
           </section>
 
@@ -886,12 +954,14 @@ export default function ClubNuevoTorneoPage() {
             <TournamentFlyerConfigurator
               value={flyerConfig}
               onChange={setFlyerConfig}
+              advancedControls
               previewData={{
                 clubName: activeClub?.name ?? '',
                 name: form.name,
                 type: typeOptions.find((option) => option.value === form.type)?.label ?? form.type,
                 gender: genderOptions.find((option) => option.value === form.gender)?.label ?? form.gender,
                 categoryLabel: `Categoria ${form.categoryId || '7'}`,
+                publicDescription: form.publicDescription,
                 segmentLabel: segmentOptions.find((option) => option.value === form.segmentType)?.label ?? form.segmentType,
                 competitionSystemLabel: competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label ?? form.competitionSystem,
                 venueName: form.venueName || activeClub?.name || '',
@@ -962,17 +1032,30 @@ export default function ClubNuevoTorneoPage() {
         .club-checkRow--wide { grid-column: 1 / -1; }
         .club-disclosure { background: rgba(255,255,255,.76); border: 1px solid rgba(15,23,42,.08); border-radius: 12px; padding: 8px 10px; }
         .club-disclosure--button { align-self: end; background: transparent; border: 0; padding: 0; }
-        .club-disclosure--button[open] { grid-column: 1 / -1; }
         .club-disclosure--button > summary { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 34%, transparent); border-radius: 999px; color: #061b3a; min-height: 36px; padding: 7px 12px; }
-        .club-disclosure--button[open] > summary { border-color: color-mix(in srgb, var(--club-admin-accent) 54%, transparent); box-shadow: 0 0 0 3px var(--club-admin-soft); justify-self: end; min-width: 220px; }
         .club-disclosureSection { padding: 10px; }
         .club-disclosure > summary, .club-disclosureSection > summary { align-items: center; cursor: pointer; display: flex; gap: 10px; justify-content: space-between; list-style: none; }
         .club-disclosure > summary::-webkit-details-marker, .club-disclosureSection > summary::-webkit-details-marker { display: none; }
         .club-disclosure summary span, .club-disclosureSection summary span { color: #17253f; font-size: 13px; font-weight: 950; }
         .club-disclosure summary small, .club-disclosureSection summary small { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); border-radius: 999px; color: #061b3a; font-size: 11px; font-weight: 900; padding: 4px 8px; }
         .club-disclosure p { color: #64748b; font-size: 12px; font-weight: 800; line-height: 1.35; margin: 8px 0 0; }
+        .club-venueRow { align-items: end; }
+        .club-courtsToggle { align-self: end; }
+        .club-courtsToggleButton { align-items: center; background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 34%, transparent); border-radius: 999px; color: #061b3a; cursor: pointer; display: flex; gap: 10px; justify-content: space-between; min-height: 36px; padding: 7px 12px; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; width: 100%; }
+        .club-courtsToggleButton:hover, .club-courtsToggleButton[aria-expanded="true"] { border-color: color-mix(in srgb, var(--club-admin-accent) 54%, transparent); box-shadow: 0 0 0 3px var(--club-admin-soft); }
+        .club-courtsToggleButton span { color: #17253f; font-size: 13px; font-weight: 950; }
+        .club-courtsToggleButton small { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); border-radius: 999px; color: #061b3a; font-size: 11px; font-weight: 900; padding: 4px 8px; white-space: nowrap; }
+        .club-courtsPanel { background: rgba(255,255,255,.54); border: 1px solid rgba(148,163,184,.14); border-radius: 14px; display: grid; gap: 10px; padding: 10px; }
+        .club-courtsPanel > p { color: #64748b; font-size: 12px; font-weight: 800; line-height: 1.35; margin: 0; }
+        .club-formSectionGrid--nested { align-items: end; background: rgba(255,255,255,.62); border: 1px solid rgba(148,163,184,.16); border-radius: 14px; padding: 10px; }
+        .club-formSectionGrid--nested > .club-field--span4 { grid-column: auto; }
+        .club-formSectionGrid--nested > label:nth-of-type(1) { grid-column: 1 / span 5; }
+        .club-formSectionGrid--nested > label:nth-of-type(2) { grid-column: span 5; }
+        .club-formSectionGrid--nested > .club-courtComposer { grid-column: span 2; }
+        .club-courtComposer { align-items: end; display: flex; justify-content: flex-end; min-height: 58px; }
+        .club-courtComposer .club-secondaryBtn { min-height: 36px; width: 100%; }
         .club-pointsGrid { display: grid; gap: 8px; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .club-pointsToolbar, .club-courtComposer { align-items: center; display: flex; flex-wrap: wrap; justify-content: space-between; }
+        .club-pointsToolbar { align-items: center; display: flex; flex-wrap: wrap; justify-content: space-between; }
         .club-pointsHint { color: #64748b; font-size: 12px; font-weight: 800; }
         .club-pointsSummary { display: flex; flex-wrap: wrap; gap: 8px; }
         .club-pointsSummary span { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 999px; color: #64748b; font-size: 12px; font-weight: 900; padding: 6px 9px; }
@@ -1008,45 +1091,99 @@ export default function ClubNuevoTorneoPage() {
         .flyerModeChip { background: #fff; border: 1px solid rgba(148,163,184,.26); border-radius: 999px; color: #274159; cursor: pointer; font-size: 13px; font-weight: 900; min-height: 38px; padding: 0 14px; transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; }
         .flyerModeChip:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 38%, transparent); color: #061b3a; }
         .flyerModeChip.is-active { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border-color: color-mix(in srgb, var(--club-admin-accent) 52%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--club-admin-accent) 14%, transparent); color: #061b3a; }
-        .flyerLayout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); }
-        .flyerControls { display: grid; gap: 14px; min-width: 0; }
+        .flyerLayout { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.24fr) minmax(300px, .76fr); }
+        .flyerControls { display: grid; gap: 10px; min-width: 0; }
         .flyerControlSection, .flyerPlaceholder { background: rgba(255,255,255,.82); border: 1px solid rgba(148,163,184,.16); border-radius: 14px; padding: 14px; }
+        .flyerControlSection--compact { border-radius: 12px; display: grid; gap: 8px; padding: 10px; }
         .flyerPlaceholder strong { color: #17253f; display: block; font-size: 15px; margin-bottom: 6px; }
         .flyerPlaceholder p { color: #64748b; font-size: 13px; font-weight: 700; line-height: 1.45; margin: 0; }
         .flyerPlaceholder--compact { min-height: 0; padding: 12px; }
+        .flyerManualUploader { background: rgba(255,255,255,.82); border: 1px solid rgba(148,163,184,.16); border-radius: 14px; display: grid; gap: 10px; padding: 12px; }
+        .flyerManualDropzone { align-items: center; background: linear-gradient(135deg, rgba(255,255,255,.92), color-mix(in srgb, var(--club-admin-accent) 7%, white)); border: 1px dashed color-mix(in srgb, var(--club-admin-accent) 46%, rgba(148,163,184,.5)); border-radius: 14px; cursor: pointer; display: grid; gap: 5px; justify-items: center; min-height: 128px; padding: 18px; text-align: center; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+        .flyerManualDropzone:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 74%, transparent); box-shadow: 0 14px 30px rgba(15,23,42,.08); transform: translateY(-1px); }
+        .flyerManualDropzone input, .flyerManualActions input { display: none; }
+        .flyerManualDropzone span { color: #061b3a; font-size: 16px; font-weight: 950; }
+        .flyerManualDropzone strong { color: #30455f; font-size: 12px; font-weight: 900; }
+        .flyerManualDropzone small { color: #64748b; font-size: 11px; font-weight: 800; }
+        .flyerManualDropzone.has-file { min-height: 96px; }
+        .flyerManualMessage { border-radius: 12px; font-size: 12px; font-weight: 850; line-height: 1.35; margin: 0; padding: 9px 10px; }
+        .flyerManualMessage--error { background: #fff1f2; border: 1px solid rgba(244,63,94,.22); color: #be123c; }
+        .flyerManualMessage--warning { background: #fffbeb; border: 1px solid rgba(245,158,11,.26); color: #92400e; }
+        .flyerManualFile { align-items: center; background: rgba(248,250,252,.92); border: 1px solid rgba(148,163,184,.18); border-radius: 14px; display: flex; gap: 10px; justify-content: space-between; padding: 10px; }
+        .flyerManualFile strong { color: #17253f; display: block; font-size: 13px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .flyerManualFile span { color: #64748b; display: block; font-size: 12px; font-weight: 800; margin-top: 2px; }
+        .flyerManualActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+        .flyerManualActions label { cursor: pointer; }
         .flyerLayout--compact { grid-template-columns: minmax(0, 1fr); }
-        .flyerBackgroundGrid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); margin-top: 10px; }
-        .flyerBackgroundOption { background: rgba(255,255,255,.92); border: 1px solid rgba(148,163,184,.18); border-radius: 12px; cursor: pointer; display: grid; gap: 8px; padding: 8px; text-align: left; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+        .flyerBackgroundGrid { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(66px, 1fr)); margin-top: 8px; }
+        .flyerBackgroundOption { background: rgba(255,255,255,.92); border: 1px solid rgba(148,163,184,.18); border-radius: 10px; cursor: pointer; display: grid; gap: 5px; padding: 6px; text-align: left; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
         .flyerBackgroundOption:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 50%, transparent); box-shadow: 0 8px 18px rgba(15,23,42,.08); transform: translateY(-1px); }
         .flyerBackgroundOption.is-selected { border-color: color-mix(in srgb, var(--club-admin-accent) 80%, transparent); box-shadow: 0 0 0 2px var(--club-admin-soft); }
-        .flyerBackgroundOption span:last-child { color: #30455f; font-size: 11px; font-weight: 900; }
-        .flyerBackgroundSwatch { aspect-ratio: 1.12; border-radius: 10px; display: block; min-width: 0; }
+        .flyerBackgroundOption span:last-child { color: #30455f; font-size: 10px; font-weight: 900; line-height: 1; }
+        .flyerBackgroundSwatch { aspect-ratio: 1.22; border-radius: 8px; display: block; min-width: 0; }
+        .flyerPersonalization { background: rgba(255,255,255,.68); border: 1px solid rgba(148,163,184,.16); border-radius: 16px; display: grid; gap: 10px; padding: 10px; }
+        .flyerPersonalizationHead { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
+        .flyerPersonalizationHead .flyerControlHint { margin: 0; max-width: 440px; text-align: right; }
+        .flyerPersonalizationGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .flyerControlRow { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .flyerControlRow--selects { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        .flyerColorField, .flyerSelectField { background: rgba(255,255,255,.82); border: 1px solid rgba(148,163,184,.16); border-radius: 14px; color: #30455f; display: grid; font-size: 12px; font-weight: 900; gap: 8px; padding: 12px; }
-        .flyerColorField input { appearance: none; background: transparent; border: none; cursor: pointer; height: 42px; padding: 0; width: 100%; }
+        .flyerControlRow--colors { gap: 7px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .flyerControlRow--selects { gap: 7px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .flyerControlHint { color: #64748b; font-size: 12px; font-weight: 750; line-height: 1.45; margin: 6px 0 0; }
+        .flyerColorField, .flyerSelectField, .flyerRangeField { background: rgba(255,255,255,.82); border: 1px solid rgba(148,163,184,.16); border-radius: 11px; color: #30455f; display: grid; font-size: 11px; font-weight: 900; gap: 6px; min-width: 0; padding: 8px; }
+        .flyerColorField input { appearance: none; background: transparent; border: none; cursor: pointer; height: 30px; padding: 0; width: 100%; }
         .flyerColorField input::-webkit-color-swatch-wrapper { padding: 0; }
-        .flyerColorField input::-webkit-color-swatch { border: 1px solid rgba(15,23,42,.14); border-radius: 10px; }
+        .flyerColorField input::-webkit-color-swatch { border: 1px solid rgba(15,23,42,.14); border-radius: 8px; }
+        .flyerSelectField .px-input { min-height: 34px; padding-bottom: 6px; padding-top: 6px; }
+        .flyerRangeField input { accent-color: var(--club-admin-accent); min-width: 0; width: 100%; }
+        .flyerRangeField small { color: #64748b; font-size: 11px; font-weight: 900; }
+        .flyerVisibleGrid { display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .flyerToggleField { align-items: center; background: rgba(248,250,252,.9); border: 1px solid rgba(148,163,184,.18); border-radius: 999px; color: #30455f; cursor: pointer; display: flex; font-size: 11px; font-weight: 900; gap: 6px; min-height: 28px; padding: 4px 8px; }
+        .flyerToggleField input { accent-color: var(--club-admin-accent); }
         .flyerPreviewShell { display: grid; gap: 8px; }
         .flyerPreview { border-radius: 22px; box-shadow: 0 28px 60px rgba(15,23,42,.18); min-height: 100%; overflow: hidden; padding: 18px; position: relative; }
         .flyerPreview--editor { min-height: 360px; }
+        .flyerPreview--manual { background-color: #020617; display: grid; min-height: 420px; place-items: center; }
         .flyerPreview::after { background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(2,6,23,.24) 100%); content: ''; inset: 0; pointer-events: none; position: absolute; }
+        .flyerPreview--manual::after { background: radial-gradient(circle at center, rgba(255,255,255,.08), transparent 62%); }
         .flyerPreview > * { position: relative; z-index: 1; }
+        .flyerManualImageFrame { align-items: center; display: flex; inset: 14px; justify-content: center; position: absolute; z-index: 1; }
+        .flyerManualImageFrame img { border-radius: 16px; box-shadow: 0 18px 44px rgba(0,0,0,.34); display: block; height: 100%; max-height: 100%; max-width: 100%; object-fit: contain; width: 100%; }
         .flyerPreviewTop { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
         .flyerPreviewClub { backdrop-filter: blur(12px); background: rgba(15,23,42,.42); border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: #f8fafc; display: inline-flex; font-size: 12px; letter-spacing: .04em; max-width: min(62%, 260px); overflow: hidden; padding: 7px 11px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-        .flyerPreviewType { backdrop-filter: blur(12px); background: rgba(15,23,42,.34); border: 1px solid rgba(255,255,255,.22); border-radius: 999px; box-shadow: 0 10px 24px rgba(15,23,42,.16); font-size: 13px; letter-spacing: .04em; padding: 9px 14px; text-transform: uppercase; }
+        .flyerPreviewType { backdrop-filter: blur(12px); background: color-mix(in srgb, var(--flyer-badge-color) 72%, rgba(15,23,42,.48)); border: 1px solid rgba(255,255,255,.28); border-radius: 999px; box-shadow: 0 10px 24px color-mix(in srgb, var(--flyer-badge-color) 28%, rgba(15,23,42,.16)); font-size: 13px; letter-spacing: .04em; padding: 9px 14px; text-transform: uppercase; }
         .flyerPreviewBody { display: grid; gap: 14px; margin-top: 30px; }
         .flyerPreviewEyebrow { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
-        .flyerPreviewMain h3 { font-size: clamp(30px, 4vw, 44px); letter-spacing: 0; line-height: 1.02; margin: 7px 0 8px; max-width: 10ch; text-wrap: balance; }
+        .flyerPreviewMain h3 { font-size: clamp(30px, 4vw, 44px); letter-spacing: 0; line-height: 1.02; margin: 7px 0 8px; max-width: 10ch; overflow-wrap: anywhere; text-wrap: balance; }
+        .flyerPreview--title-small .flyerPreviewMain h3 { font-size: clamp(26px, 3.2vw, 34px); line-height: 1.06; max-width: 12ch; }
+        .flyerPreview--title-medium .flyerPreviewMain h3 { font-size: clamp(30px, 3.8vw, 40px); }
+        .flyerPreview--title-large .flyerPreviewMain h3 { font-size: clamp(34px, 4.4vw, 48px); }
+        .flyerPreview--title-impact .flyerPreviewMain h3 { font-size: clamp(38px, 5.2vw, 56px); letter-spacing: -.02em; line-height: .96; max-width: 9ch; text-transform: uppercase; }
         .flyerPreviewMain p { color: inherit; font-size: 15px; line-height: 1.25; margin: 0; opacity: .92; }
-        .flyerPreviewDate { background: rgba(15,23,42,.26); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.20); border-radius: 14px; box-shadow: 0 12px 32px rgba(15,23,42,.14); display: inline-grid; gap: 5px; justify-self: start; min-width: 0; padding: 11px 13px; }
+        .flyerPreviewDate { background: linear-gradient(135deg, color-mix(in srgb, var(--flyer-date-color) 82%, rgba(15,23,42,.68)), rgba(15,23,42,.42)); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.22); border-radius: var(--flyer-data-radius); box-shadow: 0 16px 38px color-mix(in srgb, var(--flyer-date-color) 24%, rgba(15,23,42,.18)); display: inline-grid; gap: 9px; justify-self: start; max-width: 100%; min-width: min(100%, 230px); padding: 12px 14px; }
+        .flyerPreviewDateRow { display: grid; gap: 3px; min-width: 0; }
         .flyerPreviewDate span, .flyerPreviewMeta span { color: rgba(226,232,240,.80); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-        .flyerPreviewDate strong, .flyerPreviewMeta strong { color: #f8fafc; font-size: 16px; line-height: 1.15; }
-        .flyerPreviewMeta { display: grid; gap: 9px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 24px; }
-        .flyerPreviewMeta > div { backdrop-filter: blur(12px); background: rgba(15,23,42,.24); border: 1px solid rgba(255,255,255,.13); border-radius: 14px; box-shadow: 0 10px 26px rgba(15,23,42,.10); display: grid; gap: 5px; padding: 11px 13px; }
+        .flyerPreviewDate strong, .flyerPreviewMeta strong { color: #f8fafc; font-size: 16px; line-height: 1.15; overflow-wrap: anywhere; }
+        .flyerPreviewMeta { align-items: stretch; display: grid; gap: 9px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 20px; }
+        .flyerPreviewMetaItem { backdrop-filter: blur(var(--flyer-data-blur)); background: color-mix(in srgb, var(--flyer-data-color) var(--flyer-data-alpha), transparent); border: 1px solid color-mix(in srgb, rgba(255,255,255,.18) var(--flyer-data-alpha), transparent); border-radius: var(--flyer-data-radius); box-shadow: 0 10px 26px color-mix(in srgb, rgba(15,23,42,.16) var(--flyer-data-alpha), transparent); display: grid; gap: 5px; min-width: 0; padding: 11px 13px; }
+        .flyerPreviewMetaItem--deadline { border-color: color-mix(in srgb, var(--flyer-accent-color) var(--flyer-data-accent-alpha), transparent); grid-column: span 2; }
+        .flyerPreviewMetaItem--price { align-self: start; justify-self: start; min-width: 118px; }
+        .flyerPreviewMetaItem--price strong { color: #fff; font-size: 18px; }
+        .flyerPreviewMetaItem--secondary { opacity: .84; }
+        .flyerPreview--data-compact .flyerPreviewMeta { gap: 7px; margin-top: 16px; }
+        .flyerPreview--data-compact .flyerPreviewMetaItem { border-radius: 12px; padding: 9px 10px; }
+        .flyerPreview--data-solid .flyerPreviewMetaItem { backdrop-filter: none; background: color-mix(in srgb, var(--flyer-data-color) var(--flyer-data-alpha), transparent); }
+        .flyerPreview--data-editorial .flyerPreviewMeta { grid-template-columns: 1.2fr .8fr; }
+        .flyerPreview--data-editorial .flyerPreviewMetaItem { background: color-mix(in srgb, rgba(248,250,252,.92) var(--flyer-data-alpha), transparent); border-color: color-mix(in srgb, rgba(255,255,255,.22) var(--flyer-data-alpha), transparent); }
+        .flyerPreview--data-editorial .flyerPreviewMetaItem span { color: color-mix(in srgb, var(--flyer-data-color) 74%, #334155); }
+        .flyerPreview--data-editorial .flyerPreviewMetaItem strong { color: #061b3a; }
         .flyerManualOverlay, .flyerNoneOverlay { backdrop-filter: blur(14px); background: rgba(15,23,42,.48); border: 1px solid rgba(255,255,255,.14); border-radius: 16px; bottom: 20px; display: grid; gap: 6px; left: 20px; padding: 14px; position: absolute; right: 20px; z-index: 2; }
         .flyerManualOverlay strong, .flyerNoneOverlay strong { color: #f8fafc; font-size: 15px; }
         .flyerManualOverlay span, .flyerNoneOverlay span { color: rgba(226,232,240,.88); font-size: 12px; font-weight: 700; line-height: 1.4; }
+        @media (max-width: 1080px) {
+          .flyerPersonalizationGrid { grid-template-columns: 1fr; }
+          .flyerPersonalizationHead { display: grid; }
+          .flyerPersonalizationHead .flyerControlHint { max-width: none; text-align: left; }
+        }
         @media (max-width: 720px) {
           .club-newHead { display: grid; }
           .club-formSectionHead { display: grid; }
@@ -1055,9 +1192,15 @@ export default function ClubNuevoTorneoPage() {
           .club-disclosure--button { align-self: stretch; }
           .club-formActions { justify-content: stretch; }
           .club-formActions > * { width: 100%; }
-          .flyerBlockHead, .flyerLayout, .flyerControlRow, .flyerControlRow--selects, .flyerPreviewMeta { grid-template-columns: 1fr; }
+          .club-formSectionGrid--nested > label:nth-of-type(1),
+          .club-formSectionGrid--nested > label:nth-of-type(2),
+          .club-formSectionGrid--nested > .club-courtComposer { grid-column: auto; }
+          .club-courtComposer { min-height: 0; }
+          .flyerBlockHead, .flyerLayout, .flyerControlRow, .flyerControlRow--colors, .flyerControlRow--selects, .flyerPreviewMeta { grid-template-columns: 1fr; }
+          .flyerVisibleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .flyerBlockHead { display: grid; }
           .flyerPreview { min-height: 420px; }
+          .flyerPreviewMetaItem--deadline { grid-column: auto; }
         }
       `}</style>
     </div>

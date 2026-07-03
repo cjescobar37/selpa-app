@@ -249,11 +249,11 @@ export default function PlayerMyRankingPage() {
           border-radius: 22px;
           box-shadow: 0 18px 48px rgba(15,23,42,.07);
         }
-        .playerRankHero { align-items: center; display: flex; gap: 16px; justify-content: space-between; padding: 22px; }
+        .playerRankHero { align-items: center; display: flex; gap: 14px; justify-content: space-between; padding: 16px 18px; }
         .playerRankHero span { color: var(--rank-accent); font-size: 12px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
-        .playerRankHero h1 { font-size: clamp(34px, 5vw, 58px); font-weight: 950; letter-spacing: -.04em; line-height: .95; margin: 5px 0 7px; }
-        .playerRankHero p { color: #64748b; font-weight: 800; margin: 0; }
-        .playerRankHero a, .playerRankActions a { align-items: center; background: linear-gradient(135deg, var(--rank-accent), var(--rank-accent-2)); border-radius: 999px; color: #fff; display: inline-flex; font-weight: 950; gap: 7px; padding: 10px 13px; text-decoration: none; white-space: nowrap; }
+        .playerRankHero h1 { font-size: clamp(28px, 4vw, 44px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 4px 0 5px; }
+        .playerRankHero p { color: #64748b; font-size: 13px; font-weight: 800; margin: 0; }
+        .playerRankHero a, .playerRankActions a { align-items: center; background: linear-gradient(135deg, var(--rank-accent), var(--rank-accent-2)); border-radius: 999px; color: #fff; display: inline-flex; font-weight: 950; gap: 7px; min-height: 38px; padding: 0 13px; text-decoration: none; white-space: nowrap; }
         .playerRankCard { align-items: center; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) 210px; overflow: hidden; padding: 18px 20px; position: relative; }
         .playerRankCard::before { background: linear-gradient(180deg, var(--rank-accent), var(--rank-accent-2)); content: ""; inset: 0 auto 0 0; position: absolute; width: 5px; }
         .playerRankMain { align-items: center; display: grid; gap: 18px; grid-template-columns: 96px minmax(0, 1fr); min-width: 0; }

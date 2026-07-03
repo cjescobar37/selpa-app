@@ -4,10 +4,11 @@ import Link from 'next/link'
 import type { CSSProperties } from 'react'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Trophy, Users } from 'lucide-react'
+import { CheckCircle2, Trophy, Users } from 'lucide-react'
 import PampraxHero from '@/components/ui/PampraxHero'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
+import { BRAND } from '@/lib/branding'
 
 type PublicTournamentDetail = {
   tournament: {
@@ -232,7 +233,7 @@ function getRefundEstimate(startDate?: string | null, totalAmount?: number | nul
 
 function buildGoogleMapsUrl(parts: Array<string | null | undefined>) {
   const query = parts.map((part) => String(part ?? '').trim()).filter(Boolean).join(' ')
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query || 'Pamprax')}`
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query || 'SELPA')}`
 }
 
 function getTiebreakerSteps(value?: string | null) {
@@ -330,6 +331,7 @@ export default function TorneoDetallePage() {
   const [clubMessageOpen, setClubMessageOpen] = useState(false)
   const [clubMessage, setClubMessage] = useState('')
   const [clubMessageFeedback, setClubMessageFeedback] = useState('')
+  const [clubMessageNotice, setClubMessageNotice] = useState('')
   const [clubMessageSaving, setClubMessageSaving] = useState(false)
   const [withdrawalOpen, setWithdrawalOpen] = useState(false)
   const [withdrawalReason, setWithdrawalReason] = useState('')
@@ -368,6 +370,12 @@ export default function TorneoDetallePage() {
       alive = false
     }
   }, [tournamentId])
+
+  useEffect(() => {
+    if (!clubMessageNotice) return
+    const timer = window.setTimeout(() => setClubMessageNotice(''), 3000)
+    return () => window.clearTimeout(timer)
+  }, [clubMessageNotice])
 
   if (loading) {
     return (
@@ -471,6 +479,7 @@ export default function TorneoDetallePage() {
 
     setClubMessageSaving(true)
     setClubMessageFeedback('')
+    setClubMessageNotice('')
 
     try {
       const { data: sessionData } = await supabase.auth.getSession()
@@ -494,7 +503,9 @@ export default function TorneoDetallePage() {
       if (!response.ok) throw new Error(payload?.error ?? 'No se pudo enviar el mensaje.')
 
       setClubMessage('')
-      setClubMessageFeedback('Mensaje enviado al club.')
+      setClubMessageFeedback('')
+      setClubMessageOpen(false)
+      setClubMessageNotice('Mensaje enviado al club correctamente.')
     } catch (err) {
       setClubMessageFeedback(err instanceof Error ? err.message : 'No se pudo enviar el mensaje.')
     } finally {
@@ -505,12 +516,12 @@ export default function TorneoDetallePage() {
   return (
     <main className="tournamentPublicDetail" style={themeStyle}>
       <PampraxHero
-        kicker={clubLocation || detail.club?.name || 'Torneo Pamprax'}
+        kicker={clubLocation || detail.club?.name || `Torneo ${BRAND.name}`}
         title={detail.tournament.name}
         subtitle={subtitle}
         statusBadge={registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : detail.status.key === 'registration_open' ? { label: 'Inscripción abierta', tone: 'success' } : { label: detail.status.label, tone: 'info' }}
         secondaryAction={detail.club ? { label: 'Ver club', href: `/clubs/${detail.club.id}` } : { label: 'Calendario', href: '/torneos' }}
-        logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'PX' }}
+        logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'SE' }}
         themeKey={detail.club?.themeKey}
         coverUrl={detail.flyerUrl}
       />
@@ -535,6 +546,7 @@ export default function TorneoDetallePage() {
                     type="button"
                     onClick={() => {
                       setClubMessageFeedback('')
+                      setClubMessageNotice('')
                       setClubMessageOpen(true)
                     }}
                   >
@@ -806,6 +818,13 @@ export default function TorneoDetallePage() {
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {clubMessageNotice ? (
+        <div className="tournamentPublicDetail__toast" role="status" aria-live="polite">
+          <span aria-hidden="true"><CheckCircle2 size={16} /></span>
+          <p>{clubMessageNotice}</p>
         </div>
       ) : null}
 
@@ -1485,6 +1504,68 @@ export default function TorneoDetallePage() {
           opacity: .45;
         }
 
+        .tournamentPublicDetail__toast {
+          align-items: center;
+          animation: tournamentPublicToastIn .22s ease both, tournamentPublicToastOut .24s ease 2.76s forwards;
+          background:
+            linear-gradient(135deg, rgba(2,8,23,.98), rgba(6,26,63,.96));
+          border: 1px solid color-mix(in srgb, var(--pamprax-hero-accent, #22d3ee) 48%, rgba(255,255,255,.14));
+          border-radius: 18px;
+          bottom: 24px;
+          box-shadow:
+            0 24px 60px color-mix(in srgb, var(--pamprax-hero-accent, #22d3ee) 24%, rgba(2,8,23,.34)),
+            inset 0 1px 0 rgba(255,255,255,.10);
+          color: #f8fafc;
+          display: inline-flex;
+          gap: 10px;
+          max-width: min(420px, calc(100vw - 32px));
+          padding: 12px 14px;
+          position: fixed;
+          right: 24px;
+          z-index: 90;
+        }
+
+        .tournamentPublicDetail__toast::before {
+          background: linear-gradient(180deg, var(--pamprax-hero-accent, #22d3ee), var(--pamprax-hero-accent-2, #ec4899));
+          border-radius: 999px;
+          bottom: 10px;
+          content: "";
+          left: 0;
+          position: absolute;
+          top: 10px;
+          width: 3px;
+        }
+
+        .tournamentPublicDetail__toast span {
+          align-items: center;
+          background: color-mix(in srgb, var(--pamprax-hero-accent, #22d3ee) 18%, rgba(255,255,255,.08));
+          border: 1px solid color-mix(in srgb, var(--pamprax-hero-accent, #22d3ee) 42%, rgba(255,255,255,.12));
+          border-radius: 999px;
+          color: color-mix(in srgb, var(--pamprax-hero-accent, #22d3ee) 72%, #fff);
+          display: inline-flex;
+          flex: 0 0 auto;
+          height: 28px;
+          justify-content: center;
+          width: 28px;
+        }
+
+        .tournamentPublicDetail__toast p {
+          color: #f8fafc;
+          font-size: 13px;
+          font-weight: 900;
+          line-height: 1.25;
+          margin: 0;
+        }
+
+        @keyframes tournamentPublicToastIn {
+          from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.98); }
+          to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+        }
+
+        @keyframes tournamentPublicToastOut {
+          to { opacity: 0; transform: translate3d(0, 10px, 0) scale(.98); }
+        }
+
         .tournamentPublicDetail__modalActions {
           display: flex;
           gap: 10px;
@@ -1981,6 +2062,13 @@ export default function TorneoDetallePage() {
 
           .tournamentPublicDetail__registeredBlock {
             grid-template-columns: 1fr;
+          }
+
+          .tournamentPublicDetail__toast {
+            bottom: 18px;
+            left: 16px;
+            right: 16px;
+            justify-content: flex-start;
           }
 
           .tournamentPublicDetail__registeredIntro button {

@@ -105,7 +105,9 @@ a{ color: inherit; }
 
 .px-main{
   min-height: calc(100vh - 80px);
-  background: transparent;        /* <- sin gradients */
+  background:
+    radial-gradient(circle at 50% 0, color-mix(in srgb, var(--px-active-club-accent, #22d3ee) 1.5%, transparent), transparent 42%),
+    transparent;
 }
 
 .px-wrap{

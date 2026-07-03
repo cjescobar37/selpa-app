@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import { BRAND } from '@/lib/branding'
 
 type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string } | null
 
@@ -45,12 +46,14 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="px-auth">
+    <div className="px-auth px-authModern px-loginAuth">
       <div className="px-authCard">
         <div className="px-authTop">
           <div className="px-authBrand">
-            <div className="px-authLogo">PX</div>
             <div className="px-authBrandText">
+              <span className="px-authMark" aria-label={`${BRAND.name} logo`}>
+                <img src="/brand/selpa-wordmark-clean-dark.png" alt={BRAND.name.toUpperCase()} />
+              </span>
               <h1 className="px-authTitle">Restablecer contraseña</h1>
               <p className="px-authSub">Te mandamos un link para crear una contraseña nueva.</p>
             </div>
@@ -81,9 +84,13 @@ export default function ResetPasswordPage() {
 
           {alert ? <AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /> : null}
 
-          <div className="px-authRow">
-            <Link className="px-link" href="/login">Volver</Link>
-            <Link className="px-link" href="/register">Crear cuenta</Link>
+          <div className="px-authRow px-loginLinks">
+            <Link className="px-loginLinkBlock" href="/login">
+              <strong>Volver <b>→</b></strong>
+            </Link>
+            <Link className="px-loginLinkBlock" href="/register">
+              <strong>Crear cuenta <b>→</b></strong>
+            </Link>
           </div>
         </form>
       </div>

@@ -1,10 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Banknote, CalendarDays, CheckCircle2, Clock, CreditCard, Search, ShieldCheck, Users } from 'lucide-react'
 import PampraxHero from '@/components/ui/PampraxHero'
+import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 
 type PublicTournamentDetail = {
@@ -262,6 +264,9 @@ export default function TorneoInscripcionPage() {
   const [withdrawalSaving, setWithdrawalSaving] = useState(false)
   const [clubMessageModalOpen, setClubMessageModalOpen] = useState(false)
   const [clubMessage, setClubMessage] = useState('')
+  const [clubMessageError, setClubMessageError] = useState('')
+  const [clubMessageToast, setClubMessageToast] = useState('')
+  const [clubMessageSaving, setClubMessageSaving] = useState(false)
   const [restoredDraft, setRestoredDraft] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -406,6 +411,12 @@ export default function TorneoInscripcionPage() {
     }))
   }, [availability, availabilityReady, alreadyRegistered, currentStep, detail, paymentMethod, restoredDraft, selectedPartner])
 
+  useEffect(() => {
+    if (!clubMessageToast) return
+    const timer = window.setTimeout(() => setClubMessageToast(''), 3000)
+    return () => window.clearTimeout(timer)
+  }, [clubMessageToast])
+
   async function submitRegistration() {
     if (!detail || !selectedPartner?.userId || !paymentMethod || !availabilityReady) return
     if (isRegistrationClosed(detail.tournament.registrationDeadline)) {
@@ -540,6 +551,45 @@ export default function TorneoInscripcionPage() {
     }
   }
 
+  async function sendClubMessage() {
+    if (!detail?.club?.id || !tournamentId || clubMessage.trim().length < 4) return
+
+    setClubMessageSaving(true)
+    setClubMessageError('')
+    setMessage('')
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Iniciá sesión para enviar el mensaje.')
+
+      const response = await fetch(`/api/clubs/${detail.club.id}/message-threads`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tournamentId,
+          subject: `Consulta por inscripción · ${detail.tournament.name}`,
+          message: clubMessage.trim(),
+          context: 'tournament_registration',
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload?.error ?? 'No se pudo enviar el mensaje.')
+
+      setClubMessage('')
+      setClubMessageError('')
+      setClubMessageModalOpen(false)
+      setClubMessageToast('Mensaje enviado al club correctamente.')
+    } catch (error) {
+      setClubMessageError(error instanceof Error ? error.message : 'No se pudo enviar el mensaje.')
+    } finally {
+      setClubMessageSaving(false)
+    }
+  }
+
   function selectPartner(partner: PartnerOption) {
     setSelectedPartner(partner)
     setSearch('')
@@ -601,16 +651,21 @@ export default function TorneoInscripcionPage() {
     'A confirmar'
   const postPayment = postPaymentView(detail.viewer.myTeam?.paymentStatus, detail.viewer.myTeam?.paymentMethod)
   const showPaymentOnly = alreadyRegistered && forcePaymentStep && postPayment.action === 'pay'
+  const theme = getClubTheme(detail.club?.themeKey)
+  const themeStyle = {
+    ['--tournament-signup-accent' as string]: theme.vars.accent,
+    ['--tournament-signup-accent-2' as string]: theme.vars.accent2,
+  } as CSSProperties
 
   return (
-    <main className="tournamentSignupPage">
+    <main className="tournamentSignupPage" style={themeStyle}>
       <PampraxHero
         kicker="Inscripción al torneo"
         title={detail.tournament.name}
         subtitle={`${detail.club?.name ?? 'Club'} · ${detail.labels.category} · ${detail.labels.gender} · ${detail.labels.segment}`}
         primaryAction={{ label: 'Volver al torneo', href: `/torneos/${detail.tournament.id}` }}
         secondaryAction={detail.club ? { label: 'Ver club', href: `/clubs/${detail.club.id}` } : undefined}
-        logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'PX' }}
+        logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'SE' }}
         stats={[
           { label: 'Cupos', value: `${detail.capacity.registeredTeamsCount}/${detail.capacity.maxPairs ?? '—'}`, icon: <Users size={16} /> },
           { label: 'Cierre', value: formatDate(detail.tournament.registrationDeadline), icon: <CalendarDays size={16} /> },
@@ -753,7 +808,14 @@ export default function TorneoInscripcionPage() {
               <small>Inscripción: {registrationStatusLabel(detail.viewer.myTeam?.registrationStatus)}</small>
 
               {postPayment.action === 'message' ? (
-                <button type="button" onClick={() => setClubMessageModalOpen(true)}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClubMessageError('')
+                    setClubMessageToast('')
+                    setClubMessageModalOpen(true)
+                  }}
+                >
                   Enviar mensaje al club
                 </button>
               ) : null}
@@ -1231,11 +1293,19 @@ export default function TorneoInscripcionPage() {
               </div>
               <button type="button" onClick={() => setClubMessageModalOpen(false)} aria-label="Cerrar">×</button>
             </div>
+            {clubMessageError ? (
+              <p className="tournamentSignupPage__modalError" role="alert">
+                {clubMessageError}
+              </p>
+            ) : null}
             <label className="tournamentSignupPage__withdrawalReason">
               <span>Consulta</span>
               <textarea
                 value={clubMessage}
-                onChange={(event) => setClubMessage(event.target.value)}
+                onChange={(event) => {
+                  setClubMessage(event.target.value)
+                  setClubMessageError('')
+                }}
                 placeholder="Hola, ya solicité pagar en el predio. ¿Podrían aprobar mi inscripción?"
                 rows={4}
               />
@@ -1244,18 +1314,20 @@ export default function TorneoInscripcionPage() {
               <button type="button" className="is-secondary" onClick={() => setClubMessageModalOpen(false)}>Cancelar</button>
               <button
                 type="button"
-                disabled={clubMessage.trim().length < 4}
-                onClick={() => {
-                  console.info('[Pamprax] Mensaje al club preparado:', clubMessage.trim())
-                  setMessage('Mensaje preparado. Falta activar mensajería del club.')
-                  setClubMessage('')
-                  setClubMessageModalOpen(false)
-                }}
+                disabled={clubMessage.trim().length < 4 || clubMessageSaving}
+                onClick={sendClubMessage}
               >
-                Enviar mensaje
+                {clubMessageSaving ? 'Enviando...' : 'Enviar mensaje'}
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {clubMessageToast ? (
+        <div className="tournamentSignupPage__toast" role="status" aria-live="polite">
+          <span aria-hidden="true"><CheckCircle2 size={16} /></span>
+          <p>{clubMessageToast}</p>
         </div>
       ) : null}
 
@@ -1838,6 +1910,18 @@ export default function TorneoInscripcionPage() {
           margin: 0;
         }
 
+        .tournamentSignupPage__modalError {
+          background: rgba(244, 63, 94, 0.08);
+          border: 1px solid rgba(244, 63, 94, 0.24);
+          border-radius: 14px;
+          color: #9f1239;
+          font-size: 13px;
+          font-weight: 900;
+          line-height: 1.35;
+          margin: 0;
+          padding: 10px 12px;
+        }
+
         .tournamentSignupPage__withdrawalReason {
           display: grid;
           gap: 8px;
@@ -1966,6 +2050,67 @@ export default function TorneoInscripcionPage() {
         .tournamentSignupPage__modalActions button:disabled {
           cursor: not-allowed;
           opacity: .45;
+        }
+
+        .tournamentSignupPage__toast {
+          align-items: center;
+          animation: tournamentSignupToastIn .22s ease both, tournamentSignupToastOut .24s ease 2.76s forwards;
+          background: linear-gradient(135deg, rgba(2,8,23,.98), rgba(6,26,63,.96));
+          border: 1px solid color-mix(in srgb, var(--tournament-signup-accent, #22d3ee) 48%, rgba(255,255,255,.14));
+          border-radius: 18px;
+          bottom: 24px;
+          box-shadow:
+            0 24px 60px color-mix(in srgb, var(--tournament-signup-accent, #22d3ee) 24%, rgba(2,8,23,.34)),
+            inset 0 1px 0 rgba(255,255,255,.10);
+          color: #f8fafc;
+          display: inline-flex;
+          gap: 10px;
+          max-width: min(420px, calc(100vw - 32px));
+          padding: 12px 14px;
+          position: fixed;
+          right: 24px;
+          z-index: 90;
+        }
+
+        .tournamentSignupPage__toast::before {
+          background: linear-gradient(180deg, var(--tournament-signup-accent, #22d3ee), var(--tournament-signup-accent-2, #ec4899));
+          border-radius: 999px;
+          bottom: 10px;
+          content: "";
+          left: 0;
+          position: absolute;
+          top: 10px;
+          width: 3px;
+        }
+
+        .tournamentSignupPage__toast span {
+          align-items: center;
+          background: color-mix(in srgb, var(--tournament-signup-accent, #22d3ee) 18%, rgba(255,255,255,.08));
+          border: 1px solid color-mix(in srgb, var(--tournament-signup-accent, #22d3ee) 42%, rgba(255,255,255,.12));
+          border-radius: 999px;
+          color: color-mix(in srgb, var(--tournament-signup-accent, #22d3ee) 72%, #fff);
+          display: inline-flex;
+          flex: 0 0 auto;
+          height: 28px;
+          justify-content: center;
+          width: 28px;
+        }
+
+        .tournamentSignupPage__toast p {
+          color: #f8fafc;
+          font-size: 13px;
+          font-weight: 900;
+          line-height: 1.25;
+          margin: 0;
+        }
+
+        @keyframes tournamentSignupToastIn {
+          from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.98); }
+          to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+        }
+
+        @keyframes tournamentSignupToastOut {
+          to { opacity: 0; transform: translate3d(0, 10px, 0) scale(.98); }
         }
 
         .tournamentSignupPage__total {
@@ -2550,6 +2695,13 @@ export default function TorneoInscripcionPage() {
 
           .tournamentSignupPage__modalActions button {
             width: 100%;
+          }
+
+          .tournamentSignupPage__toast {
+            bottom: 18px;
+            left: 16px;
+            right: 16px;
+            justify-content: flex-start;
           }
 
           .tournamentSignupPage__checkoutSummary dl div {

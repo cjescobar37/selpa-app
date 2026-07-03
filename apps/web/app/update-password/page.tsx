@@ -52,7 +52,7 @@ export default function UpdatePasswordPage() {
       <div className="px-authCard">
         <div className="px-authTop">
           <div className="px-authBrand">
-            <div className="px-authLogo">PX</div>
+            <div className="px-authLogo"><img src="/brand/selpa-isotipo.png" alt="SELPA" /></div>
             <div className="px-authBrandText">
               <h1 className="px-authTitle">Nueva contraseña</h1>
               <p className="px-authSub">Creá una contraseña nueva para tu cuenta.</p>

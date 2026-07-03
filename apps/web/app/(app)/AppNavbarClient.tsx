@@ -15,6 +15,7 @@ import { useSession } from '@/components/session/SessionProvider'
 // 🔁 AJUSTÁ ESTO a tu proyecto:
 // import { NAV_CONFIG } from '@/components/nav/navConfig'
 import { NAV_CONFIG } from '@/lib/navConfig'
+import { BRAND } from '@/lib/branding'
 
 type Role = 'guest' | 'player' | 'club' | 'platform'
 
@@ -123,7 +124,7 @@ export default function AppNavbarClient() {
       <div className="px-left">
         <Link href="/" className="px-brand">
           <span className="px-brandLogo" aria-hidden="true" />
-          <span className="px-brandText">PAMPRAX</span>
+          <span className="px-brandText">{BRAND.name}</span>
         </Link>
       </div>
     )

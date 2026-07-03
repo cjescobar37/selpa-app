@@ -248,7 +248,7 @@ export default function SeleccionarClubPage() {
                 boxShadow: '0 10px 24px rgba(53,88,165,0.22)',
               }}
             >
-              PX
+              <img src="/brand/selpa-isotipo.png" alt="SELPA" />
             </div>
             <div className="px-authBrandText">
               <h1 className="px-authTitle">Seleccionar club</h1>

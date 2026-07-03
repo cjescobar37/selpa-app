@@ -179,7 +179,7 @@ export default function PlatformCreateClubPage() {
                     <span style={{ display: 'grid', gap: 2, padding: '0 12px 12px' }}>
                       <strong style={{ color: '#17253f', fontSize: 13 }}>{CLUB_THEME_LABELS[theme.key]}</strong>
                       <em style={{ color: selected ? theme.vars.accent : '#64748b', fontSize: 11, fontStyle: 'normal', fontWeight: 800 }}>
-                        {selected ? 'Seleccionado' : 'Theme Pamprax'}
+                        {selected ? 'Seleccionado' : 'Identidad SELPA'}
                       </em>
                     </span>
                   </button>

@@ -593,7 +593,8 @@ export default function ClubJugadorDetailPage() {
   const winRate = matchesPlayed > 0 ? Math.round(((stats?.wins ?? 0) / matchesPlayed) * 100) : null
   const lossRate = matchesPlayed > 0 ? Math.round(((stats?.losses ?? 0) / matchesPlayed) * 100) : null
   const preferredPosition = formatPreferredPosition(player?.preferred_position)
-  const rankingPositionLabel = '—'
+  const rankingPositionLabel = player?.ranking_points && player.ranking_points > 0 ? 'A definir' : 'Sin ranking'
+  const rankingPositionIsText = !rankingPositionLabel.startsWith('#')
   const rankingPointsLabel = formatRankingPoints(player?.ranking_points ?? null)
   const rankingStatusLabel = player?.ranking_points && player.ranking_points > 0 ? 'Sin posición pública' : 'Sin ranking'
   const isOwnProfile = Boolean(player?.user_id && user?.id && player.user_id === user.id)
@@ -690,7 +691,7 @@ export default function ClubJugadorDetailPage() {
                 <div className={`profileHeroV2__rank profileHeroV2__rank--${normalizeRankingGender(player.gender) === 'F' ? 'magenta' : 'cyan'}`}>
                   <span>Ranking actual</span>
                   <span className="profileHeroV2__crown">♕</span>
-                  <div className="profileHeroV2__rankMain">
+                  <div className={`profileHeroV2__rankMain${rankingPositionIsText ? ' profileHeroV2__rankMain--text' : ''}`}>
                     <em>{rankingPositionLabel}</em>
                     <div>
                       <small>Puntos</small>
@@ -724,7 +725,7 @@ export default function ClubJugadorDetailPage() {
               <article className="player-statCard player-statCard--pink">
                 <span className="player-statIcon"><TrendingUp size={22} strokeWidth={2.35} /></span>
                 <span className="player-statLabel">Efectividad</span>
-                <strong className="player-statValue">{typeof stats?.effectiveness === 'number' ? `${stats.effectiveness}%` : 'Sin datos'}</strong>
+                <strong className="player-statValue">{typeof stats?.effectiveness === 'number' ? `${stats.effectiveness}%` : '-'}</strong>
               </article>
               <article className="player-statCard player-statCard--blue">
                 <span className="player-statIcon"><CalendarDays size={22} strokeWidth={2.35} /></span>
@@ -841,7 +842,7 @@ export default function ClubJugadorDetailPage() {
                   <div><span>Ranking actual</span><strong>{rankingPositionLabel}</strong></div>
                   <div><span>Torneos jugados</span><strong>{stats?.tournaments_played ?? 0}</strong></div>
                   <div><span>Partidos jugados</span><strong>{stats?.matches_played ?? 0}</strong></div>
-                  <div><span>Efectividad</span><strong>{typeof stats?.effectiveness === 'number' ? `${stats.effectiveness}%` : 'Sin datos'}</strong></div>
+                  <div><span>Efectividad</span><strong>{typeof stats?.effectiveness === 'number' ? `${stats.effectiveness}%` : '-'}</strong></div>
                   <div><span>Mejor ranking</span><strong>Historial pendiente</strong></div>
                 </div>
               </article>
@@ -942,7 +943,7 @@ export default function ClubJugadorDetailPage() {
                           {coverPreview || editForm.cover_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={(coverPreview ?? editForm.cover_url) || ''} alt="" />
-                          ) : <small>Usa la portada Pamprax actual como fallback.</small>}
+                          ) : <small>Usa la portada SELPA actual como fallback.</small>}
                         </div>
                         <input type="file" accept="image/*" onChange={(event) => selectProfileFile('cover', event.target.files?.[0])} />
                       </label>
@@ -1043,7 +1044,7 @@ export default function ClubJugadorDetailPage() {
       </div>
 
       <style>{`
-        .player-premium { background: linear-gradient(180deg, #ffffff, #f8fbff); display: grid; gap: 14px; overflow: hidden; }
+        .player-premium { background: linear-gradient(180deg, #ffffff, #f8fafc); display: grid; gap: 13px; overflow: hidden; }
         .player-premiumTopbar { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
         .player-premiumTopActions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
         .player-backBtn, .player-secondaryBtn { border-radius: 10px; font-size: 13px; font-weight: 850; padding: 9px 12px; text-decoration: none; }
@@ -1056,19 +1057,18 @@ export default function ClubJugadorDetailPage() {
         .profileHeroV2__background { background: linear-gradient(135deg, #091729, #173457 48%, #22152c); inset: 0; position: absolute; }
         .profileHeroV2__background img { filter: saturate(1.02) brightness(1) blur(.1px); object-fit: cover; object-position: center; opacity: 1; }
         .profileHeroV2__wash { background:
-          linear-gradient(90deg, rgba(5,15,35,.30) 0%, rgba(10,20,45,.24) 45%, rgba(20,10,35,.18) 100%),
-          radial-gradient(circle at 9% 38%, rgba(6,182,212,.16), transparent 34%),
-          radial-gradient(circle at 92% 42%, rgba(236,72,153,.12), transparent 32%);
+          linear-gradient(90deg, rgba(5,15,35,.38) 0%, rgba(10,20,45,.25) 48%, rgba(15,23,42,.20) 100%),
+          radial-gradient(circle at 11% 38%, var(--profile-accent-glow, rgba(103,232,249,.14)), transparent 34%),
+          radial-gradient(circle at 92% 42%, rgba(255,255,255,.08), transparent 30%);
           inset: 0; position: absolute;
         }
-        .profileHeroV2__band { background: rgba(15,23,42,.24); backdrop-filter: blur(14px); border: 1px solid rgba(103,232,249,.10); border-radius: 0 30px 30px 0; box-shadow: 0 24px 58px rgba(0,0,0,.12); clip-path: polygon(0 0, 88% 0, 100% 100%, 0 100%); height: 188px; left: 34px; position: absolute; right: 170px; top: 188px; }
+        .profileHeroV2__band { background: rgba(15,23,42,.22); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.09); border-left: 3px solid var(--profile-accent, rgba(103,232,249,.72)); border-radius: 0 28px 28px 0; box-shadow: 0 22px 54px rgba(0,0,0,.10); clip-path: polygon(0 0, 88% 0, 100% 100%, 0 100%); height: 188px; left: 34px; position: absolute; right: 170px; top: 188px; }
         .profileHeroV2__band::after { display: none; }
         .profileHeroV2__content { align-items: center; display: grid; gap: 30px; grid-template-columns: 256px minmax(0, 1fr) 220px; height: 100%; padding: 108px 70px 8px; position: relative; z-index: 2; }
         .profileHeroV2__avatar { align-items: center; background:
-          radial-gradient(circle at 28% 24%, rgba(103,232,249,.38), transparent 30%),
-          radial-gradient(circle at 78% 22%, rgba(244,114,182,.26), transparent 30%),
+          radial-gradient(circle at 30% 24%, var(--profile-accent-glow, rgba(103,232,249,.24)), transparent 32%),
           linear-gradient(135deg, #0f2c4a, #111827 58%, #172554);
-          border: 8px solid rgba(255,255,255,.98); border-radius: 999px; box-shadow: 0 28px 62px rgba(0,0,0,.32), 0 0 0 3px var(--profile-accent, rgba(103,232,249,.80)), 0 0 34px var(--profile-accent-glow, rgba(103,232,249,.24)); color: #fff; cursor: pointer; display: flex; font: inherit; font-size: 72px; font-weight: 950; height: 256px; justify-content: center; overflow: hidden; padding: 0; position: relative; width: 256px; }
+          border: 7px solid rgba(255,255,255,.98); border-radius: 999px; box-shadow: 0 24px 54px rgba(0,0,0,.28), 0 0 0 2px var(--profile-accent, rgba(103,232,249,.72)), 0 0 24px var(--profile-accent-glow, rgba(103,232,249,.18)); color: #fff; cursor: pointer; display: flex; font: inherit; font-size: 72px; font-weight: 950; height: 256px; justify-content: center; overflow: hidden; padding: 0; position: relative; width: 256px; }
         .profileHeroV2__avatar img { object-fit: cover; }
         .profileHeroV2__camera { align-items: center; background: linear-gradient(135deg, #0ea5e9, #2563eb); border: 3px solid #fff; border-radius: 999px; bottom: 8px; color: #fff; display: flex; font-size: 9px; font-weight: 950; height: 34px; justify-content: center; position: absolute; right: 8px; width: 34px; }
         .profileHeroV2__identity { min-width: 0; transform: translateY(22px); }
@@ -1089,20 +1089,21 @@ export default function ClubJugadorDetailPage() {
         .profileHeroV2__badges span:first-child { background: rgba(34,197,94,.18); border-color: rgba(34,197,94,.38); color: #74f39a; }
         .profileHeroV2__badges span:nth-child(2) { background: rgba(37,99,235,.18); border-color: rgba(59,130,246,.36); color: #cfe6ff; }
         .profileHeroV2__badges span:nth-child(3) { background: rgba(245,158,11,.16); border-color: rgba(245,158,11,.40); color: #f8c55c; }
-        .profileHeroV2__rank { align-self: end; background: rgba(255,255,255,.92); border: 1px solid rgba(125,211,252,.50); border-radius: 16px; box-shadow: 0 18px 38px rgba(0,0,0,.15), 0 0 20px rgba(103,232,249,.10); color: #061b3a; display: grid; gap: 2px; height: 126px; margin-bottom: 26px; padding: 12px 12px; width: 220px; }
-        .profileHeroV2__rank--magenta { border-color: rgba(244,114,182,.52); box-shadow: 0 18px 38px rgba(0,0,0,.15), 0 0 20px rgba(236,72,153,.12); }
+        .profileHeroV2__rank { align-self: end; background: rgba(255,255,255,.95); border: 1px solid color-mix(in srgb, var(--profile-accent, rgba(103,232,249,.72)) 34%, #e2e8f0); border-radius: 18px; box-shadow: 0 16px 36px rgba(15,23,42,.12); color: #061b3a; display: grid; gap: 4px; min-height: 128px; margin-bottom: 26px; padding: 13px 13px; width: 230px; }
+        .profileHeroV2__rank--magenta { box-shadow: 0 16px 36px rgba(15,23,42,.12); }
         .profileHeroV2__rank > span, .profileHeroV2__rank small, .profileHeroV2__rank b { color: #64748b; font-size: 9px; font-weight: 900; text-transform: uppercase; }
         .profileHeroV2__crown { color: #f59e0b !important; font-size: 14px !important; line-height: 1; text-transform: none !important; }
-        .profileHeroV2__rankMain { align-items: center; display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+        .profileHeroV2__rankMain { align-items: center; display: grid; gap: 11px; grid-template-columns: minmax(0, 1fr) minmax(78px, .82fr); }
         .profileHeroV2__rankMain > div { border-left: 1px solid #dbeafe; padding-left: 10px; }
-        .profileHeroV2__rankMain em { background: linear-gradient(135deg, #061b3a 0%, #0b2f6b 58%, #0891b2 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 8px 16px rgba(8,47,73,.16)); font-size: 66px; font-style: normal; font-weight: 950; letter-spacing: -.07em; line-height: .78; position: relative; }
-        .profileHeroV2__rankMain em::after { background: linear-gradient(90deg, rgba(6,182,212,.70), rgba(37,99,235,.18)); border-radius: 999px; bottom: -7px; content: ""; height: 5px; left: 8px; position: absolute; right: 2px; }
-        .profileHeroV2__rank--magenta .profileHeroV2__rankMain em::after { background: linear-gradient(90deg, rgba(236,72,153,.72), rgba(244,114,182,.22)); }
+        .profileHeroV2__rankMain em { color: #061b3a; font-size: 62px; font-style: normal; font-weight: 950; letter-spacing: -.07em; line-height: .82; position: relative; }
+        .profileHeroV2__rankMain em::after { background: var(--profile-accent, rgba(103,232,249,.72)); border-radius: 999px; bottom: -7px; content: ""; height: 4px; left: 8px; opacity: .72; position: absolute; right: 2px; }
+        .profileHeroV2__rankMain--text { grid-template-columns: minmax(0, 1fr) minmax(76px, .65fr); }
+        .profileHeroV2__rankMain--text em { font-size: 25px; letter-spacing: -.03em; line-height: .98; max-width: 112px; }
+        .profileHeroV2__rankMain--text em::after { left: 1px; right: 20px; }
         .profileHeroV2__rankMain strong { color: #08204a; display: block; font-size: 25px; font-weight: 900; line-height: .95; margin: 1px 0; }
-        .profileHeroV2__rank i { background: linear-gradient(135deg, #0ea5e9, #06b6d4); border-radius: 999px; color: #fff; font-size: 9px; font-style: normal; font-weight: 950; justify-self: start; padding: 4px 8px; text-transform: uppercase; }
-        .profileHeroV2__rank--magenta i { background: linear-gradient(135deg, #ec4899, #be185d); }
-        .player-statGrid { display: grid; gap: 12px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
-        .player-statGrid article, .player-card { background: rgba(255,255,255,.94); border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 12px 30px rgba(15,23,42,.05); }
+        .profileHeroV2__rank i { background: color-mix(in srgb, var(--profile-accent, #0ea5e9) 14%, #f8fafc); border: 1px solid color-mix(in srgb, var(--profile-accent, #0ea5e9) 22%, #e2e8f0); border-radius: 999px; color: #0f2745; font-size: 9px; font-style: normal; font-weight: 950; justify-self: start; padding: 4px 8px; text-transform: uppercase; }
+        .player-statGrid { display: grid; gap: 10px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        .player-statGrid article, .player-card { background: rgba(255,255,255,.96); border: 1px solid rgba(226,232,240,.92); border-radius: 15px; box-shadow: 0 10px 24px rgba(15,23,42,.04); }
         .player-statGrid article {
           align-items: center;
           background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.93));
@@ -1110,10 +1111,10 @@ export default function ClubJugadorDetailPage() {
           display: flex;
           flex-direction: column;
           justify-content: center;
-          min-height: 108px;
+          min-height: 96px;
           min-width: 0;
           overflow: hidden;
-          padding: 14px 10px 13px;
+          padding: 12px 10px 11px;
           position: relative;
           text-align: center;
           transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
@@ -1129,7 +1130,7 @@ export default function ClubJugadorDetailPage() {
           right: 18px;
           top: 0;
         }
-        .player-statGrid article:hover { border-color: color-mix(in srgb, var(--stat-accent) 28%, #e2e8f0); box-shadow: 0 16px 32px rgba(15,23,42,.075); transform: translateY(-1px); }
+        .player-statGrid article:hover { border-color: color-mix(in srgb, var(--stat-accent) 24%, #e2e8f0); box-shadow: 0 13px 28px rgba(15,23,42,.06); transform: translateY(-1px); }
         .player-statIcon {
           align-items: center;
           background: rgba(248,250,252,.88);
@@ -1137,14 +1138,14 @@ export default function ClubJugadorDetailPage() {
           border-radius: 12px;
           color: var(--stat-accent);
           display: flex;
-          height: 34px;
+          height: 31px;
           justify-content: center;
-          margin-bottom: 7px;
+          margin-bottom: 6px;
           position: relative;
-          width: 34px;
+          width: 31px;
           z-index: 1;
         }
-        .player-statIcon svg { height: 19px; width: 19px; }
+        .player-statIcon svg { height: 18px; width: 18px; }
         .player-statCard--blue { --stat-accent: #0891b2; --stat-accent-2: #172554; }
         .player-statCard--green { --stat-accent: #059669; --stat-accent-2: #0891b2; }
         .player-statCard--red { --stat-accent: #be123c; --stat-accent-2: #db2777; }
@@ -1152,7 +1153,7 @@ export default function ClubJugadorDetailPage() {
         .player-statCard--gold { --stat-accent: #b77905; --stat-accent-2: #be123c; }
         .player-statGrid article:nth-child(5) { --stat-accent: #3730a3; --stat-accent-2: #0891b2; }
         .player-statLabel { color: #64748b; font-size: 10px; font-weight: 900; letter-spacing: .02em; line-height: 1.1; margin: 0 0 6px; max-width: 100%; position: relative; text-align: center; text-transform: uppercase; z-index: 1; }
-        .player-statValue { color: #061b3a; font-size: clamp(30px, 2.6vw, 38px); font-weight: 950; letter-spacing: -.02em; line-height: .94; max-width: 100%; position: relative; text-align: center; z-index: 1; }
+        .player-statValue { color: #061b3a; font-size: clamp(27px, 2.25vw, 34px); font-weight: 950; letter-spacing: -.02em; line-height: .94; max-width: 100%; position: relative; text-align: center; z-index: 1; }
         .player-statMeta { color: #64748b; font-size: 11px; font-weight: 900; line-height: 1; margin-top: 6px; position: relative; text-align: center; z-index: 1; }
         .player-infoGrid span, .player-summaryList span { color: #64748b; font-size: 10px; font-weight: 850; line-height: 1.1; text-transform: uppercase; }
         .player-infoDeck { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(280px, .9fr); }
@@ -1166,16 +1167,16 @@ export default function ClubJugadorDetailPage() {
             linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.94));
           border-color: rgba(148,163,184,.22);
           display: grid;
-          gap: 11px;
+          gap: 10px;
           min-width: 0;
-          padding: 15px;
+          padding: 14px;
         }
         .player-card header { align-items: start; border-bottom: 1px solid rgba(226,232,240,.72); display: grid; gap: 2px; padding-bottom: 10px; }
         .player-card header h2 { color: #061b3a; font-size: 17px; font-weight: 900; line-height: 1.12; margin: 0; }
         .player-card .club-kicker { color: #0891b2; font-size: 10px; letter-spacing: .03em; }
         .player-infoGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .player-infoGrid div { background: linear-gradient(135deg, #f8fafc, rgba(236,253,255,.45)); border: 1px solid rgba(226,232,240,.92); border-radius: 12px; display: grid; gap: 3px; grid-template-columns: 31px minmax(0, 1fr); min-width: 0; padding: 10px; }
-        .player-infoGrid i { align-items: center; align-self: center; background: linear-gradient(135deg, #eff6ff, #ecfeff); border: 1px solid #dbeafe; border-radius: 11px; color: #2563eb; display: flex; font-style: normal; grid-row: span 2; height: 31px; justify-content: center; width: 31px; }
+        .player-infoGrid div { background: #ffffff; border: 1px solid rgba(226,232,240,.92); border-radius: 12px; display: grid; gap: 3px; grid-template-columns: 31px minmax(0, 1fr); min-width: 0; padding: 10px; }
+        .player-infoGrid i { align-items: center; align-self: center; background: color-mix(in srgb, var(--profile-accent, #0ea5e9) 10%, #f8fafc); border: 1px solid color-mix(in srgb, var(--profile-accent, #0ea5e9) 16%, #e2e8f0); border-radius: 11px; color: #2563eb; display: flex; font-style: normal; grid-row: span 2; height: 31px; justify-content: center; width: 31px; }
         .player-infoGrid strong { color: #061b3a; font-size: 13px; font-weight: 850; line-height: 1.2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .player-partnerBox, .player-placeholder { background: linear-gradient(135deg, #f8fafc, rgba(241,245,249,.72)); border: 1px solid rgba(226,232,240,.92); border-radius: 13px; color: #526277; display: grid; gap: 5px; padding: 12px; text-decoration: none; }
         .player-partnerBox { min-height: 104px; }

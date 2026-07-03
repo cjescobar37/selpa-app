@@ -8,6 +8,7 @@ import PublicClubHomeExperience, {
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
+import { BRAND } from '@/lib/branding'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,7 +73,7 @@ function categoryLabel(value?: number | null) {
 }
 
 function playerName(player: ClubPlayerRow) {
-  return player.display_name || 'Jugador Pamprax'
+  return player.display_name || `Jugador ${BRAND.name}`
 }
 
 function isVisibleCampaign(row: CampaignRow, now: number) {

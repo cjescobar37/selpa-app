@@ -72,8 +72,8 @@ function previewText(value?: string | null, max = 94) {
 }
 
 function initials(name?: string | null) {
-  const parts = String(name ?? 'PX').trim().split(/\s+/).filter(Boolean)
-  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'PX'
+  const parts = String(name ?? 'SELPA').trim().split(/\s+/).filter(Boolean)
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'SE'
 }
 
 function counterpartLabel(scope: InboxScope, thread: ThreadSummary) {
@@ -580,15 +580,15 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
       ) : null}
 
       <style jsx>{`
-        .px-inboxShell { display: grid; gap: 16px; margin: 0 auto; max-width: 1180px; min-width: 0; padding: 24px clamp(14px, 3vw, 28px) 42px; width: 100%; }
-        .px-inboxHero { align-items: center; background: linear-gradient(135deg, rgba(255,255,255,.98), var(--px-inbox-soft)); border: 1px solid rgba(15,23,42,.08); border-radius: 22px; box-shadow: 0 22px 54px rgba(15,23,42,.09); color: #061b3a; display: flex; gap: 18px; justify-content: space-between; min-width: 0; overflow: hidden; padding: 22px; position: relative; }
+        .px-inboxShell { display: grid; gap: 14px; margin: 0 auto; max-width: 1180px; min-width: 0; padding: 18px clamp(14px, 3vw, 24px) 36px; width: 100%; }
+        .px-inboxHero { align-items: center; background: linear-gradient(135deg, rgba(255,255,255,.98), var(--px-inbox-soft)); border: 1px solid rgba(15,23,42,.08); border-radius: 20px; box-shadow: 0 16px 38px rgba(15,23,42,.08); color: #061b3a; display: flex; gap: 14px; justify-content: space-between; min-width: 0; overflow: hidden; padding: 16px 18px; position: relative; }
         .px-inboxHero::before { background: linear-gradient(90deg, var(--px-inbox-accent) 0%, var(--px-inbox-accent-2) 100%); content: ""; height: 4px; left: 0; position: absolute; right: 0; top: 0; }
         .px-inboxHero::after { background: radial-gradient(circle, var(--px-inbox-glow), transparent 64%); content: ""; height: 150px; pointer-events: none; position: absolute; right: -42px; top: -72px; width: 220px; }
         .px-inboxHero__copy { display: grid; gap: 7px; min-width: 0; position: relative; }
         .px-inboxHero span { color: #0e7490; font-size: 11px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
-        .px-inboxHero h1 { color: #061b3a; font-size: clamp(30px, 4vw, 48px); font-weight: 950; line-height: .98; margin: 0; position: relative; }
-        .px-inboxHero p { color: #64748b; font-size: 14px; font-weight: 780; margin: 0; max-width: 680px; position: relative; }
-        .px-newMessageBtn { align-items: center; background: #061b3a; border: 1px solid color-mix(in srgb, var(--px-inbox-accent) 54%, transparent); border-radius: 999px; box-shadow: 0 16px 34px var(--px-inbox-glow); color: #fff; cursor: pointer; display: inline-flex; flex: 0 0 auto; font-size: 12px; font-weight: 950; gap: 8px; min-height: 44px; padding: 0 16px; position: relative; transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease; }
+        .px-inboxHero h1 { color: #061b3a; font-size: clamp(26px, 3.4vw, 40px); font-weight: 950; line-height: .98; margin: 0; position: relative; }
+        .px-inboxHero p { color: #64748b; font-size: 13px; font-weight: 780; margin: 0; max-width: 660px; position: relative; }
+        .px-newMessageBtn { align-items: center; background: #061b3a; border: 1px solid color-mix(in srgb, var(--px-inbox-accent) 54%, transparent); border-radius: 999px; box-shadow: 0 12px 26px var(--px-inbox-glow); color: #fff; cursor: pointer; display: inline-flex; flex: 0 0 auto; font-size: 12px; font-weight: 950; gap: 8px; min-height: 40px; padding: 0 15px; position: relative; transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease; }
         .px-newMessageBtn:hover:not(:disabled) { box-shadow: 0 20px 42px var(--px-inbox-glow); transform: translateY(-1px); }
         .px-newMessageBtn:disabled { cursor: not-allowed; opacity: .52; }
         .px-inboxAlert { background: #fff7df; border: 1px solid rgba(217,119,6,.22); border-radius: 14px; color: #854d0e; font-size: 13px; font-weight: 850; padding: 12px 14px; }
@@ -599,7 +599,7 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
         .px-threadPanel__head { align-items: center; background: linear-gradient(135deg, rgba(248,250,252,.98), rgba(238,251,255,.58)); border-bottom: 1px solid rgba(15,23,42,.08); display: flex; justify-content: space-between; padding: 14px; }
         .px-threadPanel__head strong { color: #061b3a; font-size: 14px; font-weight: 950; }
         .px-threadPanel__head span { background: color-mix(in srgb, var(--px-inbox-accent) 11%, white); border: 1px solid color-mix(in srgb, var(--px-inbox-accent) 20%, transparent); border-radius: 999px; color: #0e7490; font-size: 12px; font-weight: 950; padding: 4px 9px; }
-        .px-threadList { display: grid; gap: 8px; max-height: 620px; min-width: 0; overflow: auto; padding: 10px; }
+        .px-threadList { align-content: flex-start; align-items: stretch; display: flex; flex-direction: column; gap: 8px; justify-content: flex-start; max-height: 620px; min-height: 0; min-width: 0; overflow: auto; padding: 10px; }
         .px-threadItem { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 16px; color: #061b3a; cursor: pointer; display: grid; gap: 10px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; padding: 10px; text-align: left; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background-color .18s ease; }
         .px-threadItem:hover, .px-threadItem.is-active { background: linear-gradient(135deg, #fff, var(--px-inbox-soft)); border-color: color-mix(in srgb, var(--px-inbox-accent) 34%, transparent); box-shadow: 0 12px 28px var(--px-inbox-glow); transform: translateY(-1px); }
         .px-threadAvatar { align-items: center; background: linear-gradient(135deg, #061b3a, var(--px-inbox-accent)); border: 1px solid color-mix(in srgb, var(--px-inbox-accent-2) 28%, transparent); border-radius: 999px; box-shadow: 0 10px 22px var(--px-inbox-glow); color: #fff; display: inline-flex; font-size: 12px; font-weight: 950; height: 42px; justify-content: center; width: 42px; }

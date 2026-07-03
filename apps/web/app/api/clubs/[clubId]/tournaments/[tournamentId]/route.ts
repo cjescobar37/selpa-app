@@ -98,14 +98,28 @@ function normalizeArray(value: unknown) {
 
 function buildFlyerRules(value: unknown) {
   const flyer = normalizeObject(value)
+  const nullableInteger = (input: unknown) => {
+    if (input === null || input === undefined || input === '') return null
+    const parsed = Number(input)
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : null
+  }
 
   const flyerMode = normalizeText(flyer.flyer_mode)
   const flyerBackground = normalizeText(flyer.flyer_background)
   const flyerTitleColor = normalizeText(flyer.flyer_title_color)
   const flyerTextColor = normalizeText(flyer.flyer_text_color)
   const flyerAccentColor = normalizeText(flyer.flyer_accent_color)
+  const flyerBadgeColor = normalizeText(flyer.flyer_badge_color)
+  const flyerDateBlockColor = normalizeText(flyer.flyer_date_block_color)
+  const flyerDataCardColor = normalizeText(flyer.flyer_data_card_color)
+  const flyerDataStyle = normalizeText(flyer.flyer_data_style)
+  const flyerTitleSize = normalizeText(flyer.flyer_title_size)
   const flyerFont = normalizeText(flyer.flyer_font)
+  const flyerFontWeight = normalizeText(flyer.flyer_font_weight)
   const flyerStyle = normalizeText(flyer.flyer_style)
+  const flyerTextAlign = normalizeText(flyer.flyer_text_align)
+  const flyerManualUrl = normalizeText(flyer.flyer_manual_url)
+  const isManual = flyerMode === 'MANUAL'
 
   return {
     flyer_mode: flyerMode ?? 'NONE',
@@ -113,8 +127,25 @@ function buildFlyerRules(value: unknown) {
     flyer_title_color: flyerTitleColor ?? '#f8fafc',
     flyer_text_color: flyerTextColor ?? '#e2e8f0',
     flyer_accent_color: flyerAccentColor ?? '#67e8f9',
+    flyer_badge_color: flyerBadgeColor ?? '#06b6d4',
+    flyer_date_block_color: flyerDateBlockColor ?? '#0891b2',
+    flyer_data_card_color: flyerDataCardColor ?? '#0f172a',
+    flyer_data_card_opacity: Math.min(1, Math.max(0, normalizeNumber(flyer.flyer_data_card_opacity, 0.72))),
+    flyer_data_card_radius: Math.min(28, Math.max(8, normalizeInteger(flyer.flyer_data_card_radius, 16))),
+    flyer_data_style: flyerDataStyle ?? 'GLASS',
+    flyer_title_size: flyerTitleSize ?? 'LARGE',
+    flyer_visible_fields: normalizeObject(flyer.flyer_visible_fields),
     flyer_font: flyerFont ?? 'SPORT',
+    flyer_font_weight: flyerFontWeight ?? 'MEDIUM',
     flyer_style: flyerStyle ?? 'MODERN',
+    flyer_text_align: flyerTextAlign ?? 'left',
+    flyer_manual_url: isManual ? flyerManualUrl : null,
+    flyer_url: isManual ? flyerManualUrl : null,
+    poster_url: isManual ? flyerManualUrl : null,
+    flyer_manual_name: isManual ? normalizeText(flyer.flyer_manual_name) : null,
+    flyer_manual_size: isManual ? nullableInteger(flyer.flyer_manual_size) : null,
+    flyer_manual_width: isManual ? nullableInteger(flyer.flyer_manual_width) : null,
+    flyer_manual_height: isManual ? nullableInteger(flyer.flyer_manual_height) : null,
   }
 }
 

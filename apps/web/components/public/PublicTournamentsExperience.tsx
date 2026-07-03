@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { Search, Trophy } from 'lucide-react'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
+import { BRAND } from '@/lib/branding'
 
 export type PublicTournamentItem = {
   id: string
@@ -102,8 +103,8 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
     <main className="publicTournamentShell">
       <section className="publicTournamentHero">
         <span>Calendario público</span>
-        <h1>Torneos Pamprax</h1>
-        <p>Explorá eventos abiertos, torneos en juego y resultados recientes de clubes Pamprax.</p>
+        <h1>Torneos {BRAND.name}</h1>
+        <p>Explorá eventos abiertos, torneos en juego y resultados recientes de clubes {BRAND.name}.</p>
       </section>
 
       <section className="publicTournamentFilters">

@@ -4,6 +4,7 @@ import { getNewsBySlug } from '@/lib/platformContent'
 import PublicNewsArticle from '@/components/public/PublicNewsArticle'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { BRAND } from '@/lib/branding'
 
 function formatDate(value?: string | null) {
   if (!value) return '—'
@@ -38,7 +39,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ slu
       <PublicNewsArticle
         title={item.title}
         dateLabel={formatDate(item.published_at)}
-        sourceLabel="PAMPRAX Noticias"
+        sourceLabel={`${BRAND.name} Noticias`}
         excerpt={item.excerpt}
         bodyParagraphs={paragraphs}
         coverUrl={item.cover_url}

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import { BRAND } from '@/lib/branding'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
@@ -14,7 +15,7 @@ export default function LoginPageClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [identifier, setIdentifier] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [alert, setAlert] = useState<AlertState>(null)
   const [loading, setLoading] = useState(false)
@@ -75,11 +76,13 @@ export default function LoginPageClient() {
   async function signInWithEmail(e?: React.FormEvent) {
     e?.preventDefault()
 
-    if (!identifier || !password) {
+    const cleanEmail = email.trim().toLowerCase()
+
+    if (!cleanEmail || !password) {
       setAlert({
         variant: 'warning',
         title: 'Faltan datos',
-        message: 'Completá email / CUIT / slug y contraseña.',
+        message: 'Completá email y contraseña.',
       })
       return
     }
@@ -87,33 +90,8 @@ export default function LoginPageClient() {
     setLoading(true)
     setAlert({ variant: 'info', title: 'Ingresando...' })
 
-    let resolvedEmail = identifier.trim().toLowerCase()
-
-    if (!resolvedEmail.includes('@')) {
-      const res = await fetch('/api/auth/resolve-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: resolvedEmail }),
-      })
-
-      const json = await res.json()
-
-      if (!res.ok) {
-        setAlert({
-          variant: 'error',
-          title: 'No encontramos ese acceso',
-          message:
-            json?.error ?? 'Revisá el CUIT, slug o email.',
-        })
-        setLoading(false)
-        return
-      }
-
-      resolvedEmail = String(json.email || '').toLowerCase()
-    }
-
     const { error } = await supabase.auth.signInWithPassword({
-      email: resolvedEmail,
+      email: cleanEmail,
       password,
     })
 
@@ -136,15 +114,15 @@ export default function LoginPageClient() {
   }
 
   return (
-    <div className="px-auth">
+    <div className="px-auth px-authModern px-loginAuth">
       <div className="px-authCard">
         <div className="px-authTop">
           <div className="px-authBrand">
-            <div className="px-authLogo">PX</div>
-
             <div className="px-authBrandText">
-              <h1 className="px-authTitle">Ingresar</h1>
-              <p className="px-authSub">Ranking • Torneos • Clubes</p>
+              <span className="px-authMark" aria-label={`${BRAND.name} logo`}>
+                <img src="/brand/selpa-wordmark-clean-dark.png" alt={BRAND.name.toUpperCase()} />
+              </span>
+              <p className="px-authSub">Ingresá a tu comunidad deportiva.</p>
             </div>
           </div>
         </div>
@@ -164,7 +142,9 @@ export default function LoginPageClient() {
               <>
                 <img
                   src="https://www.svgrepo.com/show/475656/google-color.svg"
-                  width={18}
+                  width={16}
+                  height={16}
+                  alt=""
                 />
                 Continuar con Google
               </>
@@ -174,14 +154,13 @@ export default function LoginPageClient() {
           <div className="px-sepRow">o</div>
 
           <div className="px-field">
-            <label className="px-label">
-              Email / CUIT / slug del club
-            </label>
+            <label className="px-label">Email</label>
             <input
               className="px-input"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="tu@email.com · 30712345678 · la33-santarosa"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tu@email.com"
               autoComplete="username"
             />
           </div>
@@ -208,9 +187,10 @@ export default function LoginPageClient() {
                 <span className="px-spinner" /> Entrando...
               </>
             ) : (
-              'Entrar'
+              'Ingresar'
             )}
           </button>
+          <p className="px-loginSecureText">Tus datos viajan protegidos mediante conexión segura.</p>
 
           {alert ? (
             <AuthAlert
@@ -220,12 +200,14 @@ export default function LoginPageClient() {
             />
           ) : null}
 
-          <div className="px-authRow">
-            <Link className="px-link" href="/register">
-              Crear cuenta
+          <div className="px-authRow px-loginLinks">
+            <Link className="px-loginLinkBlock" href="/register">
+              <span>¿Primera vez?</span>
+              <strong>Crear cuenta <b>→</b></strong>
             </Link>
-            <Link className="px-link" href="/reset-password">
-              Olvidé mi contraseña
+            <Link className="px-loginLinkBlock" href="/reset-password">
+              <span>¿Olvidaste tu contraseña?</span>
+              <strong>Recuperarla <b>→</b></strong>
             </Link>
           </div>
         </form>

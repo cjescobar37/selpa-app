@@ -3,12 +3,14 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { CSSProperties } from 'react'
-import { useMemo } from 'react'
-import { Building2, LogIn, UserRound } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
-import { getPublicAdSlot, PUBLIC_AD_SLOTS, type PublicAdSlotConfig } from '@/lib/publicAdSlots'
+import { BRAND } from '@/lib/branding'
+import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import PampraxHero from '@/components/ui/PampraxHero'
+import PublicRankingClubCard from '@/components/public/PublicRankingClubCard'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
+import { useSession } from '@/components/session/SessionProvider'
 
 type NewsItem = {
   id: string
@@ -57,6 +59,7 @@ type AdItem = {
 type SponsorItem = {
   id: string
   name: string
+  description?: string | null
   logo_url: string | null
   website_url: string | null
   tier: string
@@ -67,6 +70,8 @@ type ClubItem = {
   name: string
   city: string | null
   logo_url: string | null
+  clubThemeKey?: string | null
+  theme_key?: string | null
   players?: number
   categories?: number[]
   malePlayers?: number
@@ -82,22 +87,9 @@ type PublicMetrics = {
   matches?: number | null
 }
 
-type AssignedAdSlots = Record<string, AdItem | null>
-
 function formatDate(value?: string | null) {
   if (!value) return 'Fecha a confirmar'
   return new Date(value).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).replace('.', '')
-}
-
-function dateParts(value?: string | null) {
-  if (!value) return { day: '--', month: 'Fecha', year: 'A definir' }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return { day: '--', month: 'Fecha', year: 'A definir' }
-  return {
-    day: new Intl.DateTimeFormat('es-AR', { day: '2-digit' }).format(date),
-    month: new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(date).replace('.', ''),
-    year: new Intl.DateTimeFormat('es-AR', { year: 'numeric' }).format(date),
-  }
 }
 
 function placementLabel(placement: NewsItem['placement']) {
@@ -107,7 +99,7 @@ function placementLabel(placement: NewsItem['placement']) {
 }
 
 function newsSourceLabel(item: NewsItem) {
-  return String((item as any).club_name ?? (item as any).clubName ?? (item as any).source ?? 'PAMPrax').toUpperCase()
+  return String((item as any).club_name ?? (item as any).clubName ?? (item as any).source ?? BRAND.name).toUpperCase()
 }
 
 const NEWS_THEME_COLORS: Record<string, { accent: string; accent2: string; glow: string }> = {
@@ -136,79 +128,57 @@ function newsThemeStyle(item: NewsItem): CSSProperties {
   }
 }
 
-function tournamentStatusLabel(status: string) {
-  const value = String(status || '').toUpperCase()
-  if (value.includes('OPEN') || value.includes('PUBLISHED')) return 'Inscripción abierta'
-  if (['ACTIVE', 'LIVE', 'IN_PROGRESS', 'GROUPS', 'PLAYOFF'].some((item) => value.includes(item))) return 'En juego'
-  if (['FINISHED', 'COMPLETED', 'CLOSED'].some((item) => value.includes(item))) return 'Finalizado'
-  return 'Próximo'
-}
-
-function genderLabel(value: string) {
-  const normalized = String(value || '').toUpperCase()
-  if (normalized === 'M' || normalized === 'MALE') return 'Masculino'
-  if (normalized === 'F' || normalized === 'FEMALE') return 'Femenino'
-  if (normalized.includes('MIX')) return 'Mixto'
-  return value || 'Rama'
-}
-
 function metricValue(value?: number | null, fallback = '—') {
   if (typeof value !== 'number') return fallback
   return new Intl.NumberFormat('es-AR').format(value)
 }
 
-function categorySummary(categories?: number[]) {
-  if (!categories?.length) return 'Categorías abiertas'
-  return categories.slice(0, 4).map((item) => `${item}ta`).join(' · ')
+function tournamentSortTime(tournament: TournamentItem) {
+  return new Date(tournament.startDate ?? tournament.registrationDeadline ?? '2999-12-31').getTime()
 }
 
-function assignHomeAdSlots(ads: AdItem[]): AssignedAdSlots {
-  const used = new Set<string>()
-  const bySlot = new Map(ads.map((ad) => [String(ad.slot || '').toLowerCase(), ad]))
-  const assigned: AssignedAdSlots = {}
-
-  for (const slot of PUBLIC_AD_SLOTS) {
-    const exact = bySlot.get(slot.id.toLowerCase()) ?? null
-    assigned[slot.id] = exact
-    if (exact) used.add(exact.id)
+function validExternalUrl(value?: string | null) {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    if (!['http:', 'https:'].includes(url.protocol)) return null
+    return url.toString()
+  } catch {
+    return null
   }
-
-  let fallbackIndex = 0
-  for (const slot of PUBLIC_AD_SLOTS) {
-    if (assigned[slot.id]) continue
-    while (fallbackIndex < ads.length && used.has(ads[fallbackIndex].id)) fallbackIndex += 1
-    const fallback = ads[fallbackIndex] ?? null
-    assigned[slot.id] = fallback
-    if (fallback) used.add(fallback.id)
-  }
-
-  return assigned
 }
 
-function PublicAdSlot({ slot, ad }: { slot: PublicAdSlotConfig; ad: AdItem | null }) {
-  const content = (
-    <>
-      {ad?.image_url ? <img src={ad.image_url} alt={ad.title} /> : null}
-      <div className="px-homeAdSlotBody">
-        <span>{slot.label}</span>
-        <strong>{ad?.title || 'Este espacio puede ser tuyo'}</strong>
-        <p>{ad?.description || 'Publicitá con Pamprax y llegá a jugadores y clubes.'}</p>
-        <em>{ad ? 'Sponsor activo' : `Slot publicitario ${slot.ratio}`}</em>
-        {!ad ? <b className="px-homeAdSlotCta">Quiero publicitar</b> : null}
-      </div>
-      {!ad ? <small>{slot.recommendedSize}</small> : null}
-    </>
-  )
+const PLACEHOLDER_TEXT = new Set(['adsasd', 'sdfsf', 'asdf', 'asdasd', 'test', 'testing', 'prueba', 'lorem', 'demo'])
 
-  if (ad?.link_url) {
-    return (
-      <a className={`px-homeAdSlot ${slot.className}`} href={ad.link_url} target="_blank" rel="noreferrer">
-        {content}
-      </a>
-    )
-  }
+function hasMeaningfulSponsorText(value?: string | null) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized.length < 3) return false
+  const compact = normalized.replace(/[^a-z0-9áéíóúñ]/gi, '')
+  if (PLACEHOLDER_TEXT.has(compact)) return false
+  if (/^(.)\1{2,}$/.test(compact)) return false
+  return /[a-záéíóúñ0-9]/i.test(compact)
+}
 
-  return <div className={`px-homeAdSlot ${slot.className}`}>{content}</div>
+function sponsorInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+}
+
+function sponsorBadge(value?: string | null) {
+  const label = String(value ?? '').trim()
+  if (!label) return 'Sponsor activo'
+  return label.replace(/[_-]+/g, ' ')
+}
+
+function platformAdBadge(slot?: string | null) {
+  const normalized = String(slot ?? '').toUpperCase()
+  if (normalized.includes('HERO') || normalized.includes('INLINE')) return 'Presentado por'
+  return 'Publicidad'
 }
 
 export default function PublicHomeExperience({
@@ -219,6 +189,7 @@ export default function PublicHomeExperience({
   sponsors,
   metrics,
   clubs = [],
+  hideHero = false,
 }: {
   slides: NewsItem[]
   newsArchive: NewsItem[]
@@ -227,8 +198,21 @@ export default function PublicHomeExperience({
   sponsors: SponsorItem[]
   metrics?: PublicMetrics
   clubs?: ClubItem[]
+  hideHero?: boolean
 }) {
   const router = useRouter()
+  const session = useSession()
+  const heroPrimaryAction = useMemo(() => {
+    if (session.role === 'player') {
+      return { label: 'Ir a mi espacio', href: '/player' }
+    }
+
+    if (session.role === 'club' || session.role === 'platform') {
+      return { label: 'Ir al club', href: '/club' }
+    }
+
+    return { label: 'Crear cuenta gratis', href: '/register' }
+  }, [session.role])
   const orderedNews = useMemo(() => {
     const merged = [...slides, ...newsArchive]
     return merged.filter((item, index) => merged.findIndex((entry) => entry.id === item.id) === index)
@@ -236,16 +220,87 @@ export default function PublicHomeExperience({
   const mainNews = orderedNews[0] ?? null
   const sideNews = orderedNews.slice(1, 3)
   const moreNews = orderedNews.slice(3, 6)
-  const featuredTournaments = tournaments.slice(0, 3)
-  const assignedAdSlots = useMemo(() => assignHomeAdSlots(ads), [ads])
+  const communityTournaments = useMemo(() => {
+    return tournaments
+      .map((tournament) => ({ tournament, displayStatus: getTournamentDisplayStatus(tournament) }))
+      .filter(({ displayStatus }) => !['finished', 'draft', 'cancelled'].includes(displayStatus.key))
+      .sort((current, next) => {
+        if (current.displayStatus.priority !== next.displayStatus.priority) {
+          return current.displayStatus.priority - next.displayStatus.priority
+        }
+        return tournamentSortTime(current.tournament) - tournamentSortTime(next.tournament)
+      })
+  }, [tournaments])
+  const activeTournaments = communityTournaments
+    .filter(({ displayStatus }) => displayStatus.key === 'live')
+    .map(({ tournament }) => tournament)
+    .slice(0, 3)
+  const upcomingTournaments = communityTournaments
+    .filter(({ displayStatus }) => ['registration_open', 'upcoming'].includes(displayStatus.key))
+    .map(({ tournament }) => tournament)
+    .slice(0, 3)
   const featuredClubs = clubs.slice(0, 4)
+  const [hoveredHomeClubId, setHoveredHomeClubId] = useState<string | null>(null)
+  const [isSponsorCarouselPaused, setIsSponsorCarouselPaused] = useState(false)
+  const sponsorCarouselRef = useRef<HTMLDivElement | null>(null)
+  const brandPartners = useMemo(() => {
+    const sponsorItems = sponsors
+      .filter((item) => hasMeaningfulSponsorText(item.name))
+      .map((item) => ({
+        id: `sponsor-${item.id}`,
+        title: item.name.trim(),
+        description: hasMeaningfulSponsorText(item.description) ? item.description?.trim() ?? null : null,
+        imageUrl: item.logo_url,
+        url: validExternalUrl(item.website_url),
+        badge: sponsorBadge(item.tier),
+        source: 'sponsor' as const,
+      }))
 
-  const reasons = [
-    { title: 'Ranking personal', text: 'Seguí tu posición, puntos y categoría dentro de cada club.' },
-    { title: 'Inscripciones simples', text: 'Encontrá torneos abiertos y accedé al flujo de inscripción.' },
-    { title: 'Historial deportivo', text: 'Tu perfil reúne partidos, torneos, pareja y resultados.' },
-    { title: 'Pareja activa', text: 'Organizá tu dupla y llegá preparado al próximo evento.' },
-  ]
+    const adItems = ads
+      .filter((item) => hasMeaningfulSponsorText(item.title))
+      .map((item) => ({
+        id: `ad-${item.id}`,
+        title: item.title.trim(),
+        description: hasMeaningfulSponsorText(item.description) ? item.description?.trim() ?? null : null,
+        imageUrl: item.image_url,
+        url: validExternalUrl(item.link_url),
+        badge: 'Aliado activo',
+        source: 'ad' as const,
+      }))
+
+    return [...sponsorItems, ...adItems].slice(0, 8)
+  }, [ads, sponsors])
+  const homeAds = useMemo(() => {
+    return ads
+      .filter((item) => hasMeaningfulSponsorText(item.title))
+      .map((item) => ({
+        id: `ad-${item.id}`,
+        title: item.title.trim(),
+        description: hasMeaningfulSponsorText(item.description) ? item.description?.trim() ?? null : null,
+        imageUrl: item.image_url,
+        url: validExternalUrl(item.link_url),
+        badge: platformAdBadge(item.slot),
+      }))
+      .slice(0, 2)
+  }, [ads])
+
+  useEffect(() => {
+    if (!brandPartners.length || isSponsorCarouselPaused) return
+    const carousel = sponsorCarouselRef.current
+    if (!carousel) return
+
+    const interval = window.setInterval(() => {
+      const maxScrollLeft = carousel.scrollWidth - carousel.clientWidth
+      if (maxScrollLeft <= 0) return
+      const nextScrollLeft = carousel.scrollLeft + Math.min(280, carousel.clientWidth * 0.72)
+      carousel.scrollTo({
+        left: nextScrollLeft >= maxScrollLeft - 8 ? 0 : nextScrollLeft,
+        behavior: 'smooth',
+      })
+    }, 4200)
+
+    return () => window.clearInterval(interval)
+  }, [brandPartners.length, isSponsorCarouselPaused])
 
   function openNews(item: NewsItem) {
     router.push(`/noticias/${item.slug}`)
@@ -253,36 +308,163 @@ export default function PublicHomeExperience({
 
   return (
     <div className="px-publicHome">
-      <PampraxHero
-        kicker="Pamprax público"
-        title="Viví tu carrera deportiva"
-        subtitle="Rankings, torneos, estadísticas y comunidad para el pádel amateur."
-        primaryAction={{ label: 'Crear cuenta gratis', href: '/register' }}
-        secondaryAction={{ label: 'Explorar torneos', href: '/torneos' }}
-      />
+      {!hideHero ? (
+        <PampraxHero
+          kicker={`${BRAND.name} público`}
+          title="Viví tu carrera deportiva"
+          subtitle="Rankings, torneos, estadísticas y comunidad para el pádel amateur."
+          primaryAction={heroPrimaryAction}
+          secondaryAction={{ label: 'Explorar torneos', href: '/torneos' }}
+        />
+      ) : null}
 
-      <section className="px-homeCtaBanners">
-        <Link href="/register" className="is-cyan">
-          <i><UserRound size={18} /></i>
-          <div><strong>¿Querés ser jugador?</strong><span>Creá tu perfil, seguí ranking y torneos.</span></div>
-          <em>Crear cuenta gratis</em>
-        </Link>
-        <Link href="/unir-mi-club" className="is-balanced">
-          <i><Building2 size={18} /></i>
-          <div><strong>¿Tenés un complejo?</strong><span>Publicá torneos y activá tu comunidad.</span></div>
-          <em>Armá tu club gratis</em>
-        </Link>
-        <Link href="/login" className="is-magenta">
-          <i><LogIn size={18} /></i>
-          <div><strong>¿Ya sos jugador?</strong><span>Entrá y mirá tus novedades deportivas.</span></div>
-          <em>Ingresar</em>
-        </Link>
+      {activeTournaments.length ? (
+        <section className="px-homeTournaments">
+          <div className="px-homeSectionHead is-row">
+            <div>
+              <span>En juego</span>
+              <h2>Torneos activos de la comunidad</h2>
+            </div>
+            <Link href="/torneos" className="px-homePillButton">Ver calendario</Link>
+          </div>
+          <div className="px-homeTournamentCards">
+            {activeTournaments.map((item) => (
+              <TournamentPublicCard key={item.id} tournament={item} showClub />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {upcomingTournaments.length ? (
+        <section className="px-homeTournaments">
+          <div className="px-homeSectionHead is-row">
+            <div>
+              <span>Próximos torneos</span>
+              <h2>Próximos torneos</h2>
+            </div>
+            <Link href="/torneos" className="px-homePillButton">Ver todo el calendario</Link>
+          </div>
+          <div className="px-homeTournamentCards">
+            {upcomingTournaments.map((item) => (
+              <TournamentPublicCard key={item.id} tournament={item} showClub />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="px-homeRankingsExplore">
+        <div className="px-homeSectionHead is-row">
+          <div>
+            <span>Rankings por club</span>
+            <h2>Explorá rankings por club</h2>
+          </div>
+          <Link href="/ranking" className="px-homePillButton">Ver todos los rankings</Link>
+        </div>
+        <div className="px-homeRankingClubGrid">
+          {featuredClubs.length ? featuredClubs.map((club) => (
+            <PublicRankingClubCard
+              key={club.id}
+              clubName={club.name}
+              themeKey={club.clubThemeKey ?? club.theme_key}
+              href={`/ranking?clubId=${club.id}`}
+              variant="home"
+              playersCount={club.players ?? 0}
+              categories={club.categories}
+              rankingType="Ranking anual"
+            />
+          )) : <div className="px-homeEmpty">Los rankings por club van a aparecer acá.</div>}
+        </div>
       </section>
+
+      <section className="px-homeClubsFeatured">
+        <div className="px-homeSectionHead is-row">
+          <div>
+            <span>Clubes SELPA</span>
+            <h2>Descubrí la comunidad</h2>
+          </div>
+          <Link href="/clubes" className="px-homePillButton">Ver toda la Comunidad</Link>
+        </div>
+        <div className="px-homeClubCards">
+          {featuredClubs.length ? featuredClubs.map((club) => {
+            const logo = buildAssetProxyUrl(club.logo_url)
+            const location = club.city || `Club ${BRAND.name}`
+            const nameSize = club.name.length > 30 ? '22px' : club.name.length > 18 ? '26px' : club.name.length > 15 ? '30px' : undefined
+            return (
+              <Link
+                className="publicClubCard px-homeClubCard"
+                href={`/clubs/${club.id}`}
+                key={club.id}
+                aria-label={`Ver club ${club.name}`}
+                onBlur={() => setHoveredHomeClubId(null)}
+                onFocus={() => setHoveredHomeClubId(club.id)}
+                onMouseEnter={() => setHoveredHomeClubId(club.id)}
+                onMouseLeave={() => setHoveredHomeClubId(null)}
+              >
+                <span className={`publicClubLogo ${logo ? 'has-image' : ''}`}>
+                  {logo ? <img src={logo} alt="" loading="lazy" decoding="async" /> : getClubInitials(club.name)}
+                </span>
+                <div className="publicClubBody">
+                  <small style={{ fontSize: 9, gap: 6, lineHeight: 1, padding: '5px 8px', right: 14, top: 12 }}>Club activo</small>
+                  <h2 style={nameSize ? { ['--club-name-size' as string]: nameSize } : undefined}>{club.name}</h2>
+                  <span
+                    className="px-homeClubNameAccent"
+                    aria-hidden="true"
+                    style={{
+                      ['--club-accent-width' as string]: hoveredHomeClubId === club.id ? '230px' : '110px',
+                      ['--club-accent-position' as string]: hoveredHomeClubId === club.id ? '100% 0' : '0 0',
+                      ['--club-accent-opacity' as string]: hoveredHomeClubId === club.id ? '.98' : '.84',
+                      ['--club-accent-shift' as string]: hoveredHomeClubId === club.id ? '4px' : '0',
+                    }}
+                  />
+                  <p style={{ lineHeight: 1.12, margin: '-4px 0 9px' }}>{location}</p>
+                  <div className="publicClubStats">
+                    <span><b>{metricValue(club.players ?? 0, '0')}</b> jugadores</span>
+                    <span><b>{metricValue(club.tournaments ?? 0, '0')}</b> torneos</span>
+                  </div>
+                </div>
+                <span className="publicClubAction">
+                  <span aria-hidden="true">→</span>
+                </span>
+              </Link>
+            )
+          }) : <div className="px-homeEmpty">Los clubes destacados van a aparecer acá.</div>}
+        </div>
+      </section>
+
+      {homeAds.length ? (
+        <section className={`px-homeAdBanners ${homeAds.length === 1 ? 'is-single' : ''}`} aria-label="Publicidad">
+          {homeAds.map((item) => {
+            const image = buildAssetProxyUrl(item.imageUrl)
+            const content = (
+              <>
+                {image ? <img src={image} alt="" loading="lazy" decoding="async" /> : null}
+                <span className="px-homeAdBannerOverlay" aria-hidden="true" />
+                <span className="px-homeAdBannerBody">
+                  <small>{item.badge}</small>
+                  <strong>{item.title}</strong>
+                  {item.description ? <p>{item.description}</p> : null}
+                  {item.url ? <em>Conocer más <b aria-hidden="true">→</b></em> : null}
+                </span>
+              </>
+            )
+            return item.url ? (
+              <a className={`px-homeAdBanner ${image ? 'has-image' : ''}`} href={item.url} target="_blank" rel="noreferrer" key={item.id}>
+                {content}
+              </a>
+            ) : (
+              <article className={`px-homeAdBanner ${image ? 'has-image' : ''}`} key={item.id}>
+                {content}
+              </article>
+            )
+          })}
+        </section>
+      ) : null}
 
       <section className="px-homeNewsPortal">
         <div className="px-homeSectionHead is-row">
           <div>
-            <h2>Lo último del circuito</h2>
+            <span>Información general</span>
+            <h2>Noticias</h2>
           </div>
           <Link href="/noticias" className="px-homeNewsButton">Ver todas las noticias</Link>
         </div>
@@ -295,7 +477,7 @@ export default function PublicHomeExperience({
               <div>
                 <span className="px-homeNewsKicker">{placementLabel(mainNews.placement)}</span>
                 <strong>{mainNews.title}</strong>
-                <p>{mainNews.excerpt || 'Cobertura deportiva pública de Pamprax.'}</p>
+                <p>{mainNews.excerpt || `Cobertura deportiva pública de ${BRAND.name}.`}</p>
               </div>
             </button>
           ) : <div className="px-homeEmpty">Todavía no hay noticias públicas.</div>}
@@ -324,103 +506,57 @@ export default function PublicHomeExperience({
         ) : null}
       </section>
 
-      <section className="px-homeAdSlots is-home-ads" aria-label="Espacios publicitarios">
-        <PublicAdSlot slot={getPublicAdSlot('home_ad_left_6x3')} ad={assignedAdSlots.home_ad_left_6x3} />
-        <PublicAdSlot slot={getPublicAdSlot('home_ad_right_6x3')} ad={assignedAdSlots.home_ad_right_6x3} />
-      </section>
-
-      <section className="px-homeTournaments">
-        <div className="px-homeSectionHead is-row">
-          <div>
-            <span>Próximos torneos</span>
-            <h2>Agenda competitiva</h2>
+      {brandPartners.length ? (
+        <section className="px-homeSponsors" aria-label="Sponsors y aliados">
+          <div className="px-homeSponsorsIntro">
+            <span>Marcas que acompañan SELPA</span>
+            <h2>Potenciamos el pádel. Juntos.</h2>
+            <p>Sponsors y aliados que impulsan la comunidad deportiva.</p>
+            <button type="button">Conocé nuestros aliados</button>
           </div>
-          <Link href="/torneos" className="px-homePillButton">Ver todo el calendario</Link>
-        </div>
-        {featuredTournaments.length ? (
-          <>
-            <div className="px-homeTournamentCards">
-              {featuredTournaments.map((item) => (
-                <TournamentPublicCard key={item.id} tournament={item} showClub />
-              ))}
-            </div>
-          </>
-        ) : <div className="px-homeEmpty">Todavía no hay torneos públicos para mostrar.</div>}
-      </section>
+          <div
+            className="px-homeSponsorCarousel"
+            ref={sponsorCarouselRef}
+            onMouseEnter={() => setIsSponsorCarouselPaused(true)}
+            onMouseLeave={() => setIsSponsorCarouselPaused(false)}
+            onFocus={() => setIsSponsorCarouselPaused(true)}
+            onBlur={() => setIsSponsorCarouselPaused(false)}
+            onPointerDown={() => setIsSponsorCarouselPaused(true)}
+            onPointerUp={() => setIsSponsorCarouselPaused(false)}
+          >
+            {brandPartners.map((item, index) => {
+              const badge = item.source === 'ad' ? 'Aliado' : index === 0 ? 'Sponsor principal' : 'Sponsor oficial'
+              const content = (
+                <>
+                  <span className="px-homeSponsorBadge">{badge}</span>
+                  <span className={`px-homeSponsorLogo ${item.imageUrl ? 'has-image' : ''}`}>
+                    {item.imageUrl ? <img src={item.imageUrl} alt="" loading="lazy" decoding="async" /> : sponsorInitials(item.title)}
+                  </span>
+                  <span className="px-homeSponsorBody">
+                    <strong>{item.title}</strong>
+                    {item.description ? <p>{item.description}</p> : null}
+                    {item.url ? <em>{item.source === 'sponsor' ? 'Conocer más' : 'Ver sponsor'} <b aria-hidden="true">→</b></em> : null}
+                  </span>
+                </>
+              )
 
-      <section className="px-homeRankingsExplore">
-        <div className="px-homeSectionHead is-row">
-          <div>
-            <span>Rankings</span>
-            <h2>Explorá los rankings de cada club</h2>
-            <p>Conocé posiciones, categorías y jugadores destacados de cada comunidad.</p>
+              if (item.url) {
+                return (
+                  <a className="px-homeSponsorCard" href={item.url} target="_blank" rel="noreferrer" key={item.id}>
+                    {content}
+                  </a>
+                )
+              }
+
+              return (
+                <article className="px-homeSponsorCard" key={item.id}>
+                  {content}
+                </article>
+              )
+            })}
           </div>
-          <Link href="/ranking" className="px-homePillButton">Ver ranking</Link>
-        </div>
-        <div className="px-homeRankingClubGrid">
-          {featuredClubs.length ? featuredClubs.map((club) => {
-            const logo = buildAssetProxyUrl(club.logo_url)
-            return (
-              <Link key={club.id} href="/ranking" className="px-homeRankingClubCard">
-                <span className={`px-homeClubLogo is-large ${logo ? 'has-image' : ''}`} style={logo ? { ['--club-logo' as string]: `url("${logo}")` } : undefined}>{logo ? null : getClubInitials(club.name)}</span>
-                <div>
-                  <small>Ranking anual</small>
-                  <strong>{club.name}</strong>
-                  <p>{metricValue(club.players ?? 0, '0')} jugadores · {categorySummary(club.categories)}</p>
-                  <em>Masculino</em><em>Femenino</em>
-                </div>
-                <b>Ver ranking</b>
-              </Link>
-            )
-          }) : <div className="px-homeEmpty">Los rankings por club van a aparecer acá.</div>}
-        </div>
-      </section>
-
-      <section className="px-homeClubsFeatured">
-        <div className="px-homeSectionHead">
-          <span>Clubes destacados</span>
-          <h2>Comunidades para explorar</h2>
-        </div>
-        <div className="px-homeClubCards">
-          {featuredClubs.length ? featuredClubs.map((club) => {
-            const logo = buildAssetProxyUrl(club.logo_url)
-            return (
-              <Link key={club.id} href="/clubs">
-                <span className={`px-homeClubLogo is-large ${logo ? 'has-image' : ''}`} style={logo ? { ['--club-logo' as string]: `url("${logo}")` } : undefined}>{logo ? null : getClubInitials(club.name)}</span>
-                <strong>{club.name}</strong>
-                <p>{club.city || 'Club Pamprax'}</p>
-                <div><span>{metricValue(club.players ?? 0, '0')} jugadores</span><span>{metricValue(club.tournaments ?? 0, '0')} torneos</span></div>
-                <em>Ver actividad</em>
-              </Link>
-            )
-          }) : <div className="px-homeEmpty">Los clubes destacados van a aparecer acá.</div>}
-        </div>
-      </section>
-
-      <section className="px-homeJoin">
-        <div className="px-homeSectionHead">
-          <span>Por qué unirte</span>
-          <h2>Tu pádel, con identidad deportiva</h2>
-        </div>
-        <div className="px-homeReasonGrid">
-          {reasons.map((item) => (
-            <article key={item.title}><strong>{item.title}</strong><p>{item.text}</p></article>
-          ))}
-        </div>
-        <Link href="/register" className="px-homeJoinButton">Crear cuenta gratis</Link>
-      </section>
-
-      <section className="px-homeSponsors">
-        <div className="px-homeSponsorTrack">
-          {[...sponsors, ...sponsors].slice(0, 8).map((item, index) => (
-            <a key={`${item.id}-${index}`} href={item.website_url || '#'} target="_blank" rel="noreferrer">
-              {item.logo_url ? <img src={item.logo_url} alt={item.name} /> : <span>{item.name.slice(0, 2).toUpperCase()}</span>}
-              <strong>{item.name}</strong>
-            </a>
-          ))}
-          {!sponsors.length ? <div className="px-homeSponsorEmpty">Los sponsors principales van a aparecer acá.</div> : null}
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       <style jsx>{`
         .px-publicHome { color: #061b3a; display: grid; gap: 20px; overflow-x: hidden; }
@@ -428,7 +564,7 @@ export default function PublicHomeExperience({
         .px-homeHeroCompact::before { background-image: linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px); background-size: 42px 42px; content: ""; inset: 0; mask-image: linear-gradient(90deg, black, transparent 82%); opacity: .45; position: absolute; }
         .px-homeHeroCompact::after { background: linear-gradient(90deg, #22d3ee 0%, #67e8f9 40%, #8bd3ed 50%, #ec4899 100%); bottom: 0; content: ""; height: 4px; left: 0; position: absolute; right: 0; }
         .px-homeHeroText { display: grid; gap: 11px; max-width: 720px; position: relative; z-index: 1; }
-        .px-homeHeroCompact span, .px-homeSectionHead > span { color: #67e8f9; font-size: 12px; font-weight: 950; letter-spacing: .09em; text-transform: uppercase; }
+        .px-homeHeroCompact span, .px-homeSectionHead > span, .px-homeSectionHead > div > span { background: linear-gradient(90deg, #0891b2 0%, #0e7490 55%, #be185d 120%); -webkit-background-clip: text; background-clip: text; color: #0e7490; font-size: 12px; font-weight: 950; letter-spacing: .09em; text-transform: uppercase; -webkit-text-fill-color: transparent; }
         .px-homeHeroCompact h1 { font-size: clamp(36px, 4.8vw, 54px); font-weight: 950; letter-spacing: -.075em; line-height: .9; margin: 0; }
         .px-homeHeroCompact p { color: rgba(255,255,255,.78); font-size: clamp(16px, 1.8vw, 21px); font-weight: 720; line-height: 1.35; margin: 0; max-width: 600px; }
         .px-homeCtaBanners, .px-homeSectionHead.is-row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
@@ -445,7 +581,7 @@ export default function PublicHomeExperience({
         .px-homeCtaBanners a.is-cyan { --cta-line: linear-gradient(135deg, #22d3ee 0%, #67e8f9 68%, #ec4899 100%); --cta-glow: rgba(34,211,238,.18); }
         .px-homeCtaBanners a.is-balanced { --cta-line: linear-gradient(135deg, #22d3ee 0%, #67e8f9 35%, #c084fc 52%, #ec4899 100%); --cta-glow: rgba(168,85,247,.16); }
         .px-homeCtaBanners a.is-magenta { --cta-line: linear-gradient(135deg, rgba(34,211,238,.72) 0%, #ec4899 46%, #f472b6 100%); --cta-glow: rgba(236,72,153,.2); }
-        .px-homeCtaBanners a:hover, .px-homeActivityGrid a:hover, .px-homeTournamentCards article:not(.TournamentPublicCard):hover, .px-homeRankingClubCard:hover, .px-homeClubCards a:hover, .px-homeMainNews:hover, .px-homeSideNews button:hover, .px-homeReasonGrid article:hover, .px-homeSponsorTrack a:hover { box-shadow: 0 24px 58px rgba(15,23,42,.1); transform: translateY(-2px); }
+        .px-homeCtaBanners a:hover, .px-homeActivityGrid a:hover, .px-homeTournamentCards article:not(.TournamentPublicCard):hover, .px-homeMainNews:hover, .px-homeSideNews button:hover, .px-homeReasonGrid article:hover { box-shadow: 0 24px 58px rgba(15,23,42,.1); transform: translateY(-2px); }
         .px-homeCtaBanners i { align-items: center; align-self: center; background: #061b3a; border-radius: 20px; color: #67e8f9; display: inline-flex; grid-row: 1 / 3; height: 60px; justify-content: center; transition: transform .18s ease, box-shadow .18s ease; width: 60px; }
         .px-homeCtaBanners a:hover i { box-shadow: 0 16px 28px rgba(6,182,212,.18); transform: translateY(-2px) rotate(-3deg) scale(1.04); }
         .px-homeCtaBanners div { align-self: end; display: grid; gap: 4px; min-width: 0; }
@@ -454,6 +590,8 @@ export default function PublicHomeExperience({
         .px-homeCtaBanners em { align-self: start; background: linear-gradient(135deg, #020617, #061b3a); border: 1px solid rgba(103,232,249,.42); border-radius: 999px; box-shadow: 0 12px 22px rgba(6,182,212,.12); color: #e0faff; font-size: 11px; font-style: normal; font-weight: 950; justify-self: end; margin-right: 10px; padding: 6px 10px; text-align: center; white-space: nowrap; }
         .px-homeSectionHead { display: grid; gap: 4px; }
         .px-homeSectionHead.is-row { justify-content: space-between; }
+        .px-homeSectionHead > div { padding-left: 15px; position: relative; }
+        .px-homeSectionHead > div::before { background: linear-gradient(180deg, #22d3ee 0%, #0891b2 52%, #ec4899 100%); border-radius: 999px; bottom: 1px; box-shadow: 0 10px 22px rgba(6,182,212,.18); content: ""; left: 0; position: absolute; top: 1px; width: 4px; }
         .px-homeSectionHead h2 { font-size: clamp(26px, 4vw, 42px); font-weight: 950; letter-spacing: -.055em; line-height: .95; margin: 0; }
         .px-homeSectionHead p { color: #64748b; font-size: 14px; font-weight: 750; margin: 3px 0 0; max-width: 620px; }
         .px-homeNewsPortal, .px-homeTournaments, .px-homeRankingsExplore, .px-homeClubsFeatured, .px-homeJoin { display: grid; gap: 14px; }
@@ -483,13 +621,8 @@ export default function PublicHomeExperience({
         .px-homeMoreNews strong { font-size: 15px; font-weight: 950; line-height: 1.15; }
         .px-homeNewsButton, .px-homePillButton { background: #fff; border: 1px solid rgba(34,211,238,.34); border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(236,72,153,.08); color: #061b3a; font-size: 13px; font-weight: 950; padding: 11px 14px; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
         .px-homeNewsButton:hover, .px-homePillButton:hover { border-color: rgba(236,72,153,.28); box-shadow: 0 18px 34px rgba(6,182,212,.14); transform: translateY(-2px); }
-        .px-homeAdStripThin { background: linear-gradient(135deg, rgba(2,6,23,.98), rgba(6,27,58,.96)); border: 1px solid rgba(103,232,249,.16); border-radius: 22px; color: #fff; min-height: 82px; overflow: hidden; }
-        .px-homeAdStripThin a, .px-homeAdStripThin > div { align-items: center; color: inherit; display: grid; gap: 14px; grid-template-columns: 150px minmax(0,1fr); min-height: 82px; padding: 12px 16px; text-decoration: none; }
-        .px-homeAdStripThin img { border-radius: 14px; height: 58px; object-fit: cover; width: 150px; }
-        .px-homeAdStripThin strong { font-size: 18px; font-weight: 950; }
-        .px-homeAdStripThin p { color: rgba(255,255,255,.7); font-size: 13px; margin: 0; }
         .px-homeActivityGrid { display: grid; gap: 12px; grid-template-columns: repeat(4,minmax(0,1fr)); }
-        .px-homeActivityGrid a, .px-homeTournamentCards article:not(.TournamentPublicCard), .px-homeRankingClubCard, .px-homeClubCards a, .px-homeReasonGrid article { background: radial-gradient(circle at 0 0, rgba(34,211,238,.12), transparent 38%), #fff; border: 1px solid #e2e8f0; border-radius: 22px; box-shadow: 0 16px 44px rgba(15,23,42,.06); color: #061b3a; display: grid; gap: 7px; padding: 16px; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease; }
+        .px-homeActivityGrid a, .px-homeTournamentCards article:not(.TournamentPublicCard), .px-homeReasonGrid article { background: radial-gradient(circle at 0 0, rgba(34,211,238,.12), transparent 38%), #fff; border: 1px solid #e2e8f0; border-radius: 22px; box-shadow: 0 16px 44px rgba(15,23,42,.06); color: #061b3a; display: grid; gap: 7px; padding: 16px; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease; }
         .px-homeActivityGrid strong { color: #061b3a; font-size: 34px; font-weight: 950; letter-spacing: -.06em; line-height: .9; }
         .px-homeActivityGrid span { color: #0284c7; font-size: 12px; font-weight: 950; text-transform: uppercase; }
         .px-homeActivityGrid p { color: #64748b; font-size: 13px; font-weight: 760; margin: 0; }
@@ -510,51 +643,83 @@ export default function PublicHomeExperience({
         .px-homeTournamentInfo p { color: #64748b; font-size: 13px; font-weight: 850; margin: 0; }
         .px-homeTournamentInfo em { background: rgba(34,211,238,.1); border: 1px solid rgba(34,211,238,.22); border-radius: 999px; color: #075985; font-size: 11px; font-style: normal; font-weight: 950; justify-self: start; padding: 6px 8px; }
         .px-homeTournamentInfo a { background: #061b3a; border-radius: 999px; color: #fff; font-size: 11px; font-weight: 950; justify-self: start; margin-top: auto; padding: 8px 11px; text-decoration: none; }
-        .px-homeRankingClubGrid, .px-homeClubCards { display: grid; gap: 14px; grid-template-columns: repeat(2,minmax(0,1fr)); }
-        .px-homeRankingClubCard { align-items: center; grid-template-columns: 62px minmax(0,1fr) auto; }
-        .px-homeRankingClubCard small { color: #0284c7; font-size: 11px; font-weight: 950; text-transform: uppercase; }
-        .px-homeRankingClubCard strong, .px-homeClubCards strong { display: block; font-size: 20px; font-weight: 950; letter-spacing: -.035em; line-height: 1.02; }
-        .px-homeRankingClubCard p, .px-homeClubCards p { color: #64748b; font-size: 13px; font-weight: 800; margin: 4px 0 7px; }
-        .px-homeRankingClubCard em { background: rgba(34,211,238,.1); border: 1px solid rgba(34,211,238,.2); border-radius: 999px; color: #075985; display: inline-flex; font-size: 11px; font-style: normal; font-weight: 950; margin-right: 5px; padding: 5px 8px; }
-        .px-homeRankingClubCard b, .px-homeClubCards em { color: #0284c7; font-size: 12px; font-style: normal; font-weight: 950; white-space: nowrap; }
-        .px-homeClubCards a { min-height: 190px; }
-        .px-homeClubCards div { display: flex; flex-wrap: wrap; gap: 7px; }
-        .px-homeClubCards div span { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; color: #475569; font-size: 11px; font-weight: 900; padding: 6px 8px; }
+        .px-homeRankingsExplore > .px-homeRankingClubGrid { display: grid; gap: 14px; grid-template-columns: repeat(3,minmax(0,1fr)) !important; }
+        .px-homeClubCards { display: grid; gap: 14px; grid-template-columns: repeat(2,minmax(0,1fr)); }
+        .px-homeClubCard::before, .px-homeClubCards :global(.publicClubCard)::before { content: none !important; display: none !important; }
+        .px-homeClubCard .publicClubBody small { font-size: 8px; gap: 3px; line-height: 1; padding: 3px 6px; top: 12px; }
+        .px-homeClubCard .publicClubBody small::before { height: 4px; width: 4px; }
+        .px-homeClubCard .publicClubBody h2 { margin-bottom: 4px; }
+        .px-homeClubCard .publicClubBody p { line-height: 1.15; margin-top: -9px; }
+        .px-homeClubNameAccent { background: linear-gradient(90deg, #22d3ee 0%, #0e7490 32%, #ec4899 66%, #22d3ee 100%); background-position: var(--club-accent-position, 0 0); background-size: 220% 100%; border: 0 !important; border-radius: 999px; display: block; font-size: 0; height: 5px !important; line-height: 0; margin: 0; max-width: 88%; opacity: var(--club-accent-opacity, .84); padding: 0 !important; transform: translateX(var(--club-accent-shift, 0)); transition: width .34s ease, opacity .24s ease, transform .24s ease, background-position .42s ease; width: var(--club-accent-width, 110px); }
+        .px-homeClubNameAccent::after { content: none !important; display: none !important; }
+        .px-homeAdBanners { display: grid; gap: 14px; grid-template-columns: repeat(2,minmax(0,1fr)); }
+        .px-homeAdBanners.is-single { grid-template-columns: minmax(0,1fr); }
+        .px-homeAdBanner { background: radial-gradient(circle at 8% 8%, rgba(34,211,238,.3), transparent 32%), radial-gradient(circle at 92% 18%, rgba(236,72,153,.22), transparent 30%), linear-gradient(135deg,#031225 0%,#071936 58%,#0f172a 100%); border: 1px solid rgba(103,232,249,.26); border-radius: 24px; box-shadow: 0 18px 42px rgba(2,6,23,.13), inset 0 0 0 1px rgba(255,255,255,.04); color: #fff; display: block; min-height: 126px; overflow: hidden; position: relative; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+        .px-homeAdBanner:hover { border-color: rgba(236,72,153,.38); box-shadow: 0 24px 52px rgba(2,6,23,.18), 0 0 0 1px rgba(236,72,153,.16) inset; transform: translateY(-2px); }
+        .px-homeAdBanner img { display: block; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; }
+        .px-homeAdBannerOverlay { background: linear-gradient(90deg,rgba(2,6,23,.86) 0%,rgba(2,6,23,.58) 48%,rgba(2,6,23,.2) 100%), linear-gradient(180deg,rgba(2,6,23,.08) 0%,rgba(2,6,23,.76) 100%); inset: 0; position: absolute; }
+        .px-homeAdBannerBody { bottom: 0; display: grid; gap: 5px; left: 0; padding: 15px 18px; position: absolute; right: 0; z-index: 1; }
+        .px-homeAdBannerBody small { align-items: center; background: rgba(255,255,255,.08); border: 1px solid rgba(103,232,249,.32); border-radius: 999px; color: #67e8f9; display: inline-flex; font-size: 10px; font-weight: 950; justify-self: start; letter-spacing: .08em; padding: 5px 8px; text-transform: uppercase; }
+        .px-homeAdBannerBody strong { color: #fff; font-size: clamp(18px,2vw,25px); font-weight: 950; letter-spacing: -.04em; line-height: 1; }
+        .px-homeAdBannerBody p { color: rgba(226,250,255,.76); font-size: 12px; font-weight: 650; line-height: 1.35; margin: 0; max-width: 58ch; }
+        .px-homeAdBannerBody em { align-items: center; align-self: start; background: linear-gradient(135deg,rgba(34,211,238,.18),rgba(236,72,153,.18)); border: 1px solid rgba(103,232,249,.3); border-radius: 999px; color: #e0faff; display: inline-flex; font-size: 10px; font-style: normal; font-weight: 900; gap: 7px; padding: 5px 8px; transition: color .18s ease; }
+        .px-homeAdBannerBody b { font-size: 14px; line-height: 1; transition: transform .18s ease; }
+        .px-homeAdBanner:hover .px-homeAdBannerBody em { color: #fff; }
+        .px-homeAdBanner:hover .px-homeAdBannerBody b { transform: translateX(3px); }
         .px-homeJoin { background: linear-gradient(135deg, #fff, #f8fbff); border: 1px solid #e2e8f0; border-radius: 24px; box-shadow: 0 16px 44px rgba(15,23,42,.06); display: grid; gap: 14px; padding: 18px; }
         .px-homeReasonGrid { display: grid; gap: 12px; grid-template-columns: repeat(4,minmax(0,1fr)); }
         .px-homeReasonGrid strong { font-size: 16px; font-weight: 950; }
         .px-homeReasonGrid p { color: #64748b; font-size: 13px; font-weight: 760; line-height: 1.4; margin: 0; }
         .px-homeJoinButton { justify-self: start; }
-        .px-homeSponsors { background: linear-gradient(135deg, rgba(2,6,23,.98), rgba(6,27,58,.96)); border: 1px solid rgba(103,232,249,.14); border-radius: 24px; overflow: hidden; padding: 14px; }
-        .px-homeSponsorTrack { display: grid; gap: 12px; grid-template-columns: repeat(4,minmax(0,1fr)); }
-        .px-homeSponsorTrack a { align-items: center; background: rgba(255,255,255,.94); border-radius: 18px; color: #061b3a; display: grid; gap: 8px; min-height: 112px; padding: 12px; text-align: center; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease; }
-        .px-homeSponsorTrack img { height: 56px; object-fit: contain; width: 100%; }
-        .px-homeSponsorTrack span { font-size: 24px; font-weight: 950; }
-        .px-homeSponsorTrack strong { font-size: 13px; font-weight: 950; }
+        .px-homeSponsors { background: radial-gradient(circle at 0 0, rgba(34,211,238,.22), transparent 34%), radial-gradient(circle at 100% 20%, rgba(236,72,153,.16), transparent 30%), linear-gradient(135deg, #020617 0%, #061b3a 55%, #071426 100%); border: 1px solid rgba(34,211,238,.2); border-radius: 26px; box-shadow: 0 26px 64px rgba(2,6,23,.18); color: #fff; display: grid; gap: 20px; grid-template-columns: minmax(230px,.3fr) minmax(0,.7fr); overflow: hidden; padding: clamp(18px, 2.4vw, 26px); position: relative; }
+        .px-homeSponsors::after { background: linear-gradient(90deg, #22d3ee 0%, rgba(34,211,238,.55) 32%, rgba(236,72,153,.72) 100%); bottom: 0; content: ""; height: 4px; left: 0; position: absolute; right: 0; }
+        .px-homeSponsorsIntro { align-content: center; display: grid; gap: 10px; min-width: 0; position: relative; z-index: 1; }
+        .px-homeSponsorsIntro span { color: #67e8f9; font-size: 11px; font-weight: 950; letter-spacing: .11em; text-transform: uppercase; }
+        .px-homeSponsorsIntro h2 { font-size: clamp(28px, 3vw, 42px); font-weight: 950; letter-spacing: -.06em; line-height: .92; margin: 0; max-width: 340px; }
+        .px-homeSponsorsIntro p { color: rgba(226,250,255,.74); font-size: 14px; font-weight: 760; line-height: 1.35; margin: 0; max-width: 330px; }
+        .px-homeSponsorsIntro button { background: rgba(255,255,255,.08); border: 1px solid rgba(103,232,249,.42); border-radius: 999px; color: #e0faff; cursor: default; font: inherit; font-size: 12px; font-weight: 950; justify-self: start; margin-top: 6px; padding: 10px 13px; }
+        .px-homeSponsorCarousel { display: grid; gap: 14px; grid-auto-columns: minmax(230px, 260px); grid-auto-flow: column; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; padding: 4px 4px 16px; position: relative; scroll-behavior: smooth; scroll-snap-type: x proximity; scrollbar-color: rgba(103,232,249,.45) rgba(255,255,255,.08); z-index: 1; }
+        .px-homeSponsorCarousel::-webkit-scrollbar { height: 8px; }
+        .px-homeSponsorCarousel::-webkit-scrollbar-track { background: rgba(255,255,255,.08); border-radius: 999px; }
+        .px-homeSponsorCarousel::-webkit-scrollbar-thumb { background: linear-gradient(90deg, #22d3ee, #ec4899); border-radius: 999px; }
+        .px-homeSponsorCard { align-content: start; background: rgba(8,30,58,.82); border: 1px solid rgba(103,232,249,.16); border-radius: 18px; box-shadow: 0 18px 40px rgba(2,6,23,.18); color: #fff; display: grid; gap: 11px; min-height: 238px; overflow: hidden; padding: 14px; position: relative; scroll-snap-align: start; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+        .px-homeSponsorCard:hover { border-color: rgba(103,232,249,.42); box-shadow: 0 22px 50px rgba(2,6,23,.24), 0 0 0 1px rgba(236,72,153,.1) inset; transform: translateY(-2px); }
+        .px-homeSponsorBadge { align-items: center; background: rgba(34,211,238,.09); border: 1px solid rgba(103,232,249,.18); border-radius: 999px; color: #9ff6ff; display: inline-flex; font-size: 9px; font-weight: 950; justify-self: start; letter-spacing: .04em; padding: 5px 8px; text-transform: uppercase; }
+        .px-homeSponsorLogo { align-items: center; background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.08); border-radius: 15px; color: #e0faff; display: flex; font-size: 30px; font-weight: 950; height: 92px; justify-content: center; overflow: hidden; padding: 14px; text-align: center; }
+        .px-homeSponsorLogo.has-image { background: rgba(255,255,255,.94); }
+        .px-homeSponsorLogo img { display: block; max-height: 76px; max-width: 100%; object-fit: contain; }
+        .px-homeSponsorBody { display: grid; gap: 7px; min-width: 0; }
+        .px-homeSponsorBody strong { color: #fff; font-size: 18px; font-weight: 950; letter-spacing: -.035em; line-height: 1; overflow-wrap: anywhere; }
+        .px-homeSponsorBody p { color: rgba(226,250,255,.68); display: -webkit-box; font-size: 12px; font-weight: 720; line-height: 1.35; margin: 0; overflow: hidden; WebkitBoxOrient: vertical; WebkitLineClamp: 2; }
+        .px-homeSponsorBody em { align-items: center; color: #67e8f9; display: inline-flex; font-size: 11px; font-style: normal; font-weight: 950; gap: 7px; justify-self: start; margin-top: 2px; text-transform: uppercase; transition: color .18s ease; }
+        .px-homeSponsorBody b { font-size: 15px; line-height: 1; transition: transform .18s ease; }
+        .px-homeSponsorCard:hover .px-homeSponsorBody em { color: #fff; }
+        .px-homeSponsorCard:hover .px-homeSponsorBody b { transform: translateX(3px); }
         .px-homeEmpty { background: rgba(255,255,255,.88); border: 1px dashed rgba(15,23,42,.14); border-radius: 18px; color: #64748b; font-size: 13px; font-weight: 760; padding: 18px; }
         @media (max-width: 1080px) {
-          .px-homeNewsPortalGrid, .px-homeRankingClubGrid, .px-homeClubCards { grid-template-columns: 1fr; }
-          .px-homeActivityGrid, .px-homeTournamentCards, .px-homeReasonGrid, .px-homeSponsorTrack { grid-template-columns: repeat(2,minmax(0,1fr)); }
+          .px-homeNewsPortalGrid, .px-homeClubCards { grid-template-columns: 1fr; }
+          .px-homeActivityGrid, .px-homeTournamentCards, .px-homeReasonGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+          .px-homeSponsors { grid-template-columns: minmax(220px,.36fr) minmax(0,.64fr); }
         }
         @media (max-width: 720px) {
           .px-homeHeroCompact { border-radius: 22px; grid-template-columns: 1fr; min-height: 220px; padding: 20px; }
           .px-homeHeroCompact h1 { font-size: clamp(34px, 10vw, 44px); }
           .px-homeHeroCompact p { font-size: 15px; }
           .px-homeHeroActions { grid-template-columns: 1fr; }
-          .px-homeCtaBanners, .px-homeActivityGrid, .px-homeReasonGrid, .px-homeSponsorTrack { grid-template-columns: 1fr; }
+          .px-homeCtaBanners, .px-homeActivityGrid, .px-homeReasonGrid { grid-template-columns: 1fr; }
+          .px-homeSponsors { grid-template-columns: 1fr; }
+          .px-homeSponsorCarousel { grid-auto-columns: minmax(220px, 78vw); }
+          .px-homeAdBanners { grid-template-columns: 1fr; }
           .px-homeTournamentCards { display: grid; gap: 12px; grid-template-columns: 1fr; margin: 0; overflow: visible; padding: 0; }
           .px-homeTournamentCards :global(.TournamentPublicCard) { height: 326px; min-height: 326px; }
           .px-homeCtaBanners a { grid-template-columns: 64px minmax(0,1fr); min-height: 108px; }
           .px-homeCtaBanners em { grid-column: 2; justify-self: start; margin-right: 0; }
           .px-homeSectionHead.is-row { align-items: start; flex-direction: column; }
           .px-homeNewsPortalGrid, .px-homeMoreNews { grid-template-columns: 1fr; }
+          .px-homeRankingsExplore > .px-homeRankingClubGrid { grid-template-columns: 1fr !important; }
           .px-homeMainNews { min-height: 260px; }
-          .px-homeAdStripThin a, .px-homeAdStripThin > div { grid-template-columns: 1fr; }
-          .px-homeAdStripThin img { width: 100%; }
           .px-homeTournamentCards article:not(.TournamentPublicCard) { grid-template-columns: 1fr; }
           .px-homeDateBlock { align-items: center; display: flex; gap: 9px; justify-content: flex-start; min-height: 0; }
-          .px-homeRankingClubCard { grid-template-columns: 56px minmax(0,1fr); }
-          .px-homeRankingClubCard b { grid-column: 1 / -1; }
         }
       `}</style>
     </div>

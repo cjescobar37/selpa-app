@@ -3,6 +3,7 @@
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
+import { BRAND } from '@/lib/branding'
 import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 
 type CommercialSlotStatus = 'Disponible' | 'Reservado' | 'Activo'
@@ -480,7 +481,7 @@ export default function ClubPublicidadPage() {
               <div className={`club-commercial-placeholder ${selectedCampaign?.image_url ? 'has-campaign' : ''}`}>
                 {selectedCampaign?.image_url ? <img src={selectedCampaign.image_url} alt={selectedCampaign.title} /> : null}
                 <span>{selectedCampaign?.title ?? 'Este espacio puede ser tuyo'}</span>
-                <p>{selectedCampaign?.description ?? 'Publicitá con Pamprax y llegá a jugadores y clubes.'}</p>
+                <p>{selectedCampaign?.description ?? `Publicitá con ${BRAND.name} y llegá a jugadores y clubes.`}</p>
                 <em>
                   {selectedCampaign
                     ? `${campaignStatusLabel[selectedCampaign.status]} · ${selectedCampaign.sponsor?.name ?? 'Sin sponsor'}`

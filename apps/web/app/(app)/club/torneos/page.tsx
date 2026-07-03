@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { defaultFlyerConfig, getTournamentFlyerSurfaceStyle, readFlyerConfigFromRules } from './_components/TournamentFlyerConfigurator'
+import { buildAssetProxyUrl } from '@/lib/clubAssets'
 import {
   getTournamentOperationalStatus,
   type OperationalStage,
@@ -349,11 +350,15 @@ export default function ClubTorneosPage() {
   function renderTournamentRow(tournament: Tournament, compact = false) {
     const isHistorical = isHistoryTournament(tournament, stagesByTournamentId[tournament.id])
     const flyerConfig = readFlyerConfigFromRules(tournament.rules_json) ?? defaultFlyerConfig
+    const manualFlyerUrl = flyerConfig.mode === 'MANUAL' ? flyerConfig.manualFlyer?.publicUrl ?? flyerConfig.manualFlyer?.previewUrl ?? null : null
+    const backdropStyle = manualFlyerUrl
+      ? { backgroundImage: `url("${buildAssetProxyUrl(manualFlyerUrl) ?? manualFlyerUrl}")` }
+      : getTournamentFlyerSurfaceStyle(flyerConfig)
     const statusBadge = getTournamentListBadge(tournament)
     return (
       <article
         key={tournament.id}
-        className={`club-tournamentRow ${isHistorical ? 'club-tournamentRow--history' : 'club-tournamentRow--active'}${compact ? ' club-tournamentRow--compact' : ''}`}
+        className={`club-tournamentRow ${isHistorical ? 'club-tournamentRow--history' : 'club-tournamentRow--active'}${compact ? ' club-tournamentRow--compact' : ''}${manualFlyerUrl ? ' club-tournamentRow--manualFlyer' : ''}`}
         onClick={() => router.push(`/club/torneos/${tournament.id}`)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -384,7 +389,7 @@ export default function ClubTorneosPage() {
           </div>
         </div>
 
-        <div className="club-tournamentBackdrop" style={getTournamentFlyerSurfaceStyle(flyerConfig)}>
+        <div className="club-tournamentBackdrop" style={backdropStyle}>
           <span className="club-tournamentBackdropGlow" />
         </div>
 
@@ -615,6 +620,7 @@ export default function ClubTorneosPage() {
         .club-tournamentRow::before { background: linear-gradient(145deg, rgba(255,255,255,.74) 0%, rgba(255,255,255,.62) 48%, rgba(255,255,255,.42) 100%); border-radius: 14px; content: ''; inset: 0; position: absolute; transition: background .16s ease; z-index: 1; }
         .club-tournamentRow::after { background: linear-gradient(90deg, var(--club-admin-accent), var(--club-admin-accent-2)); border-radius: 999px; content: ''; height: 4px; left: 14px; position: absolute; right: 14px; top: 0; transition: background .16s ease, opacity .16s ease; z-index: 2; }
         .club-tournamentRow--active::before { background: linear-gradient(145deg, rgba(255,255,255,.40) 0%, rgba(255,255,255,.24) 45%, rgba(255,255,255,.08) 100%); }
+        .club-tournamentRow--manualFlyer::before { background: linear-gradient(90deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.76) 58%, rgba(255,255,255,.28) 100%); }
         .club-tournamentRow--history::before { background: linear-gradient(145deg, rgba(255,255,255,.82) 0%, rgba(248,250,252,.72) 48%, rgba(241,245,249,.58) 100%); }
         .club-tournamentRow--history::after { background: linear-gradient(90deg, rgba(148,163,184,.82), rgba(203,213,225,.28)); }
         .club-tournamentRow:hover { background: #fbfdff; border-color: color-mix(in srgb, var(--club-admin-accent) 34%, transparent); box-shadow: 0 18px 38px var(--club-admin-glow); transform: translateY(-2px); }
@@ -626,6 +632,7 @@ export default function ClubTorneosPage() {
         .club-tournamentOverlayLink { border-radius: 14px; inset: 0; position: absolute; z-index: 1; }
         .club-tournamentOverlayLink:focus-visible { outline: 2px solid var(--club-admin-accent); outline-offset: -3px; }
         .club-tournamentBackdrop { background-color: #17253f; background-position: center top !important; background-repeat: no-repeat !important; background-size: cover !important; border-radius: 14px; filter: saturate(1.46) contrast(1.06); inset: 0; opacity: 1; pointer-events: none; position: absolute; transition: filter .18s ease, transform .22s ease, opacity .18s ease; z-index: 0; }
+        .club-tournamentRow--manualFlyer .club-tournamentBackdrop { background-position: right center !important; filter: saturate(1.05) contrast(1.02); }
         .club-tournamentRow--history .club-tournamentBackdrop { filter: grayscale(1) saturate(.12) contrast(.92); opacity: .72; }
         .club-tournamentBackdrop::after { background: linear-gradient(145deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 42%, rgba(255,255,255,0) 100%); content: ''; inset: 0; position: absolute; }
         .club-tournamentRow--history .club-tournamentBackdrop::after { background: linear-gradient(145deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.18) 48%, rgba(255,255,255,.06) 100%); }

@@ -1,10 +1,11 @@
 'use client'
 
-import { type CSSProperties, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowLeft, Search } from 'lucide-react'
 import RankingBoard, { type RankingBoardRow } from '@/components/ranking/RankingBoard'
-import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
-import { getClubTheme } from '@/lib/clubThemes'
+import PublicRankingClubCard from '@/components/public/PublicRankingClubCard'
+import { buildAssetProxyUrl } from '@/lib/clubAssets'
+import { BRAND } from '@/lib/branding'
 import {
   filterRankingRows,
   formatRankingCategory,
@@ -41,12 +42,23 @@ const genders = [
 
 const PAMP_GLOW = 'rgba(6, 182, 212, 0.18)'
 
-export default function PublicRankingExperience({ players, clubs }: { players: PublicRankingPlayer[]; clubs: string[] }) {
-  const [selectedClub, setSelectedClub] = useState<string | null>(null)
+export default function PublicRankingExperience({
+  players,
+  clubs,
+  initialClubId,
+  initialCategory,
+}: {
+  players: PublicRankingPlayer[]
+  clubs: string[]
+  initialClubId?: string | null
+  initialCategory?: string | null
+}) {
+  const initialClubName = initialClubId ? players.find((player) => player.clubId === initialClubId)?.clubName ?? null : null
+  const normalizedInitialCategory = initialCategory && categories.includes(initialCategory) ? initialCategory : 'all'
+  const [selectedClub, setSelectedClub] = useState<string | null>(initialClubName)
   const [query, setQuery] = useState('')
-  const [category, setCategory] = useState('all')
+  const [category, setCategory] = useState(normalizedInitialCategory)
   const [gender, setGender] = useState('all')
-  const [hoveredClub, setHoveredClub] = useState<string | null>(null)
 
   const clubCards = useMemo(() => {
     return clubs.map((clubName) => {
@@ -100,216 +112,14 @@ export default function PublicRankingExperience({ players, clubs }: { players: P
   }, [filtered, gender])
 
   function renderClubCard(card: (typeof clubCards)[number]) {
-    const logo = buildAssetProxyUrl(card.logoUrl)
-    const theme = getClubTheme(card.themeKey)
-    const isHovered = hoveredClub === card.clubName
-    const accentStyle = {
-      ['--club-primary' as string]: theme.vars.accent,
-      ['--club-secondary' as string]: theme.vars.accent2,
-    } satisfies CSSProperties
-    const cardStyle = {
-      ...accentStyle,
-      background: 'linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.94)) padding-box, linear-gradient(135deg, rgba(34,211,238,.54), rgba(236,72,153,.46)) border-box',
-      border: '1px solid transparent',
-      borderRadius: 28,
-      boxShadow: isHovered
-        ? '0 24px 54px rgba(15,23,42,.14), 0 0 0 4px color-mix(in srgb, var(--club-primary) 16%, transparent), 0 0 38px color-mix(in srgb, var(--club-secondary) 18%, transparent)'
-        : '0 18px 44px rgba(15,23,42,.09), 0 0 0 1px rgba(255,255,255,.7) inset',
-      color: '#020617',
-      cursor: 'pointer',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      minHeight: 190,
-      minWidth: 0,
-      overflow: 'hidden',
-      padding: 24,
-      position: 'relative',
-      transform: isHovered ? 'translateY(-4px) scale(1.01)' : 'translateY(0) scale(1)',
-      transition: 'transform .18s ease, box-shadow .18s ease',
-    } satisfies CSSProperties
-
     return (
-      <article
-        className="group relative flex min-h-[190px] cursor-pointer flex-col justify-between overflow-hidden rounded-[28px] bg-white p-6 text-slate-950 shadow-xl transition duration-200 hover:-translate-y-1 hover:shadow-2xl"
+      <PublicRankingClubCard
         key={card.clubName}
-        role="button"
-        tabIndex={0}
-        onClick={() => setSelectedClub(card.clubName)}
-        onBlur={() => setHoveredClub(null)}
-        onFocus={() => setHoveredClub(card.clubName)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            setSelectedClub(card.clubName)
-          }
-        }}
-        onMouseEnter={() => setHoveredClub(card.clubName)}
-        onMouseLeave={() => setHoveredClub(null)}
-        style={cardStyle}
-      >
-        <span
-          aria-hidden="true"
-          style={{
-            background: 'linear-gradient(90deg, #22d3ee, var(--club-primary), var(--club-secondary), #ec4899)',
-            borderRadius: 999,
-            bottom: 0,
-            height: 4,
-            left: isHovered ? 18 : 24,
-            opacity: isHovered ? .95 : .58,
-            pointerEvents: 'none',
-            position: 'absolute',
-            right: isHovered ? 18 : 24,
-            transform: isHovered ? 'scaleX(1)' : 'scaleX(.74)',
-            transformOrigin: 'left center',
-            transition: 'transform .2s ease, opacity .2s ease, left .2s ease, right .2s ease',
-            zIndex: 2,
-          }}
-        />
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-70"
-          style={{
-            background: 'radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--club-primary) 18%, transparent), transparent 34%), radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--club-secondary) 14%, transparent), transparent 32%)',
-            opacity: isHovered ? .95 : .72,
-            transform: isHovered ? 'translate3d(4px, -3px, 0) scale(1.03)' : 'translate3d(0, 0, 0) scale(1)',
-            transition: 'transform .2s ease, opacity .2s ease',
-          }}
-        />
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute bottom-2 right-4 text-[54px] font-black lowercase leading-none tracking-[-0.08em] text-slate-950 opacity-[0.035]"
-          style={{
-            color: '#061b3a',
-            fontSize: 96,
-            fontWeight: 950,
-            bottom: -14,
-            lineHeight: 1,
-            opacity: .04,
-            pointerEvents: 'none',
-            position: 'absolute',
-            right: 18,
-            top: 'auto',
-            transform: isHovered ? 'translateX(2px) scale(1.03)' : 'translateX(0) scale(1)',
-            transition: 'transform .2s ease',
-            zIndex: 0,
-          }}
-        >
-          #
-        </span>
-        <span
-          aria-hidden="true"
-          style={{
-            alignItems: 'end',
-            display: 'flex',
-            filter: 'blur(.45px)',
-            gap: 12,
-            opacity: isHovered ? .10 : .06,
-            pointerEvents: 'none',
-            position: 'absolute',
-            right: 18,
-            top: 12,
-            transform: isHovered ? 'translateY(-2px) translateX(2px) scale(1.02)' : 'translateY(0) translateX(0) scale(1)',
-            transition: 'transform .2s ease, opacity .2s ease',
-            zIndex: 0,
-          }}
-        >
-          {[65, 105, 155].map((height) => (
-            <i
-              key={height}
-              style={{
-                background: 'linear-gradient(180deg, var(--club-primary), var(--club-secondary))',
-                borderRadius: '18px 18px 4px 4px',
-                display: 'block',
-                height,
-                width: 34,
-              }}
-            />
-          ))}
-        </span>
-        <header
-          className="relative z-[1] min-w-0"
-          style={{ minWidth: 0, position: 'relative', zIndex: 1 }}
-        >
-          <h2
-            className="line-clamp-2 overflow-hidden text-[23px] font-black leading-[1.04] tracking-[-0.025em] text-slate-950"
-            style={{ color: '#020617', display: '-webkit-box', fontSize: 23, fontWeight: 950, letterSpacing: '-.025em', lineHeight: 1.04, margin: 0, overflow: 'hidden', overflowWrap: 'anywhere', paddingRight: 72, WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }}
-          >
-            {card.clubName}
-          </h2>
-          <span
-            aria-hidden="true"
-            style={{ background: 'linear-gradient(90deg, #22d3ee, var(--club-primary), var(--club-secondary), #ec4899)', borderRadius: 999, display: 'block', height: isHovered ? 4 : 3, marginTop: 10, maxWidth: isHovered ? 140 : 90, opacity: isHovered ? .94 : .68, transition: 'max-width .2s ease, opacity .2s ease, height .2s ease' }}
-          />
-        </header>
-        <div
-          className="relative z-[1] flex min-w-0 items-center gap-4"
-          style={{ alignItems: 'center', display: 'flex', gap: 18, minWidth: 0, position: 'relative', transform: 'translateY(14px)', zIndex: 1 }}
-        >
-          <div
-            className="relative flex h-[72px] w-[72px] min-w-[72px] items-center justify-center overflow-hidden rounded-[20px] bg-white p-[7px] text-sm font-black text-slate-950"
-            style={{
-              alignItems: 'center',
-              background: logo ? '#ffffff' : 'linear-gradient(135deg, #061b3a, #12325d)',
-              border: '2px solid transparent',
-              borderRadius: 20,
-              boxShadow: isHovered
-                ? '0 0 0 11px color-mix(in srgb, var(--club-primary) 19%, transparent), 0 19px 36px rgba(15,23,42,.16)'
-                : '0 0 0 7px color-mix(in srgb, var(--club-primary) 10%, transparent), 0 14px 26px rgba(15,23,42,.10)',
-              color: logo ? '#020617' : '#ffffff',
-              display: 'flex',
-              flex: '0 0 83px',
-              fontSize: 14,
-              fontWeight: 950,
-              height: 83,
-              justifyContent: 'center',
-              minWidth: 83,
-              overflow: 'hidden',
-              padding: 8,
-              position: 'relative',
-              width: 83,
-              zIndex: 1,
-              transition: 'box-shadow .18s ease, transform .18s ease',
-              transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-            }}
-          >
-            {logo ? <img className="block h-full w-full object-contain" src={logo} alt="" loading="lazy" decoding="async" style={{ display: 'block', height: '100%', objectFit: 'contain', width: '100%' }} /> : getClubInitials(card.clubName)}
-          </div>
-          <p className="mt-1 text-xs font-extrabold leading-tight text-slate-500" style={{ color: '#64748b', flex: '1 1 auto', fontSize: 12, fontWeight: 850, lineHeight: 1.28, margin: 0, minWidth: 0 }}>
-            Entrá al ranking oficial del club.
-          </p>
-        </div>
-        <footer
-          className="relative z-[1] flex min-w-0 items-end justify-between gap-3"
-          style={{ alignItems: 'flex-end', display: 'flex', gap: 12, justifyContent: 'flex-end', minWidth: 0, position: 'relative', zIndex: 1 }}
-        >
-          <span
-            className="flex shrink-0 items-center justify-center rounded-full bg-slate-950 font-black leading-none text-white shadow-lg transition"
-            aria-hidden="true"
-            style={{
-              alignItems: 'center',
-              background: '#020617',
-              borderRadius: 999,
-              boxShadow: '0 12px 24px rgba(6,27,58,.16), 0 0 0 4px color-mix(in srgb, var(--club-secondary) 10%, transparent)',
-              color: '#ffffff',
-              display: 'inline-flex',
-              flex: '0 0 auto',
-              fontSize: 11,
-              fontWeight: 950,
-              gap: 8,
-              height: 40,
-              justifyContent: 'center',
-              letterSpacing: '.04em',
-              lineHeight: 1,
-              minWidth: 118,
-              padding: '0 13px',
-              textTransform: 'uppercase',
-            }}
-          >
-            Ver ranking <b style={{ display: 'inline-block', fontSize: 18, lineHeight: 1, transform: isHovered ? 'translateX(4px)' : 'translateX(0)', transition: 'transform .18s ease' }}>→</b>
-          </span>
-        </footer>
-      </article>
+        clubName={card.clubName}
+        logoUrl={card.logoUrl}
+        themeKey={card.themeKey}
+        onSelect={() => setSelectedClub(card.clubName)}
+      />
     )
   }
 
@@ -317,7 +127,7 @@ export default function PublicRankingExperience({ players, clubs }: { players: P
     <main className="publicRankingShell" style={{ ['--rank-mobile-glow' as string]: PAMP_GLOW }}>
       <section className="publicRankingHero">
         <span>Ranking público</span>
-        <h1>Ranking Pamprax</h1>
+        <h1>Ranking {BRAND.name}</h1>
         <p>Explorá rankings públicos por club. Primero elegí un club y después filtrá por categoría o rama.</p>
       </section>
 

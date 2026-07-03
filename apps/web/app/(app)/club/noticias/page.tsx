@@ -571,10 +571,10 @@ export default function ClubNoticiasPage() {
           right: 0;
           top: 0;
         }
-        .clubNewsHero { align-items: center; display: flex; gap: 18px; justify-content: space-between; padding: 24px; }
+        .clubNewsHero { align-items: center; display: flex; gap: 14px; justify-content: space-between; padding: 16px 18px; }
         .clubNewsKicker { color: var(--club-accent); display: inline-block; font-size: 11px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
-        .clubNewsHero h1, .clubNewsModalHead h2 { color: #061b3a; font-size: clamp(28px, 4vw, 44px); font-weight: 950; letter-spacing: -.04em; line-height: .95; margin: 7px 0; }
-        .clubNewsHero p { color: rgba(23,37,63,.68); font-size: 15px; font-weight: 700; margin: 0; max-width: 680px; }
+        .clubNewsHero h1, .clubNewsModalHead h2 { color: #061b3a; font-size: clamp(26px, 3.4vw, 38px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 4px 0 5px; }
+        .clubNewsHero p { color: rgba(23,37,63,.68); font-size: 13px; font-weight: 740; margin: 0; max-width: 680px; }
         .clubNewsPrimary, .clubNewsSecondary, .clubNewsActions button, .clubNewsEmpty button {
           align-items: center;
           border-radius: 999px;

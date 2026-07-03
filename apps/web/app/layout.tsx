@@ -2,6 +2,7 @@
 import './globals.css'
 import { Bebas_Neue, Inter, Outfit, Rajdhani } from 'next/font/google'
 import AppShellClient from '@/components/AppShellClient'
+import { BRAND } from '@/lib/branding'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -32,8 +33,8 @@ const rajdhani = Rajdhani({
 })
 
 export const metadata = {
-  title: 'Padelix',
-  description: 'Club Atlético Padelix',
+  title: BRAND.name.toUpperCase(),
+  description: BRAND.tagline,
 }
 
 // viewport OK

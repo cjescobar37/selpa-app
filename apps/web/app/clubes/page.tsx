@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { BRAND } from '@/lib/branding'
 
 type ClubCard = {
   id: string
@@ -64,7 +65,7 @@ export default async function ClubesPublicPage() {
     const stats = statsByClub.get(String(club.id))
     return {
       id: String(club.id),
-      name: String(club.name ?? 'Club Pamprax'),
+      name: String(club.name ?? `Club ${BRAND.name}`),
       city: club.city ?? null,
       province: club.province ?? null,
       logo_url: club.logo_url ?? null,
@@ -77,7 +78,7 @@ export default async function ClubesPublicPage() {
   return (
     <main className="publicClubsPage">
       <section className="publicClubsHero">
-        <span>Clubes Pamprax</span>
+        <span>Clubes {BRAND.name}</span>
         <h1>Comunidades activas</h1>
         <p>Explorá clubes, torneos, jugadores y categorías disponibles dentro del circuito.</p>
       </section>
@@ -85,7 +86,7 @@ export default async function ClubesPublicPage() {
       <section className="publicClubsGrid">
         {clubs.length ? clubs.map((club) => {
           const logo = buildAssetProxyUrl(club.logo_url)
-          const location = [club.city, club.province].filter(Boolean).join(' · ') || 'Club Pamprax'
+          const location = [club.city, club.province].filter(Boolean).join(' · ') || `Club ${BRAND.name}`
           const nameSize = club.name.length > 30 ? '22px' : club.name.length > 18 ? '26px' : club.name.length > 15 ? '30px' : undefined
           return (
             <Link className="publicClubCard" href={`/clubs/${club.id}`} key={club.id} aria-label={`Ver club ${club.name}`}>

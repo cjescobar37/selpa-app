@@ -1581,7 +1581,7 @@
 @media (max-width: 980px){ .publicNewsGrid, .publicAdsGrid, .publicHeroSide{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media (max-width: 720px){ .publicNewsGrid, .publicAdsGrid, .publicHeroSide{ grid-template-columns: 1fr; } .publicHeroHeadline{ font-size: 40px; } }
 
-/* Public guest experience refresh: neutral Pamprax presentation, no club themes. */
+/* Public guest experience refresh: neutral SELPA presentation, no club themes. */
 .PampraxAccentBar{
   background:linear-gradient(180deg,#22d3ee 0%,#67e8f9 42%,#ec4899 100%);
   border-radius:999px;
@@ -1649,29 +1649,31 @@
 .px-homeHeroCompact,
 .publicTournamentHero,
 .publicRankingHero,
+.publicClubsHero,
 .px-publicNewsHero{
   background:
     radial-gradient(circle at 12% 0%, rgba(34,211,238,.26), transparent 36%),
     radial-gradient(circle at 88% 10%, rgba(236,72,153,.1), transparent 30%),
     linear-gradient(135deg, #020617, #061b3a 58%, #0f274a) !important;
   border: 1px solid rgba(103,232,249,.14) !important;
-  border-radius:22px !important;
-  box-shadow:0 22px 58px rgba(2,6,23,.16) !important;
+  border-radius:20px !important;
+  box-shadow:0 16px 42px rgba(2,6,23,.14) !important;
   color:#fff !important;
-  min-height: 230px !important;
+  min-height: 150px !important;
   overflow:hidden !important;
-  padding:clamp(24px,4.5vw,42px) !important;
+  padding:clamp(16px,3vw,26px) !important;
   position:relative !important;
 }
 
 .px-homeHeroCompact::after,
 .publicTournamentHero::after,
 .publicRankingHero::after,
+.publicClubsHero::after,
 .px-publicNewsHero::after{
   background:linear-gradient(90deg,#22d3ee 0%,#67e8f9 40%,#8bd3ed 50%,#ec4899 100%) !important;
   bottom:0 !important;
   content:"" !important;
-  height:4px !important;
+  height:3px !important;
   left:0 !important;
   position:absolute !important;
   right:0 !important;
@@ -1680,9 +1682,10 @@
 .px-homeHeroCompact span,
 .publicTournamentHero span,
 .publicRankingHero span,
+.publicClubsHero span,
 .px-publicNewsHero span{
   color:#67e8f9 !important;
-  font-size:12px !important;
+  font-size:11px !important;
   font-weight:950 !important;
   letter-spacing:.08em !important;
   text-transform:uppercase !important;
@@ -1691,25 +1694,27 @@
 .px-homeHeroCompact h1,
 .publicTournamentHero h1,
 .publicRankingHero h1,
+.publicClubsHero h1,
 .px-publicNewsHero h1{
   color:#fff !important;
-  font-size:clamp(38px,6vw,68px) !important;
+  font-size:clamp(30px,4.6vw,48px) !important;
   font-weight:950 !important;
   letter-spacing:-.06em !important;
   line-height:.92 !important;
-  margin:8px 0 !important;
+  margin:5px 0 !important;
 }
 
 .px-homeHeroCompact p,
 .publicTournamentHero p,
 .publicRankingHero p,
+.publicClubsHero p,
 .px-publicNewsHero p{
   color:rgba(255,255,255,.78) !important;
-  font-size:16px !important;
+  font-size:14px !important;
   font-weight:750 !important;
   line-height:1.35 !important;
   margin:0 !important;
-  max-width:620px !important;
+  max-width:580px !important;
 }
 
 .publicTournamentGrid{
@@ -2769,9 +2774,10 @@
   .px-homeHeroCompact,
   .publicTournamentHero,
   .publicRankingHero,
+  .publicClubsHero,
   .px-publicNewsHero{
-    min-height:210px !important;
-    padding:24px 18px !important;
+    min-height:128px !important;
+    padding:16px 14px 18px !important;
   }
   .px-homeHeroCompact{
     grid-template-columns:1fr;
@@ -3245,13 +3251,13 @@
 
 .clubPublicAd{
   background:
-    radial-gradient(circle at 12% 8%, var(--club-soft, rgba(34,211,238,.13)), transparent 34%),
-    radial-gradient(circle at 92% 12%, color-mix(in srgb,var(--club-accent-2,#ec4899) 10%, transparent), transparent 32%),
-    linear-gradient(135deg,rgba(248,253,255,.96),rgba(241,247,252,.9));
-  border:1.5px dashed color-mix(in srgb, var(--club-accent,#06b6d4) 54%, var(--club-accent-2,#ec4899));
+    radial-gradient(circle at 8% 8%, color-mix(in srgb,var(--club-accent,#06b6d4) 30%, transparent), transparent 32%),
+    radial-gradient(circle at 92% 18%, color-mix(in srgb,var(--club-accent-2,#ec4899) 22%, transparent), transparent 30%),
+    linear-gradient(135deg,#031225 0%,#071936 58%,#0f172a 100%);
+  border:1px solid color-mix(in srgb, var(--club-accent,#06b6d4) 36%, rgba(255,255,255,.18));
   border-radius:24px;
-  box-shadow:0 18px 42px rgba(2,6,23,.08);
-  color:#071936 !important;
+  box-shadow:0 18px 42px rgba(2,6,23,.13), inset 0 0 0 1px rgba(255,255,255,.04);
+  color:#fff !important;
   display:block;
   min-height:170px;
   overflow:hidden;
@@ -3265,8 +3271,8 @@
 }
 
 .clubPublicAd:hover{
-  border-color:var(--club-accent,#06b6d4);
-  box-shadow:0 24px 52px var(--club-glow, rgba(34,211,238,.18));
+  border-color:color-mix(in srgb,var(--club-accent,#06b6d4) 62%, var(--club-accent-2,#ec4899));
+  box-shadow:0 24px 52px rgba(2,6,23,.18), 0 0 0 1px color-mix(in srgb,var(--club-accent-2,#ec4899) 16%, transparent) inset;
   transform:translateY(-2px);
 }
 
@@ -3279,7 +3285,9 @@
 }
 
 .clubPublicAd.has-image::after{
-  background:linear-gradient(180deg,transparent 0%,rgba(2,6,23,.72) 100%);
+  background:
+    linear-gradient(90deg,rgba(2,6,23,.86) 0%,rgba(2,6,23,.55) 48%,rgba(2,6,23,.22) 100%),
+    linear-gradient(180deg,rgba(2,6,23,.1) 0%,rgba(2,6,23,.76) 100%);
   content:"";
   inset:0;
   position:absolute;
@@ -3297,15 +3305,22 @@
 }
 
 .clubPublicAdBody span{
-  color:color-mix(in srgb, var(--club-accent,#06b6d4) 72%, #071936);
+  align-items:center;
+  background:rgba(255,255,255,.08);
+  border:1px solid color-mix(in srgb,var(--club-accent,#06b6d4) 34%, rgba(255,255,255,.16));
+  border-radius:999px;
+  color:color-mix(in srgb, var(--club-accent,#06b6d4) 72%, #fff);
+  display:inline-flex;
   font-size:11px;
   font-weight:950;
+  justify-self:start;
   letter-spacing:.08em;
+  padding:6px 9px;
   text-transform:uppercase;
 }
 
 .clubPublicAdBody strong{
-  color:#071936;
+  color:#fff;
   font-size:clamp(22px,2.4vw,34px);
   font-weight:950;
   letter-spacing:-.04em;
@@ -3313,7 +3328,7 @@
 }
 
 .clubPublicAdBody p{
-  color:#475569;
+  color:rgba(226,250,255,.76);
   font-size:13px;
   font-weight:650;
   line-height:1.35;
@@ -3322,21 +3337,33 @@
 }
 
 .clubPublicAdBody em{
+  align-items:center;
   align-self:start;
-  background:linear-gradient(135deg,color-mix(in srgb,var(--club-accent,#06b6d4) 12%, white),color-mix(in srgb,var(--club-accent-2,#ec4899) 10%, white));
-  border:1px solid color-mix(in srgb,var(--club-accent,#06b6d4) 20%, var(--club-accent-2,#ec4899));
+  background:linear-gradient(135deg,color-mix(in srgb,var(--club-accent,#06b6d4) 18%, rgba(255,255,255,.08)),color-mix(in srgb,var(--club-accent-2,#ec4899) 18%, rgba(255,255,255,.08)));
+  border:1px solid color-mix(in srgb,var(--club-accent,#06b6d4) 30%, rgba(255,255,255,.18));
   border-radius:999px;
-  color:#071936;
+  color:#e0faff;
+  display:inline-flex;
   font-size:11px;
   font-style:normal;
   font-weight:900;
+  gap:7px;
   padding:6px 9px;
+  transition:background .18s ease, color .18s ease;
 }
 
-.clubPublicAd.has-image .clubPublicAdBody strong,
-.clubPublicAd.has-image .clubPublicAdBody p,
-.clubPublicAd.has-image .clubPublicAdBody em{
-  color:white;
+.clubPublicAdBody em b{
+  font-size:14px;
+  line-height:1;
+  transition:transform .18s ease;
+}
+
+.clubPublicAd:hover .clubPublicAdBody em{
+  color:#fff;
+}
+
+.clubPublicAd:hover .clubPublicAdBody em b{
+  transform:translateX(3px);
 }
 
 .clubPublicFeaturedAd .clubPublicAd{
@@ -3789,7 +3816,7 @@
   cursor:pointer;
   display:grid;
   gap:12px;
-  grid-template-columns:126px minmax(0,1fr);
+  grid-template-columns:154px minmax(0,1fr);
   height:var(--tournament-card-height,326px);
   overflow:hidden;
   padding:13px;
@@ -3825,10 +3852,11 @@
 }
 
 .TournamentPublicCard__top{
-  align-items:center;
-  display:flex;
-  gap:14px;
-  justify-content:space-between;
+  align-items:start;
+  display:grid;
+  row-gap:7px;
+  grid-template-columns:1fr;
+  justify-content:stretch;
   min-height:36px;
   position:relative;
   z-index:2;
@@ -3866,9 +3894,34 @@
   width:100%;
 }
 
+.TournamentPublicCard.is-manual-flyer .TournamentPublicCard__poster{
+  background:#071426;
+  padding:0;
+}
+
+.TournamentPublicCard.is-manual-flyer{
+  grid-template-columns:164px minmax(0,1fr);
+}
+
+.TournamentPublicCard.is-manual-flyer .TournamentPublicCard__poster::after{
+  background:linear-gradient(180deg,rgba(2,6,23,.04),rgba(2,6,23,.16));
+}
+
+.TournamentPublicCard.is-manual-flyer .TournamentPublicCard__poster img{
+  height:100%;
+  object-fit:cover;
+  opacity:1;
+  width:100%;
+}
+
 .TournamentPublicCard:hover .TournamentPublicCard__poster img{
   opacity:.96;
   transform:scale(1.045);
+}
+
+.TournamentPublicCard.is-manual-flyer:hover .TournamentPublicCard__poster img{
+  opacity:1;
+  transform:scale(1.02);
 }
 
 .TournamentPublicCard__poster > span{
@@ -3891,8 +3944,10 @@
   display:grid;
   gap:0 8px;
   grid-template-columns:auto auto;
-  justify-items:start;
+  justify-content:center;
+  justify-items:center;
   min-width:0;
+  order:2;
   padding:0;
 }
 
@@ -4069,9 +4124,16 @@
   font-style:normal;
   font-weight:950;
   gap:6px;
-  justify-self:end;
+  justify-content:center;
+  justify-self:stretch;
+  line-height:1.05;
+  max-width:100%;
+  min-width:0;
+  order:1;
   padding:4px 7px;
-  white-space:nowrap;
+  text-align:center;
+  width:100%;
+  white-space:normal;
 }
 
 .TournamentPublicCard__status::before{
@@ -4109,6 +4171,10 @@
   background:rgba(100,116,139,.1);
   border-color:rgba(100,116,139,.22);
   color:#64748b;
+}
+
+.TournamentPublicCard.is-manual-flyer .TournamentPublicCard__status{
+  padding:5px 8px;
 }
 
 .TournamentPublicCard h3{
@@ -4231,7 +4297,9 @@
   flex-wrap:wrap;
   gap:8px;
   justify-content:center;
+  justify-self:center;
   margin-top:6px;
+  max-width:100%;
 }
 
 .TournamentPublicCard__actions a{
@@ -4246,8 +4314,8 @@
   display:inline-flex;
   gap:7px;
   justify-content:center;
-  min-width:134px;
-  padding:9px 12px;
+  min-width:108px;
+  padding:8px 11px;
   pointer-events:auto;
   text-decoration:none !important;
   transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease, filter .18s ease;
@@ -4272,82 +4340,408 @@
 }
 
 .clubPublicRankingGrid{
+  gap:16px;
   grid-template-columns:repeat(3,minmax(0,1fr));
 }
 
 .clubPublicRankingCard{
-  background:
-    linear-gradient(135deg,rgba(255,255,255,.96),rgba(248,253,255,.9)),
-    radial-gradient(circle at 12% 10%, rgba(6,182,212,.14), transparent 34%);
-  border:1px solid rgba(148,163,184,.22);
-  border-left:5px solid #06b6d4;
+  background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);
+  border:1px solid rgba(15,23,42,.08);
   border-radius:22px;
-  box-shadow:0 16px 36px rgba(2,6,23,.06);
-  padding:18px;
-}
-
-.clubPublicRankingCard--magenta{
-  background:
-    linear-gradient(135deg,rgba(255,255,255,.96),rgba(255,248,252,.9)),
-    radial-gradient(circle at 12% 10%, rgba(236,72,153,.14), transparent 34%);
-  border-left-color:#ec4899;
-}
-
-.clubPublicRankingCard > span{
-  color:color-mix(in srgb,#06b6d4 70%, #071936);
-  font-size:11px;
-  font-weight:950;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-}
-
-.clubPublicRankingCard h3{
-  color:#071936;
-  font-size:25px;
-  font-weight:950;
-  margin:8px 0 2px;
-}
-
-.clubPublicRankingCard p{
-  color:#64748b;
-  font-size:12px;
-  font-weight:850;
-  margin:0 0 14px;
-}
-
-.clubPublicRankingCard div{
-  background:rgba(7,25,54,.04);
-  border:1px solid rgba(7,25,54,.06);
-  border-radius:16px;
+  box-shadow:0 18px 40px rgba(2,6,23,.07);
+  color:inherit;
+  cursor:pointer;
   display:grid;
-  gap:3px;
-  padding:12px;
+  gap:0;
+  overflow:hidden;
+  padding:0;
+  position:relative;
+  text-decoration:none;
+  transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
-.clubPublicRankingCard em{
+.clubPublicRankingCard::before{
+  background:linear-gradient(90deg,#22d3ee 0%,rgba(34,211,238,.72) 46%,#ec4899 100%);
+  content:"";
+  height:3px;
+  left:0;
+  position:absolute;
+  right:0;
+  top:0;
+  transform:scaleX(.22);
+  transform-origin:left center;
+  transition:transform .32s ease;
+}
+
+.clubPublicRankingCard::after{
+  background:linear-gradient(180deg,rgba(34,211,238,.72),rgba(236,72,153,.72));
+  border-radius:999px;
+  bottom:20px;
+  content:"";
+  left:0;
+  opacity:.34;
+  position:absolute;
+  top:20px;
+  width:3px;
+  transition:opacity .18s ease;
+}
+
+.clubPublicRankingCard:hover{
+  border-color:rgba(34,211,238,.24);
+  box-shadow:0 24px 50px rgba(2,6,23,.1),0 0 0 3px rgba(34,211,238,.055);
+  transform:translateY(-2px);
+}
+
+.clubPublicRankingCard:hover::before{
+  transform:scaleX(1);
+}
+
+.clubPublicRankingCard:hover::after{
+  opacity:.68;
+}
+
+.clubPublicRankingCategoryHead{
+  align-items:center;
+  display:grid;
+  gap:2px;
+  justify-items:center;
+  padding:14px 16px 12px;
+  position:relative;
+  border-bottom:1px solid rgba(15,23,42,.07);
+}
+
+.clubPublicRankingCategoryHead span{
+  color:#071936;
+  font-size:30px;
+  font-weight:950;
+  letter-spacing:-.06em;
+  line-height:1;
+}
+
+.clubPublicRankingCategoryHead small{
+  background:transparent;
+  border:0;
+  border-radius:0;
   color:#64748b;
   font-size:10px;
-  font-style:normal;
   font-weight:950;
   letter-spacing:.08em;
+  padding:0;
   text-transform:uppercase;
 }
 
-.clubPublicRankingCard strong{
+.clubPublicRankingCategoryHead small.is-demo-label{
+  background:rgba(15,23,42,.04);
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:999px;
+  font-size:9px;
+  margin-top:5px;
+  padding:4px 7px;
+}
+
+.clubPublicRankingBranches{
+  display:grid;
+  gap:0;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:13px 12px 9px;
+}
+
+.clubPublicRankingBranches.is-single{
+  grid-template-columns:minmax(0,1fr);
+}
+
+.clubPublicRankingBranch{
+  align-content:start;
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  display:grid;
+  gap:9px;
+  min-width:0;
+  padding:1px 12px 0;
+  position:relative;
+}
+
+.clubPublicRankingBranches.is-single .clubPublicRankingBranch{
+  justify-self:center;
+  max-width:280px;
+  width:100%;
+}
+
+.clubPublicRankingBranches:not(.is-single) .clubPublicRankingBranch + .clubPublicRankingBranch{
+  border-left:1px solid rgba(15,23,42,.08);
+}
+
+.clubPublicRankingBranch.is-magenta{
+  border-color:rgba(15,23,42,.08);
+}
+
+.clubPublicRankingBranch.is-mixed{
+  border-color:rgba(139,92,246,.14);
+}
+
+.clubPublicRankingBranchTop{
+  align-items:center;
+  display:grid;
+  gap:8px;
+  justify-items:center;
+  justify-content:center;
+}
+
+.clubPublicRankingBranchTop span{
+  background:rgba(34,211,238,.08);
+  border:1px solid rgba(34,211,238,.14);
+  border-radius:999px;
+  color:#0f3d57;
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.08em;
+  padding:5px 9px;
+  text-transform:uppercase;
+}
+
+.clubPublicRankingBranch.is-magenta .clubPublicRankingBranchTop span{
+  background:rgba(236,72,153,.075);
+  border-color:rgba(236,72,153,.13);
+  color:#9d174d;
+}
+
+.clubPublicRankingBranch.is-mixed .clubPublicRankingBranchTop span{
+  background:rgba(139,92,246,.09);
+  border-color:rgba(139,92,246,.2);
+  color:#6d28d9;
+}
+
+.clubPublicRankingBranchTop b{
+  align-items:center;
+  background:#f8fafc;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:12px;
+  box-shadow:0 12px 24px rgba(2,6,23,.07);
   color:#071936;
-  font-size:15px;
-  font-weight:950;
+  display:grid;
+  flex:0 0 auto;
+  grid-template-columns:auto minmax(0,1fr);
+  justify-content:center;
+  min-height:38px;
+  overflow:hidden;
+  padding:0;
+  white-space:nowrap;
 }
 
-.clubPublicRankingCard small{
-  color:color-mix(in srgb,#06b6d4 70%, #071936);
+.clubPublicRankingBranch.is-magenta .clubPublicRankingBranchTop b{
+  border-color:rgba(236,72,153,.1);
+}
+
+.clubPublicRankingBranchTop b i,
+.clubPublicRankingBranchTop b em{
+  align-items:center;
+  display:inline-flex;
+  font-style:normal;
+  min-height:38px;
+}
+
+.clubPublicRankingBranchTop b i{
+  background:#081426;
+  color:#fff;
+  font-size:16px;
+  font-weight:950;
+  justify-content:center;
+  min-width:54px;
+  padding:0 14px;
+}
+
+.clubPublicRankingBranchTop b em{
+  background:#f5f7fa;
+  border-left:1px solid rgba(15,23,42,.08);
+  color:#0f172a;
   font-size:12px;
-  font-weight:950;
+  font-weight:760;
+  justify-content:center;
+  padding:0 16px;
 }
 
-.clubPublicRankingCard--magenta > span,
-.clubPublicRankingCard--magenta small{
-  color:color-mix(in srgb,#ec4899 72%, #071936);
+.clubPublicRankingBranch.is-mixed .clubPublicRankingBranchTop b{
+  border-color:rgba(139,92,246,.24);
+}
+
+.clubPublicRankingPair{
+  align-items:start;
+  display:grid;
+  gap:10px;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  justify-items:center;
+  min-height:112px;
+}
+
+.clubPublicRankingAvatar{
+  align-items:center;
+  background:linear-gradient(135deg,#f8fafc,#fff);
+  border:3px solid #fff;
+  border-radius:999px;
+  box-shadow:0 14px 26px rgba(2,6,23,.1);
+  color:#075985;
+  display:inline-flex;
+  font-size:21px;
+  font-weight:950;
+  height:68px;
+  justify-content:center;
+  letter-spacing:-.04em;
+  position:relative;
+  width:68px;
+  z-index:1;
+}
+
+.clubPublicRankingAvatar.has-image{
+  background:#fff;
+  overflow:hidden;
+  padding:0;
+}
+
+.clubPublicRankingAvatar img{
+  display:block;
+  height:100%;
+  object-fit:cover;
+  width:100%;
+}
+
+.clubPublicRankingAvatar.is-cyan{
+  background:linear-gradient(135deg,rgba(34,211,238,.16),#fff 64%,rgba(15,23,42,.03));
+  border-color:rgba(34,211,238,.6);
+}
+
+.clubPublicRankingAvatar.is-magenta{
+  background:linear-gradient(135deg,rgba(236,72,153,.14),#fff 64%,rgba(15,23,42,.03));
+  border-color:rgba(236,72,153,.42);
+  color:#be185d;
+}
+
+.clubPublicRankingAvatar.is-mixed{
+  background:linear-gradient(135deg,rgba(139,92,246,.14),#fff 64%,rgba(15,23,42,.03));
+  border-color:rgba(139,92,246,.42);
+  color:#6d28d9;
+}
+
+.clubPublicRankingAvatar.is-secondary{
+  height:68px;
+  margin-top:0;
+  width:68px;
+}
+
+.clubPublicRankingAvatar.is-neutral{
+  background:linear-gradient(135deg,#f1f5f9,#fff);
+  border-color:rgba(148,163,184,.38);
+  color:#64748b;
+}
+
+.clubPublicRankingPlayer{
+  align-items:center;
+  display:grid;
+  gap:6px;
+  justify-items:center;
+  min-width:0;
+  text-align:center;
+  width:100%;
+  max-width:104px;
+}
+
+.clubPublicRankingPlayer strong{
+  color:#071936;
+  display:grid;
+  font-size:11px;
+  font-weight:950;
+  gap:1px;
+  line-height:1.02;
+  max-width:100%;
+  min-width:0;
+  overflow:hidden;
+  text-align:center;
+  width:100%;
+}
+
+.clubPublicRankingPlayer strong span{
+  display:block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.clubPublicRankingPlayer.is-pending{
+  color:#64748b;
+  min-height:auto;
+  padding:0;
+}
+
+.clubPublicRankingPlayer.is-pending span{
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.06em;
+  line-height:1.15;
+  text-transform:uppercase;
+}
+
+.clubPublicRankingMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:center;
+  margin-top:1px;
+}
+
+.clubPublicRankingMeta span{
+  background:rgba(34,211,238,.1);
+  border:1px solid rgba(34,211,238,.2);
+  border-radius:999px;
+  color:#075985;
+  font-size:11px;
+  font-weight:950;
+  padding:6px 9px;
+}
+
+.clubPublicRankingFooter{
+  align-items:center;
+  background:rgba(2,8,23,.84);
+  border-top:1px solid rgba(103,232,249,.18);
+  color:#fff;
+  display:flex;
+  font-size:11px;
+  font-weight:950;
+  gap:6px;
+  justify-content:center;
+  letter-spacing:.01em;
+  min-height:42px;
+  padding:8px 14px;
+  text-transform:none;
+  transition:background .18s ease, color .18s ease, border-color .18s ease;
+}
+
+.clubPublicRankingFooter span{
+  display:inline-block;
+  transition:transform .18s ease;
+}
+
+.clubPublicRankingCard:hover .clubPublicRankingFooter{
+  background:#020817;
+  border-top-color:rgba(103,232,249,.34);
+  color:#fff;
+}
+
+.clubPublicRankingCard:hover .clubPublicRankingFooter span{
+  transform:translateX(4px);
+}
+
+.clubPublicRankingBranch.is-magenta .clubPublicRankingMeta span{
+  color:#be185d;
+  background:rgba(236,72,153,.09);
+  border-color:rgba(236,72,153,.18);
+}
+
+.clubPublicRankingBranch.is-mixed .clubPublicRankingMeta span{
+  background:rgba(139,92,246,.09);
+  border-color:rgba(139,92,246,.18);
+  color:#6d28d9;
 }
 
 .clubPublicSponsorGrid{
@@ -4356,6 +4750,233 @@
 
 .clubPublicSponsorGrid .clubPublicAd{
   min-height:220px;
+}
+
+.clubPublicSponsorsPanel{
+  background:
+    radial-gradient(circle at 0 0, color-mix(in srgb,var(--club-accent,#06b6d4) 28%, transparent), transparent 34%),
+    radial-gradient(circle at 100% 18%, color-mix(in srgb,var(--club-accent-2,#ec4899) 20%, transparent), transparent 30%),
+    linear-gradient(135deg,#020617 0%,#061b3a 55%,#071426 100%);
+  border:1px solid color-mix(in srgb,var(--club-accent,#06b6d4) 28%, rgba(255,255,255,.12));
+  border-radius:26px;
+  box-shadow:0 26px 64px rgba(2,6,23,.18);
+  color:#fff;
+  display:grid;
+  gap:20px;
+  grid-template-columns:minmax(230px,.3fr) minmax(0,.7fr);
+  overflow:hidden;
+  padding:clamp(18px,2.4vw,26px);
+  position:relative;
+}
+
+.clubPublicSponsorsPanel::after{
+  background:linear-gradient(90deg,var(--club-accent,#22d3ee) 0%, color-mix(in srgb,var(--club-accent,#22d3ee) 52%, var(--club-accent-2,#ec4899)) 44%, var(--club-accent-2,#ec4899) 100%);
+  bottom:0;
+  content:"";
+  height:4px;
+  left:0;
+  position:absolute;
+  right:0;
+}
+
+.clubPublicSponsorsIntro{
+  align-content:center;
+  display:grid;
+  gap:10px;
+  min-width:0;
+  position:relative;
+  z-index:1;
+}
+
+.clubPublicSponsorsIntro span{
+  color:color-mix(in srgb,var(--club-accent,#67e8f9) 82%, #fff);
+  font-size:11px;
+  font-weight:950;
+  letter-spacing:.11em;
+  text-transform:uppercase;
+}
+
+.clubPublicSponsorsIntro h2{
+  font-size:clamp(27px,3vw,40px);
+  font-weight:950;
+  letter-spacing:-.06em;
+  line-height:.94;
+  margin:0;
+  max-width:350px;
+}
+
+.clubPublicSponsorsIntro p{
+  color:rgba(226,250,255,.74);
+  font-size:14px;
+  font-weight:760;
+  line-height:1.35;
+  margin:0;
+  max-width:330px;
+}
+
+.clubPublicSponsorsIntro button{
+  background:rgba(255,255,255,.08);
+  border:1px solid color-mix(in srgb,var(--club-accent,#67e8f9) 42%, rgba(255,255,255,.18));
+  border-radius:999px;
+  color:#e0faff;
+  cursor:default;
+  font:inherit;
+  font-size:12px;
+  font-weight:950;
+  justify-self:start;
+  margin-top:6px;
+  padding:10px 13px;
+}
+
+.clubPublicSponsorCarousel{
+  display:grid;
+  gap:14px;
+  grid-auto-columns:minmax(230px,260px);
+  grid-auto-flow:column;
+  min-width:0;
+  overflow-x:auto;
+  overscroll-behavior-inline:contain;
+  padding:4px 4px 16px;
+  position:relative;
+  scroll-behavior:smooth;
+  scroll-snap-type:x proximity;
+  scrollbar-color:color-mix(in srgb,var(--club-accent,#67e8f9) 54%, transparent) rgba(255,255,255,.08);
+  z-index:1;
+}
+
+.clubPublicSponsorCarousel::-webkit-scrollbar{
+  height:8px;
+}
+
+.clubPublicSponsorCarousel::-webkit-scrollbar-track{
+  background:rgba(255,255,255,.08);
+  border-radius:999px;
+}
+
+.clubPublicSponsorCarousel::-webkit-scrollbar-thumb{
+  background:linear-gradient(90deg,var(--club-accent,#22d3ee),var(--club-accent-2,#ec4899));
+  border-radius:999px;
+}
+
+.clubPublicSponsorCard{
+  align-content:start;
+  background:rgba(8,30,58,.82);
+  border:1px solid color-mix(in srgb,var(--club-accent,#67e8f9) 16%, rgba(255,255,255,.08));
+  border-radius:18px;
+  box-shadow:0 18px 40px rgba(2,6,23,.18);
+  color:#fff;
+  display:grid;
+  gap:11px;
+  min-height:238px;
+  overflow:hidden;
+  padding:14px;
+  position:relative;
+  scroll-snap-align:start;
+  text-decoration:none;
+  transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.clubPublicSponsorCard:hover{
+  border-color:color-mix(in srgb,var(--club-accent,#67e8f9) 44%, rgba(255,255,255,.14));
+  box-shadow:0 22px 50px rgba(2,6,23,.24), 0 0 0 1px color-mix(in srgb,var(--club-accent-2,#ec4899) 12%, transparent) inset;
+  transform:translateY(-2px);
+}
+
+.clubPublicSponsorBadge{
+  align-items:center;
+  background:color-mix(in srgb,var(--club-accent,#22d3ee) 9%, transparent);
+  border:1px solid color-mix(in srgb,var(--club-accent,#67e8f9) 20%, rgba(255,255,255,.1));
+  border-radius:999px;
+  color:color-mix(in srgb,var(--club-accent,#9ff6ff) 74%, #fff);
+  display:inline-flex;
+  font-size:9px;
+  font-weight:950;
+  justify-self:start;
+  letter-spacing:.04em;
+  padding:5px 8px;
+  text-transform:uppercase;
+}
+
+.clubPublicSponsorLogo{
+  align-items:center;
+  background:rgba(255,255,255,.055);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:15px;
+  color:#e0faff;
+  display:flex;
+  font-size:30px;
+  font-weight:950;
+  height:92px;
+  justify-content:center;
+  overflow:hidden;
+  padding:14px;
+  text-align:center;
+}
+
+.clubPublicSponsorLogo.has-image{
+  background:rgba(255,255,255,.94);
+}
+
+.clubPublicSponsorLogo img{
+  display:block;
+  max-height:76px;
+  max-width:100%;
+  object-fit:contain;
+}
+
+.clubPublicSponsorBody{
+  display:grid;
+  gap:7px;
+  min-width:0;
+}
+
+.clubPublicSponsorBody strong{
+  color:#fff;
+  font-size:18px;
+  font-weight:950;
+  letter-spacing:-.035em;
+  line-height:1;
+  overflow-wrap:anywhere;
+}
+
+.clubPublicSponsorBody p{
+  color:rgba(226,250,255,.68);
+  display:-webkit-box;
+  font-size:12px;
+  font-weight:720;
+  line-height:1.35;
+  margin:0;
+  overflow:hidden;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+}
+
+.clubPublicSponsorBody em{
+  align-items:center;
+  color:color-mix(in srgb,var(--club-accent,#67e8f9) 78%, #fff);
+  display:inline-flex;
+  font-size:11px;
+  font-style:normal;
+  font-weight:950;
+  gap:7px;
+  justify-self:start;
+  margin-top:2px;
+  text-transform:uppercase;
+  transition:color .18s ease;
+}
+
+.clubPublicSponsorBody b{
+  font-size:15px;
+  line-height:1;
+  transition:transform .18s ease;
+}
+
+.clubPublicSponsorCard:hover .clubPublicSponsorBody em{
+  color:#fff;
+}
+
+.clubPublicSponsorCard:hover .clubPublicSponsorBody b{
+  transform:translateX(3px);
 }
 
 .clubPublicEmpty{
@@ -4404,10 +5025,21 @@
     min-height:128px;
   }
 
+  .clubPublicSponsorsPanel{
+    grid-template-columns:1fr;
+  }
+
+  .clubPublicSponsorCarousel{
+    grid-auto-columns:minmax(220px,42vw);
+  }
+
   .clubPublicNewsGrid,
-  .clubPublicRankingGrid,
   .clubPublicSponsorGrid{
     grid-template-columns:1fr;
+  }
+
+  .clubPublicRankingGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
   }
 
   .clubPublicNewsGrid{
@@ -4426,10 +5058,27 @@
 }
 
 @media (max-width: 720px){
+  .clubPublicRankingGrid{
+    grid-template-columns:1fr;
+  }
+
+  .clubPublicSponsorsPanel{
+    border-radius:22px;
+    padding:18px;
+  }
+
+  .clubPublicSponsorCarousel{
+    grid-auto-columns:minmax(220px,78vw);
+  }
+
   .TournamentPublicCard{
     gap:10px;
-    grid-template-columns:112px minmax(0,1fr);
+    grid-template-columns:130px minmax(0,1fr);
     padding:12px;
+  }
+
+  .TournamentPublicCard.is-manual-flyer{
+    grid-template-columns:136px minmax(0,1fr);
   }
 
   .TournamentPublicCard__poster{
@@ -4461,6 +5110,18 @@
   .TournamentPublicCard__actions a{
     min-width:128px;
     padding:10px 12px;
+  }
+}
+
+@media (max-width: 560px){
+  .clubPublicRankingBranches{
+    grid-template-columns:1fr;
+  }
+
+  .clubPublicRankingBranches:not(.is-single) .clubPublicRankingBranch + .clubPublicRankingBranch{
+    border-left:0;
+    border-top:1px solid rgba(15,23,42,.08);
+    padding-top:16px;
   }
 }
 

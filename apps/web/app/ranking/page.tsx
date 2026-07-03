@@ -1,5 +1,6 @@
 import PublicRankingExperience, { type PublicRankingPlayer } from '@/components/public/PublicRankingExperience'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { BRAND } from '@/lib/branding'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,10 +31,17 @@ type ProfileRow = {
 
 function displayName(player: ClubPlayerRow, profile?: ProfileRow | null) {
   const fullName = `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim()
-  return player.display_name || profile?.display_name || fullName || 'Jugador Pamprax'
+  return player.display_name || profile?.display_name || fullName || `Jugador ${BRAND.name}`
 }
 
-export default async function RankingPublicPage() {
+export default async function RankingPublicPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ clubId?: string; club?: string; category?: string }>
+}) {
+  const params = await searchParams
+  const initialClubId = params?.clubId ?? params?.club ?? null
+  const initialCategory = params?.category ?? null
   const { data: playersData } = await supabaseAdmin
     .from('club_players')
     .select('id,club_id,user_id,display_name,category,gender,ranking_points,approved_at')
@@ -59,7 +67,7 @@ export default async function RankingPublicPage() {
     return {
       id: player.id,
       clubId: player.club_id,
-      clubName: club?.name ?? 'Club Pamprax',
+      clubName: club?.name ?? `Club ${BRAND.name}`,
       clubLogoUrl: club?.logo_url ?? null,
       clubThemeKey: club?.theme_key ?? null,
       name: displayName(player, profile),
@@ -74,7 +82,7 @@ export default async function RankingPublicPage() {
 
   return (
     <div className="px-wrap">
-      <PublicRankingExperience players={publicPlayers} clubs={clubs} />
+      <PublicRankingExperience players={publicPlayers} clubs={clubs} initialClubId={initialClubId} initialCategory={initialCategory} />
     </div>
   )
 }

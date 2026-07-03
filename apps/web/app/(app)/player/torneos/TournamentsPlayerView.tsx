@@ -7,6 +7,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
+import { BRAND } from '@/lib/branding'
 
 type ViewMode = 'mine' | 'calendar' | 'explore' | 'rules'
 
@@ -145,7 +146,7 @@ function pageCopy(mode: ViewMode) {
     return {
       kicker: 'Explorar',
       title: 'Torneos públicos',
-      body: 'Encontrá torneos abiertos de todos los clubes Pamprax.',
+      body: `Encontrá torneos abiertos de todos los clubes ${BRAND.name}.`,
       icon: Compass,
     }
   }
@@ -153,7 +154,7 @@ function pageCopy(mode: ViewMode) {
     return {
       kicker: 'Reglamento',
       title: 'Reglas de competencia',
-      body: 'Reglamento general Pamprax y documento del club activo cuando esté disponible.',
+      body: `Reglamento general ${BRAND.name} y documento del club activo cuando esté disponible.`,
       icon: FileText,
     }
   }
@@ -349,7 +350,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
             <span className="playerTournamentClubMark">
               {logoUrl ? <img src={logoUrl} alt="" /> : getClubInitials(club?.name)}
             </span>
-            <b>{club?.name ?? 'Club Pamprax'}</b>
+            <b>{club?.name ?? `Club ${BRAND.name}`}</b>
           </div>
           <strong>{tournament.name}</strong>
           <p>{formatCategory(tournament.category)} · {formatGender(tournament.gender)}</p>
@@ -390,7 +391,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         <section className="playerRulesGrid">
           <article>
             <span>Reglamento general</span>
-            <strong>Reglas Pamprax</strong>
+            <strong>Reglas {BRAND.name}</strong>
             <p>Consulta las bases generales de competencia, inscripción, resultados y conducta deportiva. El documento completo se publicará desde la plataforma.</p>
           </article>
           <article>
@@ -455,12 +456,12 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
       <style>{`
         .playerTournamentsShell { background: radial-gradient(circle at 8% 0%, var(--t-glow), transparent 34%), #f3f7fb; color: #061b3a; display: grid; gap: 16px; margin: 0 auto; max-width: 1180px; padding: 18px; width: 100%; }
         .playerTournamentsHero, .playerTournamentFilters, .playerTournamentCard, .playerTournamentEmpty, .playerRulesGrid article { background: rgba(255,255,255,.9); border: 1px solid #e2e8f0; border-radius: 22px; box-shadow: 0 18px 48px rgba(15,23,42,.07); }
-        .playerTournamentsHero { align-items: center; background: radial-gradient(circle at 12% 0%, var(--t-soft), transparent 34%), linear-gradient(135deg, #fff, #f8fbff); display: flex; justify-content: space-between; gap: 16px; padding: 22px; position: relative; overflow: hidden; }
+        .playerTournamentsHero { align-items: center; background: radial-gradient(circle at 12% 0%, var(--t-soft), transparent 34%), linear-gradient(135deg, #fff, #f8fbff); display: flex; justify-content: space-between; gap: 14px; padding: 16px 18px; position: relative; overflow: hidden; }
         .playerTournamentsHero::before { background: linear-gradient(90deg, var(--t-accent), var(--t-accent-2)); content: ""; height: 4px; left: 22px; position: absolute; right: 22px; top: 0; }
         .playerTournamentsHero span, .playerTournamentFilters span, .playerRulesGrid span { color: var(--t-accent); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
-        .playerTournamentsHero h1 { font-size: clamp(32px, 5vw, 54px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 5px 0 7px; }
-        .playerTournamentsHero p { color: #64748b; font-weight: 800; margin: 0; }
-        .playerTournamentsHero i { align-items: center; background: color-mix(in srgb, var(--t-accent) 12%, white); border: 1px solid color-mix(in srgb, var(--t-accent) 30%, white); border-radius: 18px; color: var(--t-accent); display: flex; flex: 0 0 auto; height: 58px; justify-content: center; width: 58px; }
+        .playerTournamentsHero h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 4px 0 5px; }
+        .playerTournamentsHero p { color: #64748b; font-size: 13px; font-weight: 800; margin: 0; }
+        .playerTournamentsHero i { align-items: center; background: color-mix(in srgb, var(--t-accent) 12%, white); border: 1px solid color-mix(in srgb, var(--t-accent) 30%, white); border-radius: 16px; color: var(--t-accent); display: flex; flex: 0 0 auto; height: 48px; justify-content: center; width: 48px; }
         .playerTournamentFilters { display: grid; gap: 12px; grid-template-columns: 160px 160px minmax(0, 1fr); padding: 13px; }
         .playerTournamentFilters label { display: grid; gap: 6px; min-width: 0; }
         .playerTournamentFilters select, .playerTournamentFilters input { background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; color: #061b3a; font: inherit; font-weight: 850; min-width: 0; padding: 10px 11px; }

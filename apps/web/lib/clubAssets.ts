@@ -161,6 +161,38 @@ export async function uploadClubRulesPdf(params: {
   })
 }
 
+export async function uploadTournamentFlyer(params: {
+  file: File
+  clubId?: string | null
+  tournamentId?: string | null
+  folder?: string
+}) {
+  const { file, clubId, tournamentId, folder = 'tournament-flyers' } = params
+
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('El flyer no puede superar los 5 MB.')
+  }
+
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+  if (!['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+    throw new Error('El flyer debe ser JPG, PNG o WEBP.')
+  }
+
+  if (file.type && !file.type.toLowerCase().startsWith('image/')) {
+    throw new Error('El flyer debe ser una imagen.')
+  }
+
+  const safeBase = sanitizeFileName(file.name.replace(/\.[^.]+$/, '')) || 'flyer'
+  const target = tournamentId || 'pending'
+  const objectPath = `${folder}/${clubId || 'pending'}/${target}/${Date.now()}-${safeBase}.${ext}`
+
+  return uploadToFirstAvailableBucket({
+    buckets: CLUB_LOGO_BUCKET_CANDIDATES,
+    file,
+    objectPath,
+  })
+}
+
 export async function uploadPlayerProfileImage(params: {
   file: File
   userId?: string | null
