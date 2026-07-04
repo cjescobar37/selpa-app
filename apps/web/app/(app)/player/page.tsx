@@ -189,6 +189,7 @@ export default function PlayerHomePage() {
   const activeClub = session.activeClubId ? clubsById.get(session.activeClubId) : undefined
   const activePlayer = activeClub ? playerByClubId.get(activeClub.id) : undefined
   const activeTheme = getClubTheme(session.activeClubId ? clubThemeKeys[session.activeClubId] : null)
+  const activeRankingLabel = activePlayer?.ranking_points ? 'Ranking en curso' : 'Sin ranking'
   const activePartnerName = useMemo(() => {
     const activePartnership = partnerships.find((partnership) => (
       activeClub ? partnership.club_id === activeClub.id : true
@@ -223,6 +224,15 @@ export default function PlayerHomePage() {
 
   const tournamentById = useMemo(() => new Map(tournaments.map((tournament) => [tournament.id, tournament])), [tournaments])
   const teamIds = useMemo(() => myTeams.map((team) => team.id), [myTeams])
+  const nextTournament = upcomingTournaments[0]
+  const nextTournamentClub = nextTournament ? clubsById.get(nextTournament.club_id) : undefined
+  const sortedPlayerClubs = useMemo(() => {
+    return [...session.clubs].sort((left, right) => {
+      if (left.id === session.activeClubId) return -1
+      if (right.id === session.activeClubId) return 1
+      return left.name.localeCompare(right.name)
+    })
+  }, [session.activeClubId, session.clubs])
   const myTournamentCards = useMemo(() => {
     return registrations
       .map((registration) => {
@@ -472,42 +482,80 @@ export default function PlayerHomePage() {
           <span className="playerHomeHeroCard__category">
             {activePlayer?.category ? `Categoría ${activePlayer.category}` : 'Categoría por definir'}
           </span>
-          <strong>Sin Ranking</strong>
+          <strong>{activeRankingLabel}</strong>
           <span className="playerHomeHeroCard__points">{activePlayer?.ranking_points ?? 0} pts</span>
         </div>
       </section>
 
-      <section className="playerQuickGrid">
-        <Link href="/perfil">
-          <UserRound size={18} />
-          <span>Mi perfil</span>
-          <strong>{session.user.name ?? 'Ver datos'}</strong>
+      <section className="playerPriorityPanel" aria-label="Acción principal del jugador">
+        {nextTournament ? (
+          <Link href={`/torneos/${nextTournament.id}`} className="playerPriorityCard">
+            <span>Próximo torneo</span>
+            <strong>{nextTournament.name}</strong>
+            <small>{nextTournamentClub?.name ?? 'Club'} · {formatDate(nextTournament.starts_on ?? nextTournament.start_date)}</small>
+            <b>Ver torneo <ChevronRight size={16} /></b>
+          </Link>
+        ) : activeClub ? (
+          <Link href={`/player/${activeClub.id}`} className="playerPriorityCard">
+            <span>Club activo</span>
+            <strong>{activeClub.name}</strong>
+            <small>{activePlayer ? `${activePlayer.category ?? 'Sin cat.'} · ${normalizeGender(activePlayer.gender)}` : 'Tu espacio deportivo del club'}</small>
+            <b>Entrar al club <ChevronRight size={16} /></b>
+          </Link>
+        ) : (
+          <Link href="/clubs" className="playerPriorityCard">
+            <span>Primer paso</span>
+            <strong>Elegí un club</strong>
+            <small>Sumate a una comunidad para competir y ver torneos.</small>
+            <b>Ver clubes <ChevronRight size={16} /></b>
+          </Link>
+        )}
+
+        <div className="playerPrioritySide">
+          <a href="#mis-torneos">
+            <Trophy size={16} />
+            <span>Mis torneos</span>
+            <strong>{myTournamentCards.length}</strong>
+          </a>
+          <a href="#pareja-activa">
+            <UsersRound size={16} />
+            <span>{pendingInvites.length ? 'Invitaciones' : 'Pareja'}</span>
+            <strong>{pendingInvites.length || activePartnerName}</strong>
+          </a>
+        </div>
+      </section>
+
+      <section className="playerQuickGrid playerQuickGrid--secondary">
+        <Link href={activeClub ? `/player/${activeClub.id}` : '#clubes-activos'}>
+          <ShieldCheck size={18} />
+          <span>Club activo</span>
+          <strong>{activeClub?.name ?? 'Elegir'}</strong>
         </Link>
         <a href="#clubes-activos">
           <ShieldCheck size={18} />
-          <span>Clubes activos</span>
+          <span>Clubes</span>
           <strong>{session.clubs.length}</strong>
         </a>
         <Link href="/torneos">
           <CalendarDays size={18} />
-          <span>Torneos</span>
+          <span>Calendario</span>
           <strong>{upcomingTournaments.length}</strong>
         </Link>
-        <a href="#pareja-activa">
-          <UsersRound size={18} />
-          <span>Pareja activa</span>
-          <strong>{activePartnerName}</strong>
-        </a>
+        <Link href="/perfil">
+          <UserRound size={18} />
+          <span>Perfil</span>
+          <strong>Ver</strong>
+        </Link>
       </section>
 
       <section className="playerSection" id="clubes-activos">
         <header>
-          <span className="playerHomeKicker">Clubes activos</span>
-          <h2>Elegí dónde operar</h2>
+          <span className="playerHomeKicker">Club deportivo</span>
+          <h2>{activeClub ? 'Tu club activo' : 'Elegí dónde operar'}</h2>
         </header>
         {session.clubs.length ? (
           <div className="playerClubGrid">
-            {session.clubs.map((club) => {
+            {sortedPlayerClubs.map((club) => {
               const player = playerByClubId.get(club.id)
               const isActive = session.activeClubId === club.id
               const theme = getClubTheme(clubThemeKeys[club.id])
@@ -559,7 +607,7 @@ export default function PlayerHomePage() {
             <h2>Agenda competitiva</h2>
           </header>
           <div className="playerTournamentCards">
-            {upcomingTournaments.length ? upcomingTournaments.map((tournament) => {
+            {upcomingTournaments.length ? upcomingTournaments.slice(0, 3).map((tournament) => {
               const club = clubsById.get(tournament.club_id)
               return (
                 <TournamentPublicCard
@@ -723,7 +771,7 @@ export default function PlayerHomePage() {
         </article>
       </section>
 
-      <section className="playerSection">
+      <section className="playerSection playerNewsSection">
         <header>
           <span className="playerHomeKicker">Noticias</span>
           <h2>Contenido de tus clubes</h2>
@@ -823,6 +871,108 @@ export default function PlayerHomePage() {
         .playerHomeHeroCard strong { color: #fff; font-size: clamp(22px, 3vw, 32px); font-weight: 950; letter-spacing: -.03em; line-height: .98; max-width: 150px; overflow-wrap: anywhere; }
         .playerHomeHeroCard__points { color: color-mix(in srgb, var(--active-club-accent, #67e8f9) 72%, white); font-size: 16px; font-weight: 950; line-height: 1; }
         .playerHomeMessage { background: rgba(251,113,133,.13); border: 1px solid rgba(251,113,133,.26); border-radius: 12px; color: #ffe4e6; font-weight: 800; margin-top: 12px; padding: 10px 12px; }
+        .playerPriorityPanel {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: minmax(0, 1fr) 260px;
+        }
+        .playerPriorityCard,
+        .playerPrioritySide a {
+          background: rgba(255,255,255,.9);
+          border: 1px solid rgba(226,232,240,.92);
+          border-radius: 18px;
+          box-shadow: 0 16px 38px rgba(15,23,42,.07);
+          color: #061b3a;
+          min-width: 0;
+          text-decoration: none;
+          transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+        }
+        .playerPriorityCard {
+          display: grid;
+          gap: 6px;
+          overflow: hidden;
+          padding: 17px 18px;
+          position: relative;
+        }
+        .playerPriorityCard::before {
+          background: linear-gradient(180deg, var(--active-club-accent, #06b6d4), var(--active-club-accent-2, #ec4899));
+          bottom: 14px;
+          border-radius: 999px;
+          content: "";
+          left: 0;
+          position: absolute;
+          top: 14px;
+          width: 4px;
+        }
+        .playerPriorityCard:hover,
+        .playerPrioritySide a:hover {
+          border-color: color-mix(in srgb, var(--active-club-accent, #06b6d4) 34%, #e2e8f0);
+          box-shadow: 0 18px 42px color-mix(in srgb, var(--active-club-accent, #06b6d4) 11%, rgba(15,23,42,.08));
+          transform: translateY(-1px);
+        }
+        .playerPriorityCard span,
+        .playerPrioritySide span {
+          color: #64748b;
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: .04em;
+          text-transform: uppercase;
+        }
+        .playerPriorityCard strong {
+          font-size: clamp(20px, 3vw, 30px);
+          font-weight: 950;
+          letter-spacing: -.035em;
+          line-height: 1.02;
+          max-width: 22ch;
+        }
+        .playerPriorityCard small {
+          color: #475569;
+          font-size: 13px;
+          font-weight: 800;
+          line-height: 1.25;
+        }
+        .playerPriorityCard b {
+          align-items: center;
+          color: color-mix(in srgb, var(--active-club-accent, #0891b2) 70%, #061b3a);
+          display: inline-flex;
+          font-size: 13px;
+          font-weight: 950;
+          gap: 5px;
+          margin-top: 2px;
+        }
+        .playerPriorityCard b svg,
+        .playerPrioritySide a svg {
+          transition: transform .18s ease;
+        }
+        .playerPriorityCard:hover b svg {
+          transform: translateX(3px);
+        }
+        .playerPrioritySide {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        .playerPrioritySide a {
+          align-items: center;
+          display: grid;
+          gap: 4px 10px;
+          grid-template-columns: 28px minmax(0, 1fr);
+          padding: 12px;
+        }
+        .playerPrioritySide svg {
+          color: var(--active-club-accent, #0891b2);
+          grid-row: 1 / span 2;
+        }
+        .playerPrioritySide strong {
+          color: #061b3a;
+          font-size: 19px;
+          font-weight: 950;
+          line-height: 1;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
         .playerQuickGrid { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 12px; }
         .playerQuickGrid a { align-content: center; background: linear-gradient(135deg, #fff, #f8fafc); border: 1px solid #e2e8f0; border-radius: 16px; color: #061b3a; display: grid; gap: 4px 10px; grid-template-columns: 26px minmax(0, 1fr); min-height: 72px; min-width: 0; padding: 13px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
         .playerQuickGrid a:hover { border-color: color-mix(in srgb, var(--active-club-accent, #0891b2) 35%, #e2e8f0); box-shadow: 0 12px 24px rgba(15,23,42,.06); transform: translateY(-1px); }
@@ -914,20 +1064,242 @@ export default function PlayerHomePage() {
         .playerEmptyState a { background: #0ea5e9; border-radius: 999px; color: #fff; font-weight: 950; margin-top: 4px; padding: 8px 11px; text-decoration: none; }
         .playerEmptyState--compact { padding: 13px; }
         @media (max-width: 980px) {
-          .playerHomeHero, .playerDashboardGrid { grid-template-columns: 1fr; }
+          .playerHomeHero, .playerDashboardGrid, .playerPriorityPanel { grid-template-columns: 1fr; }
+          .playerPrioritySide { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .playerQuickGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .playerClubGrid, .playerNewsGrid { grid-template-columns: 1fr; }
         }
         @media (max-width: 560px) {
-          .playerHomeShell { padding: 12px; }
-          .playerHomeHero, .playerSection { border-radius: 18px; padding: 16px; }
-          .playerQuickGrid { gap: 8px; padding: 8px; }
-          .playerQuickGrid a { padding: 11px; }
-          .playerQuickGrid strong { font-size: 15px; }
-          .playerClubCard { grid-template-columns: 44px minmax(0, 1fr); }
+          .playerHomeShell {
+            gap: 10px;
+            padding: 8px;
+          }
+          .homeModePane {
+            gap: 10px;
+          }
+          .modePublicHomeEmbed {
+            margin: 0 -8px;
+          }
+          .playerHomePanel, .playerHomeHero, .playerSection, .playerQuickGrid {
+            border-radius: 16px;
+            box-shadow: 0 10px 26px rgba(15,23,42,.055);
+          }
+          .playerHomeHero {
+            align-items: start;
+            gap: 12px;
+            grid-template-columns: minmax(0, 1fr);
+            padding: 16px;
+          }
+          .playerHomeHero::after {
+            height: 2px;
+            left: 16px;
+            right: 16px;
+          }
+          .playerHomeKicker {
+            font-size: 10px;
+            letter-spacing: .035em;
+          }
+          .playerHomeHero h1 {
+            font-size: clamp(28px, 11vw, 38px);
+            line-height: .96;
+            margin: 5px 0 7px;
+          }
+          .playerHomeHero p {
+            font-size: 13px;
+            line-height: 1.28;
+            max-width: 100%;
+          }
+          .playerHomeHeroCard {
+            align-items: center;
+            display: grid;
+            gap: 8px;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            justify-items: start;
+            padding: 10px 11px;
+            text-align: left;
+            width: 100%;
+          }
+          .playerHomeHeroCard__category {
+            font-size: 9px;
+            max-width: 100%;
+            overflow: hidden;
+            padding: 6px 8px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+          .playerHomeHeroCard strong {
+            font-size: 18px;
+            line-height: 1;
+            max-width: none;
+            text-align: right;
+            white-space: nowrap;
+          }
+          .playerHomeHeroCard__points {
+            font-size: 13px;
+            white-space: nowrap;
+          }
+          .playerPriorityPanel {
+            gap: 7px;
+          }
+          .playerPriorityCard {
+            border-radius: 15px;
+            gap: 4px;
+            padding: 12px 13px 12px 15px;
+          }
+          .playerPriorityCard::before {
+            bottom: 12px;
+            top: 12px;
+            width: 3px;
+          }
+          .playerPriorityCard span,
+          .playerPrioritySide span {
+            font-size: 9px;
+            letter-spacing: .025em;
+          }
+          .playerPriorityCard strong {
+            font-size: 19px;
+            max-width: 100%;
+          }
+          .playerPriorityCard small {
+            font-size: 11px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+          .playerPriorityCard b {
+            font-size: 12px;
+          }
+          .playerPrioritySide {
+            gap: 7px;
+          }
+          .playerPrioritySide a {
+            border-radius: 13px;
+            gap: 2px 8px;
+            grid-template-columns: 22px minmax(0, 1fr);
+            padding: 9px;
+          }
+          .playerPrioritySide svg {
+            height: 15px;
+            width: 15px;
+          }
+          .playerPrioritySide strong {
+            font-size: 14px;
+          }
+          .playerQuickGrid {
+            gap: 7px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            padding: 7px;
+          }
+          .playerQuickGrid--secondary {
+            display: none;
+          }
+          .playerQuickGrid a {
+            border-radius: 13px;
+            gap: 2px 8px;
+            grid-template-columns: 22px minmax(0, 1fr);
+            min-height: 58px;
+            padding: 9px;
+          }
+          .playerQuickGrid svg {
+            height: 16px;
+            width: 16px;
+          }
+          .playerQuickGrid span {
+            font-size: 9px;
+            letter-spacing: .02em;
+          }
+          .playerQuickGrid strong {
+            font-size: 14px;
+          }
+          .playerSection {
+            gap: 10px;
+            padding: 12px;
+          }
+          .playerSection header h2 {
+            font-size: 19px;
+            line-height: 1.04;
+            margin-top: 2px;
+          }
+          .playerClubGrid,
+          .playerTournamentCards,
+          .playerTournamentList,
+          .playerPartnerList,
+          .playerSportSummary,
+          .playerNewsGrid {
+            gap: 8px;
+          }
+          .playerClubCard {
+            border-radius: 14px;
+            gap: 9px;
+            grid-template-columns: 38px minmax(0, 1fr);
+            padding: 10px;
+          }
+          .playerClubLogo, .playerPartnerCard > span {
+            border-radius: 12px;
+            height: 38px;
+            width: 38px;
+          }
+          .playerClubCard strong {
+            font-size: 14px;
+          }
+          .playerClubCard span {
+            font-size: 11px;
+            margin-top: 2px;
+          }
           .playerClubActions { grid-column: 1 / -1; grid-template-columns: auto auto; justify-content: start; justify-items: start; }
-          .playerMyTournamentCard { align-items: start; grid-template-columns: minmax(0, 1fr) 34px; padding: 12px; }
+          .playerMyTournamentCard {
+            align-items: center;
+            border-radius: 13px;
+            gap: 9px;
+            grid-template-columns: minmax(0, 1fr) 30px;
+            padding: 10px;
+          }
+          .playerMyTournamentCard__body {
+            gap: 4px;
+          }
+          .playerMyTournamentCard__status {
+            font-size: 9px;
+            padding: 4px 7px;
+          }
           .playerMyTournamentCard strong { white-space: normal; }
+          .playerMyTournamentCard small,
+          .playerMyTournamentCard em {
+            font-size: 11px;
+          }
+          .playerMyTournamentCard__cta {
+            height: 30px;
+            width: 30px;
+          }
+          .playerPartnerCard,
+          .playerSportSummary > a,
+          .playerRecentStack div,
+          .playerInviteStack div,
+          .playerNewsGrid article,
+          .playerEmptyState {
+            border-radius: 13px;
+            padding: 10px;
+          }
+          .playerEmptyState--compact {
+            padding: 10px;
+          }
+          .playerNewsSection {
+            display: none;
+          }
+        }
+        @media (max-width: 390px) {
+          .playerHomeHeroCard {
+            grid-template-columns: minmax(0, 1fr) auto;
+          }
+          .playerHomeHeroCard__points {
+            grid-column: 2;
+          }
+          .playerQuickGrid a {
+            min-height: 54px;
+            padding: 8px;
+          }
+          .playerQuickGrid strong {
+            font-size: 13px;
+          }
         }
       `}</style>
     </div>
