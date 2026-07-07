@@ -865,8 +865,20 @@ export default function AppNavbarClient() {
 
     return (
       <div className="px-dd px-clubWrap px-mobileClubWrap">
-        <button type="button" className="px-mobileClubBtn px-clubBtn--themed" style={clubThemeStyle} onClick={() => setClubOpen((v) => !v)} aria-label="Club activo">
+        <button
+          type="button"
+          className="px-mobileClubBtn px-clubBtn--themed"
+          style={clubThemeStyle}
+          onClick={() => {
+            setClubOpen((v) => !v)
+            setMobileMenuOpen(false)
+            setUserOpen(false)
+            setNotificationsOpen(false)
+          }}
+          aria-label={`Club activo: ${displayClubName}`}
+        >
           <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
+          <span className="px-mobileClubName">{shorten(displayClubName, 20)}</span>
           <ChevronDown size={14} className="px-caret" />
         </button>
         {renderClubMenu()}
@@ -879,22 +891,7 @@ export default function AppNavbarClient() {
       return <Link className="px-loginBtn px-mobileLogin" href="/login">Login</Link>
     }
 
-    return (
-      <button
-        type="button"
-        className="px-burger"
-        onClick={() => {
-          setMobileMenuOpen((v) => !v)
-          setUserOpen(false)
-          setClubOpen(false)
-          setNotificationsOpen(false)
-        }}
-        aria-label="Abrir menú"
-        aria-expanded={mobileMenuOpen}
-      >
-        {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
-      </button>
-    )
+    return null
   }
 
   function renderMobileRight() {
@@ -935,12 +932,37 @@ export default function AppNavbarClient() {
           </Link>
         ) : null}
         <div className="px-userWrap px-dd">
-          <button type="button" className="px-mobileUserBtn" onClick={() => setUserOpen((v) => !v)} aria-label="Mi cuenta">
+          <button
+            type="button"
+            className="px-mobileUserBtn"
+            onClick={() => {
+              setUserOpen((v) => !v)
+              setMobileMenuOpen(false)
+              setClubOpen(false)
+              setNotificationsOpen(false)
+            }}
+            aria-label="Mi cuenta"
+          >
             <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
             <ChevronDown size={14} className="px-caret" />
           </button>
           {renderUserMenu()}
         </div>
+        <button
+          type="button"
+          className="px-burger px-burger--menu"
+          onClick={() => {
+            setMobileMenuOpen((v) => !v)
+            setUserOpen(false)
+            setClubOpen(false)
+            setNotificationsOpen(false)
+          }}
+          aria-label="Abrir menú"
+          aria-expanded={mobileMenuOpen}
+        >
+          {mobileMenuOpen ? <X size={17} /> : <Menu size={17} />}
+          <span className="px-burgerText">Menú</span>
+        </button>
       </div>
     )
   }
@@ -951,6 +973,11 @@ export default function AppNavbarClient() {
     const items = nav
     return (
       <div className="px-mobileMenu" role="dialog" aria-label="Menú móvil">
+        <div className="px-mobileMenuHead">
+          <span>Navegación</span>
+          <strong>{role === 'guest' ? BRAND.name.toUpperCase() : shorten(displayClubName, 24)}</strong>
+        </div>
+
         {role !== 'guest' ? (
           <button className="px-mobileLink" type="button" onClick={() => { setMobileMenuOpen(false); setSearchOpen(true) }}>
             Buscar
