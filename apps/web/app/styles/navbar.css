@@ -1992,6 +1992,15 @@
     width: 38px;
   }
 
+  .px-auth--gate .px-authLogo img{
+    display: block;
+    height: 28px;
+    max-height: 48px;
+    max-width: 48px;
+    object-fit: contain;
+    width: 30px;
+  }
+
   .px-auth--gate .px-authTitle{
     font-size: 22px;
     font-weight: 800;
