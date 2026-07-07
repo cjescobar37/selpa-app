@@ -613,9 +613,11 @@ export default function PlayerHomePage() {
                   </div>
                   <div className="playerClubActions">
                     <Link href={`/player/${club.id}`}>Entrar al club</Link>
-                    <button type="button" onClick={() => activateClub(club.id)}>
-                      {isActive ? '✓' : 'Activar'}
-                    </button>
+                    {!isActive ? (
+                      <button type="button" onClick={() => activateClub(club.id)}>
+                        Activar
+                      </button>
+                    ) : null}
                   </div>
                 </article>
               )
@@ -1062,7 +1064,6 @@ export default function PlayerHomePage() {
         .playerClubActions { align-items: end; display: grid; gap: 7px; justify-items: end; }
         .playerClubActions a { background: linear-gradient(135deg, var(--club-accent, #0ea5e9), #0891b2); border-radius: 999px; color: #fff; font-size: 12px; font-weight: 950; padding: 8px 11px; text-decoration: none; white-space: nowrap; }
         .playerClubActions button { background: rgba(255,255,255,.72); border: 1px solid color-mix(in srgb, var(--club-accent, #06b6d4) 28%, #e2e8f0); border-radius: 999px; color: #0e7490; cursor: pointer; font: inherit; font-size: 11px; font-weight: 950; padding: 7px 9px; }
-        .playerClubCard.is-active .playerClubActions button { align-items: center; background: color-mix(in srgb, var(--club-accent, #06b6d4) 14%, white); border-color: color-mix(in srgb, var(--club-accent, #06b6d4) 38%, white); border-radius: 999px; display: inline-flex; font-size: 14px; height: 30px; justify-content: center; padding: 0; width: 30px; }
         .playerDashboardGrid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); }
         .playerTournamentCards { display: grid; gap: 12px; grid-template-columns: 1fr; }
         .playerTournamentCards :global(.TournamentPublicCard) { --tournament-card-height: 286px; height: 286px; min-height: 286px; }

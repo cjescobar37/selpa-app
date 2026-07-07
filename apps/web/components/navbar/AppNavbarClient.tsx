@@ -1014,7 +1014,7 @@ export default function AppNavbarClient() {
           {renderDesktopRight()}
         </div>
 
-        <div className="px-mobileBar">
+        <div className={`px-mobileBar ${role === 'guest' ? 'px-mobileBar--guest' : 'px-mobileBar--authed'}`}>
           <div className="px-mobileBar__left">{renderMobileLeft()}</div>
           <div className="px-mobileBar__center">{renderMobileCenter()}</div>
           <div className="px-mobileBar__right">{renderMobileRight()}</div>
