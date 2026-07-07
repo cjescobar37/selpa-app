@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Bell, Mail, Search, ChevronDown, Menu, X } from 'lucide-react'
+import { Bell, Mail, Search, ChevronDown, X } from 'lucide-react'
 
 import { NAV_CONFIG, type NavChild, type NavItem } from '@/lib/navConfig'
 import { useSession } from '@/components/session/SessionProvider'
@@ -223,7 +223,6 @@ export default function AppNavbarClient() {
   const [navOpenIndex, setNavOpenIndex] = useState<number | null>(null)
   const [userOpen, setUserOpen] = useState(false)
   const [clubOpen, setClubOpen] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -325,7 +324,6 @@ export default function AppNavbarClient() {
         setNavOpenIndex(null)
         setUserOpen(false)
         setClubOpen(false)
-        setMobileMenuOpen(false)
         setNotificationsOpen(false)
         setSearchOpen(false)
       }
@@ -336,7 +334,6 @@ export default function AppNavbarClient() {
         setNavOpenIndex(null)
         setUserOpen(false)
         setClubOpen(false)
-        setMobileMenuOpen(false)
         setNotificationsOpen(false)
         setSearchOpen(false)
         setPreviewModal(null)
@@ -358,7 +355,6 @@ export default function AppNavbarClient() {
     setNavOpenIndex(null)
     setUserOpen(false)
     setClubOpen(false)
-    setMobileMenuOpen(false)
     setNotificationsOpen(false)
     setSearchOpen(false)
     setPreviewModal(null)
@@ -436,7 +432,6 @@ export default function AppNavbarClient() {
     setNavOpenIndex(null)
     setUserOpen(false)
     setClubOpen(false)
-    setMobileMenuOpen(false)
     setNotificationsOpen(false)
     setSearchOpen(false)
   }
@@ -871,17 +866,16 @@ export default function AppNavbarClient() {
           style={clubThemeStyle}
           onClick={() => {
             setClubOpen((v) => !v)
-            setMobileMenuOpen(false)
             setUserOpen(false)
             setNotificationsOpen(false)
           }}
           aria-label={`Club activo: ${displayClubName}`}
         >
           <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
-          <span className="px-mobileClubName">{shorten(displayClubName, 20)}</span>
+          <span className="px-mobileClubName">{shorten(displayClubName, 13)}</span>
           <ChevronDown size={14} className="px-caret" />
         </button>
-        {renderClubMenu()}
+        {renderMobileClubMenu()}
       </div>
     )
   }
@@ -899,15 +893,6 @@ export default function AppNavbarClient() {
       return (
         <div className="px-mobileActions">
           <button className={`px-iconBtn ${searchOpen ? 'is-active' : ''}`} aria-label="Buscar" aria-expanded={searchOpen} onClick={toggleSearch}><Search size={17} /></button>
-          <button
-            type="button"
-            className="px-burger"
-            onClick={() => setMobileMenuOpen((v) => !v)}
-            aria-label="Abrir menú"
-            aria-expanded={mobileMenuOpen}
-          >
-            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
         </div>
       )
     }
@@ -915,7 +900,7 @@ export default function AppNavbarClient() {
     return (
       <div className="px-mobileActions">
         {showRight.search ? (
-          <button className={`px-iconBtn ${searchOpen ? 'is-active' : ''}`} aria-label="Buscar" aria-expanded={searchOpen} onClick={toggleSearch}>
+          <button className={`px-iconBtn px-mobileSearchBtn ${searchOpen ? 'is-active' : ''}`} aria-label="Buscar" aria-expanded={searchOpen} onClick={toggleSearch}>
             <Search size={17} />
           </button>
         ) : null}
@@ -937,54 +922,31 @@ export default function AppNavbarClient() {
             className="px-mobileUserBtn"
             onClick={() => {
               setUserOpen((v) => !v)
-              setMobileMenuOpen(false)
               setClubOpen(false)
               setNotificationsOpen(false)
             }}
-            aria-label="Mi cuenta"
+            aria-label="Mi cuenta y actividad"
           >
             <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
             <ChevronDown size={14} className="px-caret" />
           </button>
           {renderUserMenu()}
         </div>
-        <button
-          type="button"
-          className="px-burger px-burger--menu"
-          onClick={() => {
-            setMobileMenuOpen((v) => !v)
-            setUserOpen(false)
-            setClubOpen(false)
-            setNotificationsOpen(false)
-          }}
-          aria-label="Abrir menú"
-          aria-expanded={mobileMenuOpen}
-        >
-          {mobileMenuOpen ? <X size={17} /> : <Menu size={17} />}
-          <span className="px-burgerText">Menú</span>
-        </button>
       </div>
     )
   }
 
-  function renderMobileMenu() {
-    if (!mobileMenuOpen) return null
+  function renderMobileClubMenu() {
+    if (!clubOpen) return null
 
-    const items = nav
     return (
-      <div className="px-mobileMenu" role="dialog" aria-label="Menú móvil">
-        <div className="px-mobileMenuHead">
-          <span>Navegación</span>
-          <strong>{role === 'guest' ? BRAND.name.toUpperCase() : shorten(displayClubName, 24)}</strong>
+      <div className="px-mobileClubMenu" role="menu" aria-label="Contexto del club">
+        <div className="px-mobileClubMenu__head">
+          <span>Club</span>
+          <strong>{shorten(displayClubName, 24)}</strong>
         </div>
 
-        {role !== 'guest' ? (
-          <button className="px-mobileLink" type="button" onClick={() => { setMobileMenuOpen(false); setSearchOpen(true) }}>
-            Buscar
-          </button>
-        ) : null}
-
-        {items.map((item) => (
+        {nav.map((item) => (
           <div key={item.href} className="px-mobileRow">
             <Link className={`px-mobileLink ${isActiveItem(pathname, currentSearch, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}>
               {item.label}
@@ -1005,6 +967,40 @@ export default function AppNavbarClient() {
             ) : null}
           </div>
         ))}
+
+        {role !== 'platform' ? (
+          <>
+            <div className="px-ddSep" />
+            {role === 'player' ? (
+              <>
+                <Link className="px-mobileLink px-mobileLink--muted" href="/clubs" onClick={closeAllMenus}>Ver clubes activos</Link>
+                <Link className="px-mobileLink px-mobileLink--muted" href="/seleccionar-club" onClick={closeAllMenus}>Seleccionar club</Link>
+              </>
+            ) : (
+              <>
+                <Link className="px-mobileLink px-mobileLink--muted" href="/club" onClick={closeAllMenus}>Info del club</Link>
+                <Link className="px-mobileLink px-mobileLink--muted" href="/seleccionar-club" onClick={closeAllMenus}>Cambiar club</Link>
+              </>
+            )}
+            {clubs.length > 0 ? (
+              <div className="px-mobileClubList" aria-label="Clubes disponibles">
+                {clubs.map((club) => (
+                  <button
+                    key={club.id}
+                    className={`px-mobileChild ${club.id === displayClub?.id ? 'is-active' : ''}`}
+                    onClick={async () => {
+                      await setActiveClub(club.id)
+                      setClubOpen(false)
+                    }}
+                    type="button"
+                  >
+                    {club.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </div>
     )
   }
@@ -1024,7 +1020,6 @@ export default function AppNavbarClient() {
           <div className="px-mobileBar__right">{renderMobileRight()}</div>
         </div>
 
-        {renderMobileMenu()}
         {renderSearchPanel()}
       </header>
 
