@@ -1290,15 +1290,92 @@ export default function ClubJugadorDetailPage() {
           .player-editGrid, .player-editMediaGrid { grid-template-columns: 1fr; }
         }
         @media (max-width: 560px) {
-          .profileHeroV2__content { padding: 28px 14px 16px; }
-          .profileHeroV2__band { top: 66px; }
-          .profileHeroV2__avatar { font-size: 44px; height: 170px; width: 170px; }
-          .profileHeroV2__identity h1 { font-size: 30px; }
-          .profileHeroV2__rankMain em { font-size: 64px; }
-          .profileHeroV2__rankMain strong { font-size: 32px; }
+          .profileHeroV2 {
+            margin-left: -12px;
+            margin-right: -12px;
+            width: calc(100% + 24px);
+          }
+          .profileHeroV2__content {
+            gap: 12px;
+            padding: 20px 12px 12px;
+          }
+          .profileHeroV2__band {
+            border-radius: 18px;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            top: 54px;
+          }
+          .profileHeroV2__avatar {
+            border-width: 4px;
+            box-shadow: 0 14px 30px rgba(0,0,0,.22), 0 0 0 1px var(--profile-accent, rgba(103,232,249,.62));
+            font-size: 34px;
+            height: 112px;
+            justify-self: start;
+            width: 112px;
+          }
+          .profileHeroV2__camera {
+            border-width: 2px;
+            bottom: 2px;
+            height: 26px;
+            right: 2px;
+            width: 26px;
+          }
+          .profileHeroV2__identity {
+            transform: none;
+          }
+          .profileHeroV2__identity h1 {
+            font-size: clamp(25px, 8vw, 32px);
+            margin-bottom: 7px;
+          }
+          .profileHeroV2__identity p {
+            font-size: 13px;
+            line-height: 1.25;
+            margin-bottom: 9px;
+          }
+          .profileHeroV2__partner {
+            font-size: 12px;
+            margin-bottom: 9px;
+            padding: 6px 10px 6px 7px;
+          }
+          .profileHeroV2__badges {
+            gap: 5px;
+          }
+          .profileHeroV2__badges span {
+            font-size: 11px;
+            padding: 7px 10px;
+          }
+          .profileHeroV2__rank {
+            border-radius: 15px;
+            gap: 3px;
+            margin-bottom: 0;
+            max-width: none;
+            min-height: 0;
+            padding: 10px;
+            width: 100%;
+          }
+          .profileHeroV2__rankMain {
+            gap: 8px;
+            grid-template-columns: minmax(0, .8fr) minmax(0, 1fr);
+          }
+          .profileHeroV2__rankMain em {
+            font-size: 42px;
+          }
+          .profileHeroV2__rankMain strong {
+            font-size: 22px;
+          }
           .player-statGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .player-statGrid article { min-height: 104px; padding: 14px 9px 12px; }
-          .player-statValue { font-size: clamp(26px, 9vw, 36px); overflow-wrap: anywhere; }
+          .player-statGrid article {
+            min-height: 78px;
+            padding: 10px 8px;
+          }
+          .player-statLabel {
+            font-size: 9px;
+          }
+          .player-statValue {
+            font-size: clamp(22px, 8vw, 30px);
+            overflow-wrap: anywhere;
+          }
           .player-infoGrid { grid-template-columns: 1fr; }
         }
       `}</style>

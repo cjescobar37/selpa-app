@@ -196,21 +196,21 @@ export default function PublicNewsExperience({
       </div>
 
       <style jsx>{`
-        .px-publicNewsSurface { display: grid; gap: clamp(14px, 2.4vw, 22px); }
+        .px-publicNewsSurface { display: grid; gap: clamp(14px, 2.4vw, 22px); max-width: 100%; min-width: 0; overflow: hidden; }
         .px-publicNewsHero { background: radial-gradient(circle at 12% 0%, rgba(34,211,238,.16), transparent 34%), linear-gradient(135deg, #020617, #061b3a 58%, #0f172a); border: 1px solid rgba(103,232,249,.12); border-radius: 20px; box-shadow: 0 16px 38px rgba(2,6,23,.13); color: #fff; overflow: hidden; padding: clamp(16px, 3vw, 26px); position: relative; }
         .px-publicNewsHero::after { background: linear-gradient(90deg, #22d3ee 0%, #2563eb 50%, #ec4899 100%); bottom: 0; content: ""; height: 3px; left: 20px; position: absolute; right: 20px; }
         .px-publicNewsHero span { color: #67e8f9; font-size: 11px; font-weight: 950; letter-spacing: .10em; text-transform: uppercase; }
         .px-publicNewsHero h1 { font-size: clamp(30px, 4.8vw, 48px); font-weight: 950; letter-spacing: -.055em; line-height: .94; margin: 4px 0; }
         .px-publicNewsHero p { color: rgba(255,255,255,.78); font-size: clamp(13px, 1.9vw, 15px); font-weight: 700; line-height: 1.35; margin: 0; max-width: 620px; }
-        .px-publicNewsStack { display: grid; gap: clamp(14px, 2.4vw, 22px); }
+        .px-publicNewsStack { display: grid; gap: clamp(14px, 2.4vw, 22px); max-width: 100%; min-width: 0; }
         .px-publicInteractive { cursor: pointer; transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
         .px-publicInteractive:hover { transform: translateY(-2px); }
         .px-publicInteractive img { transition: transform 220ms ease, filter 220ms ease; }
         .px-publicInteractive:hover img { filter: saturate(1.03) contrast(1.02); transform: scale(1.025); }
-        .px-publicEditorialBoard { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.24fr) minmax(290px, .76fr); }
+        .px-publicEditorialBoard { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.24fr) minmax(290px, .76fr); max-width: 100%; min-width: 0; overflow: hidden; }
         .px-publicEditorialMain, .px-publicEditorialSideCard { background: #061226; border: 1px solid color-mix(in srgb, var(--news-accent, #22d3ee) 28%, rgba(255,255,255,.16)); box-shadow: 0 18px 46px rgba(2,6,23,.12), 0 0 0 1px rgba(255,255,255,.02) inset; color: #fff; overflow: hidden; position: relative; }
         .px-publicEditorialMain { border-radius: 0; min-height: clamp(285px, 31vw, 390px); }
-        .px-publicEditorialSide { display: grid; gap: 12px; min-width: 0; }
+        .px-publicEditorialSide { display: grid; gap: 12px; max-width: 100%; min-width: 0; overflow: hidden; }
         .px-publicEditorialSideCard { border-radius: 0; min-height: 0; padding: 16px; }
         .px-publicEditorialMedia, .px-publicEditorialSideCard img, .px-publicEditorialSideCard .publicNewsTileFallback { height: 100%; inset: 0; position: absolute; width: 100%; }
         .px-publicEditorialMedia img, .px-publicEditorialMedia .publicNewsTileFallback, .px-publicEditorialSideCard img, .px-publicEditorialSideCard .publicNewsTileFallback { display: block; height: 100%; object-fit: cover; width: 100%; }
@@ -234,7 +234,7 @@ export default function PublicNewsExperience({
         .px-publicSectionHead { align-items: end; display: flex; justify-content: space-between; }
         .px-publicSectionHead span { color: #0891b2; display: block; font-size: 11px; font-weight: 950; letter-spacing: .10em; text-transform: uppercase; }
         .px-publicSectionHead h3 { color: #061b3a; font-size: clamp(24px, 3vw, 32px); font-weight: 950; letter-spacing: -.045em; line-height: 1; margin: 3px 0 0; }
-        .px-publicLatestGrid { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .px-publicLatestGrid { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 100%; min-width: 0; overflow: hidden; }
         .px-publicNewsCard { background: #061226; border: 1px solid color-mix(in srgb, var(--news-accent, #22d3ee) 22%, rgba(255,255,255,.16)); box-shadow: 0 14px 34px rgba(2,6,23,.09); color: #fff; display: grid; min-height: 315px; overflow: hidden; position: relative; }
         .px-publicNewsCard:hover { border-color: color-mix(in srgb, var(--news-accent, #22d3ee) 48%, rgba(255,255,255,.2)); box-shadow: 0 18px 44px rgba(2,6,23,.14), 0 0 26px var(--news-glow, rgba(34,211,238,.16)); }
         .px-publicNewsMedia { background: #0f172a; inset: 0; overflow: hidden; position: absolute; }
@@ -279,6 +279,8 @@ export default function PublicNewsExperience({
           .px-publicLatestGrid { grid-template-columns: 1fr; }
           .px-publicNewsCard { min-height: 285px; }
           .px-publicArchiveList { background: transparent; border: 0; box-shadow: none; gap: 10px; overflow: visible; }
+          .px-publicEditorialMain, .px-publicEditorialSideCard, .px-publicNewsCard { max-width: 100%; min-width: 0; overflow: hidden; }
+          .px-publicEditorialMedia img, .px-publicEditorialSideCard img, .px-publicNewsMedia img { max-width: 100%; transform-origin: center; }
           .px-publicArchiveItem { border: 1px solid rgba(15,23,42,.08); border-radius: 14px; box-shadow: 0 8px 20px rgba(15,23,42,.05); gap: 7px; grid-template-columns: 1fr; padding: 12px; }
           .px-publicArchiveMeta strong, .px-publicArchiveMeta p { white-space: normal; }
           .px-publicArchiveAction { margin-top: 2px; }

@@ -162,8 +162,49 @@ export default function PublicHomeEmbed({ userName }: { userName?: string | null
           font-weight: 850;
         }
         @media (max-width: 640px) {
-          .modeCommunityHero { border-radius: 18px; padding: 16px; }
-          .modeCommunityMetrics { display: grid; grid-template-columns: 1fr; }
+          .modeCommunityHero {
+            border-radius: 16px;
+            gap: 6px;
+            margin-bottom: 10px;
+            padding: 13px 14px;
+          }
+          .modeCommunityHero::after {
+            height: 2px;
+          }
+          .modeCommunityHero > span {
+            font-size: 10px;
+            letter-spacing: .05em;
+          }
+          .modeCommunityHero h1 {
+            font-size: clamp(24px, 9vw, 34px);
+            line-height: .96;
+          }
+          .modeCommunityHero p {
+            font-size: 13px;
+            line-height: 1.25;
+          }
+          .modeCommunityMetrics {
+            display: grid;
+            gap: 6px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .modeCommunityMetrics div {
+            border-radius: 12px;
+            min-width: 0;
+            padding: 7px 8px;
+          }
+          .modeCommunityMetrics strong {
+            font-size: 16px;
+          }
+          .modeCommunityMetrics small {
+            font-size: 10px;
+            line-height: 1.1;
+          }
+        }
+        @media (max-width: 380px) {
+          .modeCommunityMetrics {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
     </div>

@@ -70,13 +70,20 @@ export default function ModeSegmentedControl({
         }
         @media (max-width: 560px) {
           .homeModeSwitch {
+            box-shadow: 0 10px 24px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.72);
+            padding: 4px;
             justify-self: stretch;
             width: 100%;
           }
           .homeModeSwitch button {
             font-size: 12px;
-            min-height: 40px;
-            padding: 9px 10px;
+            min-height: 34px;
+            padding: 7px 8px;
+          }
+        }
+        @media (max-width: 380px) {
+          .homeModeSwitch button {
+            font-size: 11px;
           }
         }
       `}</style>

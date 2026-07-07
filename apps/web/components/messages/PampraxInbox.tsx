@@ -670,17 +670,34 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
           .px-inboxHero { align-items: flex-start; flex-direction: column; }
           .px-newMessageBtn { justify-content: center; width: 100%; }
           .px-inboxGrid { grid-template-columns: 1fr; }
-          .px-conversationPanel { min-height: 560px; }
+          .px-conversationPanel { min-height: 520px; }
           .px-threadList { max-height: 360px; }
         }
         @media (max-width: 560px) {
-          .px-inboxShell { padding-inline: 10px; }
-          .px-threadItem { grid-template-columns: auto minmax(0, 1fr); }
+          .px-inboxShell { gap: 10px; padding: 8px 8px 24px; }
+          .px-inboxHero { border-radius: 16px; gap: 9px; padding: 13px; }
+          .px-inboxHero::before { height: 2px; }
+          .px-inboxHero__copy { gap: 4px; }
+          .px-inboxHero span { font-size: 10px; letter-spacing: .05em; }
+          .px-inboxHero h1 { font-size: clamp(24px, 9vw, 34px); }
+          .px-inboxHero p { font-size: 12px; line-height: 1.25; }
+          .px-newMessageBtn { min-height: 34px; padding: 0 12px; }
+          .px-threadPanel, .px-conversationPanel { border-radius: 16px; box-shadow: 0 10px 26px rgba(15,23,42,.055); }
+          .px-conversationPanel { grid-template-rows: auto minmax(220px, 1fr) auto; min-height: 430px; }
+          .px-threadPanel__head, .px-conversationHead { padding: 12px; }
+          .px-conversationHead h2 { font-size: 19px; }
+          .px-messageStream { gap: 8px; max-height: 430px; padding: 10px; }
+          .px-threadItem { border-radius: 13px; grid-template-columns: auto minmax(0, 1fr); padding: 10px; }
           .px-threadMeta { grid-column: 2; justify-items: start; }
-          .px-messageBubble { max-width: 92%; }
-          .px-replyBox { grid-template-columns: 1fr; }
-          .px-replyBox button { justify-content: center; width: 100%; }
+          .px-threadAvatar { height: 38px; width: 38px; }
+          .px-messageBubble { border-radius: 13px; max-width: 94%; padding: 9px 10px; }
+          .px-messageBubble p { font-size: 12px; line-height: 1.38; }
+          .px-replyBox { gap: 8px; grid-template-columns: 1fr; padding: 10px; }
+          .px-replyBox textarea { border-radius: 12px; min-height: 72px; padding: 9px 10px; }
+          .px-replyBox button { justify-content: center; min-height: 36px; width: 100%; }
           .px-composerActions { align-items: stretch; flex-direction: column-reverse; }
+          .px-composerHead, .px-composerBody, .px-composerActions { padding-left: 14px; padding-right: 14px; }
+          .px-composerHead h2 { font-size: 22px; }
           .px-composeCancel, .px-composeSubmit { justify-content: center; width: 100%; }
         }
       `}</style>

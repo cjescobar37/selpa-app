@@ -2986,6 +2986,56 @@
   margin-top:auto !important;
 }
 
+.px-publicNewsSurface,
+.px-publicNewsStack,
+.px-publicEditorialBoard,
+.px-publicEditorialSide,
+.px-publicLatestGrid{
+  max-width:100% !important;
+  min-width:0 !important;
+}
+
+.px-publicNewsSurface{
+  overflow:hidden !important;
+}
+
+.px-publicEditorialBoard,
+.px-publicEditorialSide,
+.px-publicLatestGrid{
+  overflow:clip !important;
+}
+
+.px-publicEditorialMain,
+.px-publicEditorialSideCard,
+.px-publicNewsCard{
+  max-width:100% !important;
+  min-width:0 !important;
+  overflow:hidden !important;
+  position:relative !important;
+}
+
+.px-publicEditorialMedia,
+.px-publicNewsMedia{
+  inset:0 !important;
+  overflow:hidden !important;
+  position:absolute !important;
+}
+
+.px-publicEditorialMedia img,
+.px-publicEditorialSideCard > img,
+.px-publicNewsMedia img,
+.px-publicEditorialMedia .publicNewsTileFallback,
+.px-publicEditorialSideCard > .publicNewsTileFallback,
+.px-publicNewsMedia .publicNewsTileFallback{
+  display:block !important;
+  height:100% !important;
+  inset:0 !important;
+  max-width:none !important;
+  object-fit:cover !important;
+  position:absolute !important;
+  width:100% !important;
+}
+
 /* Public club home */
 .clubPublicHome{
   color:#06163a;

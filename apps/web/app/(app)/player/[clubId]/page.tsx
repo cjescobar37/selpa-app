@@ -447,10 +447,102 @@ export default function PlayerClubHomePage() {
           .playerClubStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 520px) {
-          .playerClubHome { padding: 12px; }
-          .playerClubHero, .playerClubPanel { border-radius: 18px; padding: 16px; }
-          .playerClubLogo { height: 64px; width: 64px; }
-          .playerClubStats { grid-template-columns: 1fr; }
+          .playerClubHome {
+            gap: 10px;
+            padding: 8px;
+          }
+          .playerClubHero, .playerClubPanel, .playerClubStats article {
+            border-radius: 16px;
+            box-shadow: 0 10px 26px rgba(15,23,42,.055);
+          }
+          .playerClubHero {
+            gap: 10px;
+            grid-template-columns: 48px minmax(0, 1fr);
+            padding: 13px;
+          }
+          .playerClubHero::before {
+            height: 2px;
+            left: 13px;
+            right: 13px;
+          }
+          .playerClubLogo {
+            border-width: 2px;
+            border-radius: 14px;
+            font-size: 15px;
+            height: 48px;
+            width: 48px;
+          }
+          .playerClubHero h1 {
+            font-size: clamp(24px, 9vw, 34px);
+            margin: 2px 0 4px;
+          }
+          .playerClubHero p {
+            font-size: 12px;
+            line-height: 1.25;
+          }
+          .playerClubHeroActions {
+            display: flex;
+            gap: 7px;
+            grid-column: 1 / -1;
+            justify-content: flex-start;
+          }
+          .playerClubHeroActions a,
+          .playerClubHeroActions button {
+            font-size: 11px;
+            min-height: 32px;
+            padding: 7px 10px;
+          }
+          .playerClubStats {
+            gap: 8px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .playerClubStats article {
+            align-content: center;
+            min-height: 74px;
+            padding: 10px;
+          }
+          .playerClubStats span {
+            font-size: 9px;
+          }
+          .playerClubStats strong {
+            font-size: 16px;
+          }
+          .playerClubStats small {
+            font-size: 11px;
+          }
+          .playerClubGrid,
+          .playerClubGrid--bottom {
+            gap: 10px;
+          }
+          .playerClubPanel {
+            gap: 10px;
+            padding: 12px;
+          }
+          .playerClubPanel header h2 {
+            font-size: 19px;
+            line-height: 1.05;
+          }
+          .playerClubList,
+          .playerClubMatchList {
+            gap: 8px;
+          }
+          .playerClubList a {
+            border-radius: 13px;
+            grid-template-columns: 30px minmax(0, 1fr) 16px;
+            padding: 10px;
+          }
+          .playerClubPartner,
+          .playerClubMatchList div,
+          .playerClubNews,
+          .playerClubEmpty {
+            border-radius: 13px;
+            padding: 10px;
+          }
+        }
+        @media (max-width: 370px) {
+          .playerClubStats {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
     </div>
