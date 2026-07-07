@@ -33,6 +33,30 @@ function shorten(text?: string, max = 16) {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value
 }
 
+function getMobileClubLabel(text?: string) {
+  const value = (text || '').trim().replace(/\s+/g, ' ')
+  if (!value) return ''
+  if (value.length <= 10) return value
+
+  const words = value.split(' ')
+  const isGenericWord = (word: string) => ['club', 'padel', 'pádel', 'complejo', 'academia', 'escuela', 'centro'].includes(word.toLocaleLowerCase('es-AR'))
+  const isShortCode = (word: string) => /^[A-Z0-9]{2,4}$/.test(word)
+
+  if (words.length === 2 && words[0]?.toLocaleLowerCase('es-AR') === 'padel' && isShortCode(words[1] ?? '')) {
+    return value
+  }
+
+  if (words.length >= 2 && isGenericWord(words[0] ?? '') && isShortCode(words[1] ?? '')) {
+    return words[1] ?? value
+  }
+
+  const meaningful = words.filter((word) => !isGenericWord(word))
+  const inferred = meaningful.length ? meaningful.join(' ') : words[0]
+  if (inferred && inferred.length <= 10) return inferred
+  const fallback = meaningful[0] || words[0] || value
+  return fallback.length <= 9 ? `${fallback}…` : `${fallback.slice(0, 9).trim()}…`
+}
+
 function toTitleCaseName(text?: string) {
   return (text || 'Usuario')
     .trim()
@@ -872,7 +896,7 @@ export default function AppNavbarClient() {
           aria-label={`Club activo: ${displayClubName}`}
         >
           <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
-          <span className="px-mobileClubName">{shorten(displayClubName, 13)}</span>
+          <span className="px-mobileClubName">{getMobileClubLabel(displayClubName)}</span>
           <ChevronDown size={14} className="px-caret" />
         </button>
         {renderMobileClubMenu()}
