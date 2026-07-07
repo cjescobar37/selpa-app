@@ -1392,3 +1392,692 @@
     width: min(360px, calc(100vw - 20px));
   }
 }
+
+/* Mobile Compact Pass: denser layout without changing structure or palette. */
+@media (max-width: 720px){
+  body{
+    font-size: 14px;
+    line-height: 1.38;
+  }
+
+  .px-main{
+    min-height: calc(100vh - 58px);
+  }
+
+  .px-wrap,
+  .home-panel{
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .px-wrap{
+    padding-bottom: 22px;
+    padding-top: 12px;
+  }
+
+  .home-shell,
+  .px-page,
+  .px-auth,
+  .px-authModern,
+  .px-loginAuth{
+    padding-bottom: 22px;
+    padding-top: 12px;
+  }
+
+  .public-section,
+  .px-sectionCard,
+  .publicClubsPage,
+  .publicTournamentShell,
+  .clubPublicHome{
+    gap: 12px;
+    margin-top: 10px;
+  }
+
+  .public-headerRow,
+  .px-pageHead,
+  .tableTitle{
+    margin-bottom: 7px;
+  }
+
+  .px-pageSub,
+  .public-sub,
+  .px-clubSub,
+  .club-sub,
+  .px-platformSub,
+  .publicTournamentHero p,
+  .publicClubsHero p,
+  .clubPublicHeroText p,
+  .pampraxHero__text p{
+    font-size: 12.5px;
+    line-height: 1.32;
+  }
+
+  .px-h1,
+  .px-pageTitle{
+    font-size: 28px;
+    line-height: 1.02;
+  }
+
+  .px-h2,
+  .px-cardTitle,
+  .px-sectionTitle,
+  .public-title,
+  .club-title,
+  .px-clubTitle,
+  .px-platformTitle{
+    font-size: 16px;
+    font-weight: 780;
+    line-height: 1.12;
+  }
+
+  .px-card,
+  .px-sectionCard,
+  .px-authCard,
+  .px-modalCard,
+  .club-panel,
+  .club-card,
+  .club-kpi,
+  .px-clubPanel,
+  .px-clubCard,
+  .px-clubKpi,
+  .px-platform,
+  .px-platformCard,
+  .px-platformMetricCard,
+  .px-platformRequestItem,
+  .px-platformInfoCard,
+  .px-platformMiniItem,
+  .px-platformDetailGrid > div,
+  .px-platformMiniStats > div,
+  .newsCard,
+  .tourCard,
+  .rankCard,
+  .sponsorCard,
+  .publicAdCard,
+  .publicClubCard,
+  .publicTournamentCard,
+  .TournamentPublicCard,
+  .clubPublicNewsCard,
+  .clubPublicTournament,
+  .clubPublicRankingCard,
+  .clubPublicSponsorCard{
+    border-radius: 14px;
+    padding: 12px;
+  }
+
+  .px-card--tight{
+    padding: 10px;
+  }
+
+  .px-cardTopAccent::before,
+  .px-platformCard::before{
+    left: 12px;
+    right: 12px;
+  }
+
+  .px-btn,
+  .pamprax-soft-action,
+  .pampraxHero__action,
+  .pampraxHero__statusBadge,
+  .publicHeroActions a,
+  .publicClubAction,
+  .TournamentPublicCard__actions a,
+  .clubPublicHeroActions a,
+  .clubPublicSponsorsIntro button,
+  .px-loginAuth .px-btn,
+  .px-loginAuth .px-btnGoogle,
+  .px-authModern .px-btn,
+  .px-authModern .px-input,
+  .px-input{
+    border-radius: 11px;
+    font-size: 12.5px;
+    font-weight: 720;
+    min-height: 36px;
+    padding-bottom: 8px;
+    padding-top: 8px;
+  }
+
+  .px-btn,
+  .pamprax-soft-action,
+  .pampraxHero__action,
+  .pampraxHero__statusBadge,
+  .publicHeroActions a,
+  .TournamentPublicCard__actions a,
+  .clubPublicHeroActions a{
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .px-field,
+  .px-authModern .px-field,
+  .px-financeForm,
+  .px-settingsForm,
+  .px-formGrid,
+  .px-platformFilters,
+  .px-contentAdminGrid,
+  .px-platformAdminLayout,
+  .px-platformGrid,
+  .px-clubGrid,
+  .club-grid,
+  .px-actions,
+  .px-platformAsideStack,
+  .px-contentList,
+  .publicTournamentSections,
+  .publicTournamentList,
+  .publicNewsGrid,
+  .publicAdsGrid,
+  .clubPublicTournamentGrid,
+  .clubPublicNewsGrid,
+  .clubPublicSponsorGrid,
+  .clubPublicRankingGrid{
+    gap: 9px;
+  }
+
+  .px-kpis,
+  .px-kpis--platformAdmin,
+  .px-clubKpis,
+  .club-kpis,
+  .statsGrid,
+  .tourGrid,
+  .rankGrid,
+  .sponsorRow{
+    gap: 8px;
+    margin-top: 9px;
+  }
+
+  .pampraxHero,
+  .publicTournamentHero,
+  .publicClubsHero,
+  .clubPublicHero{
+    border-radius: 18px;
+    min-height: 132px;
+    padding: 16px;
+  }
+
+  .pampraxHero{
+    gap: 10px;
+  }
+
+  .pampraxHero__body,
+  .pampraxHero__text,
+  .pampraxHero__actions,
+  .clubPublicHeroText,
+  .publicPromoBannerCopy,
+  .publicHeroOverlay,
+  .publicSideNewsOverlay,
+  .publicNewsTileOverlay{
+    gap: 8px;
+  }
+
+  .pampraxHero__logo{
+    border-radius: 16px;
+    height: 60px;
+    width: 60px;
+  }
+
+  .pampraxHero.has-identity-logo .pampraxHero__logo{
+    border-radius: 22px;
+    height: 72px;
+    width: 72px;
+  }
+
+  .pampraxHero__text > span,
+  .publicTournamentHero span,
+  .publicClubsHero span,
+  .clubPublicSponsorsIntro span{
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: .06em;
+  }
+
+  .pampraxHero__text h1,
+  .publicTournamentHero h1,
+  .publicClubsHero h1,
+  .clubPublicHeroText h1{
+    font-size: clamp(27px, 8vw, 34px);
+    letter-spacing: -.035em;
+    line-height: .98;
+  }
+
+  .pampraxHero__stats{
+    gap: 6px;
+  }
+
+  .pampraxHero__stats em,
+  .px-pill,
+  .tourTag,
+  .px-statusBadge,
+  .px-platformRequestBadge,
+  .px-platformMiniTag,
+  .publicTournamentSection > header small,
+  .publicClubBody small,
+  .publicClubStats span,
+  .TournamentPublicCard__status,
+  .TournamentPublicCard__meta span,
+  .TournamentPublicCard__typeBadge,
+  .clubPublicSponsorBadge,
+  .clubPublicRankingMeta span,
+  [class*="Badge"],
+  [class*="badge"],
+  [class*="Chip"],
+  [class*="chip"]{
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    min-height: 24px;
+    padding: 5px 8px;
+  }
+
+  .hero__grid{
+    gap: 14px;
+    padding: 18px;
+  }
+
+  .hero__photoWrap{
+    min-height: 212px;
+  }
+
+  .hero__overlayCard{
+    border-radius: 13px;
+    bottom: 10px;
+    left: 10px;
+    padding: 10px;
+    right: 10px;
+  }
+
+  .hero__overlayRank{
+    font-size: 25px;
+    font-weight: 760;
+  }
+
+  .hero__overlayLine{
+    font-size: 12px;
+    font-weight: 760;
+    gap: 6px;
+  }
+
+  .metaRow,
+  .statsStrip,
+  .tableWrap{
+    margin-top: 9px;
+  }
+
+  .metaCell,
+  .statsItem,
+  .statsStrip,
+  .tableWrap{
+    padding: 10px 11px;
+  }
+
+  .metaLabel,
+  .statsK,
+  .rankLabel,
+  .px-platformMetricCard span,
+  .px-platformFilterField span,
+  .px-settingsGrid label span{
+    font-size: 10px;
+    font-weight: 760;
+    letter-spacing: .06em;
+  }
+
+  .metaValue{
+    font-size: 17px;
+    margin-top: 5px;
+  }
+
+  .statsV{
+    font-size: 26px;
+    margin-top: 5px;
+  }
+
+  .table th,
+  .table td,
+  .px-table--platform th,
+  .px-table--platform td{
+    font-size: 12px;
+    padding: 9px 8px;
+  }
+
+  .publicHeroLayout,
+  .publicHeroSide,
+  .publicClubsGrid,
+  .clubPublicHeroMain,
+  .clubPublicSponsorsPanel{
+    gap: 9px;
+  }
+
+  .publicHeroMain{
+    border-radius: 18px;
+    min-height: 300px;
+  }
+
+  .publicSideNewsCard{
+    border-radius: 15px;
+    min-height: 150px;
+  }
+
+  .publicHeroOverlay,
+  .publicSideNewsOverlay,
+  .publicNewsTileOverlay{
+    padding: 14px;
+  }
+
+  .publicHeroHeadline,
+  .publicArticleTitle,
+  .publicNewsTileOverlay h3{
+    font-size: clamp(27px, 9vw, 38px);
+    letter-spacing: -.035em;
+    line-height: 1;
+  }
+
+  .publicHeroExcerpt,
+  .publicArticleExcerpt,
+  .publicArticleContent{
+    font-size: 14px;
+    line-height: 1.48;
+  }
+
+  .publicNewsTile,
+  .clubPublicNewsCard,
+  .clubPublicNewsCard.is-featured{
+    border-radius: 16px;
+    min-height: 230px;
+  }
+
+  .publicAdCardImage{
+    height: 142px;
+  }
+
+  .publicAdCardCopy,
+  .publicArticleBody{
+    gap: 7px;
+    padding: 14px;
+  }
+
+  .publicClubCard{
+    gap: 10px;
+    min-height: 112px;
+  }
+
+  .publicClubLogo{
+    border-radius: 14px;
+    height: 68px;
+    width: 96px;
+  }
+
+  .publicClubBody h2{
+    font-size: min(var(--club-name-size, 22px), 22px);
+    margin: 15px 0 4px;
+  }
+
+  .publicClubBody p,
+  .newsText,
+  .tourMeta,
+  .publicClubStats span,
+  .px-help,
+  .px-alertText{
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .TournamentPublicCard{
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .TournamentPublicCard__poster,
+  .clubPublicTournamentPoster{
+    border-radius: 13px;
+  }
+
+  .TournamentPublicCard__posterMeta{
+    inset: 8px;
+  }
+
+  .TournamentPublicCard__posterMeta strong{
+    font-size: 27px;
+  }
+
+  .TournamentPublicCard h3,
+  .publicSideNewsTitle,
+  .tourTitle,
+  .newsTitle,
+  .px-platformRequestTitle,
+  .px-platformDetailTitle,
+  .px-platformRequestName{
+    font-size: 16px;
+    font-weight: 780;
+    line-height: 1.12;
+  }
+
+  .TournamentPublicCard p,
+  .TournamentPublicCard__dates,
+  .px-platformRequestMeta,
+  .px-platformRequestText,
+  .px-platformRequestOwner,
+  .px-platformEntityCell span,
+  .px-platformStackCell span{
+    font-size: 12px;
+    line-height: 1.32;
+  }
+
+  .clubPublicSponsorsPanel{
+    border-radius: 18px;
+    padding: 14px;
+  }
+
+  .clubPublicSponsorCarousel{
+    gap: 10px;
+    padding-bottom: 10px;
+  }
+
+  .clubPublicSponsorCard{
+    gap: 8px;
+    min-height: 204px;
+  }
+
+  .clubPublicSponsorLogo{
+    border-radius: 12px;
+    height: 76px;
+    padding: 10px;
+  }
+
+  .px-mobileBar{
+    min-height: 40px;
+    padding-bottom: 7px;
+    padding-top: 7px;
+  }
+
+  .px-iconBtn,
+  .px-mobileUserBtn,
+  .px-mobileClubBtn,
+  .px-mobileBrand,
+  .px-mobileLogin{
+    height: 30px;
+    min-height: 30px;
+  }
+
+  .px-iconBtn,
+  .px-mobileBrand{
+    min-width: 30px;
+    width: 30px;
+  }
+
+  .px-mobileUserBtn .px-avatar,
+  .px-mobileClubBtn .px-clubLogo{
+    height: 24px;
+    width: 24px;
+  }
+
+  .px-mobileClubName{
+    font-size: 10.5px;
+    font-weight: 760;
+  }
+
+  .px-mobileClubMenu,
+  .px-userWrap .px-navDropdown--right{
+    top: 48px;
+  }
+
+  .px-mobileLink,
+  .px-mobileChild,
+  .px-ddItem{
+    border-radius: 9px;
+    font-size: 11.5px;
+    font-weight: 650;
+    padding: 8px 9px;
+  }
+
+  .px-footer{
+    margin-top: 12px;
+  }
+
+  .px-footer-main{
+    padding: 16px 0;
+  }
+
+  .px-footer-inner{
+    gap: 10px;
+    width: min(1120px, calc(100% - 24px));
+  }
+}
+
+@media (max-width: 720px){
+  .px-loginAuth .px-authTop,
+  .px-authModern .px-authTop,
+  .px-authTop{
+    padding: 12px 14px 10px;
+  }
+
+  .px-loginAuth .px-authBody,
+  .px-authModern .px-authBody,
+  .px-authBody{
+    gap: 8px;
+    padding: 9px 14px 14px;
+  }
+
+  .px-loginAuth .px-authTitle,
+  .px-authModern .px-authTitle,
+  .px-authTitle{
+    font-size: clamp(24px, 7vw, 29px);
+    line-height: 1;
+  }
+
+  .px-loginAuth .px-authSub,
+  .px-authModern .px-authSub,
+  .px-authSub{
+    font-size: 12px;
+    line-height: 1.25;
+    margin-top: 6px;
+  }
+
+  .px-loginAuth .px-input,
+  .px-authModern .px-input,
+  .px-input{
+    min-height: 40px;
+    padding: 9px 11px;
+  }
+
+  .px-loginAuth .px-btn:not(.px-btnGoogle),
+  .px-loginAuth .px-btnGoogle,
+  .px-authModern .px-btn,
+  .px-authModern .px-btnGoogle{
+    min-height: 40px;
+  }
+
+  .px-loginSecureText{
+    font-size: 10.5px;
+    line-height: 1.25;
+    margin-top: -6px;
+  }
+
+  .px-loginAuth .px-loginLinks{
+    gap: 7px;
+    margin-top: 2px;
+    padding-top: 9px;
+  }
+
+  .px-loginLinkBlock{
+    border-radius: 13px;
+    gap: 3px;
+    min-height: 48px;
+    padding: 8px 10px;
+  }
+
+  .px-loginLinkBlock span{
+    font-size: 11px;
+  }
+
+  .px-loginLinkBlock strong{
+    font-size: 12px;
+  }
+
+  .TournamentPublicCard{
+    --tournament-card-height: 278px;
+    height: 278px !important;
+    min-height: 278px !important;
+    padding: 10px;
+  }
+
+  .TournamentPublicCard.is-manual-flyer{
+    grid-template-columns: 106px minmax(0,1fr);
+  }
+
+  .TournamentPublicCard__body{
+    gap: 7px;
+  }
+
+  .TournamentPublicCard__club{
+    gap: 6px;
+    margin-bottom: 2px;
+  }
+
+  .TournamentPublicCard__clubLogo{
+    border-radius: 10px;
+    height: 28px;
+    width: 28px;
+  }
+
+  .TournamentPublicCard__dates,
+  .TournamentPublicCard__meta,
+  .TournamentPublicCard__actions{
+    gap: 6px;
+  }
+
+  .TournamentPublicCard__actions a{
+    min-height: 34px;
+    min-width: 0;
+    padding: 8px 10px;
+  }
+
+  .publicTournamentCard{
+    gap: 10px;
+    grid-template-columns: 74px minmax(0,1fr);
+    min-height: 96px;
+  }
+
+  .publicTournamentDate{
+    border-radius: 13px;
+    min-height: 74px;
+    padding: 7px;
+  }
+
+  .publicTournamentDate strong{
+    font-size: 26px;
+  }
+
+  .publicTournamentDate span{
+    font-size: 11px;
+  }
+
+  .publicTournamentDate small,
+  .publicTournamentClub,
+  .publicTournamentMeta{
+    font-size: 11px;
+  }
+
+  .publicTournamentBody h3{
+    font-size: 16px;
+    line-height: 1.1;
+    margin-bottom: 3px;
+  }
+}
