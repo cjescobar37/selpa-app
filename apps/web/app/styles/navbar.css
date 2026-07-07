@@ -1970,6 +1970,39 @@
     margin-top: 6px;
   }
 
+  .px-auth--gate{
+    padding: 12px 10px;
+  }
+
+  .px-auth--gate .px-authCard{
+    border-radius: 16px;
+    max-width: 340px;
+  }
+
+  .px-auth--gate .px-authTop{
+    padding: 10px 12px 9px;
+  }
+
+  .px-auth--gate .px-authBody{
+    padding: 8px 12px 12px;
+  }
+
+  .px-auth--gate .px-authLogo{
+    height: 38px;
+    width: 38px;
+  }
+
+  .px-auth--gate .px-authTitle{
+    font-size: 22px;
+    font-weight: 800;
+  }
+
+  .px-auth--gate .px-authSub{
+    font-size: 11px;
+    font-weight: 650;
+    margin-top: 4px;
+  }
+
   .px-loginAuth .px-input,
   .px-authModern .px-input,
   .px-input{

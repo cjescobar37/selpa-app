@@ -155,6 +155,24 @@ function initials(name: string) {
   return `${parts[0]?.[0] ?? 'P'}${parts[1]?.[0] ?? ''}`.toUpperCase()
 }
 
+function PlayerHomeLoader() {
+  return (
+    <div className="playerHomeShell">
+      <div className="playerHomePanel playerHomePanel--loading">
+        <div className="playerHomeLoader" role="status" aria-label="Cargando inicio del jugador">
+          <span className="playerHomeLoader__mark" aria-hidden="true">
+            <img src="/brand/selpa-isotipo.png" alt="" />
+          </span>
+          <span className="playerHomeLoader__body" aria-hidden="true">
+            <span />
+            <span />
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function PlayerHomePage() {
   const session = useSession()
   const [players, setPlayers] = useState<ClubPlayerRow[]>([])
@@ -438,7 +456,7 @@ export default function PlayerHomePage() {
   }
 
   if ((session.status === 'loading' || loadingData) && !hasLoadedData) {
-    return <div className="playerHomeShell"><div className="playerHomePanel">Cargando inicio del jugador...</div></div>
+    return <PlayerHomeLoader />
   }
 
   if (!session.user) {
@@ -850,6 +868,54 @@ export default function PlayerHomePage() {
           box-shadow: 0 18px 48px rgba(15,23,42,.07);
         }
         .playerHomePanel { padding: 22px; }
+        .playerHomePanel--loading { align-items: center; display: flex; justify-content: center; min-height: 118px; }
+        .playerHomeLoader {
+          align-items: center;
+          background: rgba(255,255,255,.9);
+          border: 1px solid rgba(226,232,240,.9);
+          border-radius: 18px;
+          box-shadow: 0 14px 34px rgba(15,23,42,.07);
+          display: grid;
+          gap: 11px;
+          grid-template-columns: 34px minmax(0, 1fr);
+          padding: 12px;
+          width: min(274px, 100%);
+        }
+        .playerHomeLoader__mark {
+          align-items: center;
+          background: linear-gradient(135deg, rgba(14,165,233,.12), rgba(236,72,153,.10));
+          border: 1px solid rgba(14,165,233,.16);
+          border-radius: 12px;
+          display: inline-flex;
+          height: 34px;
+          justify-content: center;
+          width: 34px;
+        }
+        .playerHomeLoader__mark img {
+          height: 22px;
+          width: 22px;
+        }
+        .playerHomeLoader__body {
+          display: grid;
+          gap: 7px;
+          min-width: 0;
+        }
+        .playerHomeLoader__body span {
+          animation: playerHomeLoaderShimmer 1.1s ease-in-out infinite;
+          background: linear-gradient(90deg, #e2e8f0 0%, #f8fafc 48%, #e2e8f0 100%);
+          background-size: 210% 100%;
+          border-radius: 999px;
+          display: block;
+          height: 8px;
+        }
+        .playerHomeLoader__body span:last-child {
+          opacity: .8;
+          width: 68%;
+        }
+        @keyframes playerHomeLoaderShimmer {
+          0% { background-position: 100% 0; }
+          100% { background-position: -100% 0; }
+        }
         .playerHomePanel--empty { display: grid; gap: 10px; justify-items: start; }
         .playerHomePanel--empty h1 { font-size: 28px; margin: 0; }
         .playerHomePanel--empty p { color: #64748b; font-weight: 750; margin: 0; }
@@ -1130,6 +1196,26 @@ export default function PlayerHomePage() {
             border-radius: 16px;
             box-shadow: 0 10px 26px rgba(15,23,42,.055);
           }
+          .playerHomePanel--loading {
+            min-height: 92px;
+            padding: 12px;
+          }
+          .playerHomeLoader {
+            border-radius: 16px;
+            gap: 10px;
+            grid-template-columns: 32px minmax(0, 1fr);
+            padding: 10px;
+            width: min(238px, 100%);
+          }
+          .playerHomeLoader__mark {
+            border-radius: 11px;
+            height: 32px;
+            width: 32px;
+          }
+          .playerHomeLoader__mark img {
+            height: 20px;
+            width: 20px;
+          }
           .playerHomeHero {
             align-items: start;
             gap: 10px;
@@ -1143,15 +1229,18 @@ export default function PlayerHomePage() {
           }
           .playerHomeKicker {
             font-size: 10px;
+            font-weight: 800;
             letter-spacing: .035em;
           }
           .playerHomeHero h1 {
             font-size: clamp(26px, 10vw, 34px);
+            font-weight: 850;
             line-height: .96;
             margin: 4px 0 6px;
           }
           .playerHomeHero p {
             font-size: 13px;
+            font-weight: 650;
             line-height: 1.28;
             max-width: 100%;
           }
@@ -1163,6 +1252,7 @@ export default function PlayerHomePage() {
           }
           .playerHomeHeroCard__club {
             font-size: 9px;
+            font-weight: 800;
             max-width: 100%;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -1180,9 +1270,11 @@ export default function PlayerHomePage() {
           }
           .playerHomeHeroStats small {
             font-size: 8px;
+            font-weight: 800;
           }
           .playerHomeHeroStats strong {
             font-size: 12px;
+            font-weight: 850;
           }
           .playerPriorityPanel {
             gap: 7px;
@@ -1200,10 +1292,12 @@ export default function PlayerHomePage() {
           .playerPriorityCard span,
           .playerPrioritySide span {
             font-size: 9px;
+            font-weight: 800;
             letter-spacing: .025em;
           }
           .playerPriorityCard strong {
             font-size: 19px;
+            font-weight: 850;
             max-width: 100%;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -1211,12 +1305,14 @@ export default function PlayerHomePage() {
           }
           .playerPriorityCard small {
             font-size: 11px;
+            font-weight: 650;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
           }
           .playerPriorityCard b {
             font-size: 12px;
+            font-weight: 850;
           }
           .playerPrioritySide {
             gap: 7px;
@@ -1233,6 +1329,7 @@ export default function PlayerHomePage() {
           }
           .playerPrioritySide strong {
             font-size: 14px;
+            font-weight: 850;
           }
           .playerQuickGrid {
             gap: 7px;
@@ -1255,10 +1352,12 @@ export default function PlayerHomePage() {
           }
           .playerQuickGrid span {
             font-size: 9px;
+            font-weight: 800;
             letter-spacing: .02em;
           }
           .playerQuickGrid strong {
             font-size: 14px;
+            font-weight: 850;
           }
           .playerSection {
             gap: 10px;
@@ -1273,11 +1372,13 @@ export default function PlayerHomePage() {
           }
           .playerSection header h2 {
             font-size: 19px;
+            font-weight: 850;
             line-height: 1.04;
             margin-top: 2px;
           }
           .playerClubSwitchHint {
             font-size: 10px;
+            font-weight: 700;
             padding: 6px 8px;
           }
           .playerClubGrid,
@@ -1308,9 +1409,11 @@ export default function PlayerHomePage() {
           }
           .playerClubCard strong {
             font-size: 14px;
+            font-weight: 850;
           }
           .playerClubCard span {
             font-size: 11px;
+            font-weight: 650;
             margin-top: 2px;
           }
           .playerClubActions { grid-column: 1 / -1; grid-template-columns: auto auto; justify-content: start; justify-items: start; }
@@ -1326,6 +1429,7 @@ export default function PlayerHomePage() {
           }
           .playerMyTournamentCard__status {
             font-size: 9px;
+            font-weight: 800;
             padding: 4px 7px;
           }
           .playerMyTournamentCard strong { white-space: normal; }

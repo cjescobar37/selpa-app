@@ -56,7 +56,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
 
   if (!ready) {
     return (
-      <div className="px-auth">
+      <div className="px-auth px-auth--gate">
         <div className="px-authCard">
           <div className="px-authTop">
             <div className="px-authBrand">
