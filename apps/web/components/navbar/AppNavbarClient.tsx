@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Bell, Mail, Search, ChevronDown, X } from 'lucide-react'
+import { Bell, Mail, Search, ChevronDown, X, Menu } from 'lucide-react'
 
 import { NAV_CONFIG, type NavChild, type NavItem } from '@/lib/navConfig'
 import { useSession } from '@/components/session/SessionProvider'
@@ -245,6 +245,7 @@ export default function AppNavbarClient() {
   const cfg = useMemo(() => NAV_CONFIG[role || 'guest'], [role])
 
   const [navOpenIndex, setNavOpenIndex] = useState<number | null>(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
   const [clubOpen, setClubOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -346,6 +347,7 @@ export default function AppNavbarClient() {
       if (!rootRef.current) return
       if (!rootRef.current.contains(target)) {
         setNavOpenIndex(null)
+        setMobileMenuOpen(false)
         setUserOpen(false)
         setClubOpen(false)
         setNotificationsOpen(false)
@@ -356,6 +358,7 @@ export default function AppNavbarClient() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setNavOpenIndex(null)
+        setMobileMenuOpen(false)
         setUserOpen(false)
         setClubOpen(false)
         setNotificationsOpen(false)
@@ -377,6 +380,7 @@ export default function AppNavbarClient() {
   useEffect(() => {
     clearNavCloseTimeout()
     setNavOpenIndex(null)
+    setMobileMenuOpen(false)
     setUserOpen(false)
     setClubOpen(false)
     setNotificationsOpen(false)
@@ -454,6 +458,7 @@ export default function AppNavbarClient() {
 
   function closeAllMenus() {
     setNavOpenIndex(null)
+    setMobileMenuOpen(false)
     setUserOpen(false)
     setClubOpen(false)
     setNotificationsOpen(false)
@@ -463,6 +468,7 @@ export default function AppNavbarClient() {
   function toggleSearch() {
     setSearchOpen((value) => !value)
     setNavOpenIndex(null)
+    setMobileMenuOpen(false)
     setUserOpen(false)
     setClubOpen(false)
     setNotificationsOpen(false)
@@ -916,6 +922,19 @@ export default function AppNavbarClient() {
     if (role === 'guest') {
       return (
         <div className="px-mobileActions">
+          <button
+            className={`px-burger px-burger--menu ${mobileMenuOpen ? 'is-active' : ''}`}
+            type="button"
+            aria-label="Abrir menú"
+            aria-expanded={mobileMenuOpen}
+            onClick={() => {
+              setMobileMenuOpen((value) => !value)
+              setSearchOpen(false)
+            }}
+          >
+            <Menu size={16} aria-hidden="true" />
+            <span className="px-burgerText">Menú</span>
+          </button>
           <button className={`px-iconBtn ${searchOpen ? 'is-active' : ''}`} aria-label="Buscar" aria-expanded={searchOpen} onClick={toggleSearch}><Search size={17} /></button>
         </div>
       )
@@ -1029,6 +1048,26 @@ export default function AppNavbarClient() {
     )
   }
 
+  function renderMobileMenu() {
+    if (role !== 'guest' || !mobileMenuOpen) return null
+
+    return (
+      <nav className="px-mobileMenu" aria-label="Menú principal">
+        <div className="px-mobileMenuHead">
+          <span>Menú</span>
+          <strong>{BRAND.name.toUpperCase()}</strong>
+        </div>
+        {nav.map((item) => (
+          <div key={item.href} className="px-mobileRow">
+            <Link className={`px-mobileLink ${isActiveItem(pathname, currentSearch, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}>
+              {item.label}
+            </Link>
+          </div>
+        ))}
+      </nav>
+    )
+  }
+
   return (
     <>
       <header className={`px-nav${isGlobalPublicNav ? ' px-nav--global' : ''}`} ref={rootRef} style={clubThemeStyle}>
@@ -1044,6 +1083,7 @@ export default function AppNavbarClient() {
           <div className="px-mobileBar__right">{renderMobileRight()}</div>
         </div>
 
+        {renderMobileMenu()}
         {renderSearchPanel()}
       </header>
 
