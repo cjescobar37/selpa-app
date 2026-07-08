@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import SelpaLoader from '@/components/SelpaLoader'
 import { useSession } from '@/components/session/SessionProvider'
 
 export default function RoleGate({ children }: { children: React.ReactNode }) {
@@ -55,7 +56,11 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
       isAllowedWithoutClub)
 
   if (!ready) {
-    return <div className="px-auth px-authModern px-auth--bridge" aria-hidden="true" />
+    return (
+      <div className="px-auth px-authModern px-auth--bridge">
+        <SelpaLoader title="Preparando tu perfil..." subtitle="Cargando tu información" />
+      </div>
+    )
   }
 
   // ✅ ACÁ ESTABA TU BUG: faltaba devolver children

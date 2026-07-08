@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import SelpaLoader from '@/components/SelpaLoader'
 import { BRAND } from '@/lib/branding'
 
 type AlertState =
@@ -124,16 +125,7 @@ export default function LoginPageClient() {
 
         <form className="px-authBody" onSubmit={signInWithEmail}>
           {loading ? (
-            <div className="px-loginLoading" role="status" aria-live="polite">
-              <span className="px-loginLoading__mark" aria-hidden="true">
-                <span className="px-spinner" />
-              </span>
-              <div>
-                <strong>Ingresando...</strong>
-                <p>Preparando tu espacio</p>
-              </div>
-              <span className="px-loginLoading__line" aria-hidden="true" />
-            </div>
+            <SelpaLoader title="Ingresando..." subtitle="Preparando tu espacio" />
           ) : (
             <>
               <button

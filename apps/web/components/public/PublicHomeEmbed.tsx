@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import SelpaLoader from '@/components/SelpaLoader'
 import PublicHomeExperience from '@/components/public/PublicHomeExperience'
 
 type PublicHomeData = {
@@ -51,7 +52,13 @@ export default function PublicHomeEmbed({ userName }: { userName?: string | null
   }, [])
 
   if (error) return <div className="modeEmbedState">{error}</div>
-  if (!data) return <div className="modeEmbedState">Cargando Comunidad SELPA...</div>
+  if (!data) {
+    return (
+      <div className="modeEmbedState modeEmbedState--loading">
+        <SelpaLoader title="Cargando comunidad..." subtitle="Buscando torneos y clubes" />
+      </div>
+    )
+  }
   const displayName = String(userName ?? '').trim()
   const openRegistrationCount = getOpenRegistrationCount(data.tournaments)
   const recentNewsCount = data.newsArchive.length

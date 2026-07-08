@@ -17,6 +17,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubTheme } from '@/lib/clubThemes'
 import { BRAND } from '@/lib/branding'
+import SelpaLoader from '@/components/SelpaLoader'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import PublicHomeEmbed from '@/components/public/PublicHomeEmbed'
 import ModeSegmentedControl, { type HomeMode } from '@/components/ModeSegmentedControl'
@@ -160,16 +161,7 @@ function PlayerHomeLoader() {
     <>
       <div className="playerHomeShell playerHomeShell--loading">
         <div className="playerHomePanel playerHomePanel--loading">
-          <div className="px-loginLoading" role="status" aria-live="polite">
-            <span className="px-loginLoading__mark" aria-hidden="true">
-              <span className="px-spinner" />
-            </span>
-            <div>
-              <strong>Ingresando...</strong>
-              <p>Preparando tu espacio</p>
-            </div>
-            <span className="px-loginLoading__line" aria-hidden="true" />
-          </div>
+          <SelpaLoader title="Preparando tu perfil..." subtitle="Cargando tu información" />
         </div>
       </div>
       <style>{`

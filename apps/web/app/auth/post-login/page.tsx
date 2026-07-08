@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import AuthAlert from '@/components/AuthAlert'
+import SelpaLoader from '@/components/SelpaLoader'
 import { useSession } from '@/components/session/SessionProvider'
 
 type AlertState =
@@ -55,7 +56,11 @@ export default function PostLoginPage() {
   }, [router, session.postLoginDestination, session.status, session.user])
 
   if (!alert) {
-    return <div className="px-auth px-authModern px-auth--bridge" aria-hidden="true" />
+    return (
+      <div className="px-auth px-authModern px-auth--bridge">
+        <SelpaLoader title="Ingresando..." subtitle="Preparando tu espacio" />
+      </div>
+    )
   }
 
   return (
