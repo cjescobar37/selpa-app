@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import AuthAlert from '@/components/AuthAlert'
 import { useSession } from '@/components/session/SessionProvider'
@@ -12,39 +12,17 @@ type AlertState =
 export default function PostLoginPage() {
   const router = useRouter()
   const session = useSession()
-  const [t, setT] = useState(0)
   const [stuck, setStuck] = useState(false)
 
-  const alert: AlertState = useMemo(() => {
-    if (stuck) {
-      return {
+  const alert: AlertState = stuck
+    ? {
         variant: 'warning',
         title: 'Está tardando más de lo normal',
         message: 'Podés reintentar, ir a seleccionar club o volver al login.',
       }
-    }
-
-    if (session.status === 'ready' && !session.user) {
-      return { variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' }
-    }
-
-    if (session.status === 'ready') {
-      return null
-    }
-
-    return null
-  }, [session.status, session.user, stuck])
-
-  const pct = useMemo(() => {
-    // barrita que sube “suave” hasta 90%, y si resolve ok, llega a 100% antes de redirigir
-    const p = Math.min(90, 10 + t * 12)
-    return p
-  }, [t])
-
-  useEffect(() => {
-    const it = setInterval(() => setT(x => x + 1), 800)
-    return () => clearInterval(it)
-  }, [])
+    : session.status === 'ready' && !session.user
+    ? { variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' }
+    : null
 
   useEffect(() => {
     let alive = true
@@ -63,11 +41,8 @@ export default function PostLoginPage() {
       }
     }
 
-    const redirect = setTimeout(() => {
-      if (alive) router.replace(session.postLoginDestination)
-    }, 450)
+    router.replace(session.postLoginDestination)
 
-    // fallback si tarda
     const slow = setTimeout(() => {
       if (!alive) return
       setStuck(true)
@@ -75,10 +50,13 @@ export default function PostLoginPage() {
 
     return () => {
       alive = false
-      clearTimeout(redirect)
       clearTimeout(slow)
     }
   }, [router, session.postLoginDestination, session.status, session.user])
+
+  if (!alert) {
+    return <div className="px-auth px-authModern px-auth--bridge" aria-hidden="true" />
+  }
 
   return (
     <div className="px-auth px-authModern px-loginAuth">
@@ -94,20 +72,7 @@ export default function PostLoginPage() {
         </div>
 
         <div className="px-authBody">
-          <div className="px-loginLoading" role="status" aria-live="polite">
-            <span className="px-loginLoading__mark" aria-hidden="true">
-              <span className="px-spinner" />
-            </span>
-            <div>
-              <strong>Ingresando...</strong>
-              <p>Preparando tu espacio</p>
-            </div>
-            <span className="px-loginLoading__line px-loginLoading__line--progress" aria-hidden="true">
-              <span style={{ width: `${pct}%` }} />
-            </span>
-          </div>
-
-          {alert ? <AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /> : null}
+          <AuthAlert variant={alert.variant} title={alert.title} message={alert.message} />
 
           {stuck ? (
             <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>

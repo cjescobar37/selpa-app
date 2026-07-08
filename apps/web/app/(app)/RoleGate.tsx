@@ -55,34 +55,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
       isAllowedWithoutClub)
 
   if (!ready) {
-    return (
-      <div className="px-auth px-authModern px-loginAuth px-auth--gate">
-        <div className="px-authCard">
-          <div className="px-authTop">
-            <div className="px-authBrand">
-              <div className="px-authBrandText">
-                <span className="px-authMark" aria-label="SELPA logo">
-                  <img src="/brand/selpa-wordmark-clean-dark.png" alt="SELPA" />
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-authBody">
-            <div className="px-loginLoading" role="status" aria-live="polite">
-              <span className="px-loginLoading__mark" aria-hidden="true">
-                <span className="px-spinner" />
-              </span>
-              <div>
-                <strong>Ingresando...</strong>
-                <p>Preparando tu espacio</p>
-              </div>
-              <span className="px-loginLoading__line" aria-hidden="true" />
-            </div>
-          </div>
-        </div>
-      </div>
-    )
+    return <div className="px-auth px-authModern px-auth--bridge" aria-hidden="true" />
   }
 
   // ✅ ACÁ ESTABA TU BUG: faltaba devolver children

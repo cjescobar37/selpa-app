@@ -257,6 +257,10 @@
   padding: 34px 16px;
 }
 
+.px-auth--bridge{
+  min-height: calc(100vh - 120px);
+}
+
 .px-authModern .px-authCard{
   background: #ffffff;
   border: 1px solid rgba(148,163,184,.22);
