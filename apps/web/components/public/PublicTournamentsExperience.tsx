@@ -184,9 +184,26 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
           .publicTournamentGrid { grid-template-columns: repeat(2, minmax(0,1fr)); }
         }
         @media (max-width: 560px) {
-          .publicTournamentShell { gap: 14px; }
-          .publicTournamentHero { border-radius: 20px; padding: 24px 18px; }
-          .publicTournamentSection > header { align-items: start; flex-direction: column; }
+          .publicTournamentShell { gap: 8px; }
+          .publicTournamentHero { border-radius: 16px; min-height: 118px; padding: 12px 13px; }
+          .publicTournamentHero::after { height: 2px; left: 13px; right: 13px; }
+          .publicTournamentHero span { font-size: 9.5px; font-weight: 780; letter-spacing: .04em; }
+          .publicTournamentHero h1 { font-size: clamp(26px, 8vw, 31px); font-weight: 820; letter-spacing: -.025em; line-height: 1; margin: 4px 0 5px; }
+          .publicTournamentHero p { font-size: 12px; font-weight: 620; line-height: 1.24; }
+          .publicTournamentFilters { border-radius: 14px; gap: 5px 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 7px; }
+          .publicTournamentFilters label { gap: 2px; }
+          .publicTournamentFilters label > span { font-size: 9px; font-weight: 680; letter-spacing: .01em; }
+          .publicTournamentFilters select, .publicTournamentFilters input { border-radius: 9px; font-size: 11.5px; font-weight: 620; min-height: 30px; padding: 5px 7px; }
+          .publicTournamentSearch { grid-column: auto; }
+          .publicTournamentSearch div { border-radius: 9px; gap: 5px; min-height: 30px; min-width: 0; padding-left: 7px; }
+          .publicTournamentSearch input { min-width: 0; width: 100%; }
+          .publicTournamentSearch svg { height: 13px; width: 13px; }
+          .publicTournamentSections { gap: 12px; }
+          .publicTournamentSection { gap: 7px; }
+          .publicTournamentSection > header { align-items: center; flex-direction: row; gap: 8px; }
+          .publicTournamentSection > header span { font-size: 17px; font-weight: 760; letter-spacing: 0; }
+          .publicTournamentSection > header strong { font-size: 11px; font-weight: 620; }
+          .publicTournamentSection > header small { font-size: 10px; font-weight: 720; padding: 4px 7px; }
           .publicTournamentGrid { grid-template-columns: 1fr; }
           .publicTournamentCard { grid-template-columns: 1fr; padding: 12px; }
           .publicTournamentDate { align-items: center; display: flex; gap: 8px; justify-content: flex-start; min-height: 0; }

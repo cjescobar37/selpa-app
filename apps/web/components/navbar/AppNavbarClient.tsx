@@ -935,7 +935,6 @@ export default function AppNavbarClient() {
             <Menu size={16} aria-hidden="true" />
             <span className="px-burgerText">Menú</span>
           </button>
-          <button className={`px-iconBtn ${searchOpen ? 'is-active' : ''}`} aria-label="Buscar" aria-expanded={searchOpen} onClick={toggleSearch}><Search size={17} /></button>
         </div>
       )
     }
