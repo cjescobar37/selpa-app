@@ -15,13 +15,13 @@ export default function PostLoginPage() {
   const [stuck, setStuck] = useState(false)
 
   const alert: AlertState = stuck
-    ? {
-        variant: 'warning',
-        title: 'Está tardando más de lo normal',
-        message: 'Podés reintentar, ir a seleccionar club o volver al login.',
-      }
-    : session.status === 'ready' && !session.user
-    ? { variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' }
+    ? session.status === 'ready' && !session.user
+      ? { variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' }
+      : {
+          variant: 'warning',
+          title: 'Está tardando más de lo normal',
+          message: 'Podés reintentar, ir a seleccionar club o volver al login.',
+        }
     : null
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export default function PostLoginPage() {
       const retry = setTimeout(() => {
         if (!alive) return
         setStuck(true)
-      }, 350)
+      }, 1600)
 
       return () => {
         alive = false
