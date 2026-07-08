@@ -171,46 +171,49 @@ export default function PublicHomeEmbed({ userName }: { userName?: string | null
         @media (max-width: 640px) {
           .modeCommunityHero {
             border-radius: 16px;
-            gap: 6px;
-            margin-bottom: 10px;
-            padding: 13px 14px;
+            gap: 5px;
+            margin-bottom: 8px;
+            padding: 10px 11px;
           }
           .modeCommunityHero::after {
             height: 2px;
           }
           .modeCommunityHero > span {
-            font-size: 10px;
-            letter-spacing: .05em;
+            font-size: 9px;
+            font-weight: 850;
+            letter-spacing: .04em;
           }
           .modeCommunityHero h1 {
-            font-size: clamp(24px, 9vw, 34px);
-            line-height: .96;
+            font-size: clamp(21px, 7.6vw, 28px);
+            font-weight: 850;
+            letter-spacing: -.02em;
+            line-height: 1;
           }
           .modeCommunityHero p {
-            font-size: 13px;
-            line-height: 1.25;
+            font-size: 12px;
+            font-weight: 650;
+            line-height: 1.18;
           }
           .modeCommunityMetrics {
             display: grid;
-            gap: 6px;
+            gap: 5px;
             grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 2px;
           }
           .modeCommunityMetrics div {
-            border-radius: 12px;
+            border-radius: 10px;
+            gap: 1px;
             min-width: 0;
-            padding: 7px 8px;
+            padding: 5px 6px;
           }
           .modeCommunityMetrics strong {
-            font-size: 16px;
+            font-size: 14px;
+            font-weight: 850;
           }
           .modeCommunityMetrics small {
-            font-size: 10px;
+            font-size: 9px;
+            font-weight: 700;
             line-height: 1.1;
-          }
-        }
-        @media (max-width: 380px) {
-          .modeCommunityMetrics {
-            grid-template-columns: 1fr;
           }
         }
       `}</style>
