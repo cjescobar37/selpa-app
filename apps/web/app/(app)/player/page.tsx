@@ -160,14 +160,15 @@ function PlayerHomeLoader() {
     <>
       <div className="playerHomeShell playerHomeShell--loading">
         <div className="playerHomePanel playerHomePanel--loading">
-          <div className="playerHomeLoader" role="status" aria-label="Cargando inicio del jugador">
-            <span className="playerHomeLoader__mark" aria-hidden="true">
-              <img src="/brand/selpa-isotipo.png" alt="" width={24} height={24} />
+          <div className="px-loginLoading" role="status" aria-live="polite">
+            <span className="px-loginLoading__mark" aria-hidden="true">
+              <span className="px-spinner" />
             </span>
-            <span className="playerHomeLoader__body" aria-hidden="true">
-              <span />
-              <span />
-            </span>
+            <div>
+              <strong>Ingresando...</strong>
+              <p>Preparando tu espacio</p>
+            </div>
+            <span className="px-loginLoading__line" aria-hidden="true" />
           </div>
         </div>
       </div>
@@ -195,58 +196,6 @@ function PlayerHomeLoader() {
           justify-content: center;
           min-height: 108px;
           padding: 14px;
-        }
-        .playerHomeLoader {
-          align-items: center;
-          background: rgba(255,255,255,.92);
-          border: 1px solid rgba(226,232,240,.9);
-          border-radius: 16px;
-          box-shadow: 0 12px 28px rgba(15,23,42,.07);
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 34px minmax(0, 1fr);
-          padding: 10px;
-          width: min(238px, 100%);
-        }
-        .playerHomeLoader__mark {
-          align-items: center;
-          background: linear-gradient(135deg, rgba(14,165,233,.12), rgba(236,72,153,.10));
-          border: 1px solid rgba(14,165,233,.16);
-          border-radius: 11px;
-          display: inline-flex;
-          height: 34px;
-          justify-content: center;
-          overflow: hidden;
-          width: 34px;
-        }
-        .playerHomeLoader__mark img {
-          display: block;
-          height: 24px;
-          max-height: 48px;
-          max-width: 48px;
-          object-fit: contain;
-          width: 24px;
-        }
-        .playerHomeLoader__body {
-          display: grid;
-          gap: 7px;
-          min-width: 0;
-        }
-        .playerHomeLoader__body span {
-          animation: playerHomeLoaderShimmer 1.1s ease-in-out infinite;
-          background: linear-gradient(90deg, #e2e8f0 0%, #f8fafc 48%, #e2e8f0 100%);
-          background-size: 210% 100%;
-          border-radius: 999px;
-          display: block;
-          height: 8px;
-        }
-        .playerHomeLoader__body span:last-child {
-          opacity: .8;
-          width: 68%;
-        }
-        @keyframes playerHomeLoaderShimmer {
-          0% { background-position: 100% 0; }
-          100% { background-position: -100% 0; }
         }
         @media (max-width: 560px) {
           .playerHomeShell--loading {

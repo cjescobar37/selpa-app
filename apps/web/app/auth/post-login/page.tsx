@@ -29,10 +29,10 @@ export default function PostLoginPage() {
     }
 
     if (session.status === 'ready') {
-      return { variant: 'success', title: 'Listo', message: 'Entrando…' }
+      return null
     }
 
-    return { variant: 'info', title: 'Accediendo…', message: 'Resolviendo tu perfil…' }
+    return null
   }, [session.status, session.user, stuck])
 
   const pct = useMemo(() => {
@@ -81,40 +81,30 @@ export default function PostLoginPage() {
   }, [router, session.postLoginDestination, session.status, session.user])
 
   return (
-    <div className="px-auth">
+    <div className="px-auth px-authModern px-loginAuth">
       <div className="px-authCard">
         <div className="px-authTop">
           <div className="px-authBrand">
-            <div className="px-authLogo"><img src="/brand/selpa-isotipo.png" alt="SELPA" /></div>
             <div className="px-authBrandText">
-              <h1 className="px-authTitle">Accediendo</h1>
-              <p className="px-authSub">Estamos resolviendo tu perfil…</p>
+              <span className="px-authMark" aria-label="SELPA logo">
+                <img src="/brand/selpa-wordmark-clean-dark.png" alt="SELPA" />
+              </span>
             </div>
           </div>
         </div>
 
         <div className="px-authBody">
-          {/* Barra de progreso (sólida + detalle magenta) */}
-          <div
-            style={{
-              height: 10,
-              borderRadius: 999,
-              background: 'rgba(255,255,255,0.10)',
-              border: '1px solid rgba(255,255,255,0.14)',
-              overflow: 'hidden',
-              marginBottom: 14,
-            }}
-          >
-            <div
-              style={{
-                height: '100%',
-                width: `${pct}%`,
-                borderRadius: 999,
-                background: 'linear-gradient(90deg, rgba(105,223,227,1), rgba(105,223,227,0.6))',
-                boxShadow: '0 0 0 1px rgba(255,78,114,0.18) inset',
-                transition: 'width .45s ease',
-              }}
-            />
+          <div className="px-loginLoading" role="status" aria-live="polite">
+            <span className="px-loginLoading__mark" aria-hidden="true">
+              <span className="px-spinner" />
+            </span>
+            <div>
+              <strong>Ingresando...</strong>
+              <p>Preparando tu espacio</p>
+            </div>
+            <span className="px-loginLoading__line px-loginLoading__line--progress" aria-hidden="true">
+              <span style={{ width: `${pct}%` }} />
+            </span>
           </div>
 
           {alert ? <AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /> : null}

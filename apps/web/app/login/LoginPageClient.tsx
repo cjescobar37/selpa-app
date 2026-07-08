@@ -55,7 +55,7 @@ export default function LoginPageClient() {
   }, [router])
 
   async function signInWithGoogle() {
-    setAlert({ variant: 'info', title: 'Redirigiendo a Google...' })
+    setAlert(null)
     setLoading(true)
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -88,7 +88,7 @@ export default function LoginPageClient() {
     }
 
     setLoading(true)
-    setAlert({ variant: 'info', title: 'Ingresando...' })
+    setAlert(null)
 
     const { error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
@@ -104,11 +104,6 @@ export default function LoginPageClient() {
       setLoading(false)
       return
     }
-
-    setAlert({
-      variant: 'success',
-      title: '¡Listo! Entraste correctamente.',
-    })
 
     router.replace('/auth/post-login')
   }
@@ -128,18 +123,24 @@ export default function LoginPageClient() {
         </div>
 
         <form className="px-authBody" onSubmit={signInWithEmail}>
-          <button
-            className="px-btn px-btnGoogle"
-            type="button"
-            onClick={signInWithGoogle}
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <span className="px-spinner" /> Conectando...
-              </>
-            ) : (
-              <>
+          {loading ? (
+            <div className="px-loginLoading" role="status" aria-live="polite">
+              <span className="px-loginLoading__mark" aria-hidden="true">
+                <span className="px-spinner" />
+              </span>
+              <div>
+                <strong>Ingresando...</strong>
+                <p>Preparando tu espacio</p>
+              </div>
+              <span className="px-loginLoading__line" aria-hidden="true" />
+            </div>
+          ) : (
+            <>
+              <button
+                className="px-btn px-btnGoogle"
+                type="button"
+                onClick={signInWithGoogle}
+              >
                 <img
                   src="https://www.svgrepo.com/show/475656/google-color.svg"
                   width={16}
@@ -147,69 +148,59 @@ export default function LoginPageClient() {
                   alt=""
                 />
                 Continuar con Google
-              </>
-            )}
-          </button>
+              </button>
 
-          <div className="px-sepRow">o</div>
+              <div className="px-sepRow">o</div>
 
-          <div className="px-field">
-            <label className="px-label">Email</label>
-            <input
-              className="px-input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@email.com"
-              autoComplete="username"
-            />
-          </div>
+              <div className="px-field">
+                <label className="px-label">Email</label>
+                <input
+                  className="px-input"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="tu@email.com"
+                  autoComplete="username"
+                />
+              </div>
 
-          <div className="px-field">
-            <label className="px-label">Contraseña</label>
-            <input
-              className="px-input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete="current-password"
-            />
-          </div>
+              <div className="px-field">
+                <label className="px-label">Contraseña</label>
+                <input
+                  className="px-input"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+              </div>
 
-          <button
-            className="px-btn"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <span className="px-spinner" /> Entrando...
-              </>
-            ) : (
-              'Ingresar'
-            )}
-          </button>
-          <p className="px-loginSecureText">Tus datos viajan protegidos mediante conexión segura.</p>
+              <button className="px-btn" type="submit">
+                Ingresar
+              </button>
+              <p className="px-loginSecureText">Tus datos viajan protegidos mediante conexión segura.</p>
 
-          {alert ? (
-            <AuthAlert
-              variant={alert.variant}
-              title={alert.title}
-              message={alert.message}
-            />
-          ) : null}
+              {alert ? (
+                <AuthAlert
+                  variant={alert.variant}
+                  title={alert.title}
+                  message={alert.message}
+                />
+              ) : null}
 
-          <div className="px-authRow px-loginLinks">
-            <Link className="px-loginLinkBlock" href="/register">
-              <span>¿Primera vez?</span>
-              <strong>Crear cuenta <b>→</b></strong>
-            </Link>
-            <Link className="px-loginLinkBlock" href="/reset-password">
-              <span>¿Olvidaste tu contraseña?</span>
-              <strong>Recuperarla <b>→</b></strong>
-            </Link>
-          </div>
+              <div className="px-authRow px-loginLinks">
+                <Link className="px-loginLinkBlock" href="/register">
+                  <span>¿Primera vez?</span>
+                  <strong>Crear cuenta <b>→</b></strong>
+                </Link>
+                <Link className="px-loginLinkBlock" href="/reset-password">
+                  <span>¿Olvidaste tu contraseña?</span>
+                  <strong>Recuperarla <b>→</b></strong>
+                </Link>
+              </div>
+            </>
+          )}
         </form>
       </div>
     </div>

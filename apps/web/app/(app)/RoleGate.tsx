@@ -56,32 +56,28 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
 
   if (!ready) {
     return (
-      <div className="px-auth px-auth--gate">
+      <div className="px-auth px-authModern px-loginAuth px-auth--gate">
         <div className="px-authCard">
           <div className="px-authTop">
             <div className="px-authBrand">
-              <div className="px-authLogo"><img src="/brand/selpa-isotipo.png" alt="SELPA" /></div>
               <div className="px-authBrandText">
-                <h1 className="px-authTitle">Accediendo…</h1>
-                <p className="px-authSub">Verificando permisos y club activo</p>
+                <span className="px-authMark" aria-label="SELPA logo">
+                  <img src="/brand/selpa-wordmark-clean-dark.png" alt="SELPA" />
+                </span>
               </div>
             </div>
           </div>
 
           <div className="px-authBody">
-            <div className="px-help" style={{ marginBottom: 10 }}>
-              Si tarda más de lo normal, podés salir y volver a entrar.
-            </div>
-
-            <div className="px-authRow" style={{ justifyContent: 'flex-end' }}>
-              <button
-                className="px-btn px-btn--ghost"
-                onClick={async () => {
-                  await session.signOut()
-                }}
-              >
-                Salir
-              </button>
+            <div className="px-loginLoading" role="status" aria-live="polite">
+              <span className="px-loginLoading__mark" aria-hidden="true">
+                <span className="px-spinner" />
+              </span>
+              <div>
+                <strong>Ingresando...</strong>
+                <p>Preparando tu espacio</p>
+              </div>
+              <span className="px-loginLoading__line" aria-hidden="true" />
             </div>
           </div>
         </div>
