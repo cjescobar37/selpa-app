@@ -1411,8 +1411,8 @@
   }
 
   .px-wrap{
-    padding-bottom: 22px;
-    padding-top: 12px;
+    padding-bottom: 18px;
+    padding-top: 10px;
   }
 
   .home-shell,
@@ -1420,8 +1420,8 @@
   .px-auth,
   .px-authModern,
   .px-loginAuth{
-    padding-bottom: 22px;
-    padding-top: 12px;
+    padding-bottom: 18px;
+    padding-top: 10px;
   }
 
   .public-section,
@@ -1429,14 +1429,14 @@
   .publicClubsPage,
   .publicTournamentShell,
   .clubPublicHome{
-    gap: 12px;
-    margin-top: 10px;
+    gap: 10px;
+    margin-top: 8px;
   }
 
   .public-headerRow,
   .px-pageHead,
   .tableTitle{
-    margin-bottom: 7px;
+    margin-bottom: 5px;
   }
 
   .px-pageSub,
@@ -1569,7 +1569,7 @@
   .clubPublicNewsGrid,
   .clubPublicSponsorGrid,
   .clubPublicRankingGrid{
-    gap: 9px;
+    gap: 8px;
   }
 
   .px-kpis,
@@ -1581,7 +1581,7 @@
   .rankGrid,
   .sponsorRow{
     gap: 8px;
-    margin-top: 9px;
+    margin-top: 8px;
   }
 
   .pampraxHero,
@@ -1590,7 +1590,7 @@
   .clubPublicHero{
     border-radius: 18px;
     min-height: 132px;
-    padding: 16px;
+    padding: 14px 16px;
   }
 
   .pampraxHero{
@@ -1698,7 +1698,7 @@
   .metaRow,
   .statsStrip,
   .tableWrap{
-    margin-top: 9px;
+    margin-top: 8px;
   }
 
   .metaCell,
@@ -1742,7 +1742,7 @@
   .publicClubsGrid,
   .clubPublicHeroMain,
   .clubPublicSponsorsPanel{
-    gap: 9px;
+    gap: 8px;
   }
 
   .publicHeroMain{
@@ -1758,7 +1758,7 @@
   .publicHeroOverlay,
   .publicSideNewsOverlay,
   .publicNewsTileOverlay{
-    padding: 14px;
+    padding: 12px 14px;
   }
 
   .publicHeroHeadline,
@@ -1790,7 +1790,7 @@
   .publicAdCardCopy,
   .publicArticleBody{
     gap: 7px;
-    padding: 14px;
+    padding: 12px 14px;
   }
 
   .publicClubCard{
@@ -1862,12 +1862,12 @@
 
   .clubPublicSponsorsPanel{
     border-radius: 18px;
-    padding: 14px;
+    padding: 12px 14px;
   }
 
   .clubPublicSponsorCarousel{
     gap: 10px;
-    padding-bottom: 10px;
+    padding-bottom: 8px;
   }
 
   .clubPublicSponsorCard{
@@ -1928,11 +1928,11 @@
   }
 
   .px-footer{
-    margin-top: 12px;
+    margin-top: 10px;
   }
 
   .px-footer-main{
-    padding: 16px 0;
+    padding: 14px 0;
   }
 
   .px-footer-inner{
@@ -1945,14 +1945,14 @@
   .px-loginAuth .px-authTop,
   .px-authModern .px-authTop,
   .px-authTop{
-    padding: 12px 14px 10px;
+    padding: 10px 14px 8px;
   }
 
   .px-loginAuth .px-authBody,
   .px-authModern .px-authBody,
   .px-authBody{
     gap: 8px;
-    padding: 9px 14px 14px;
+    padding: 8px 14px 12px;
   }
 
   .px-loginAuth .px-authTitle,
