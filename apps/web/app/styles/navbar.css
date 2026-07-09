@@ -2128,21 +2128,22 @@
   }
 
   .TournamentPublicCard{
-    --tournament-card-height: 224px;
-    gap: 6px;
-    grid-template-columns: 78px minmax(0,1fr);
-    height: auto !important;
-    min-height: 224px !important;
-    padding: 7px;
+    --tournament-card-height: 220px;
+    align-items: stretch;
+    gap: 10px;
+    grid-template-columns: 34% minmax(0,1fr);
+    height: 220px !important;
+    min-height: 220px !important;
+    padding: 8px;
   }
 
   .TournamentPublicCard h3{
     display: -webkit-box;
-    font-size: 14.5px;
+    font-size: 15px;
     font-weight: 900;
-    line-height: 1.12;
-    margin: 1px 0 0;
-    max-height: 2.24em;
+    line-height: 1.1;
+    margin: 0;
+    max-height: 2.2em;
     order: 1;
     overflow: hidden;
     -webkit-box-orient: vertical;
@@ -2150,7 +2151,7 @@
   }
 
   .TournamentPublicCard.is-manual-flyer{
-    grid-template-columns: 82px minmax(0,1fr);
+    grid-template-columns: 34% minmax(0,1fr);
   }
 
   .TournamentPublicCard::before{
@@ -2161,8 +2162,10 @@
 
   .TournamentPublicCard__poster{
     align-self: stretch;
-    border-radius: 10px;
-    max-height: 210px;
+    border-radius: 11px;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
   }
 
   .TournamentPublicCard__posterMeta{
@@ -2194,16 +2197,19 @@
   }
 
   .TournamentPublicCard__body{
-    align-content: stretch;
-    gap: 3px;
-    grid-template-rows: auto auto auto minmax(0,1fr) auto;
+    align-content: initial;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
     height: 100%;
     min-height: 0;
   }
 
   .TournamentPublicCard__top{
     align-items: center;
-    grid-template-columns: auto minmax(0,1fr);
+    display: flex;
+    gap: 6px;
+    justify-content: space-between;
     min-height: 18px;
     order: 3;
     row-gap: 0;
@@ -2218,7 +2224,7 @@
   }
 
   .TournamentPublicCard__date strong{
-    font-size: 14px;
+    font-size: 15px;
     grid-row: auto;
     letter-spacing: 0;
   }
@@ -2234,12 +2240,12 @@
   }
 
   .TournamentPublicCard__status{
-    font-size: 7px;
+    flex: 0 0 auto;
+    font-size: 7.5px;
     gap: 3px;
-    justify-self: end;
     min-height: 16px;
     order: 2;
-    padding: 1px 5px;
+    padding: 2px 6px;
     white-space: nowrap;
     width: auto;
   }
@@ -2254,7 +2260,7 @@
     gap: 4px;
     margin: 0;
     order: 2;
-    padding: 1px 0 3px;
+    padding: 0;
   }
 
   .TournamentPublicCard__clubLogo{
@@ -2276,8 +2282,7 @@
   }
 
   .TournamentPublicCard__dates{
-    align-self: start;
-    margin-top: 3px;
+    display: none;
     order: 4;
   }
 
@@ -2299,7 +2304,8 @@
 
   .TournamentPublicCard__actions{
     align-self: end;
-    margin-top: 2px;
+    justify-content: flex-end;
+    margin-top: auto;
     order: 5;
   }
 
