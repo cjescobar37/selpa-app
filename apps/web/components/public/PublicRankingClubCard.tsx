@@ -422,7 +422,7 @@ export default function PublicRankingClubCard({
   if (variant === 'home') {
     if (href) {
       return (
-        <Link href={href} style={homeCardStyle} {...interactionProps}>
+        <Link className="publicRankingCardV2 publicRankingCardV2--home" href={href} style={homeCardStyle} {...interactionProps}>
           {homeContent}
         </Link>
       )
@@ -430,6 +430,7 @@ export default function PublicRankingClubCard({
 
     return (
       <article
+        className="publicRankingCardV2 publicRankingCardV2--home"
         role="button"
         tabIndex={0}
         onClick={onSelect}
@@ -445,7 +446,7 @@ export default function PublicRankingClubCard({
   if (href) {
     return (
       <Link
-        className="group relative flex min-h-[190px] cursor-pointer flex-col justify-between overflow-hidden rounded-[28px] bg-white p-6 text-slate-950 shadow-xl transition duration-200 hover:-translate-y-1 hover:shadow-2xl"
+        className="publicRankingCardV2 publicRankingCardV2--ranking group relative flex min-h-[190px] cursor-pointer flex-col justify-between overflow-hidden rounded-[28px] bg-white p-6 text-slate-950 shadow-xl transition duration-200 hover:-translate-y-1 hover:shadow-2xl"
         href={href}
         style={cardStyle}
         {...interactionProps}
@@ -457,7 +458,7 @@ export default function PublicRankingClubCard({
 
   return (
     <article
-      className="group relative flex min-h-[190px] cursor-pointer flex-col justify-between overflow-hidden rounded-[28px] bg-white p-6 text-slate-950 shadow-xl transition duration-200 hover:-translate-y-1 hover:shadow-2xl"
+      className="publicRankingCardV2 publicRankingCardV2--ranking group relative flex min-h-[190px] cursor-pointer flex-col justify-between overflow-hidden rounded-[28px] bg-white p-6 text-slate-950 shadow-xl transition duration-200 hover:-translate-y-1 hover:shadow-2xl"
       role="button"
       tabIndex={0}
       onClick={onSelect}
