@@ -125,6 +125,7 @@ export default function PublicRankingClubCard({
       />
       <svg
         aria-hidden="true"
+        className="publicRankingCardV2__mark"
         viewBox="0 0 220 120"
         style={{
           bottom: -18,
@@ -155,8 +156,9 @@ export default function PublicRankingClubCard({
           zIndex: 0,
         }}
       />
-      <div style={{ alignSelf: 'start', display: 'grid', gap: 9, gridTemplateRows: 'auto 1fr 5px', minHeight: 142, position: 'relative', zIndex: 1 }}>
+      <div className="publicRankingCardV2__chartWrap" style={{ alignSelf: 'start', display: 'grid', gap: 9, gridTemplateRows: 'auto 1fr 5px', minHeight: 142, position: 'relative', zIndex: 1 }}>
         <span
+          className="publicRankingCardV2__badge"
           style={{
             alignItems: 'center',
             background: 'rgba(255,255,255,.88)',
@@ -179,6 +181,7 @@ export default function PublicRankingClubCard({
         </span>
         <div
           aria-hidden="true"
+          className="publicRankingCardV2__steps"
           style={{
             alignItems: 'end',
             display: 'grid',
@@ -194,6 +197,7 @@ export default function PublicRankingClubCard({
             { label: '1', height: 100, color: 'linear-gradient(180deg, #ffffff, color-mix(in srgb, var(--club-secondary) 22%, #94a3b8))', opacity: .98, lift: 5 },
           ].map((step) => (
             <span
+              className="publicRankingCardV2__step"
               key={step.label}
               style={{
                 alignItems: 'start',
@@ -220,6 +224,7 @@ export default function PublicRankingClubCard({
           ))}
         </div>
         <span
+          className="publicRankingCardV2__base"
           style={{
             background: 'linear-gradient(90deg, var(--club-primary), color-mix(in srgb, var(--club-secondary) 40%, #64748b))',
             borderRadius: 999,
@@ -232,14 +237,14 @@ export default function PublicRankingClubCard({
         />
       </div>
 
-      <header style={{ alignSelf: 'center', display: 'grid', gap: 8, justifyItems: 'center', minWidth: 0, position: 'relative', textAlign: 'center', transform: 'translateY(-8px)', zIndex: 1 }}>
-        <h3 style={{ color: '#020617', display: '-webkit-box', fontSize: 30, fontWeight: 950, letterSpacing: '-.065em', lineHeight: .94, margin: 0, overflow: 'hidden', overflowWrap: 'anywhere', textShadow: isHovered ? '0 13px 30px rgba(15,23,42,.14)' : '0 10px 24px rgba(15,23,42,.09)', transition: 'text-shadow .18s ease', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }}>
+      <header className="publicRankingCardV2__homeBody" style={{ alignSelf: 'center', display: 'grid', gap: 8, justifyItems: 'center', minWidth: 0, position: 'relative', textAlign: 'center', transform: 'translateY(-8px)', zIndex: 1 }}>
+        <h3 className="publicRankingCardV2__clubName" style={{ color: '#020617', display: '-webkit-box', fontSize: 30, fontWeight: 950, letterSpacing: '-.065em', lineHeight: .94, margin: 0, overflow: 'hidden', overflowWrap: 'anywhere', textShadow: isHovered ? '0 13px 30px rgba(15,23,42,.14)' : '0 10px 24px rgba(15,23,42,.09)', transition: 'text-shadow .18s ease', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }}>
           {clubName}
         </h3>
-        <p style={{ color: '#0f172a', fontSize: 11, fontWeight: 950, letterSpacing: '.02em', lineHeight: 1.25, margin: 0 }}>
+        <p className="publicRankingCardV2__branches" style={{ color: '#0f172a', fontSize: 11, fontWeight: 950, letterSpacing: '.02em', lineHeight: 1.25, margin: 0 }}>
           Damas - Caballeros
         </p>
-        <p style={{ color: '#475569', fontSize: 12, fontWeight: 900, lineHeight: 1.3, margin: 0 }}>
+        <p className="publicRankingCardV2__players" style={{ color: '#475569', fontSize: 12, fontWeight: 900, lineHeight: 1.3, margin: 0 }}>
           {renderHomeMeta()}
         </p>
       </header>
@@ -328,11 +333,11 @@ export default function PublicRankingClubCard({
         ))}
       </span>
       <header
-        className="relative z-[1] min-w-0"
+        className="publicRankingCardV2__rankingHeader relative z-[1] min-w-0"
         style={{ minWidth: 0, position: 'relative', zIndex: 1 }}
       >
         <h2
-          className="line-clamp-2 overflow-hidden text-[23px] font-black leading-[1.04] tracking-[-0.025em] text-slate-950"
+          className="publicRankingCardV2__rankingTitle line-clamp-2 overflow-hidden text-[23px] font-black leading-[1.04] tracking-[-0.025em] text-slate-950"
           style={{ color: '#020617', display: '-webkit-box', fontSize: 23, fontWeight: 950, letterSpacing: '-.025em', lineHeight: 1.04, margin: 0, overflow: 'hidden', overflowWrap: 'anywhere', paddingRight: 72, WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }}
         >
           {clubName}
@@ -343,7 +348,7 @@ export default function PublicRankingClubCard({
         />
       </header>
       <div
-        className="relative z-[1] flex min-w-0 items-center gap-4"
+        className="publicRankingCardV2__rankingMeta relative z-[1] flex min-w-0 items-center gap-4"
         style={{ alignItems: 'center', display: 'flex', gap: 18, minWidth: 0, position: 'relative', transform: 'translateY(14px)', zIndex: 1 }}
       >
         <div
@@ -375,16 +380,16 @@ export default function PublicRankingClubCard({
         >
           {logo ? <img className="block h-full w-full object-contain" src={logo} alt="" loading="lazy" decoding="async" style={{ display: 'block', height: '100%', objectFit: 'contain', width: '100%' }} /> : getClubInitials(clubName)}
         </div>
-        <p className="mt-1 text-xs font-extrabold leading-tight text-slate-500" style={{ color: '#64748b', flex: '1 1 auto', fontSize: 12, fontWeight: 850, lineHeight: 1.28, margin: 0, minWidth: 0 }}>
+        <p className="publicRankingCardV2__rankingCopy mt-1 text-xs font-extrabold leading-tight text-slate-500" style={{ color: '#64748b', flex: '1 1 auto', fontSize: 12, fontWeight: 850, lineHeight: 1.28, margin: 0, minWidth: 0 }}>
           Entrá al ranking oficial del club.
         </p>
       </div>
       <footer
-        className="relative z-[1] flex min-w-0 items-end justify-between gap-3"
+        className="publicRankingCardV2__rankingFooter relative z-[1] flex min-w-0 items-end justify-between gap-3"
         style={{ alignItems: 'flex-end', display: 'flex', gap: 12, justifyContent: 'flex-end', minWidth: 0, position: 'relative', zIndex: 1 }}
       >
         <span
-          className="flex shrink-0 items-center justify-center rounded-full bg-slate-950 font-black leading-none text-white shadow-lg transition"
+          className="publicRankingCardV2__cta flex shrink-0 items-center justify-center rounded-full bg-slate-950 font-black leading-none text-white shadow-lg transition"
           aria-hidden="true"
           style={{
             alignItems: 'center',
@@ -424,6 +429,7 @@ export default function PublicRankingClubCard({
       return (
         <Link className="publicRankingCardV2 publicRankingCardV2--home" href={href} style={homeCardStyle} {...interactionProps}>
           {homeContent}
+          <MobileRankingCardStyles />
         </Link>
       )
     }
@@ -439,6 +445,7 @@ export default function PublicRankingClubCard({
         {...interactionProps}
       >
         {homeContent}
+        <MobileRankingCardStyles />
       </article>
     )
   }
@@ -452,6 +459,7 @@ export default function PublicRankingClubCard({
         {...interactionProps}
       >
         {content}
+        <MobileRankingCardStyles />
       </Link>
     )
   }
@@ -467,6 +475,140 @@ export default function PublicRankingClubCard({
       {...interactionProps}
     >
       {content}
+      <MobileRankingCardStyles />
     </article>
+  )
+}
+
+function MobileRankingCardStyles() {
+  return (
+    <style jsx>{`
+      @media (max-width: 640px) {
+        :global(.publicRankingCardV2--home) {
+          align-items: stretch !important;
+          gap: 10px !important;
+          grid-template-columns: minmax(118px, .48fr) minmax(0, 1fr) !important;
+          min-height: 138px !important;
+          padding: 12px 13px !important;
+        }
+
+        :global(.publicRankingCardV2__chartWrap) {
+          gap: 5px !important;
+          min-height: 112px !important;
+        }
+
+        :global(.publicRankingCardV2__badge) {
+          font-size: 7.5px !important;
+          font-weight: 850 !important;
+          gap: 4px !important;
+          letter-spacing: .055em !important;
+          padding: 3px 6px !important;
+        }
+
+        :global(.publicRankingCardV2__badge i) {
+          height: 5px !important;
+          width: 5px !important;
+        }
+
+        :global(.publicRankingCardV2__steps) {
+          align-items: end !important;
+          gap: 7px !important;
+          justify-self: center !important;
+          max-width: 132px !important;
+          width: 100% !important;
+        }
+
+        :global(.publicRankingCardV2__step) {
+          border-radius: 9px 9px 3px 3px !important;
+          font-size: 13px !important;
+          padding-top: 8px !important;
+        }
+
+        :global(.publicRankingCardV2__step:nth-child(1)) { height: 36px !important; }
+        :global(.publicRankingCardV2__step:nth-child(2)) { height: 54px !important; }
+        :global(.publicRankingCardV2__step:nth-child(3)) { height: 72px !important; }
+        :global(.publicRankingCardV2__step:nth-child(4)) { height: 91px !important; }
+
+        :global(.publicRankingCardV2__base) {
+          height: 3px !important;
+          width: 72% !important;
+        }
+
+        :global(.publicRankingCardV2__mark) {
+          right: 34px !important;
+          width: 166px !important;
+        }
+
+        :global(.publicRankingCardV2__homeBody) {
+          align-content: center !important;
+          gap: 5px !important;
+          justify-items: start !important;
+          text-align: left !important;
+          transform: none !important;
+        }
+
+        :global(.publicRankingCardV2__clubName) {
+          font-size: 24px !important;
+          font-weight: 900 !important;
+          letter-spacing: 0 !important;
+          line-height: 1 !important;
+          max-width: 100% !important;
+          text-align: left !important;
+        }
+
+        :global(.publicRankingCardV2__branches),
+        :global(.publicRankingCardV2__players) {
+          font-size: 11.5px !important;
+          font-weight: 780 !important;
+          line-height: 1.16 !important;
+        }
+
+        :global(.publicRankingCardV2--ranking) {
+          border-radius: 20px !important;
+          min-height: 134px !important;
+          padding: 10px !important;
+        }
+
+        :global(.publicRankingCardV2__rankingHeader h2) {
+          font-size: 24px !important;
+          font-weight: 900 !important;
+          letter-spacing: 0 !important;
+          line-height: 1.02 !important;
+          padding-right: 28px !important;
+        }
+
+        :global(.publicRankingCardV2__rankingHeader span) {
+          margin-top: 7px !important;
+          max-width: 112px !important;
+        }
+
+        :global(.publicRankingCardV2__rankingMeta) {
+          gap: 9px !important;
+          transform: none !important;
+        }
+
+        :global(.publicRankingCardV2__rankingMeta > div) {
+          border-radius: 16px !important;
+          flex-basis: 48px !important;
+          height: 48px !important;
+          min-width: 48px !important;
+          padding: 5px !important;
+          width: 48px !important;
+        }
+
+        :global(.publicRankingCardV2__rankingCopy) {
+          font-size: 12.5px !important;
+          font-weight: 760 !important;
+          line-height: 1.2 !important;
+        }
+
+        :global(.publicRankingCardV2__cta) {
+          font-size: 9px !important;
+          height: 29px !important;
+          min-width: 98px !important;
+          padding: 0 10px !important;
+        }
+      }
+    `}</style>
   )
 }
