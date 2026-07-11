@@ -2139,8 +2139,8 @@
 
   .TournamentPublicCard h3{
     display: -webkit-box;
-    font-size: 15px;
-    font-weight: 900;
+    font-size: 15.5px;
+    font-weight: 920;
     line-height: 1.1;
     margin: 1px 0 0;
     max-height: 2.2em;
@@ -2200,7 +2200,7 @@
     align-content: initial;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
     height: 100%;
     min-height: 0;
     padding: 2px 1px 0 0;
@@ -2219,9 +2219,9 @@
   .TournamentPublicCard__date{
     gap: 1px 4px;
     grid-template-columns: auto auto;
-    justify-content: end;
-    justify-items: end;
-    order: 2;
+    justify-content: start;
+    justify-items: start;
+    order: 1;
   }
 
   .TournamentPublicCard__date strong{
@@ -2246,7 +2246,7 @@
     font-size: 8px;
     gap: 3px;
     min-height: 18px;
-    order: 1;
+    order: 2;
     padding: 2px 7px;
     white-space: nowrap;
     width: auto;
@@ -2257,10 +2257,15 @@
     width: 3px;
   }
 
+  .TournamentPublicCard__status.is-open::before{
+    animation: tournamentOpenPulse 1.9s ease-in-out infinite;
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, .26);
+  }
+
   .TournamentPublicCard__club{
     border-bottom: 0;
     gap: 4px;
-    margin: 1px 0 0;
+    margin: 0;
     order: 2;
     padding: 0;
   }
@@ -2333,6 +2338,25 @@
   .TournamentPublicCard__actionIcon{
     height: 11px;
     width: 11px;
+  }
+
+  @keyframes tournamentOpenPulse{
+    0%,
+    100%{
+      box-shadow: 0 0 0 0 rgba(22, 163, 74, .22);
+      transform: scale(1);
+    }
+    50%{
+      box-shadow: 0 0 0 4px rgba(22, 163, 74, 0);
+      transform: scale(1.18);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .TournamentPublicCard__status.is-open::before{
+      animation: none;
+      box-shadow: none;
+    }
   }
 
   .publicTournamentCard{
