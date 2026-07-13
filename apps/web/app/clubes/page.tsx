@@ -1,6 +1,8 @@
 import Link from 'next/link'
+import type { CSSProperties } from 'react'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { BRAND } from '@/lib/branding'
+import { getClubTheme } from '@/lib/clubThemes'
 
 type ClubCard = {
   id: string
@@ -8,6 +10,7 @@ type ClubCard = {
   city: string | null
   province: string | null
   logo_url: string | null
+  theme_key: string | null
   players: number
   tournaments: number
   categories: number[]
@@ -28,7 +31,7 @@ export default async function ClubesPublicPage() {
   const [{ data: clubRows }, { data: playerRows }, { data: tournamentRows }] = await Promise.all([
     supabaseAdmin
       .from('clubs')
-      .select('id,name,city,province,logo_url')
+      .select('id,name,city,province,logo_url,theme_key')
       .eq('is_active', true)
       .order('name', { ascending: true }),
     supabaseAdmin
@@ -69,6 +72,7 @@ export default async function ClubesPublicPage() {
       city: club.city ?? null,
       province: club.province ?? null,
       logo_url: club.logo_url ?? null,
+      theme_key: club.theme_key ?? null,
       players: stats?.players ?? 0,
       tournaments: stats?.tournaments ?? 0,
       categories: stats ? Array.from(stats.categories).sort((a, b) => a - b) : [],
@@ -88,8 +92,15 @@ export default async function ClubesPublicPage() {
           const logo = buildAssetProxyUrl(club.logo_url)
           const location = [club.city, club.province].filter(Boolean).join(' · ') || `Club ${BRAND.name}`
           const nameSize = club.name.length > 30 ? '22px' : club.name.length > 18 ? '26px' : club.name.length > 15 ? '30px' : undefined
+          const theme = getClubTheme(club.theme_key)
+          const clubStyle = {
+            ['--club-card-accent' as string]: theme.vars.accent,
+            ['--club-card-accent-2' as string]: theme.vars.accent2,
+            ['--club-card-soft' as string]: theme.vars.soft,
+            ['--club-card-glow' as string]: theme.vars.glow,
+          } satisfies CSSProperties
           return (
-            <Link className="publicClubCard" href={`/clubs/${club.id}`} key={club.id} aria-label={`Ver club ${club.name}`}>
+            <Link className="publicClubCard" href={`/clubs/${club.id}`} key={club.id} aria-label={`Ver club ${club.name}`} style={clubStyle}>
               <span className={`publicClubLogo ${logo ? 'has-image' : ''}`}>
                 {logo ? <img src={logo} alt="" loading="lazy" decoding="async" /> : getClubInitials(club.name)}
               </span>

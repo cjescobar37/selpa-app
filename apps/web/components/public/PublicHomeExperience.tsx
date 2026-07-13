@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { BRAND } from '@/lib/branding'
+import { getClubTheme } from '@/lib/clubThemes'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import PampraxHero from '@/components/ui/PampraxHero'
 import PublicRankingClubCard from '@/components/public/PublicRankingClubCard'
@@ -389,12 +390,20 @@ export default function PublicHomeExperience({
             const logo = buildAssetProxyUrl(club.logo_url)
             const location = club.city || `Club ${BRAND.name}`
             const nameSize = club.name.length > 30 ? '22px' : club.name.length > 18 ? '26px' : club.name.length > 15 ? '30px' : undefined
+            const theme = getClubTheme(club.clubThemeKey ?? club.theme_key)
+            const clubStyle = {
+              ['--club-card-accent' as string]: theme.vars.accent,
+              ['--club-card-accent-2' as string]: theme.vars.accent2,
+              ['--club-card-soft' as string]: theme.vars.soft,
+              ['--club-card-glow' as string]: theme.vars.glow,
+            } satisfies CSSProperties
             return (
               <Link
                 className="publicClubCard px-homeClubCard"
                 href={`/clubs/${club.id}`}
                 key={club.id}
                 aria-label={`Ver club ${club.name}`}
+                style={clubStyle}
                 onBlur={() => setHoveredHomeClubId(null)}
                 onFocus={() => setHoveredHomeClubId(club.id)}
                 onMouseEnter={() => setHoveredHomeClubId(club.id)}
@@ -650,7 +659,7 @@ export default function PublicHomeExperience({
         .px-homeClubCard .publicClubBody small::before { height: 4px; width: 4px; }
         .px-homeClubCard .publicClubBody h2 { margin-bottom: 4px; }
         .px-homeClubCard .publicClubBody p { line-height: 1.15; margin-top: -9px; }
-        .px-homeClubNameAccent { background: linear-gradient(90deg, #22d3ee 0%, #0e7490 32%, #ec4899 66%, #22d3ee 100%); background-position: var(--club-accent-position, 0 0); background-size: 220% 100%; border: 0 !important; border-radius: 999px; display: block; font-size: 0; height: 5px !important; line-height: 0; margin: 0; max-width: 88%; opacity: var(--club-accent-opacity, .84); padding: 0 !important; transform: translateX(var(--club-accent-shift, 0)); transition: width .34s ease, opacity .24s ease, transform .24s ease, background-position .42s ease; width: var(--club-accent-width, 110px); }
+        .px-homeClubNameAccent { background: linear-gradient(90deg, var(--club-card-accent, #22d3ee) 0%, color-mix(in srgb, var(--club-card-accent, #22d3ee) 64%, var(--club-card-accent-2, #ec4899)) 48%, var(--club-card-accent-2, #ec4899) 100%); background-position: var(--club-accent-position, 0 0); background-size: 220% 100%; border: 0 !important; border-radius: 999px; display: block; font-size: 0; height: 5px !important; line-height: 0; margin: 0; max-width: 88%; opacity: var(--club-accent-opacity, .84); padding: 0 !important; transform: translateX(var(--club-accent-shift, 0)); transition: width .34s ease, opacity .24s ease, transform .24s ease, background-position .42s ease; width: var(--club-accent-width, 110px); }
         .px-homeClubNameAccent::after { content: none !important; display: none !important; }
         .px-homeAdBanners { display: grid; gap: 14px; grid-template-columns: repeat(2,minmax(0,1fr)); }
         .px-homeAdBanners.is-single { grid-template-columns: minmax(0,1fr); }

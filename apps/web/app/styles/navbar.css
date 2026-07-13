@@ -1796,14 +1796,17 @@
 
   .publicClubCard{
     align-items: center;
+    border-color: color-mix(in srgb, var(--club-card-accent, #06b6d4) 16%, #e2e8f0);
+    border-top: 2px solid var(--club-card-accent, #06b6d4);
+    box-shadow: 0 10px 22px rgba(15,23,42,.055), 0 8px 18px var(--club-card-glow, rgba(34,211,238,.12));
     gap: 12px;
-    grid-template-columns: minmax(0, 1fr) 98px;
-    min-height: 154px;
-    padding: 14px 14px 13px 16px;
+    grid-template-columns: minmax(0, 1fr) 96px;
+    min-height: 140px;
+    padding: 9px 14px 9px 16px;
   }
 
   .px-homeClubCards .publicClubCard{
-    min-height: 154px;
+    min-height: 140px;
   }
 
   .publicClubCard::before{
@@ -1814,13 +1817,13 @@
   .publicClubLogo{
     border-width: 2px;
     border-radius: 18px;
-    box-shadow: 0 14px 28px rgba(15,23,42,.16), 0 0 22px rgba(34,211,238,.22), 0 0 24px rgba(236,72,153,.14);
+    box-shadow: 0 12px 24px rgba(15,23,42,.13), 0 0 20px var(--club-card-glow, rgba(34,211,238,.18)), 0 0 18px color-mix(in srgb, var(--club-card-accent-2, #ec4899) 16%, transparent);
     font-size: 18px;
     grid-column: 2;
     grid-row: 1;
-    height: 98px;
+    height: 96px;
     justify-self: end;
-    width: 98px;
+    width: 96px;
   }
 
   .publicClubLogo img{
@@ -1831,10 +1834,10 @@
   .publicClubBody{
     align-self: stretch;
     display: grid;
-    gap: 7px;
+    gap: 5px;
     grid-column: 1;
     grid-row: 1;
-    grid-template-rows: auto 4px auto 1fr auto;
+    grid-template-rows: auto 3px auto auto;
     justify-content: stretch;
     min-width: 0;
     padding-right: 0;
@@ -1868,11 +1871,13 @@
 
   .publicClubBody h2 + .px-homeClubNameAccent{
     align-self: start;
+    background: linear-gradient(90deg, var(--club-card-accent, #22d3ee), color-mix(in srgb, var(--club-card-accent, #22d3ee) 62%, var(--club-card-accent-2, #ec4899))) !important;
     display: block;
-    height: 4px !important;
+    height: 3px !important;
     margin: 0;
     max-width: 118px;
-    width: 56% !important;
+    opacity: .9 !important;
+    width: 54% !important;
   }
 
   .publicClubBody p{
@@ -1898,19 +1903,26 @@
   }
 
   .publicClubStats{
-    align-self: end;
+    align-self: start;
     display: flex;
     flex-wrap: nowrap;
-    gap: 6px;
+    gap: 5px;
     min-width: 0;
   }
 
   .publicClubStats span{
-    font-size: 10px;
+    background: color-mix(in srgb, var(--club-card-soft, rgba(103,232,249,.18)) 72%, white) !important;
+    border-color: color-mix(in srgb, var(--club-card-accent, #06b6d4) 24%, #dbeafe) !important;
+    color: color-mix(in srgb, var(--club-card-accent, #075985) 50%, #334155) !important;
+    font-size: 9.5px;
     font-weight: 700;
     gap: 4px;
-    min-height: 26px;
-    padding: 5px 8px;
+    min-height: 24px;
+    padding: 4px 7px;
+  }
+
+  .publicClubStats b{
+    color: color-mix(in srgb, var(--club-card-accent, #061b3a) 36%, #061b3a) !important;
   }
 
   .publicClubAction{
