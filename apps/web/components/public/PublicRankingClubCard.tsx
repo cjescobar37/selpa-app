@@ -26,6 +26,7 @@ export default function PublicRankingClubCard({
   onSelect,
   variant = 'ranking',
   playersCount,
+  categories = [],
   rankingType = 'Ranking anual',
 }: PublicRankingClubCardProps) {
   const [isHovered, setIsHovered] = useState(false)
@@ -69,6 +70,12 @@ export default function PublicRankingClubCard({
   function renderHomeMeta() {
     const count = typeof playersCount === 'number' ? playersCount : 0
     return `${new Intl.NumberFormat('es-AR').format(count)} jugadores`
+  }
+
+  function renderCategoryMeta() {
+    if (!categories.length) return 'Categorias activas'
+    const visible = categories.slice(0, 3).join(', ')
+    return `Categorias ${visible}${categories.length > 3 ? '+' : ''}`
   }
 
   const homeCardStyle = {
@@ -247,6 +254,7 @@ export default function PublicRankingClubCard({
         <p className="publicRankingCardV2__players" style={{ color: '#475569', fontSize: 12, fontWeight: 900, lineHeight: 1.3, margin: 0 }}>
           {renderHomeMeta()}
         </p>
+        <span className="publicRankingCardV2__homeCta" aria-hidden="true">Ver ranking →</span>
       </header>
     </>
   )
@@ -332,6 +340,33 @@ export default function PublicRankingClubCard({
           />
         ))}
       </span>
+      <div className="publicRankingCardV2__mobileLayout" style={{ display: 'none' }}>
+        <div className="publicRankingCardV2__mobileVisual" aria-hidden="true">
+          <span className="publicRankingCardV2__mobileBadge">
+            <i />
+            {rankingType}
+          </span>
+          <span className="publicRankingCardV2__mobileArrow">
+            <svg viewBox="0 0 120 92" focusable="false">
+              <path d="M14 70 C42 66 59 50 74 35 C83 26 91 18 106 16" />
+              <path d="M82 13 L108 16 L100 42" />
+            </svg>
+          </span>
+          <div className="publicRankingCardV2__mobileSteps">
+            <span>3</span>
+            <span>2</span>
+            <span>1</span>
+          </div>
+        </div>
+        <div className="publicRankingCardV2__mobileBody">
+          <h2>{clubName}</h2>
+          <p>{renderCategoryMeta()}</p>
+          <small>{typeof playersCount === 'number' ? renderHomeMeta() : 'Ranking oficial'}</small>
+          <span className="publicRankingCardV2__mobileCta">
+            Ver ranking <b aria-hidden="true">→</b>
+          </span>
+        </div>
+      </div>
       <header
         className="publicRankingCardV2__rankingHeader relative z-[1] min-w-0"
         style={{ minWidth: 0, position: 'relative', zIndex: 1 }}
@@ -563,10 +598,225 @@ function MobileRankingCardStyles() {
           line-height: 1.16 !important;
         }
 
+        :global(.publicRankingCardV2__homeCta) {
+          align-items: center !important;
+          background: #020617 !important;
+          border-radius: 999px !important;
+          color: #fff !important;
+          display: inline-flex !important;
+          font-size: 9px !important;
+          font-weight: 850 !important;
+          justify-self: end !important;
+          line-height: 1 !important;
+          margin-top: 2px !important;
+          padding: 7px 9px !important;
+          text-transform: uppercase !important;
+        }
+
         :global(.publicRankingCardV2--ranking) {
           border-radius: 20px !important;
-          min-height: 134px !important;
-          padding: 10px !important;
+          display: grid !important;
+          min-height: 156px !important;
+          padding: 0 !important;
+        }
+
+        :global(.publicRankingCardV2--ranking > span:not(.publicRankingCardV2__mobileArrow)),
+        :global(.publicRankingCardV2--ranking > header),
+        :global(.publicRankingCardV2--ranking > .publicRankingCardV2__rankingMeta),
+        :global(.publicRankingCardV2--ranking > footer) {
+          display: none !important;
+        }
+
+        :global(.publicRankingCardV2__mobileLayout) {
+          display: grid !important;
+          grid-template-columns: 130px minmax(0, 1fr) !important;
+          min-height: 156px !important;
+          overflow: hidden !important;
+          position: relative !important;
+          transform: none !important;
+          width: 100% !important;
+          z-index: 1 !important;
+        }
+
+        :global(.publicRankingCardV2--ranking > .publicRankingCardV2__mobileLayout) {
+          gap: 0 !important;
+          transform: none !important;
+        }
+
+        :global(.publicRankingCardV2__mobileVisual) {
+          align-content: end !important;
+          background:
+            radial-gradient(circle at 12% 10%, color-mix(in srgb, var(--club-primary) 16%, transparent), transparent 42%),
+            linear-gradient(135deg, color-mix(in srgb, var(--club-primary) 11%, #f8fafc), color-mix(in srgb, var(--club-secondary) 8%, #fff)) !important;
+          border-right: 1px solid color-mix(in srgb, var(--club-primary) 16%, #e2e8f0) !important;
+          display: grid !important;
+          min-width: 0 !important;
+          overflow: hidden !important;
+          padding: 10px 8px 11px !important;
+          position: relative !important;
+        }
+
+        :global(.publicRankingCardV2--ranking > .publicRankingCardV2__mobileLayout > .publicRankingCardV2__mobileVisual) {
+          border-radius: 0 !important;
+          flex-basis: auto !important;
+          height: auto !important;
+          min-width: 0 !important;
+          width: auto !important;
+        }
+
+        :global(.publicRankingCardV2__mobileBadge) {
+          align-items: center !important;
+          background: rgba(255, 255, 255, .82) !important;
+          border: 1px solid color-mix(in srgb, var(--club-primary) 22%, #dbe5ef) !important;
+          border-radius: 999px !important;
+          color: color-mix(in srgb, var(--club-primary) 54%, #0f172a) !important;
+          display: inline-flex !important;
+          font-size: 7px !important;
+          font-weight: 860 !important;
+          gap: 4px !important;
+          justify-self: start !important;
+          letter-spacing: .04em !important;
+          line-height: 1 !important;
+          padding: 4px 6px !important;
+          position: absolute !important;
+          text-transform: uppercase !important;
+          top: 10px !important;
+          left: 8px !important;
+          z-index: 2 !important;
+        }
+
+        :global(.publicRankingCardV2__mobileBadge i) {
+          background: var(--club-primary) !important;
+          border-radius: 999px !important;
+          display: inline-block !important;
+          height: 5px !important;
+          width: 5px !important;
+        }
+
+        :global(.publicRankingCardV2__mobileArrow) {
+          bottom: 10px !important;
+          color: color-mix(in srgb, var(--club-secondary) 48%, #061b3a) !important;
+          opacity: .18 !important;
+          position: absolute !important;
+          right: -14px !important;
+          width: 112px !important;
+          z-index: 0 !important;
+        }
+
+        :global(.publicRankingCardV2__mobileArrow svg) {
+          display: block !important;
+          fill: none !important;
+          height: auto !important;
+          stroke: currentColor !important;
+          stroke-linecap: round !important;
+          stroke-linejoin: round !important;
+          stroke-width: 13 !important;
+          width: 100% !important;
+        }
+
+        :global(.publicRankingCardV2__mobileSteps) {
+          align-items: end !important;
+          align-self: end !important;
+          display: grid !important;
+          gap: 5px !important;
+          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          height: 108px !important;
+          position: relative !important;
+          z-index: 1 !important;
+        }
+
+        :global(.publicRankingCardV2__mobileSteps span) {
+          align-items: start !important;
+          background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--club-primary) 30%, #cbd5e1)) !important;
+          border: 1px solid color-mix(in srgb, var(--club-primary) 18%, rgba(255,255,255,.82)) !important;
+          border-radius: 11px 11px 4px 4px !important;
+          box-shadow: 0 10px 18px rgba(15,23,42,.105) !important;
+          color: #0f172a !important;
+          display: flex !important;
+          font-size: 15px !important;
+          font-weight: 930 !important;
+          justify-content: center !important;
+          line-height: 1 !important;
+          padding-top: 8px !important;
+        }
+
+        :global(.publicRankingCardV2__mobileSteps span:nth-child(1)) { height: 60px !important; }
+        :global(.publicRankingCardV2__mobileSteps span:nth-child(2)) { height: 84px !important; }
+        :global(.publicRankingCardV2__mobileSteps span:nth-child(3)) {
+          background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--club-secondary) 34%, #cbd5e1)) !important;
+          height: 108px !important;
+        }
+
+        :global(.publicRankingCardV2__mobileBody) {
+          align-content: start !important;
+          display: grid !important;
+          gap: 5px !important;
+          min-width: 0 !important;
+          padding: 13px 12px 11px !important;
+          position: relative !important;
+        }
+
+        :global(.publicRankingCardV2__mobileBody h2) {
+          color: #020617 !important;
+          display: -webkit-box !important;
+          font-size: 22px !important;
+          font-weight: 930 !important;
+          letter-spacing: 0 !important;
+          line-height: 1 !important;
+          margin: 0 !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+          overflow-wrap: anywhere !important;
+          -webkit-box-orient: vertical !important;
+          -webkit-line-clamp: 2 !important;
+        }
+
+        :global(.publicRankingCardV2__mobileBody p),
+        :global(.publicRankingCardV2__mobileBody small) {
+          color: #64748b !important;
+          font-size: 11.5px !important;
+          font-weight: 760 !important;
+          line-height: 1.15 !important;
+          margin: 0 !important;
+          min-width: 0 !important;
+        }
+
+        :global(.publicRankingCardV2--ranking > .publicRankingCardV2__mobileLayout > .publicRankingCardV2__mobileBody p),
+        :global(.publicRankingCardV2--ranking > .publicRankingCardV2__mobileLayout > .publicRankingCardV2__mobileBody small) {
+          font-size: 11.5px !important;
+          font-weight: 760 !important;
+        }
+
+        :global(.publicRankingCardV2__mobileBody p) {
+          color: #0f172a !important;
+          font-weight: 820 !important;
+        }
+
+        :global(.publicRankingCardV2__mobileCta) {
+          align-items: center !important;
+          align-self: end !important;
+          background: #020617 !important;
+          border-radius: 999px !important;
+          box-shadow: 0 10px 20px rgba(6,27,58,.14), 0 0 0 3px color-mix(in srgb, var(--club-secondary) 9%, transparent) !important;
+          color: #fff !important;
+          display: inline-flex !important;
+          font-size: 8.8px !important;
+          font-weight: 880 !important;
+          gap: 6px !important;
+          justify-self: end !important;
+          letter-spacing: .025em !important;
+          line-height: 1 !important;
+          margin-top: auto !important;
+          min-height: 30px !important;
+          min-width: 112px !important;
+          padding: 0 11px !important;
+          text-transform: uppercase !important;
+          white-space: nowrap !important;
+        }
+
+        :global(.publicRankingCardV2__mobileCta b) {
+          font-size: 14px !important;
+          line-height: 1 !important;
         }
 
         :global(.publicRankingCardV2__rankingHeader h2) {

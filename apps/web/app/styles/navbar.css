@@ -2128,21 +2128,21 @@
   }
 
   .TournamentPublicCard{
-    --tournament-card-height: 194px;
+    --tournament-card-height: 188px;
     align-items: stretch;
     column-gap: 9px;
     grid-template-columns: 26% minmax(0,1fr);
-    height: 194px !important;
-    min-height: 194px !important;
+    height: 188px !important;
+    min-height: 188px !important;
     padding: 0 8px 0 0;
   }
 
   .TournamentPublicCard h3{
     display: -webkit-box;
-    font-size: 15.5px;
-    font-weight: 920;
+    font-size: 16.5px;
+    font-weight: 940;
     line-height: 1.1;
-    margin: 2px auto 0;
+    margin: 7px auto 0;
     max-height: 2.2em;
     order: 3;
     overflow: hidden;
@@ -2201,10 +2201,10 @@
     align-content: initial;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 0;
     height: 100%;
     min-height: 0;
-    padding: 8px 1px 8px 0;
+    padding: 6px 1px 6px 0;
   }
 
   .TournamentPublicCard__top{
@@ -2216,7 +2216,7 @@
     justify-content: space-between;
     min-height: 0;
     order: 1;
-    padding-bottom: 5px;
+    padding-bottom: 4px;
   }
 
   .TournamentPublicCard__date{
@@ -2266,11 +2266,12 @@
   }
 
   .TournamentPublicCard__club{
-    border-bottom: 0;
-    gap: 4px;
-    margin: 1px 0 0;
+    border-bottom: 1px solid rgba(15, 23, 42, .08);
+    gap: 5px;
+    justify-content: center;
+    margin: 0;
     order: 2;
-    padding: 0;
+    padding: 6px 0 7px;
   }
 
   .TournamentPublicCard__clubLogo{
@@ -2296,7 +2297,7 @@
     justify-content: center;
     display: flex;
     flex-wrap: nowrap;
-    margin-top: 1px;
+    margin-top: 6px;
     min-width: 0;
     order: 4;
     overflow: hidden;
@@ -2308,20 +2309,20 @@
     align-items: center;
     display: inline-grid;
     flex: 0 1 auto;
-    gap: 3px;
-    grid-template-columns: 11px minmax(0,1fr);
+    gap: 4px;
+    grid-template-columns: 12px minmax(0,1fr);
     min-width: 0;
   }
 
   .TournamentPublicCard__dates svg{
-    height: 10px;
+    height: 11px;
     margin-top: 0;
-    width: 10px;
+    width: 11px;
   }
 
   .TournamentPublicCard__dates strong{
-    font-size: 9.5px;
-    font-weight: 780;
+    font-size: 10.5px;
+    font-weight: 820;
     white-space: nowrap;
   }
 
