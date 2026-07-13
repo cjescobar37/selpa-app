@@ -2405,10 +2405,10 @@
 
 .px-homeRankingClubCard em,
 .px-homeClubCards div span{
-  background:rgba(34,211,238,.1);
-  border:1px solid rgba(34,211,238,.2);
+  background:color-mix(in srgb, var(--club-card-soft, rgba(103,232,249,.18)) 76%, white);
+  border:1px solid color-mix(in srgb, var(--club-card-accent, #06b6d4) 28%, #e2e8f0);
   border-radius:999px;
-  color:#075985;
+  color:color-mix(in srgb, var(--club-card-accent, #075985) 54%, #334155);
   display:inline-flex;
   font-size:11px;
   font-style:normal;
@@ -5671,10 +5671,10 @@
 
 .publicClubLogo{
   align-items:center;
-  background:linear-gradient(#061b3a, #061b3a) padding-box, linear-gradient(135deg, #22d3ee, #ec4899) border-box;
+  background:linear-gradient(#061b3a, #061b3a) padding-box, linear-gradient(135deg, var(--club-card-accent, #22d3ee), var(--club-card-accent-2, #ec4899)) border-box;
   border:3px solid transparent;
   border-radius:20px;
-  box-shadow:0 22px 42px rgba(15,23,42,.24), 0 0 34px rgba(34,211,238,.26), 0 0 38px rgba(236,72,153,.18);
+  box-shadow:0 22px 42px rgba(15,23,42,.2), 0 0 34px var(--club-card-glow, rgba(34,211,238,.22)), 0 0 28px color-mix(in srgb, var(--club-card-accent-2, #ec4899) 20%, transparent);
   color:#fff;
   display:flex;
   font-size:28px;
@@ -5690,7 +5690,7 @@
 }
 
 .publicClubLogo.has-image{
-  background:linear-gradient(#fff, #fff) padding-box, linear-gradient(135deg, #22d3ee 0%, #3b82f6 42%, #ec4899 100%) border-box;
+  background:linear-gradient(#fff, #fff) padding-box, linear-gradient(135deg, var(--club-card-accent, #22d3ee) 0%, color-mix(in srgb, var(--club-card-accent, #22d3ee) 55%, var(--club-card-accent-2, #ec4899)) 48%, var(--club-card-accent-2, #ec4899) 100%) border-box;
 }
 
 .publicClubLogo img{
@@ -5705,7 +5705,7 @@
 
 .publicClubCard:hover .publicClubLogo{
   transform:scale(1.04);
-  box-shadow:0 30px 58px rgba(15,23,42,.24), 0 0 46px rgba(34,211,238,.34), 0 0 58px rgba(236,72,153,.2);
+  box-shadow:0 30px 58px rgba(15,23,42,.22), 0 0 46px var(--club-card-glow, rgba(34,211,238,.28)), 0 0 44px color-mix(in srgb, var(--club-card-accent-2, #ec4899) 22%, transparent);
 }
 
 .publicClubBody{
@@ -5769,10 +5769,10 @@
 
 .publicClubStats span{
   align-items:center;
-  background:linear-gradient(135deg, rgba(255,255,255,.92), rgba(241,245,249,.82));
-  border:1px solid rgba(34,211,238,.18);
+  background:color-mix(in srgb, var(--club-card-soft, rgba(103,232,249,.18)) 76%, white);
+  border:1px solid color-mix(in srgb, var(--club-card-accent, #06b6d4) 28%, #e2e8f0);
   border-radius:999px;
-  color:#475569;
+  color:color-mix(in srgb, var(--club-card-accent, #075985) 54%, #334155);
   display:inline-flex;
   font-size:10px;
   font-weight:900;
@@ -5784,7 +5784,7 @@
 }
 
 .publicClubStats b{
-  color:#061b3a;
+  color:color-mix(in srgb, var(--club-card-accent, #061b3a) 40%, #061b3a);
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
