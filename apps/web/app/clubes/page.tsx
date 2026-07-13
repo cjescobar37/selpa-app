@@ -96,6 +96,7 @@ export default async function ClubesPublicPage() {
               <div className="publicClubBody">
                 <small>Club activo</small>
                 <h2 style={nameSize ? { ['--club-name-size' as string]: nameSize } : undefined}>{club.name}</h2>
+                <span className="px-homeClubNameAccent" aria-hidden="true" />
                 <p>{location}</p>
                 <div className="publicClubStats">
                   <span><b>{club.players}</b> jugadores</span>

@@ -1795,63 +1795,98 @@
   }
 
   .publicClubCard{
-    gap: 8px;
-    grid-template-columns: 80px minmax(0, 1fr);
-    min-height: 92px;
-    padding: 9px 10px 9px 11px;
+    align-items: center;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) 98px;
+    min-height: 154px;
+    padding: 14px 14px 13px 16px;
+  }
+
+  .px-homeClubCards .publicClubCard{
+    min-height: 154px;
   }
 
   .publicClubCard::before{
-    bottom: 13px;
-    top: 13px;
-    width: 2px;
+    content: none;
+    display: none;
   }
 
   .publicClubLogo{
     border-width: 2px;
-    border-radius: 12px;
-    box-shadow: 0 12px 24px rgba(15,23,42,.16), 0 0 20px rgba(34,211,238,.18);
-    font-size: 16px;
-    height: 58px;
-    width: 80px;
+    border-radius: 18px;
+    box-shadow: 0 14px 28px rgba(15,23,42,.16), 0 0 22px rgba(34,211,238,.22), 0 0 24px rgba(236,72,153,.14);
+    font-size: 18px;
+    grid-column: 2;
+    grid-row: 1;
+    height: 98px;
+    justify-self: end;
+    width: 98px;
+  }
+
+  .publicClubLogo img{
+    object-fit: contain;
+    padding: 0;
   }
 
   .publicClubBody{
-    gap: 2px;
-    justify-content: center;
-    padding-right: 28px;
+    align-self: stretch;
+    display: grid;
+    gap: 7px;
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-rows: auto 4px auto 1fr auto;
+    justify-content: stretch;
+    min-width: 0;
+    padding-right: 0;
   }
 
   .publicClubBody small{
-    font-size: 7.5px;
-    gap: 3px;
-    min-height: 16px;
-    padding: 2px 5px;
-    right: 10px;
-    top: 8px;
+    display: none !important;
   }
 
   .publicClubBody small::before{
-    height: 4px;
-    width: 4px;
+    content: none;
+    display: none;
   }
 
   .publicClubBody h2{
-    font-size: min(var(--club-name-size, 20px), 20px);
-    font-weight: 920;
-    letter-spacing: -.025em;
-    line-height: 1.12;
-    margin: 10px 0 2px;
+    display: -webkit-box;
+    font-size: min(var(--club-name-size, 23px), 23px);
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.04;
+    margin: 0;
     max-width: 100%;
     min-width: 0;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .publicClubBody h2 + .px-homeClubNameAccent{
+    align-self: start;
+    display: block;
+    height: 4px !important;
+    margin: 0;
+    max-width: 118px;
+    width: 56% !important;
   }
 
   .publicClubBody p{
     color: #64748b;
-    font-size: 11px;
-    font-weight: 680;
-    line-height: 1.2;
-    margin: 0 0 5px;
+    display: -webkit-box;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.18;
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .newsText,
@@ -1863,30 +1898,23 @@
   }
 
   .publicClubStats{
-    gap: 4px;
+    align-self: end;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-width: 0;
   }
 
   .publicClubStats span{
-    font-size: 8.5px;
-    font-weight: 760;
-    gap: 3px;
-    min-height: 18px;
-    padding: 3px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    gap: 4px;
+    min-height: 26px;
+    padding: 5px 8px;
   }
 
   .publicClubAction{
-    background: rgba(6,27,58,.06);
-    border: 1px solid rgba(6,27,58,.08);
-    border-radius: 999px;
-    bottom: 10px;
-    box-shadow: none;
-    color: #061b3a !important;
-    font-size: 14px;
-    height: 24px;
-    min-height: 24px;
-    padding: 0;
-    right: 10px;
-    width: 24px;
+    display: none !important;
   }
 
   .publicClubAction span:last-child{
