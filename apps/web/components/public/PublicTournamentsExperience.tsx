@@ -104,7 +104,6 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
       <section className="publicTournamentHero">
         <span>Calendario público</span>
         <h1>Torneos {BRAND.name}</h1>
-        <p>Explorá eventos abiertos, torneos en juego y resultados recientes de clubes {BRAND.name}.</p>
       </section>
 
       <section className="publicTournamentFilters">
@@ -135,11 +134,10 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
 
       <style jsx>{`
         .publicTournamentShell { color: #061b3a; display: grid; gap: 16px; margin: 0 auto; max-width: 1180px; width: 100%; }
-        .publicTournamentHero { background: radial-gradient(circle at 18% 6%, rgba(34,211,238,.3), transparent 34%), radial-gradient(circle at 84% 18%, rgba(236,72,153,.1), transparent 28%), linear-gradient(135deg, #020617 0%, #061b3a 58%, #071426 100%); border: 1px solid rgba(103,232,249,.14); border-radius: 22px; box-shadow: 0 16px 38px rgba(2,6,23,.14); color: #fff; display: grid; align-content: center; min-height: 156px; max-width: 1056px; margin: 0 auto; overflow: hidden; padding: clamp(14px, 2vw, 20px); position: relative; width: 100%; }
+        .publicTournamentHero { background: radial-gradient(circle at 18% 6%, rgba(34,211,238,.3), transparent 34%), radial-gradient(circle at 84% 18%, rgba(236,72,153,.1), transparent 28%), linear-gradient(135deg, #020617 0%, #061b3a 58%, #071426 100%); border: 1px solid rgba(103,232,249,.14); border-radius: 22px; box-shadow: 0 16px 38px rgba(2,6,23,.14); color: #fff; display: grid; align-content: center; min-height: 128px; max-width: 1056px; margin: 0 auto; overflow: hidden; padding: clamp(12px, 1.7vw, 18px); position: relative; width: 100%; }
         .publicTournamentHero::after { background: linear-gradient(90deg, #22d3ee 0%, #67e8f9 40%, #8bd3ed 50%, #ec4899 100%); bottom: 0; content: ""; height: 4px; left: 0; position: absolute; right: 0; }
         .publicTournamentHero span { color: #67e8f9; font-size: 12px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
         .publicTournamentHero h1 { font-size: clamp(30px, 4vw, 46px); font-weight: 950; letter-spacing: -.075em; line-height: .9; margin: 5px 0; }
-        .publicTournamentHero p { color: rgba(255,255,255,.78); font-size: clamp(14px, 1.45vw, 17px); font-weight: 720; line-height: 1.35; margin: 0; max-width: 600px; }
         .publicTournamentFilters { background: rgba(255,255,255,.9); border: 1px solid #e2e8f0; border-radius: 22px; box-shadow: 0 18px 48px rgba(15,23,42,.07); display: grid; gap: 12px; grid-template-columns: 140px 150px 190px minmax(0,1fr); padding: 13px; }
         .publicTournamentFilters label { display: grid; gap: 6px; min-width: 0; }
         .publicTournamentFilters label > span { color: #0284c7; font-size: 11px; font-weight: 950; text-transform: uppercase; }
@@ -185,11 +183,10 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
         }
         @media (max-width: 560px) {
           .publicTournamentShell { gap: 8px; }
-          .publicTournamentHero { border-radius: 18px; min-height: 150px; max-width: min(100%, calc(100vw - 47px)); padding: 14px 16px; }
+          .publicTournamentHero { border-radius: 18px; min-height: 118px; max-width: min(100%, calc(100vw - 47px)); padding: 12px 16px; }
           .publicTournamentHero::after { height: 4px; left: 0; right: 0; }
           .publicTournamentHero span { font-size: 10px; font-weight: 850; letter-spacing: .06em; }
           .publicTournamentHero h1 { font-size: clamp(28px, 8vw, 32px); font-weight: 950; letter-spacing: -.06em; line-height: .9; margin: 5px 0; }
-          .publicTournamentHero p { font-size: 12px; font-weight: 720; line-height: 1.25; }
           .publicTournamentFilters { border-radius: 14px; gap: 5px 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 7px; }
           .publicTournamentFilters label { gap: 2px; }
           .publicTournamentFilters label > span { font-size: 9px; font-weight: 680; letter-spacing: .01em; }

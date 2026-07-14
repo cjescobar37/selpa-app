@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubPermission } from '@/lib/clubMembershipServer'
 import { getTokenUser } from '@/lib/platformApiAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const CLUB_AD_SLOT_IDS = [
-  'HOME_HERO_RIGHT',
-  'HOME_NEWS_LEFT',
-  'HOME_NEWS_RIGHT',
-  'HOME_CALENDAR_INLINE',
-  'HOME_FOOTER_STRIP',
+  'CLUB_HOME_HERO',
+  'CLUB_HOME_AFTER_TOURNAMENTS',
+  'CLUB_HOME_AFTER_NEWS',
 ] as const
 
 export const CLUB_SPONSOR_STATUSES = ['active', 'inactive'] as const
@@ -20,7 +18,7 @@ export type ClubCampaignStatus = (typeof CLUB_CAMPAIGN_STATUSES)[number]
 
 export function isMissingRelation(error?: { message?: string } | null) {
   const msg = String(error?.message || '').toLowerCase()
-  return msg.includes('could not find the table') || (msg.includes('relation') && msg.includes('does not exist'))
+  return msg.includes('could not find the table') || (msg.includes('relation') && msg.includes('does not exist')) || (msg.includes('render_config') && msg.includes('schema cache'))
 }
 
 export function missingCommercialSetupResponse() {
@@ -68,16 +66,17 @@ export async function assertClubCommercialManager(req: NextRequest, clubId: stri
     return { error: NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 }), user: null }
   }
 
-  const [{ data: platformAdmin, error: platformError }, canManageClub] = await Promise.all([
+  const [{ data: platformAdmin, error: platformError }, canEditContent, canConfigureClub] = await Promise.all([
     supabaseAdmin.from('platform_admins').select('user_id').eq('user_id', user.id).maybeSingle(),
-    isClubAdmin(user.id, clubId),
+    userHasClubPermission(user.id, clubId, 'content:edit'),
+    userHasClubPermission(user.id, clubId, 'club:configure'),
   ])
 
   if (platformError) {
     return { error: NextResponse.json({ error: platformError.message }, { status: 500 }), user: null }
   }
 
-  if (!platformAdmin?.user_id && !canManageClub) {
+  if (!platformAdmin?.user_id && !canEditContent && !canConfigureClub) {
     return { error: NextResponse.json({ error: 'No autorizado para gestionar publicidad del club.' }, { status: 403 }), user: null }
   }
 

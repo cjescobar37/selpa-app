@@ -31,6 +31,7 @@ export default function PublicNewsArticle({
 }: PublicNewsArticleProps) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [resolvedClubHref, setResolvedClubHref] = useState<string | null>(clubHref ?? null)
+  const backLabel = resolvedClubHref ? 'Volver al club' : 'Volver a noticias'
 
   useEffect(() => {
     if (!lightboxUrl) return
@@ -75,7 +76,7 @@ export default function PublicNewsArticle({
       <nav className="publicArticleNav" aria-label="Navegación de noticia">
         <Link href={resolvedClubHref ?? '/noticias'} className="pamprax-soft-action">
           <ArrowLeft size={17} strokeWidth={2.5} />
-          <span>Volver al club</span>
+          <span>{backLabel}</span>
         </Link>
         <Link href="/noticias" className="pamprax-soft-action">
           <Newspaper size={17} strokeWidth={2.5} />

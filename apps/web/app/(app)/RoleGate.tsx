@@ -14,6 +14,10 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const session = useSession()
   const publicGuestRoute = isPublicGuestRoute(pathname)
+  const currentPath = useMemo(() => {
+    if (typeof window === 'undefined') return pathname
+    return `${pathname}${window.location.search}`
+  }, [pathname])
 
   const allowedWithoutClub = useMemo(
     () => [
@@ -31,7 +35,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     if (session.status === 'loading') return
 
     if (!session.user) {
-      router.replace('/login')
+      router.replace(`/login?next=${encodeURIComponent(currentPath)}`)
       return
     }
 
@@ -44,6 +48,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     }
   }, [
     allowedWithoutClub,
+    currentPath,
     pathname,
     publicGuestRoute,
     router,

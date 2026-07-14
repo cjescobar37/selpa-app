@@ -1,8 +1,15 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import ConfigurableAdBanner from '@/components/ads/ConfigurableAdBanner'
+import AdVisualEditor from '@/components/ads/AdVisualEditor'
 import AuthAlert from '@/components/AuthAlert'
 import PlatformModuleShell from '@/components/platform/PlatformModuleShell'
+import {
+  defaultPlatformAdRenderConfig,
+  normalizePlatformAdRenderConfig,
+  type PlatformAdRenderConfig,
+} from '@/lib/platformAdConfig'
 import { supabase } from '@/lib/supabaseClient'
 
 type Campaign = {
@@ -14,6 +21,7 @@ type Campaign = {
   slot: 'HOME_AFTER_RANKING' | 'HOME_AFTER_NEWS_HERO' | 'HOME_HERO' | 'HOME_GRID' | 'HOME_INLINE'
   status: 'ACTIVE' | 'PAUSED'
   sort_order: number
+  render_config?: unknown
 }
 
 type Sponsor = {
@@ -28,7 +36,26 @@ type Sponsor = {
 
 type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string } | null
 
-const emptyCampaign = { title: '', description: '', linkUrl: '', slot: 'HOME_AFTER_RANKING' as Campaign['slot'], status: 'ACTIVE' as Campaign['status'], sortOrder: '100' }
+type CampaignForm = {
+  title: string
+  description: string
+  linkUrl: string
+  slot: Campaign['slot']
+  status: Campaign['status']
+  sortOrder: string
+  renderConfig: PlatformAdRenderConfig
+}
+
+const newBannerConfig: PlatformAdRenderConfig = {
+  ...defaultPlatformAdRenderConfig,
+  enabled: true,
+  themeMode: 'AUTO',
+  subtitle: 'Campaña destacada',
+  secondaryText: '',
+  buttonEnabled: true,
+}
+
+const emptyCampaign: CampaignForm = { title: '', description: '', linkUrl: '', slot: 'HOME_AFTER_RANKING', status: 'ACTIVE', sortOrder: '100', renderConfig: newBannerConfig }
 const emptySponsor = { name: '', websiteUrl: '', tier: 'SPONSOR' as Sponsor['tier'], status: 'ACTIVE' as Sponsor['status'], sortOrder: '100' }
 
 function slotLabel(slot: Campaign['slot']) {
@@ -68,6 +95,80 @@ function tierBadgeClass(tier: Sponsor['tier']) {
   return 'px-slotBadge px-slotBadge--sponsor'
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function hexToRgb(value: string) {
+  const normalized = value.replace('#', '').trim()
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) return null
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16),
+  }
+}
+
+function rgbToHex(r: number, g: number, b: number) {
+  return `#${[r, g, b].map((part) => clamp(Math.round(part), 0, 255).toString(16).padStart(2, '0')).join('')}`
+}
+
+function mixHex(value: string, target: string, amount: number) {
+  const from = hexToRgb(value)
+  const to = hexToRgb(target)
+  if (!from || !to) return value
+  return rgbToHex(
+    from.r + (to.r - from.r) * amount,
+    from.g + (to.g - from.g) * amount,
+    from.b + (to.b - from.b) * amount,
+  )
+}
+
+function extractImageAccent(src: string) {
+  return new Promise<string>((resolve, reject) => {
+    const image = new Image()
+    image.crossOrigin = 'anonymous'
+    image.onload = () => {
+      const canvas = document.createElement('canvas')
+      const width = 24
+      const height = Math.max(1, Math.round((image.naturalHeight / Math.max(1, image.naturalWidth)) * width))
+      canvas.width = width
+      canvas.height = height
+      const context = canvas.getContext('2d', { willReadFrequently: true })
+      if (!context) {
+        reject(new Error('Canvas no disponible'))
+        return
+      }
+      context.drawImage(image, 0, 0, width, height)
+      const pixels = context.getImageData(0, 0, width, height).data
+      let r = 0
+      let g = 0
+      let b = 0
+      let count = 0
+      for (let index = 0; index < pixels.length; index += 16) {
+        const alpha = pixels[index + 3]
+        if (alpha < 80) continue
+        const pr = pixels[index]
+        const pg = pixels[index + 1]
+        const pb = pixels[index + 2]
+        const brightness = (pr + pg + pb) / 3
+        if (brightness < 24 || brightness > 238) continue
+        r += pr
+        g += pg
+        b += pb
+        count += 1
+      }
+      if (!count) {
+        reject(new Error('No se pudo detectar color'))
+        return
+      }
+      resolve(rgbToHex(r / count, g / count, b / count))
+    }
+    image.onerror = reject
+    image.src = src
+  })
+}
+
 export default function PlatformPublicidadPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [sponsors, setSponsors] = useState<Sponsor[]>([])
@@ -89,6 +190,8 @@ export default function PlatformPublicidadPage() {
   const [saving, setSaving] = useState(false)
   const [setupRequired, setSetupRequired] = useState<string | null>(null)
   const [alert, setAlert] = useState<AlertState>(null)
+  const [campaignModalAlert, setCampaignModalAlert] = useState<AlertState>(null)
+  const [sponsorModalAlert, setSponsorModalAlert] = useState<AlertState>(null)
 
   async function getToken() {
     const { data } = await supabase.auth.getSession()
@@ -148,26 +251,76 @@ export default function PlatformPublicidadPage() {
     return () => URL.revokeObjectURL(url)
   }, [sponsorFile])
 
+  useEffect(() => {
+    const image = campaignPreviewUrl
+    if (!image || campaignForm.renderConfig.themeMode !== 'AUTO') return
+    let active = true
+    extractImageAccent(image)
+      .then((accent) => {
+        if (!active) return
+        setCampaignForm((state) => ({
+          ...state,
+          renderConfig: {
+            ...state.renderConfig,
+            backgroundMode: 'gradient',
+            backgroundColor: mixHex(accent, '#061b3a', 0.56),
+            gradientFrom: mixHex(accent, '#061b3a', 0.64),
+            gradientTo: mixHex(accent, '#020617', 0.82),
+            buttonBackgroundColor: '#ffffff',
+            buttonTextColor: mixHex(accent, '#061b3a', 0.72),
+          },
+        }))
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [campaignPreviewUrl, campaignForm.renderConfig.themeMode])
+
   const selectedCampaign = useMemo(() => campaigns.find((row) => row.id === selectedCampaignId) ?? null, [campaigns, selectedCampaignId])
   const selectedSponsor = useMemo(() => sponsors.find((row) => row.id === selectedSponsorId) ?? null, [sponsors, selectedSponsorId])
+  const editingCampaign = useMemo(() => campaigns.find((row) => row.id === editingCampaignId) ?? null, [campaigns, editingCampaignId])
+  const editingSponsor = useMemo(() => sponsors.find((row) => row.id === editingSponsorId) ?? null, [sponsors, editingSponsorId])
+
+  function updateCampaignConfig(patch: Partial<PlatformAdRenderConfig>) {
+    setCampaignForm((state) => ({
+      ...state,
+      renderConfig: normalizePlatformAdRenderConfig({ ...state.renderConfig, ...patch }),
+    }))
+  }
 
   function openNewCampaign() {
+    setAlert(null)
+    setCampaignModalAlert(null)
     setEditingCampaignId(null)
-    setCampaignForm(emptyCampaign)
+    setCampaignForm({ ...emptyCampaign, renderConfig: { ...newBannerConfig } })
     setCampaignFile(null)
     setKeepImage(true)
     setCampaignOpen(true)
   }
 
   function openEditCampaign(row: Campaign) {
+    setAlert(null)
+    setCampaignModalAlert(null)
+    setSelectedCampaignId(row.id)
     setEditingCampaignId(row.id)
-    setCampaignForm({ title: row.title, description: row.description || '', linkUrl: row.link_url || '', slot: editableSlot(row.slot), status: row.status, sortOrder: String(row.sort_order ?? 100) })
+    setCampaignForm({
+      title: row.title,
+      description: row.description || '',
+      linkUrl: row.link_url || '',
+      slot: editableSlot(row.slot),
+      status: row.status,
+      sortOrder: String(row.sort_order ?? 100),
+      renderConfig: normalizePlatformAdRenderConfig(row.render_config),
+    })
     setCampaignFile(null)
     setKeepImage(Boolean(row.image_url))
     setCampaignOpen(true)
   }
 
   function openNewSponsor() {
+    setAlert(null)
+    setSponsorModalAlert(null)
     setEditingSponsorId(null)
     setSponsorForm(emptySponsor)
     setSponsorFile(null)
@@ -176,6 +329,9 @@ export default function PlatformPublicidadPage() {
   }
 
   function openEditSponsor(row: Sponsor) {
+    setAlert(null)
+    setSponsorModalAlert(null)
+    setSelectedSponsorId(row.id)
     setEditingSponsorId(row.id)
     setSponsorForm({ name: row.name, websiteUrl: row.website_url || '', tier: row.tier, status: row.status, sortOrder: String(row.sort_order ?? 100) })
     setSponsorFile(null)
@@ -186,6 +342,7 @@ export default function PlatformPublicidadPage() {
   async function saveCampaign() {
     const token = await getToken()
     if (!token) return
+    setCampaignModalAlert(null)
     setSaving(true)
     const fd = new FormData()
     fd.set('title', campaignForm.title)
@@ -195,13 +352,14 @@ export default function PlatformPublicidadPage() {
     fd.set('status', campaignForm.status)
     fd.set('sortOrder', campaignForm.sortOrder)
     fd.set('keepImage', keepImage ? '1' : '0')
+    fd.set('renderConfig', JSON.stringify(campaignForm.renderConfig))
     if (campaignFile) fd.set('image', campaignFile)
     const res = await fetch(editingCampaignId ? `/api/platform/ads/${editingCampaignId}` : '/api/platform/ads', { method: editingCampaignId ? 'PATCH' : 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })
     const json = await res.json().catch(() => ({}))
     setSaving(false)
     if (!res.ok) {
-      if (json?.setupRequired) setSetupRequired(json?.detail || json?.error || 'Falta migración de contenido.')
-      else setAlert({ variant: 'error', title: 'No pude guardar la campaña', message: json?.error || 'Error inesperado.' })
+      if (json?.setupRequired) setCampaignModalAlert({ variant: 'warning', title: 'Contenido no inicializado', message: json?.detail || json?.error || 'Falta migración de contenido.' })
+      else setCampaignModalAlert({ variant: 'error', title: 'No pude guardar la campaña', message: json?.error || 'Error inesperado.' })
       return
     }
     setCampaignOpen(false)
@@ -212,6 +370,7 @@ export default function PlatformPublicidadPage() {
   async function saveSponsor() {
     const token = await getToken()
     if (!token) return
+    setSponsorModalAlert(null)
     setSaving(true)
     const fd = new FormData()
     fd.set('name', sponsorForm.name)
@@ -225,8 +384,8 @@ export default function PlatformPublicidadPage() {
     const json = await res.json().catch(() => ({}))
     setSaving(false)
     if (!res.ok) {
-      if (json?.setupRequired) setSetupRequired(json?.detail || json?.error || 'Falta migración de contenido.')
-      else setAlert({ variant: 'error', title: 'No pude guardar el sponsor', message: json?.error || 'Error inesperado.' })
+      if (json?.setupRequired) setSponsorModalAlert({ variant: 'warning', title: 'Contenido no inicializado', message: json?.detail || json?.error || 'Falta migración de contenido.' })
+      else setSponsorModalAlert({ variant: 'error', title: 'No pude guardar el sponsor', message: json?.error || 'Error inesperado.' })
       return
     }
     setSponsorOpen(false)
@@ -267,8 +426,41 @@ export default function PlatformPublicidadPage() {
     { label: 'Ocultas', value: String(campaigns.filter((item) => item.status === 'PAUSED').length) },
   ]
 
-  const campaignPreviewImage = campaignPreviewUrl || (editingCampaignId && keepImage ? selectedCampaign?.image_url || null : null)
-  const sponsorPreviewImage = sponsorPreviewUrl || (editingSponsorId && keepLogo ? selectedSponsor?.logo_url || null : null)
+  const campaignPreviewImage = campaignPreviewUrl || (editingCampaignId && keepImage ? editingCampaign?.image_url || null : null)
+  const sponsorPreviewImage = sponsorPreviewUrl || (editingSponsorId && keepLogo ? editingSponsor?.logo_url || null : null)
+  const rankingPreviewCampaign = selectedCampaign && isAfterRankingSlot(selectedCampaign.slot)
+    ? selectedCampaign
+    : campaigns.find((item) => isAfterRankingSlot(item.slot) && item.status === 'ACTIVE') ?? campaigns.find((item) => isAfterRankingSlot(item.slot)) ?? null
+  const newsPreviewCampaign = selectedCampaign && isAfterNewsHeroSlot(selectedCampaign.slot)
+    ? selectedCampaign
+    : campaigns.find((item) => isAfterNewsHeroSlot(item.slot) && item.status === 'ACTIVE') ?? campaigns.find((item) => isAfterNewsHeroSlot(item.slot)) ?? null
+
+  function renderRealCampaignPreview(row: Campaign | null, label: string) {
+    if (!row) {
+      return <div className="px-realPreviewEmpty">Sin campañas en esta posición.</div>
+    }
+    const config = normalizePlatformAdRenderConfig(row.render_config)
+    return (
+      <article className="px-realPreviewItem">
+        <span className={slotBadgeClass(row.slot)}>{label}</span>
+        {config.enabled ? (
+          <ConfigurableAdBanner
+            className="px-realPreviewBanner"
+            config={config}
+            description={row.description}
+            imageUrl={row.image_url}
+            title={row.title}
+            viewport="desktop"
+          />
+        ) : (
+          <div className="px-realPreviewLegacy">
+            {row.image_url ? <img src={row.image_url} alt={row.title} /> : <span>Sin imagen</span>}
+            <strong>{row.title}</strong>
+          </div>
+        )}
+      </article>
+    )
+  }
 
   return (
     <PlatformModuleShell
@@ -276,7 +468,15 @@ export default function PlatformPublicidadPage() {
       subtitle="Organizá campañas, posiciones y logos con una lectura clara de qué sale y dónde."
       metrics={metrics}
       actions={<div className="px-mediaActions"><button className="px-btn px-btn--ghost" type="button" onClick={load}>Actualizar</button><button className="px-btn" type="button" onClick={openNewCampaign}>Nueva campaña</button></div>}
-      aside={<div className="px-platformCard px-mediaAside"><div className="px-mediaAsideHead"><h3>Impacto actual</h3></div><div className="px-mediaRuleList"><div><span>Después de rankings</span><strong>{campaigns.filter((item) => isAfterRankingSlot(item.slot) && item.status === 'ACTIVE').length} activa(s)</strong></div><div><span>Después de noticia destacada</span><strong>{campaigns.filter((item) => isAfterNewsHeroSlot(item.slot) && item.status === 'ACTIVE').length} activa(s)</strong></div><div><span>Ocultas</span><strong>{campaigns.filter((item) => item.status === 'PAUSED').length}</strong></div><div><span>Sponsors visibles</span><strong>{sponsors.filter((item) => item.status === 'ACTIVE').length}</strong></div></div></div>}
+      aside={(
+        <div className="px-platformCard px-mediaAside px-realPreviewAside">
+          <div className="px-mediaAsideHead"><h3>Preview real</h3><p>Cómo se ven las piezas dentro del sitio.</p></div>
+          <div className="px-realPreviewList">
+            {renderRealCampaignPreview(rankingPreviewCampaign, 'Después de rankings')}
+            {renderRealCampaignPreview(newsPreviewCampaign, 'Después de noticia destacada')}
+          </div>
+        </div>
+      )}
     >
       {alert ? <AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /> : null}
       {setupRequired ? <AuthAlert variant="warning" title="Contenido no inicializado" message={setupRequired} /> : null}
@@ -335,94 +535,67 @@ export default function PlatformPublicidadPage() {
           </div>
         </section>
 
-        <section className="px-platformCard px-mediaSection px-mediaSection--preview">
-          <div className="px-mediaSectionHead">
-            <div><h3>Preview real</h3><p>Cómo impactan las piezas activas dentro del sitio.</p></div>
-          </div>
-          <div className="px-mediaPreviewGrid">
-            <article className="px-mediaPreviewCard px-mediaPreviewCard--hero">
-              <span className="px-slotBadge px-slotBadge--grid">HOME_AFTER_RANKING</span>
-              {selectedCampaign && isAfterRankingSlot(selectedCampaign.slot) && selectedCampaign.image_url ? <img src={selectedCampaign.image_url} alt={selectedCampaign.title} className="px-mediaPreviewImage" /> : null}
-              <div className="px-mediaPreviewBody"><strong>{selectedCampaign && isAfterRankingSlot(selectedCampaign.slot) ? selectedCampaign.title : 'Después de rankings'}</strong><p>Banner horizontal entre rankings y comunidad.</p></div>
-            </article>
-            <article className="px-mediaPreviewCard">
-              <span className="px-slotBadge px-slotBadge--grid">Rankings</span>
-              <div className="px-mediaMiniPreviewList">
-                {campaigns.filter((item) => isAfterRankingSlot(item.slot)).slice(0, 3).map((item) => (
-                  <div key={item.id} className="px-mediaMiniPreview">{item.image_url ? <img src={item.image_url} alt={item.title} /> : <div />}<strong>{item.title}</strong></div>
-                ))}
-              </div>
-            </article>
-            <article className="px-mediaPreviewCard">
-              <span className="px-slotBadge px-slotBadge--inline">HOME_AFTER_NEWS_HERO</span>
-              <div className="px-mediaInlinePreview">
-                {campaigns.filter((item) => isAfterNewsHeroSlot(item.slot)).slice(0, 2).map((item) => (
-                  <div key={item.id} className="px-mediaInlineItem"><strong>{item.title}</strong><span>{item.status === 'ACTIVE' ? 'Visible' : 'Oculta'}</span></div>
-                ))}
-                {!campaigns.some((item) => isAfterNewsHeroSlot(item.slot)) ? <span className="px-muted">Sin campañas en esta posición.</span> : null}
-              </div>
-            </article>
-            <article className="px-mediaPreviewCard px-mediaPreviewCard--sponsors">
-              <span className="px-slotBadge px-slotBadge--sponsor">Sponsors</span>
-              <div className="px-mediaSponsorPreview">
-                {sponsors.slice(0, 4).map((item) => (
-                  <div key={item.id} className="px-mediaSponsorLogo">{item.logo_url ? <img src={item.logo_url} alt={item.name} /> : <span>{item.name.slice(0, 2).toUpperCase()}</span>}</div>
-                ))}
-              </div>
-            </article>
-          </div>
-        </section>
       </div>
 
       {campaignOpen ? (
-        <div className="px-mediaOverlay" onClick={() => !saving && setCampaignOpen(false)}>
+        <div className="px-mediaOverlay">
           <div className="px-mediaModal" onClick={(event) => event.stopPropagation()}>
             <div className="px-mediaModalHead">
               <div><h3>{editingCampaignId ? 'Editar campaña' : 'Nueva campaña'}</h3><p>Definí pieza, ubicación y prioridad visual.</p></div>
               <button className="px-btn px-btn--ghost" type="button" onClick={() => setCampaignOpen(false)}>Cerrar</button>
             </div>
-            <div className="px-mediaModalGrid">
-              <div className="px-mediaFormStack">
-                <section className="px-mediaFormBlock">
-                  <h4>Datos principales</h4>
-                  <label><span>Nombre de campaña</span><input value={campaignForm.title} onChange={(event) => setCampaignForm((state) => ({ ...state, title: event.target.value }))} /></label>
-                  <label><span>Link</span><input value={campaignForm.linkUrl} onChange={(event) => setCampaignForm((state) => ({ ...state, linkUrl: event.target.value }))} /></label>
-                  <label><span>Descripción</span><textarea rows={4} value={campaignForm.description} onChange={(event) => setCampaignForm((state) => ({ ...state, description: event.target.value }))} /></label>
-                </section>
-                <section className="px-mediaFormBlock">
-                  <h4>Ubicación y estado</h4>
-                  <div className="px-mediaSplit">
+            {campaignModalAlert ? <AuthAlert variant={campaignModalAlert.variant} title={campaignModalAlert.title} message={campaignModalAlert.message} /> : null}
+            <AdVisualEditor
+              key={editingCampaignId || 'new-campaign'}
+              title={campaignForm.title}
+              description={campaignForm.description}
+              linkUrl={campaignForm.linkUrl}
+              imageUrl={campaignPreviewImage}
+              renderConfig={campaignForm.renderConfig}
+              slotLabel={slotLabel(campaignForm.slot)}
+              onTitleChange={(title) => setCampaignForm((state) => ({ ...state, title }))}
+              onDescriptionChange={(description) => setCampaignForm((state) => ({ ...state, description }))}
+              onRenderConfigChange={(renderConfig) => setCampaignForm((state) => ({ ...state, renderConfig: normalizePlatformAdRenderConfig(renderConfig) }))}
+              onCancel={() => setCampaignOpen(false)}
+              onSave={saveCampaign}
+              saving={saving}
+              saveLabel={editingCampaignId ? 'Guardar cambios' : 'Crear campaña'}
+              generalFields={(
+                <>
+                  <div className="adGeneralRow is-two">
+                    <label><span>Nombre</span><input value={campaignForm.title} onChange={(event) => setCampaignForm((state) => ({ ...state, title: event.target.value }))} /></label>
+                    <label><span>Link</span><input value={campaignForm.linkUrl} onChange={(event) => setCampaignForm((state) => ({ ...state, linkUrl: event.target.value }))} /></label>
+                  </div>
+                  <div className="adGeneralRow is-three">
                     <label><span>Posición</span><select value={campaignForm.slot} onChange={(event) => setCampaignForm((state) => ({ ...state, slot: event.target.value as Campaign['slot'] }))}><option value="HOME_AFTER_RANKING">Después de rankings</option><option value="HOME_AFTER_NEWS_HERO">Después de noticia destacada</option></select></label>
                     <label><span>Visibilidad</span><select value={campaignForm.status} onChange={(event) => setCampaignForm((state) => ({ ...state, status: event.target.value as Campaign['status'] }))}><option value="ACTIVE">Activa</option><option value="PAUSED">Oculta</option></select></label>
                     <label><span>Orden</span><input value={campaignForm.sortOrder} onChange={(event) => setCampaignForm((state) => ({ ...state, sortOrder: event.target.value }))} /></label>
                   </div>
-                </section>
-                <section className="px-mediaFormBlock">
-                  <h4>Imagen</h4>
-                  <label className="px-mediaUpload"><span>Banner horizontal ancho</span><input type="file" accept="image/*" onChange={(event) => setCampaignFile(event.target.files?.[0] || null)} /></label>
+                  <div className="adGeneralRow is-three">
+                    {campaignForm.renderConfig.enabled ? <label><span>Tema</span><select value={campaignForm.renderConfig.themeMode} onChange={(event) => updateCampaignConfig({ themeMode: event.target.value as PlatformAdRenderConfig['themeMode'] })}><option value="AUTO">Automático</option><option value="MANUAL">Manual</option></select></label> : null}
+                    <label><span>Modo</span><select value={campaignForm.renderConfig.enabled ? 'configured' : 'legacy'} onChange={(event) => updateCampaignConfig({ enabled: event.target.value === 'configured' })}><option value="configured">Banner SELPA</option><option value="legacy">Imagen legacy</option></select></label>
+                    {campaignForm.renderConfig.enabled ? <label><span>Layout</span><select value={campaignForm.renderConfig.layout} onChange={(event) => updateCampaignConfig({ layout: event.target.value as PlatformAdRenderConfig['layout'] })}><option value="image-right">Imagen derecha</option><option value="image-left">Imagen izquierda</option><option value="image-only">Solo imagen</option><option value="text-only">Solo texto</option></select></label> : null}
+                  </div>
+                  <div className="adGeneralRow is-full">
+                    <label><span>Imagen base</span><input type="file" accept="image/*" onChange={(event) => { setCampaignModalAlert(null); setCampaignFile(event.target.files?.[0] || null); if (event.target.files?.[0]) setKeepImage(false) }} /></label>
+                  </div>
                   {editingCampaignId ? <label className="px-mediaCheckbox"><input type="checkbox" checked={keepImage} onChange={(event) => setKeepImage(event.target.checked)} />Mantener imagen actual si no subo otra.</label> : null}
-                </section>
-              </div>
-              <aside className="px-mediaFormPreview">
-                <div className="px-mediaFormPreviewHead"><h4>Preview</h4><span className={slotBadgeClass(campaignForm.slot)}>{slotLabel(campaignForm.slot)}</span></div>
-                <div className="px-mediaLiveCard is-inline">
-                  {campaignPreviewImage ? <img src={campaignPreviewImage} alt={campaignForm.title || 'Preview campaña'} /> : <div className="px-mediaLiveFallback">Sin imagen</div>}
-                  <div className="px-mediaLiveCopy"><strong>{campaignForm.title || 'Nombre de campaña'}</strong><p>{campaignForm.description || 'La pieza seleccionada se va a ver acá con el ratio y jerarquía de su posición.'}</p></div>
-                </div>
-              </aside>
-            </div>
-            <div className="px-mediaModalActions"><button className="px-btn px-btn--ghost" type="button" onClick={() => setCampaignOpen(false)}>Cancelar</button><button className="px-btn" type="button" onClick={saveCampaign} disabled={saving}>{saving ? 'Guardando…' : editingCampaignId ? 'Guardar cambios' : 'Crear campaña'}</button></div>
+                </>
+              )}
+              imageField={<label><span>Recurso</span><input type="file" accept="image/*" onChange={(event) => { setCampaignModalAlert(null); setCampaignFile(event.target.files?.[0] || null); if (event.target.files?.[0]) setKeepImage(false) }} /></label>}
+            />
           </div>
         </div>
       ) : null}
 
       {sponsorOpen ? (
-        <div className="px-mediaOverlay" onClick={() => !saving && setSponsorOpen(false)}>
+        <div className="px-mediaOverlay">
           <div className="px-mediaModal" onClick={(event) => event.stopPropagation()}>
             <div className="px-mediaModalHead">
               <div><h3>{editingSponsorId ? 'Editar sponsor' : 'Nuevo sponsor'}</h3><p>Logo, nivel y posición visual dentro del home.</p></div>
               <button className="px-btn px-btn--ghost" type="button" onClick={() => setSponsorOpen(false)}>Cerrar</button>
             </div>
+            {sponsorModalAlert ? <AuthAlert variant={sponsorModalAlert.variant} title={sponsorModalAlert.title} message={sponsorModalAlert.message} /> : null}
             <div className="px-mediaModalGrid">
               <div className="px-mediaFormStack">
                 <section className="px-mediaFormBlock">
@@ -440,7 +613,7 @@ export default function PlatformPublicidadPage() {
                 </section>
                 <section className="px-mediaFormBlock">
                   <h4>Logo</h4>
-                  <label className="px-mediaUpload"><span>Logo cuadrado o horizontal limpio</span><input type="file" accept="image/*" onChange={(event) => setSponsorFile(event.target.files?.[0] || null)} /></label>
+                  <label className="px-mediaUpload"><span>Logo cuadrado o horizontal limpio</span><input type="file" accept="image/*" onChange={(event) => { setSponsorModalAlert(null); setSponsorFile(event.target.files?.[0] || null); if (event.target.files?.[0]) setKeepLogo(false) }} /></label>
                   {editingSponsorId ? <label className="px-mediaCheckbox"><input type="checkbox" checked={keepLogo} onChange={(event) => setKeepLogo(event.target.checked)} />Mantener logo actual si no subo otro.</label> : null}
                 </section>
               </div>
@@ -509,27 +682,48 @@ export default function PlatformPublicidadPage() {
         .px-mediaSponsorLogo img { width: 100%; height: 100%; object-fit: contain; display: block; padding: 8px; }
         .px-mediaAside { display: grid; gap: 12px; }
         .px-mediaAsideHead h3 { margin: 0; }
+        .px-mediaAsideHead p { margin: 3px 0 0; color: rgba(23,37,63,.62); font-size: 12px; line-height: 1.35; }
+        .px-realPreviewAside { align-content: start; }
+        .px-realPreviewList { display: grid; gap: 12px; }
+        .px-realPreviewItem { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 10px; display: grid; gap: 8px; padding: 10px; }
+        .px-realPreviewItem > span { justify-self: start; }
+        .px-realPreviewBanner { --selpa-ad-height: 112px; border-radius: 8px; box-shadow: 0 12px 24px rgba(15,23,42,.08); width: 100%; }
+        .px-realPreviewLegacy { border-radius: 8px; display: grid; gap: 8px; overflow: hidden; }
+        .px-realPreviewLegacy img, .px-realPreviewLegacy > span { background: rgba(148,163,184,.16); border-radius: 8px; color: rgba(23,37,63,.62); display: grid; height: 112px; object-fit: cover; place-items: center; width: 100%; }
+        .px-realPreviewLegacy strong { color: #061b3a; font-size: 13px; line-height: 1.2; }
+        .px-realPreviewEmpty { background: rgba(148,163,184,.12); border: 1px dashed rgba(15,23,42,.14); border-radius: 10px; color: rgba(23,37,63,.58); font-size: 12px; font-weight: 700; padding: 14px; text-align: center; }
         .px-mediaRuleList { display: grid; gap: 10px; }
         .px-mediaRuleList div { display: grid; gap: 4px; }
         .px-mediaRuleList span { font-size: 12px; color: rgba(23,37,63,.56); }
         .px-mediaRuleList strong { font-size: 14px; line-height: 1.3; }
         .px-mediaOverlay { position: fixed; inset: 72px 0 0 0; background: rgba(15,23,42,.66); padding: 16px; z-index: 70; overflow-y: auto; }
-        .px-mediaModal { width: min(1160px, 100%); margin: 0 auto; background: #f8fafc; border-radius: 10px; padding: 16px; display: grid; gap: 16px; }
+        .px-mediaModal { width: min(1160px, 100%); margin: 0 auto; background: #f8fafc; border-radius: 10px; padding: 14px; display: grid; gap: 12px; overflow: visible; }
         .px-mediaModalHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .px-mediaModalHead h3 { margin: 0; font-size: 22px; }
         .px-mediaModalHead p { margin: 3px 0 0; font-size: 13px; color: rgba(23,37,63,.62); }
-        .px-mediaModalGrid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+        .px-mediaModalGrid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; overflow: visible; }
+        .px-mediaModalGrid--designer { grid-template-columns: minmax(0, 1fr) 420px; }
         .px-mediaFormStack, .px-mediaFormPreview { display: grid; gap: 12px; }
-        .px-mediaFormBlock { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 8px; padding: 14px; display: grid; gap: 10px; }
+        .px-mediaFormBlock { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 8px; padding: 10px; display: grid; gap: 8px; }
         .px-mediaFormBlock h4, .px-mediaFormPreview h4 { margin: 0; font-size: 14px; }
-        .px-mediaFormBlock label { display: grid; gap: 6px; font-size: 13px; color: rgba(23,37,63,.84); }
-        .px-mediaFormBlock input, .px-mediaFormBlock select, .px-mediaFormBlock textarea { width: 100%; border: 1px solid rgba(15,23,42,.14); border-radius: 8px; padding: 9px 10px; background: #fff; color: #0f172a; font-size: 13px; }
-        .px-mediaSplit { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .px-mediaFormBlock label { display: grid; gap: 4px; font-size: 12px; color: rgba(23,37,63,.84); font-weight: 700; }
+        .px-mediaFormBlock label span { color: rgba(23,37,63,.62); font-size: 11px; font-weight: 800; }
+        .px-mediaFormBlock input, .px-mediaFormBlock select, .px-mediaFormBlock textarea { width: 100%; border: 1px solid rgba(15,23,42,.14); border-radius: 7px; padding: 7px 9px; background: #fff; color: #0f172a; font-size: 12px; min-height: 34px; }
+        .px-mediaFormBlock textarea { min-height: 58px; resize: vertical; }
+        .px-mediaSplit { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .px-colorGrid { display: grid; gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .px-colorControl { align-items: center; display: grid !important; grid-template-columns: minmax(0, 1fr) 36px; gap: 8px !important; }
+        .px-colorControl input[type="color"] { height: 32px; min-height: 32px; padding: 3px; }
+        .px-rangeControl { align-items: center; display: grid !important; grid-template-columns: 154px minmax(0, 1fr); gap: 10px !important; }
+        .px-rangeControl span { align-items: center; display: flex; justify-content: space-between; gap: 8px; }
+        .px-rangeControl b { color: #0f172a; font-size: 11px; font-weight: 900; }
+        .px-rangeControl input[type="range"] { min-height: 28px; padding: 0; }
         .px-mediaUpload input { padding: 8px; }
         .px-mediaCheckbox { display: flex !important; align-items: center; gap: 8px; }
         .px-mediaCheckbox input { width: auto !important; }
-        .px-mediaFormPreview { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 8px; padding: 14px; }
-        .px-mediaFormPreviewHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .px-mediaFormPreview { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 8px; padding: 12px; }
+        .px-mediaFormPreviewHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+        .px-mediaFormPreviewHead > div:first-child { display: grid; gap: 6px; }
         .px-mediaLiveCard { display: grid; gap: 10px; }
         .px-mediaLiveCard img, .px-mediaSponsorLogoLarge img { width: 100%; display: block; object-fit: cover; border-radius: 10px; }
         .px-mediaLiveCard.is-hero img { height: 220px; }
@@ -542,12 +736,12 @@ export default function PlatformPublicidadPage() {
         .px-mediaSponsorLive { display: grid; gap: 10px; place-items: start; }
         .px-mediaSponsorLogoLarge { width: 180px; height: 108px; border-radius: 10px; border: 1px solid rgba(15,23,42,.08); background: #fff; display: grid; place-items: center; overflow: hidden; }
         .px-mediaSponsorLogoLarge span { font-size: 28px; font-weight: 700; color: rgba(23,37,63,.46); }
-        .px-mediaModalActions { display: flex; justify-content: flex-end; gap: 8px; }
+        .px-mediaModalActions { background: linear-gradient(180deg, rgba(248,250,252,.74), #f8fafc 36%); bottom: 0; display: flex; justify-content: flex-end; gap: 8px; margin: 0 -2px -2px; padding: 10px 2px 2px; position: sticky; z-index: 4; }
         @media (max-width: 980px) {
           .px-mediaPreviewGrid { grid-template-columns: 1fr; }
           .px-mediaPreviewCard--hero, .px-mediaPreviewCard--sponsors { grid-column: span 1; }
           .px-mediaModalGrid { grid-template-columns: 1fr; }
-          .px-mediaSplit { grid-template-columns: 1fr; }
+          .px-mediaSplit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 720px) {
           .px-mediaActions, .px-mediaSectionHead, .px-mediaModalHead, .px-mediaModalActions, .px-mediaTop { flex-direction: column; align-items: stretch; }
@@ -557,6 +751,9 @@ export default function PlatformPublicidadPage() {
           .px-mediaMeta span { max-width: 100%; }
           .px-mediaOverlay { inset: 64px 0 0 0; padding: 0; }
           .px-mediaModal { border-radius: 0; min-height: calc(100vh - 64px); }
+          .px-mediaSplit, .px-colorGrid { grid-template-columns: 1fr; }
+          .px-rangeControl { grid-template-columns: 1fr; gap: 4px !important; }
+          .px-colorControl { grid-template-columns: minmax(0, 1fr) 44px; }
         }
       `}</style>
     </PlatformModuleShell>

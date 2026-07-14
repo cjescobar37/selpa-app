@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { CheckCircle2, Trophy, Users } from 'lucide-react'
+import SelpaLoader from '@/components/SelpaLoader'
 import PampraxHero from '@/components/ui/PampraxHero'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
@@ -380,7 +381,9 @@ export default function TorneoDetallePage() {
   if (loading) {
     return (
       <main className="tournamentPublicDetail">
-        <div className="tournamentPublicDetail__loading">Cargando detalle del torneo...</div>
+        <div className="tournamentPublicDetail__loading">
+          <SelpaLoader title="Cargando torneo..." subtitle="Preparando la información" />
+        </div>
       </main>
     )
   }
@@ -2099,6 +2102,10 @@ export default function TorneoDetallePage() {
         }
 
         @media (max-width: 560px) {
+          .tournamentPublicDetail {
+            padding-bottom: 34px;
+          }
+
           .tournamentPublicDetail__summary {
             grid-template-columns: 1fr;
           }
@@ -2107,18 +2114,152 @@ export default function TorneoDetallePage() {
             font-size: 34px;
           }
 
+          .tournamentPublicDetail__landingPitch,
+          .tournamentPublicDetail__personalBoard,
+          .tournamentPublicDetail__progressCard,
+          .tournamentPublicDetail__generalInfo {
+            border-radius: 18px;
+            margin-top: 10px;
+            padding: 12px;
+          }
+
+          .tournamentPublicDetail__landingPitch::before {
+            inset: 12px auto 12px 0;
+            width: 3px;
+          }
+
+          .tournamentPublicDetail__pitchGrid {
+            gap: 10px;
+          }
+
+          .tournamentPublicDetail__pitchCopy {
+            border-radius: 16px;
+            gap: 8px;
+            min-height: 0;
+            padding: 12px 12px 12px 14px;
+          }
+
+          .tournamentPublicDetail__eyebrow {
+            font-size: 11px;
+          }
+
+          .tournamentPublicDetail__landingPitch h2 {
+            font-size: 34px;
+            line-height: .88;
+          }
+
+          .tournamentPublicDetail__landingPitch p {
+            font-size: 14px;
+            line-height: 1.25;
+          }
+
+          .tournamentPublicDetail__signupCard {
+            border-radius: 18px;
+            gap: 10px;
+            padding: 12px;
+          }
+
+          .tournamentPublicDetail__countdown {
+            border-radius: 14px;
+            gap: 6px;
+            padding: 7px 10px;
+          }
+
+          .tournamentPublicDetail__countdown strong,
+          .tournamentPublicDetail__signupCard .tournamentPublicDetail__countdown strong {
+            font-size: 28px;
+          }
+
+          .tournamentPublicDetail__countdown span,
+          .tournamentPublicDetail__signupCard .tournamentPublicDetail__countdown span {
+            font-size: 11px;
+          }
+
+          .tournamentPublicDetail__signupCard a:first-of-type {
+            font-size: 18px;
+            min-height: 46px;
+            padding: 0 16px;
+          }
+
+          .tournamentPublicDetail__pitchFacts {
+            gap: 6px;
+          }
+
+          .tournamentPublicDetail__pitchFacts span {
+            font-size: 11px;
+            min-height: 32px;
+            padding: 0 9px;
+          }
+
           .tournamentPublicDetail__points {
             grid-template-columns: 1fr;
+            gap: 6px;
+          }
+
+          .tournamentPublicDetail__points span {
+            align-items: center;
+            border-radius: 12px;
+            display: grid;
+            gap: 8px;
+            grid-template-columns: 28px minmax(0, 1fr) auto;
+            padding: 8px 10px;
+          }
+
+          .tournamentPublicDetail__points i {
+            font-size: 16px;
+            margin: 0;
+          }
+
+          .tournamentPublicDetail__points small {
+            font-size: 10px;
+            min-width: 0;
+          }
+
+          .tournamentPublicDetail__points strong {
+            font-size: 15px;
+            margin: 0;
+            white-space: nowrap;
           }
 
           .tournamentPublicDetail__progressGrid,
-          .tournamentPublicDetail__personalSlots,
+          .tournamentPublicDetail__personalSlots {
+            gap: 8px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
           .tournamentPublicDetail__infoGrid {
             grid-template-columns: 1fr;
           }
 
           .tournamentPublicDetail__infoPanel--wide {
             grid-column: auto;
+          }
+
+          .tournamentPublicDetail__progressGrid div,
+          .tournamentPublicDetail__personalSlots span,
+          .tournamentPublicDetail__infoPanel {
+            border-radius: 13px;
+            padding: 9px;
+          }
+
+          .tournamentPublicDetail__progressCount {
+            margin: 8px 0 10px;
+          }
+
+          .tournamentPublicDetail__progressCount strong {
+            font-size: 24px;
+          }
+
+          .tournamentPublicDetail__personalBoard p {
+            font-size: 13px;
+            line-height: 1.25;
+            margin-bottom: 8px;
+          }
+
+          .tournamentPublicDetail strong {
+            font-size: 14px;
+            line-height: 1.1;
+            overflow-wrap: anywhere;
           }
         }
       `}</style>

@@ -10,6 +10,7 @@ import {
   normalizeSlotId,
   normalizeStatus,
 } from '@/lib/clubCommercialServer'
+import { normalizePlatformAdRenderConfig } from '@/lib/platformAdConfig'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function PATCH(
@@ -31,6 +32,8 @@ export async function PATCH(
       image_url: normalizeNullableText(body?.image_url ?? body?.imageUrl, 1400),
       target_url: normalizeNullableText(body?.target_url ?? body?.targetUrl, 1400),
       status: normalizeStatus(body?.status, CLUB_CAMPAIGN_STATUSES, 'draft'),
+      sort_order: Number.isFinite(Number(body?.sort_order ?? body?.sortOrder)) ? Number(body?.sort_order ?? body?.sortOrder) : 100,
+      render_config: body?.render_config || body?.renderConfig ? normalizePlatformAdRenderConfig(body?.render_config ?? body?.renderConfig) : null,
       starts_at: normalizeDate(body?.starts_at ?? body?.startsAt),
       ends_at: normalizeDate(body?.ends_at ?? body?.endsAt),
     }

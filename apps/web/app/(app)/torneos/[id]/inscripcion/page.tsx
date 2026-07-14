@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Banknote, CalendarDays, CheckCircle2, Clock, CreditCard, Search, ShieldCheck, Users } from 'lucide-react'
+import SelpaLoader from '@/components/SelpaLoader'
 import PampraxHero from '@/components/ui/PampraxHero'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
@@ -624,7 +625,9 @@ export default function TorneoInscripcionPage() {
   if (loading) {
     return (
       <main className="tournamentSignupPage">
-        <div className="tournamentSignupPage__state">Cargando inscripción...</div>
+        <div className="tournamentSignupPage__state">
+          <SelpaLoader title="Preparando inscripción..." subtitle="Cargando datos del torneo" />
+        </div>
       </main>
     )
   }
@@ -1333,7 +1336,9 @@ export default function TorneoInscripcionPage() {
 
       <style>{`
         .tournamentSignupPage {
-          width: min(1180px, calc(100vw - 32px));
+          box-sizing: border-box;
+          max-width: 1180px;
+          width: 100%;
           margin: 0 auto;
           padding: 22px 0 56px;
           color: #061a3f;
@@ -1613,12 +1618,15 @@ export default function TorneoInscripcionPage() {
         .tournamentSignupPage__actions a,
         .tournamentSignupPage__actions button,
         .tournamentSignupPage__continueBox button {
+          align-items: center;
           border: 1px solid rgba(14, 165, 233, 0.28);
           border-radius: 999px;
           background: #061a3f;
-          color: white;
+          color: white !important;
           cursor: pointer;
+          display: inline-flex;
           font-weight: 950;
+          justify-content: center;
           min-height: 42px;
           padding: 0 16px;
           text-decoration: none;
@@ -2695,6 +2703,31 @@ export default function TorneoInscripcionPage() {
 
           .tournamentSignupPage__modalActions button {
             width: 100%;
+          }
+
+          .tournamentSignupPage__panel--center {
+            border-radius: 18px;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 14px;
+          }
+
+          .tournamentSignupPage__panel--center h2 {
+            font-size: 20px;
+            line-height: 1.05;
+          }
+
+          .tournamentSignupPage__panel--center p {
+            font-size: 13px;
+            line-height: 1.3;
+            max-width: 310px;
+          }
+
+          .tournamentSignupPage__panel--center .tournamentSignupPage__primary {
+            font-size: 13px;
+            min-height: 42px;
+            padding: 0 15px;
+            width: auto;
           }
 
           .tournamentSignupPage__toast {

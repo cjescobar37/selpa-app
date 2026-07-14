@@ -3,10 +3,11 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { assertPlatformAdmin } from '@/lib/platformApiAuth'
 import { platformContentSetupMessage, uploadPlatformAsset } from '@/lib/platformContent'
 import { logPlatformAction } from '@/lib/platformAudit'
+import { normalizePlatformAdRenderConfig } from '@/lib/platformAdConfig'
 
 function isMissingRelation(error?: { message?: string } | null) {
   const msg = String(error?.message || '').toLowerCase()
-  return msg.includes('could not find the table') || (msg.includes('relation') && msg.includes('does not exist'))
+  return msg.includes('could not find the table') || (msg.includes('relation') && msg.includes('does not exist')) || (msg.includes('render_config') && msg.includes('schema cache'))
 }
 
 function setupResponse(entity: string) {
@@ -38,13 +39,15 @@ export async function POST(req: NextRequest) {
     const slot = String(form.get('slot') ?? 'HOME_AFTER_RANKING')
     const status = String(form.get('status') ?? 'ACTIVE')
     const sortOrder = Number(form.get('sortOrder') ?? 100)
+    const renderConfigRaw = String(form.get('renderConfig') ?? '').trim()
     const file = form.get('image')
     if (!title) return NextResponse.json({ error: 'Falta título.' }, { status: 400 })
     if (!ALLOWED_AD_SLOTS.has(slot)) return NextResponse.json({ error: 'Posición de publicidad inválida.' }, { status: 400 })
     if (!ALLOWED_AD_STATUSES.has(status)) return NextResponse.json({ error: 'Estado de publicidad inválido.' }, { status: 400 })
     let imageUrl: string | null = null
     if (file instanceof File && file.size > 0) imageUrl = await uploadPlatformAsset(file, 'ads')
-    const { data, error } = await supabaseAdmin.from('platform_ad_campaigns').insert({ title, description: description || null, link_url: linkUrl || null, slot, status, sort_order: sortOrder, image_url: imageUrl, created_by: auth.user!.id, updated_by: auth.user!.id }).select('*').maybeSingle()
+    const renderConfig = renderConfigRaw ? normalizePlatformAdRenderConfig(JSON.parse(renderConfigRaw)) : null
+    const { data, error } = await supabaseAdmin.from('platform_ad_campaigns').insert({ title, description: description || null, link_url: linkUrl || null, slot, status, sort_order: sortOrder, image_url: imageUrl, render_config: renderConfig, created_by: auth.user!.id, updated_by: auth.user!.id }).select('*').maybeSingle()
     if (error) {
       if (isMissingRelation(error)) return setupResponse('campañas')
       return NextResponse.json({ error: error.message }, { status: 500 })

@@ -21,10 +21,17 @@ export default function LoginPageClient() {
   const [alert, setAlert] = useState<AlertState>(null)
   const [loading, setLoading] = useState(false)
 
+  const nextPath = useMemo(() => {
+    const raw = searchParams.get('next')
+    if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return ''
+    return raw
+  }, [searchParams])
+
   const redirectTo = useMemo(() => {
     if (typeof window === 'undefined') return ''
-    return `${window.location.origin}/auth/callback`
-  }, [])
+    const next = nextPath ? `?next=${encodeURIComponent(nextPath)}` : ''
+    return `${window.location.origin}/auth/callback${next}`
+  }, [nextPath])
 
   useEffect(() => {
     const confirmed = searchParams.get('confirmed')
@@ -51,9 +58,9 @@ export default function LoginPageClient() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data?.session?.user) router.replace('/auth/post-login')
+      if (data?.session?.user) router.replace(nextPath ? `/auth/post-login?next=${encodeURIComponent(nextPath)}` : '/auth/post-login')
     })
-  }, [router])
+  }, [nextPath, router])
 
   async function signInWithGoogle() {
     setAlert(null)
@@ -106,7 +113,7 @@ export default function LoginPageClient() {
       return
     }
 
-    router.replace('/auth/post-login')
+    router.replace(nextPath ? `/auth/post-login?next=${encodeURIComponent(nextPath)}` : '/auth/post-login')
   }
 
   return (

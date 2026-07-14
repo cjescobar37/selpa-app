@@ -3,10 +3,11 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { assertPlatformAdmin } from '@/lib/platformApiAuth'
 import { platformContentSetupMessage, uploadPlatformAsset } from '@/lib/platformContent'
 import { logPlatformAction } from '@/lib/platformAudit'
+import { normalizePlatformAdRenderConfig } from '@/lib/platformAdConfig'
 
 function isMissingRelation(error?: { message?: string } | null) {
   const msg = String(error?.message || '').toLowerCase()
-  return msg.includes('could not find the table') || (msg.includes('relation') && msg.includes('does not exist'))
+  return msg.includes('could not find the table') || (msg.includes('relation') && msg.includes('does not exist')) || (msg.includes('render_config') && msg.includes('schema cache'))
 }
 
 function setupResponse(entity: string) {
@@ -28,6 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const slot = String(form.get('slot') ?? 'HOME_AFTER_RANKING')
     const status = String(form.get('status') ?? 'ACTIVE')
     const sortOrder = Number(form.get('sortOrder') ?? 100)
+    const renderConfigRaw = String(form.get('renderConfig') ?? '').trim()
     const keepImage = String(form.get('keepImage') ?? '1')
     const file = form.get('image')
     if (!ALLOWED_AD_SLOTS.has(slot)) return NextResponse.json({ error: 'Posición de publicidad inválida.' }, { status: 400 })
@@ -36,6 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (file instanceof File && file.size > 0) imageUrl = await uploadPlatformAsset(file, 'ads')
     else if (keepImage === '0') imageUrl = null
     const payload: Record<string, any> = { title, description: description || null, link_url: linkUrl || null, slot, status, sort_order: sortOrder, updated_by: auth.user!.id }
+    if (renderConfigRaw) payload.render_config = normalizePlatformAdRenderConfig(JSON.parse(renderConfigRaw))
     if (imageUrl !== undefined) payload.image_url = imageUrl
     const { data, error } = await supabaseAdmin.from('platform_ad_campaigns').update(payload).eq('id', id).select('*').maybeSingle()
     if (error) {

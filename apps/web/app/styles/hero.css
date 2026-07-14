@@ -11,9 +11,9 @@
   display:grid;
   gap:14px;
   grid-template-columns:minmax(0,1fr) 210px;
-  min-height:156px;
+  min-height:128px;
   overflow:hidden;
-  padding:clamp(14px,2vw,20px);
+  padding:clamp(12px,1.7vw,18px);
   position:relative;
 }
 
@@ -272,8 +272,8 @@
   .pampraxHero{
     border-radius:22px;
     grid-template-columns:1fr;
-    min-height:150px;
-    padding:14px 16px;
+    min-height:118px;
+    padding:12px 16px;
   }
 
   .pampraxHero__body.has-logo{

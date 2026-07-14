@@ -8,6 +8,8 @@ import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { BRAND } from '@/lib/branding'
 import { getClubTheme } from '@/lib/clubThemes'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
+import { normalizePlatformAdRenderConfig } from '@/lib/platformAdConfig'
+import ConfigurableAdBanner, { AD_BANNER_DIMENSIONS } from '@/components/ads/ConfigurableAdBanner'
 import PampraxHero from '@/components/ui/PampraxHero'
 import PublicRankingClubCard from '@/components/public/PublicRankingClubCard'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
@@ -58,6 +60,7 @@ type AdItem = {
   status?: string | null
   starts_at?: string | null
   ends_at?: string | null
+  render_config?: unknown
 }
 
 type SponsorItem = {
@@ -182,8 +185,10 @@ function sponsorBadge(value?: string | null) {
 type HomeAdBannerItem = {
   id: string
   title: string
+  description?: string | null
   imageUrl: string | null
   url: string | null
+  render_config?: unknown
 }
 
 function HomeAdBannerSlot({ ads, ariaLabel }: { ads: HomeAdBannerItem[]; ariaLabel: string }) {
@@ -235,6 +240,20 @@ function HomeAdBannerSlot({ ads, ariaLabel }: { ads: HomeAdBannerItem[]; ariaLab
       <div className="px-homeAdTrack" ref={carouselRef}>
         {ads.map((item) => {
           const image = buildAssetProxyUrl(item.imageUrl)
+          const config = normalizePlatformAdRenderConfig(item.render_config)
+          if (config.enabled) {
+            return (
+              <ConfigurableAdBanner
+                key={item.id}
+                className="px-homeAdBanner px-homeAdBanner--composed"
+                config={config}
+                description={item.description}
+                href={config.buttonUrl || item.url || null}
+                imageUrl={image}
+                title={item.title}
+              />
+            )
+          }
           const content = (
             <>
               {image ? <img src={image} alt="" loading="lazy" decoding="async" /> : null}
@@ -305,7 +324,7 @@ export default function PublicHomeExperience({
       return { label: 'Ir al club', href: '/club' }
     }
 
-    return { label: 'Crear cuenta gratis', href: '/register' }
+    return { label: 'Registrate gratis!', href: '/register' }
   }, [session.role])
   const orderedNews = useMemo(() => {
     const merged = [...slides, ...newsArchive]
@@ -380,8 +399,10 @@ export default function PublicHomeExperience({
       return {
         id: `ad-${item.id}`,
         title: item.title.trim(),
+        description: hasMeaningfulSponsorText(item.description) ? item.description?.trim() ?? null : null,
         imageUrl: item.image_url,
         url: validExternalUrl(item.link_url),
+        render_config: item.render_config,
       }
     }
 
@@ -422,8 +443,7 @@ export default function PublicHomeExperience({
       {!hideHero ? (
         <PampraxHero
           kicker={`${BRAND.name} público`}
-          title="Viví tu carrera deportiva"
-          subtitle="Rankings, torneos, estadísticas y comunidad para el pádel amateur."
+          title={'Viví tu carrera\ndeportiva'}
           primaryAction={heroPrimaryAction}
           secondaryAction={{ label: 'Explorar torneos', href: '/torneos' }}
         />
@@ -436,7 +456,7 @@ export default function PublicHomeExperience({
               <span>En juego</span>
               <h2>Torneos activos de la comunidad</h2>
             </div>
-            <Link href="/torneos" className="px-homePillButton">Ver calendario</Link>
+            <Link href="/torneos" className="px-homePillButton">Ver más</Link>
           </div>
           <div className="px-homeTournamentCards">
             {activeTournaments.map((item) => (
@@ -450,10 +470,10 @@ export default function PublicHomeExperience({
         <section className="px-homeTournaments">
           <div className="px-homeSectionHead is-row">
             <div>
-              <span>Próximos torneos</span>
-              <h2>Próximos torneos</h2>
+              <span>Calendario Selpa</span>
+              <h2>Proximos Torneos</h2>
             </div>
-            <Link href="/torneos" className="px-homePillButton">Ver todo el calendario</Link>
+            <Link href="/torneos" className="px-homePillButton">Ver más</Link>
           </div>
           <div className="px-homeTournamentCards">
             {upcomingTournaments.map((item) => (
@@ -466,10 +486,10 @@ export default function PublicHomeExperience({
       <section className="px-homeRankingsExplore">
         <div className="px-homeSectionHead is-row">
           <div>
-            <span>Rankings por club</span>
-            <h2>Explorá rankings por club</h2>
+            <span>Conoce a los mejores</span>
+            <h2>Rankings por club</h2>
           </div>
-          <Link href="/ranking" className="px-homePillButton">Ver todos los rankings</Link>
+          <Link href="/ranking" className="px-homePillButton">Ver todos</Link>
         </div>
         <div className="px-homeRankingClubGrid">
           {featuredClubs.length ? featuredClubs.map((club) => (
@@ -492,10 +512,10 @@ export default function PublicHomeExperience({
       <section className="px-homeClubsFeatured">
         <div className="px-homeSectionHead is-row">
           <div>
-            <span>Clubes SELPA</span>
-            <h2>Descubrí la comunidad</h2>
+            <span>Explora los clubes</span>
+            <h2>Comunidad SELPA</h2>
           </div>
-          <Link href="/clubes" className="px-homePillButton">Ver toda la Comunidad</Link>
+          <Link href="/clubes" className="px-homePillButton">Ver todos</Link>
         </div>
         <div className="px-homeClubCards">
           {featuredClubs.length ? featuredClubs.map((club) => {
@@ -556,9 +576,9 @@ export default function PublicHomeExperience({
         <div className="px-homeSectionHead is-row">
           <div>
             <span>Información general</span>
-            <h2>Noticias</h2>
+            <h2>Ultimas noticias</h2>
           </div>
-          <Link href="/noticias" className="px-homeNewsButton">Ver todas las noticias</Link>
+          <Link href="/noticias" className="px-homeNewsButton">Ver más</Link>
         </div>
         <div className="px-homeNewsPortalGrid">
           <div className="px-homeNewsLead">
@@ -655,12 +675,12 @@ export default function PublicHomeExperience({
 
       <style jsx>{`
         .px-publicHome { color: #061b3a; display: grid; gap: 20px; overflow-x: hidden; }
-        .px-homeHeroCompact { align-items: center; background: radial-gradient(circle at 18% 6%, rgba(34,211,238,.3), transparent 34%), radial-gradient(circle at 84% 18%, rgba(236,72,153,.1), transparent 28%), linear-gradient(135deg, #020617 0%, #061b3a 58%, #071426 100%); border: 1px solid rgba(103,232,249,.14); border-radius: 22px; box-shadow: 0 22px 52px rgba(2,6,23,.16); color: #fff; display: grid; gap: 18px; grid-template-columns: minmax(0,1fr) 210px; min-height: 220px; overflow: hidden; padding: clamp(20px, 2.6vw, 28px); position: relative; }
+        .px-homeHeroCompact { align-items: center; background: radial-gradient(circle at 18% 6%, rgba(34,211,238,.3), transparent 34%), radial-gradient(circle at 84% 18%, rgba(236,72,153,.1), transparent 28%), linear-gradient(135deg, #020617 0%, #061b3a 58%, #071426 100%); border: 1px solid rgba(103,232,249,.14); border-radius: 22px; box-shadow: 0 22px 52px rgba(2,6,23,.16); color: #fff; display: grid; gap: 18px; grid-template-columns: minmax(0,1fr) 210px; min-height: 128px; overflow: hidden; padding: clamp(12px, 1.7vw, 18px); position: relative; }
         .px-homeHeroCompact::before { background-image: linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px); background-size: 42px 42px; content: ""; inset: 0; mask-image: linear-gradient(90deg, black, transparent 82%); opacity: .45; position: absolute; }
         .px-homeHeroCompact::after { background: linear-gradient(90deg, #22d3ee 0%, #67e8f9 40%, #8bd3ed 50%, #ec4899 100%); bottom: 0; content: ""; height: 4px; left: 0; position: absolute; right: 0; }
         .px-homeHeroText { display: grid; gap: 11px; max-width: 720px; position: relative; z-index: 1; }
         .px-homeHeroCompact span, .px-homeSectionHead > span, .px-homeSectionHead > div > span { background: linear-gradient(90deg, #0891b2 0%, #0e7490 55%, #be185d 120%); -webkit-background-clip: text; background-clip: text; color: #0e7490; font-size: 12px; font-weight: 950; letter-spacing: .09em; text-transform: uppercase; -webkit-text-fill-color: transparent; }
-        .px-homeHeroCompact h1 { font-size: clamp(36px, 4.8vw, 54px); font-weight: 950; letter-spacing: -.075em; line-height: .9; margin: 0; }
+        .px-homeHeroCompact h1 { font-size: clamp(36px, 4.8vw, 54px); font-weight: 850; letter-spacing: -.035em; line-height: .94; margin: 0; }
         .px-homeHeroCompact p { color: rgba(255,255,255,.78); font-size: clamp(16px, 1.8vw, 21px); font-weight: 720; line-height: 1.35; margin: 0; max-width: 600px; }
         .px-homeCtaBanners, .px-homeSectionHead.is-row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
         .px-homeHeroActions { align-content: center; display: grid; gap: 10px; position: relative; z-index: 1; }
@@ -751,7 +771,7 @@ export default function PublicHomeExperience({
         :global(.px-homeAdBanners) { display: grid; gap: 6px; min-width: 0; width: 100%; }
         :global(.px-homeAdTrack) { display: grid; grid-auto-columns: 100%; grid-auto-flow: column; min-width: 0; overflow-x: auto; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; }
         :global(.px-homeAdTrack::-webkit-scrollbar) { display: none; }
-        :global(.px-homeAdBanner) { background: #061b3a; border: 0; border-radius: 8px; box-shadow: 0 12px 28px rgba(15,23,42,.12); color: #fff; display: block; height: 100px; min-width: 0; overflow: hidden; position: relative; scroll-snap-align: start; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease; width: 100%; }
+        :global(.px-homeAdBanner) { background: #061b3a; border: 0; border-radius: 8px; box-shadow: 0 12px 28px rgba(15,23,42,.12); color: #fff; display: block; height: ${AD_BANNER_DIMENSIONS.desktopHeight}px; min-width: 0; overflow: hidden; position: relative; scroll-snap-align: start; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease; width: 100%; }
         :global(.px-homeAdBanner:hover) { box-shadow: 0 16px 34px rgba(15,23,42,.16); transform: translateY(-1px); }
         :global(.px-homeAdBanner img) { display: block; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; }
         :global(.px-homeAdBannerOverlay) { background: linear-gradient(90deg,rgba(2,6,23,.78) 0%,rgba(2,6,23,.34) 58%,rgba(2,6,23,.08) 100%), linear-gradient(180deg,rgba(2,6,23,.08) 0%,rgba(2,6,23,.34) 100%); inset: 0; position: absolute; }
@@ -798,10 +818,11 @@ export default function PublicHomeExperience({
           .px-homeSponsors { grid-template-columns: minmax(220px,.36fr) minmax(0,.64fr); }
         }
         @media (max-width: 720px) {
-          .px-homeHeroCompact { border-radius: 22px; grid-template-columns: 1fr; min-height: 220px; padding: 20px; }
-          .px-homeHeroCompact h1 { font-size: clamp(34px, 10vw, 44px); }
+          .px-homeHeroCompact { border-radius: 22px; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(116px, 34%); min-height: 132px; padding: 12px 16px; }
+          .px-homeHeroCompact h1 { font-size: clamp(28px, 8vw, 36px); font-weight: 850; letter-spacing: -.03em; line-height: .96; }
           .px-homeHeroCompact p { font-size: 15px; }
-          .px-homeHeroActions { grid-template-columns: 1fr; }
+          .px-homeHeroActions { align-content: center; gap: 7px; grid-template-columns: 1fr; justify-self: end; width: 100%; }
+          .px-homeHeroActions a { font-size: 10.5px; min-height: 34px; padding: 8px 8px; }
           .px-homeCtaBanners, .px-homeActivityGrid, .px-homeReasonGrid { grid-template-columns: 1fr; }
           .px-homeSponsors { grid-template-columns: 1fr; }
           .px-homeSponsorCarousel { grid-auto-columns: minmax(220px, 78vw); }
@@ -810,11 +831,14 @@ export default function PublicHomeExperience({
           .px-homeTournamentCards :global(.TournamentPublicCard) { height: 326px; min-height: 326px; }
           .px-homeCtaBanners a { grid-template-columns: 64px minmax(0,1fr); min-height: 108px; }
           .px-homeCtaBanners em { grid-column: 2; justify-self: start; margin-right: 0; }
-          .px-homeSectionHead.is-row { align-items: start; flex-direction: column; }
+          .px-homeSectionHead.is-row { align-items: flex-start; flex-direction: row; flex-wrap: nowrap; padding-right: 0; position: relative; }
+          .px-homeSectionHead.is-row > div { min-width: 0; }
+          .px-homeSectionHead h2 { font-size: clamp(25px, 8vw, 32px); letter-spacing: -.04em; white-space: nowrap; }
+          .px-homeSectionHead.is-row .px-homePillButton, .px-homeSectionHead.is-row .px-homeNewsButton { font-size: 9.5px; letter-spacing: .03em; min-height: 28px; padding: 6px 9px; position: absolute; right: 0; text-transform: uppercase; top: 0; white-space: nowrap; }
           .px-homeNewsPortalGrid, .px-homeMoreNews { grid-template-columns: 1fr; }
           .px-homeRankingsExplore > .px-homeRankingClubGrid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
           .px-homeMainNews { min-height: 260px; }
-          :global(.px-homeAdBanner) { border-radius: 7px; height: 78px; }
+          :global(.px-homeAdBanner) { border-radius: 7px; height: ${AD_BANNER_DIMENSIONS.mobileHeight}px; }
           :global(.px-homeAdBannerBody) { max-width: 76%; padding: 8px 10px; }
           :global(.px-homeAdBannerBody strong) { font-size: 13px; }
           :global(.px-homeAdBadge) { font-size: 7px; padding: 3px 5px; right: 6px; top: 6px; }

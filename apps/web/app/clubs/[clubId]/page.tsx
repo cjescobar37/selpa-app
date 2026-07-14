@@ -39,6 +39,7 @@ type CampaignRow = {
   description: string | null
   image_url: string | null
   target_url: string | null
+  render_config?: unknown
   status: string
   starts_at: string | null
   ends_at: string | null
@@ -58,7 +59,7 @@ type ClubNewsRow = {
   created_at: string | null
 }
 
-const publicSponsorSlots = ['HOME_HERO_RIGHT', 'HOME_NEWS_LEFT', 'HOME_NEWS_RIGHT', 'HOME_CALENDAR_INLINE', 'HOME_FOOTER_STRIP']
+const publicSponsorSlots = ['CLUB_HOME_HERO', 'CLUB_HOME_AFTER_TOURNAMENTS', 'CLUB_HOME_AFTER_NEWS']
 
 function normalizeGender(value?: string | null) {
   const normalized = String(value ?? '').toUpperCase()
@@ -103,6 +104,7 @@ function toPublicCampaign(row: CampaignRow): PublicClubCampaign {
     description: row.description,
     imageUrl: row.image_url,
     targetUrl: row.target_url,
+    renderConfig: row.render_config,
     sponsorName: sponsor?.name ?? null,
   }
 }
@@ -219,9 +221,10 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
   const [{ data: campaignsData, error: campaignsError }, { data: newsData, error: newsError }] = await Promise.all([
     supabaseAdmin
       .from('club_ad_campaigns')
-      .select('id,slot_id,title,description,image_url,target_url,status,starts_at,ends_at,sponsor:club_sponsors(name)')
+      .select('id,slot_id,title,description,image_url,target_url,render_config,status,starts_at,ends_at,sponsor:club_sponsors(name)')
       .eq('club_id', clubId)
       .in('slot_id', publicSponsorSlots)
+      .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false }),
     supabaseAdmin
       .from('platform_news')
@@ -279,7 +282,7 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
         tournaments: tournamentViews.length,
         categories: categories.size,
       }}
-      heroCampaign={campaignsBySlot.HOME_HERO_RIGHT ?? null}
+      heroCampaign={campaignsBySlot.CLUB_HOME_HERO ?? null}
       campaignsBySlot={campaignsBySlot}
       tournaments={tournaments}
       rankingSummary={buildRankingSummary(players)}

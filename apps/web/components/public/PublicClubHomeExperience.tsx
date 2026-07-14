@@ -10,6 +10,8 @@ import PampraxHero from '@/components/ui/PampraxHero'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { formatRankingPoints, normalizeRankingGender } from '@/lib/ranking'
+import { normalizePlatformAdRenderConfig } from '@/lib/platformAdConfig'
+import ConfigurableAdBanner from '@/components/ads/ConfigurableAdBanner'
 
 export type PublicClubCampaign = {
   id: string
@@ -18,6 +20,7 @@ export type PublicClubCampaign = {
   description: string | null
   imageUrl: string | null
   targetUrl: string | null
+  renderConfig?: unknown
   sponsorName: string | null
 }
 
@@ -85,10 +88,8 @@ type PublicClubHomeProps = {
 }
 
 const sponsorSlots = [
-  { id: 'HOME_NEWS_LEFT', title: 'Editorial principal', ratio: '6x4' },
-  { id: 'HOME_NEWS_RIGHT', title: 'Editorial lateral', ratio: '6x4' },
-  { id: 'HOME_CALENDAR_INLINE', title: 'Calendario inline', ratio: '6x2' },
-  { id: 'HOME_FOOTER_STRIP', title: 'Banner inferior', ratio: '12x2' },
+  { id: 'CLUB_HOME_AFTER_TOURNAMENTS', title: 'Después de torneos', ratio: '12x3' },
+  { id: 'CLUB_HOME_AFTER_NEWS', title: 'Después de noticias', ratio: '12x3' },
 ] as const
 
 const PLACEHOLDER_TEXT = new Set(['adsasd', 'sdfsf', 'asdf', 'asdasd', 'test', 'testing', 'prueba', 'lorem', 'demo'])
@@ -237,20 +238,34 @@ function CampaignSlot({
 }) {
   const image = buildAssetProxyUrl(campaign?.imageUrl)
   const targetUrl = validExternalUrl(campaign?.targetUrl)
+  const config = normalizePlatformAdRenderConfig(campaign?.renderConfig)
   const badge = campaign ? 'Publicidad en este club' : 'Espacio disponible'
   const meta = campaign?.sponsorName ?? `Formato ${ratio} · Disponible`
+  if (!campaign) return null
+  if (campaign && config.enabled) {
+    return (
+      <ConfigurableAdBanner
+        className={`clubPublicAd clubPublicAd--composed ${hero ? 'is-hero' : ''}`}
+        config={config}
+        description={campaign.description}
+        href={config.buttonUrl || targetUrl}
+        imageUrl={image}
+        title={campaign.title}
+      />
+    )
+  }
   const body = (
     <>
       {image ? <img src={image} alt={campaign?.title ?? title} /> : null}
       <div className="clubPublicAdBody">
         <span>{badge}</span>
-        <strong>{campaign?.title ?? 'Este espacio puede ser tuyo'}</strong>
-        <p>{campaign?.description ?? 'Presencia comercial premium dentro de la actividad pública del club.'}</p>
+        <strong>{campaign?.title ?? title}</strong>
+        {campaign?.description ? <p>{campaign.description}</p> : null}
         <em>{targetUrl ? <>Conocer más <b aria-hidden="true">→</b></> : meta}</em>
       </div>
     </>
   )
-  const className = `clubPublicAd ${hero ? 'is-hero' : ''} ${image ? 'has-image' : ''} ${campaign ? 'has-campaign' : 'is-empty'}`
+  const className = `clubPublicAd ${hero ? 'is-hero' : ''} ${image ? 'has-image' : ''} has-campaign`
 
   if (targetUrl) {
     return (
@@ -357,37 +372,23 @@ export default function PublicClubHomeExperience({
   }, [rankingSummary])
   const sponsorCampaigns = useMemo(() => {
     return sponsorSlots
-      .map((slot) => {
+      .flatMap((slot) => {
         const campaign = campaignsBySlot[slot.id] ?? null
         if (!campaign) {
-          return {
-            id: `available-${slot.id}`,
-            displayTitle: 'Este espacio puede ser tuyo',
-            displayDescription: `Formato ${slot.ratio} disponible para marcas del club.`,
-            displayImage: null,
-            displayUrl: null,
-            isPlaceholder: true,
-          }
+          return []
         }
         const title = hasMeaningfulCommercialText(campaign.sponsorName) ? campaign.sponsorName! : campaign.title
         if (!hasMeaningfulCommercialText(title)) {
-          return {
-            id: `available-${slot.id}`,
-            displayTitle: 'Este espacio puede ser tuyo',
-            displayDescription: `Formato ${slot.ratio} disponible para marcas del club.`,
-            displayImage: null,
-            displayUrl: null,
-            isPlaceholder: true,
-          }
+          return []
         }
-        return {
+        return [{
           id: campaign.id,
           displayTitle: title.trim(),
           displayDescription: hasMeaningfulCommercialText(campaign.description) ? campaign.description?.trim() ?? null : null,
           displayImage: buildAssetProxyUrl(campaign.imageUrl),
           displayUrl: validExternalUrl(campaign.targetUrl),
           isPlaceholder: false,
-        }
+        }]
       })
       .slice(0, 8)
   }, [campaignsBySlot])
@@ -521,7 +522,8 @@ export default function PublicClubHomeExperience({
                 })}
               </div>
               <div className="clubPublicRankingFooter">
-                Ver ranking completo de {category.label} <span aria-hidden="true">→</span>
+                <span className="clubPublicRankingFooterText">Ver ranking completo de {category.label}</span>
+                <span aria-hidden="true">→</span>
               </div>
             </Link>
           )) : (
@@ -563,7 +565,7 @@ export default function PublicClubHomeExperience({
         </div>
       </section>
 
-      <section className="clubPublicSponsorsPanel" aria-label="Sponsors del club">
+      {sponsorCampaigns.length ? <section className="clubPublicSponsorsPanel" aria-label="Sponsors del club">
         <div className="clubPublicSponsorsIntro">
           <span>Marcas que acompañan {club.name}</span>
           <h2>Aliados que impulsan la comunidad.</h2>
@@ -606,7 +608,7 @@ export default function PublicClubHomeExperience({
             )
           })}
         </div>
-      </section>
+      </section> : null}
     </main>
   )
 }

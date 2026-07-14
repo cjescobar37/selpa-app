@@ -14,6 +14,7 @@ export default function PostLoginPage() {
   const router = useRouter()
   const session = useSession()
   const [stuck, setStuck] = useState(false)
+  const safeNextPath = getSafeNextPath()
 
   const alert: AlertState = stuck
     ? session.status === 'ready' && !session.user
@@ -42,7 +43,7 @@ export default function PostLoginPage() {
       }
     }
 
-    router.replace(session.postLoginDestination)
+    router.replace(safeNextPath || session.postLoginDestination)
 
     const slow = setTimeout(() => {
       if (!alive) return
@@ -53,7 +54,7 @@ export default function PostLoginPage() {
       alive = false
       clearTimeout(slow)
     }
-  }, [router, session.postLoginDestination, session.status, session.user])
+  }, [router, safeNextPath, session.postLoginDestination, session.status, session.user])
 
   if (!alert) {
     return (
@@ -103,4 +104,10 @@ export default function PostLoginPage() {
       </div>
     </div>
   )
+}
+
+function getSafeNextPath() {
+  if (typeof window === 'undefined') return ''
+  const nextPath = new URLSearchParams(window.location.search).get('next')
+  return nextPath && nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : ''
 }

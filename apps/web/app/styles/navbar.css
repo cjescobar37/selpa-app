@@ -1592,9 +1592,9 @@
   .px-publicNewsHero,
   .clubPublicHero{
     border-radius: 18px;
-    min-height: 150px;
+    min-height: 118px;
     max-width: min(100%, calc(100vw - 47px));
-    padding: 14px 16px;
+    padding: 12px 16px;
   }
 
   .pampraxHero{
@@ -1642,8 +1642,9 @@
   .px-publicNewsHero h1,
   .clubPublicHeroText h1{
     font-size: clamp(28px, 8vw, 32px);
-    letter-spacing: -.06em;
-    line-height: .9;
+    font-weight: 850;
+    letter-spacing: -.03em;
+    line-height: .96;
   }
 
   .pampraxHero__text p,
@@ -2125,9 +2126,9 @@
   display: grid !important;
   margin: 0 auto !important;
   max-width: 1056px !important;
-  min-height: 158px !important;
+  min-height: 128px !important;
   overflow: hidden !important;
-  padding: 20px !important;
+  padding: 18px !important;
   position: relative !important;
   width: 100% !important;
 }
@@ -2165,9 +2166,9 @@
 .px-publicNewsSurface .px-publicNewsHero h1{
   color: #fff !important;
   font-size: clamp(30px,4vw,48px) !important;
-  font-weight: 950 !important;
-  letter-spacing: -.075em !important;
-  line-height: .9 !important;
+  font-weight: 850 !important;
+  letter-spacing: -.035em !important;
+  line-height: .94 !important;
   margin: 5px 0 !important;
 }
 
@@ -2192,8 +2193,8 @@
   .px-publicNewsSurface .px-publicNewsHero{
     border-radius: 18px !important;
     max-width: min(100%, calc(100vw - 47px)) !important;
-    min-height: 198px !important;
-    padding: 14px 16px !important;
+    min-height: 118px !important;
+    padding: 12px 16px !important;
   }
 
   .px-publicHome .pampraxHero__text > span,
@@ -2212,8 +2213,9 @@
   .publicClubsPage .publicClubsHero h1,
   .px-publicNewsSurface .px-publicNewsHero h1{
     font-size: 30px !important;
-    letter-spacing: -.06em !important;
-    line-height: .9 !important;
+    font-weight: 850 !important;
+    letter-spacing: -.03em !important;
+    line-height: .96 !important;
     margin: 5px 0 !important;
   }
 
@@ -2224,6 +2226,84 @@
   .px-publicNewsSurface .px-publicNewsHero p{
     font-size: 12px !important;
     line-height: 1.25 !important;
+  }
+}
+
+@media (max-width: 720px){
+  .px-publicHome,
+  .publicTournamentShell,
+  .publicRankingShell,
+  .publicClubsPage,
+  .px-publicNewsSurface,
+  .clubPublicHome{
+    overflow: visible !important;
+  }
+
+  .px-publicHome .pampraxHero,
+  .publicTournamentShell .publicTournamentHero,
+  .publicRankingShell .publicRankingHero,
+  .publicClubsPage .publicClubsHero,
+  .px-publicNewsSurface .px-publicNewsHero,
+  .clubPublicHome .clubPublicHero{
+    box-sizing: border-box !important;
+    box-shadow: 0 24px 58px rgba(2,6,23,.20), 0 0 0 1px rgba(103,232,249,.08) !important;
+    left: auto !important;
+    margin-left: calc(50% - 48vw) !important;
+    margin-right: 0 !important;
+    max-width: 96vw !important;
+    min-height: 132px !important;
+    position: relative !important;
+    transform: none !important;
+    width: 96vw !important;
+  }
+
+  .px-publicHome .pampraxHero{
+    align-items: center !important;
+    gap: 8px !important;
+    grid-template-columns: minmax(0, 1fr) 106px !important;
+  }
+
+  .px-publicHome .pampraxHero__body,
+  .px-publicHome .pampraxHero__text{
+    min-width: 0 !important;
+  }
+
+  .px-publicHome .pampraxHero__actions{
+    align-content: center !important;
+    gap: 8px !important;
+    grid-template-columns: 1fr !important;
+    justify-self: end !important;
+    width: 100% !important;
+  }
+
+  .px-publicHome .pampraxHero__text h1{
+    font-size: clamp(25px, 7vw, 31px) !important;
+    letter-spacing: -.025em !important;
+    line-height: .98 !important;
+    white-space: pre-line !important;
+  }
+
+  .px-publicHome .pampraxHero__action{
+    font-size: 9px !important;
+    line-height: 1 !important;
+    min-height: 32px !important;
+    padding: 7px 6px !important;
+    white-space: nowrap !important;
+    width: 100% !important;
+  }
+}
+
+@media (min-width: 421px) and (max-width: 720px){
+  .px-publicHome .pampraxHero,
+  .publicTournamentShell .publicTournamentHero,
+  .publicRankingShell .publicRankingHero,
+  .publicClubsPage .publicClubsHero,
+  .px-publicNewsSurface .px-publicNewsHero,
+  .clubPublicHome .clubPublicHero{
+    max-width: 96vw !important;
+    margin-left: calc(50% - 48vw) !important;
+    margin-right: 0 !important;
+    width: 96vw !important;
   }
 }
 

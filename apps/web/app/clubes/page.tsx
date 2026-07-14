@@ -85,7 +85,6 @@ export default async function ClubesPublicPage() {
         <section className="publicClubsHero">
           <span>Comunidad {BRAND.name}</span>
           <h1>Clubes {BRAND.name}</h1>
-          <p>Explorá clubes, torneos, jugadores y categorías disponibles dentro del circuito.</p>
         </section>
 
         <section className="publicClubsGrid">

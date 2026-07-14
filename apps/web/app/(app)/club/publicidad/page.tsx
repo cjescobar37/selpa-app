@@ -1,9 +1,15 @@
 'use client'
 
 import { useSession } from '@/components/session/SessionProvider'
+import AdVisualEditor from '@/components/ads/AdVisualEditor'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import { BRAND } from '@/lib/branding'
+import {
+  defaultPlatformAdRenderConfig,
+  normalizePlatformAdRenderConfig,
+  type PlatformAdRenderConfig,
+} from '@/lib/platformAdConfig'
 import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 
 type CommercialSlotStatus = 'Disponible' | 'Reservado' | 'Activo'
@@ -42,6 +48,8 @@ type ClubCampaign = {
   image_url: string | null
   target_url: string | null
   status: 'draft' | 'active' | 'paused' | 'ended'
+  sort_order?: number | null
+  render_config?: unknown
   starts_at: string | null
   ends_at: string | null
   sponsor?: Pick<ClubSponsor, 'id' | 'name' | 'logo_url' | 'website_url' | 'status'> | null
@@ -53,6 +61,8 @@ type CampaignFormState = {
   imageUrl: string
   targetUrl: string
   status: ClubCampaign['status']
+  sortOrder: string
+  renderConfig: PlatformAdRenderConfig
   sponsorId: string
   newSponsorName: string
   startsAt: string
@@ -61,69 +71,43 @@ type CampaignFormState = {
 
 const commercialSlots: CommercialSlot[] = [
   {
-    id: 'HOME_HERO_RIGHT',
-    name: 'Hero principal derecho',
+    id: 'CLUB_HOME_HERO',
+    name: 'Hero del club',
     detailName: 'Banner Principal Home',
     status: 'Activo',
     visibility: 'Alta visibilidad',
     visibilityScore: 5,
     location: 'Home pública',
-    format: '6x3',
-    recommendedSize: '1200x450',
+    format: 'Horizontal bajo',
+    recommendedSize: '1200x360',
     description: 'Ideal para sponsors principales.',
     previewClass: 'is-hero',
   },
   {
-    id: 'HOME_NEWS_LEFT',
-    name: 'Noticias destacado',
-    detailName: 'Banner Editorial Principal',
+    id: 'CLUB_HOME_AFTER_TOURNAMENTS',
+    name: 'Después de torneos',
+    detailName: 'Banner Después de Torneos',
     status: 'Disponible',
     visibility: 'Alta visibilidad',
     visibilityScore: 4,
-    location: 'Home pública · Noticias',
-    format: '6x4',
-    recommendedSize: '900x600',
-    description: 'Ideal para marcas asociadas a contenido, cobertura y novedades.',
-    previewClass: 'is-news-left',
-  },
-  {
-    id: 'HOME_NEWS_RIGHT',
-    name: 'Noticias lateral',
-    detailName: 'Banner Lateral Noticias',
-    status: 'Reservado',
-    visibility: 'Media visibilidad',
-    visibilityScore: 3,
-    location: 'Home pública · Noticias',
-    format: '4x4',
-    recommendedSize: '600x600',
-    description: 'Ideal para refuerzo de marca junto a noticias del club.',
-    previewClass: 'is-news-right',
-  },
-  {
-    id: 'HOME_CALENDAR_INLINE',
-    name: 'Calendario inline',
-    detailName: 'Banner Calendario Torneos',
-    status: 'Disponible',
-    visibility: 'Media visibilidad',
-    visibilityScore: 4,
-    location: 'Home pública · Calendario',
-    format: '6x2',
-    recommendedSize: '900x300',
+    location: 'Home pública · Agenda',
+    format: 'Horizontal bajo',
+    recommendedSize: '1200x300',
     description: 'Ideal para marcas vinculadas a torneos, paletas, indumentaria o servicios.',
     previewClass: 'is-calendar',
   },
   {
-    id: 'HOME_FOOTER_STRIP',
-    name: 'Banner inferior',
-    detailName: 'Banner Inferior Institucional',
-    status: 'Disponible',
-    visibility: 'Baja visibilidad',
-    visibilityScore: 2,
-    location: 'Home pública · Footer',
-    format: '12x2',
-    recommendedSize: '1440x240',
-    description: 'Ideal para sponsors institucionales con presencia persistente.',
-    previewClass: 'is-footer',
+    id: 'CLUB_HOME_AFTER_NEWS',
+    name: 'Después de noticias',
+    detailName: 'Banner Después de Noticias',
+    status: 'Reservado',
+    visibility: 'Media visibilidad',
+    visibilityScore: 3,
+    location: 'Home pública · Noticias',
+    format: 'Horizontal bajo',
+    recommendedSize: '1200x300',
+    description: 'Ideal para refuerzo de marca junto a novedades del club.',
+    previewClass: 'is-news-right',
   },
 ]
 
@@ -139,6 +123,14 @@ const emptyCampaignForm: CampaignFormState = {
   imageUrl: '',
   targetUrl: '',
   status: 'draft',
+  sortOrder: '100',
+  renderConfig: {
+    ...defaultPlatformAdRenderConfig,
+    enabled: true,
+    themeMode: 'AUTO',
+    subtitle: 'Sponsor del club',
+    buttonEnabled: true,
+  },
   sponsorId: '',
   newSponsorName: '',
   startsAt: '',
@@ -282,7 +274,11 @@ export default function ClubPublicidadPage() {
       description: current?.description ?? '',
       imageUrl: current?.image_url ?? '',
       targetUrl: current?.target_url ?? '',
-      status: current?.status ?? 'draft',
+      status: current?.status ?? 'active',
+      sortOrder: String(current?.sort_order ?? 100),
+      renderConfig: current?.render_config
+        ? normalizePlatformAdRenderConfig(current.render_config)
+        : { ...emptyCampaignForm.renderConfig },
       sponsorId: current?.sponsor_id ?? '',
       newSponsorName: '',
       startsAt: toLocalDateInput(current?.starts_at ?? null),
@@ -327,6 +323,8 @@ export default function ClubPublicidadPage() {
         imageUrl: campaignForm.imageUrl,
         targetUrl: campaignForm.targetUrl,
         status: campaignForm.status,
+        sortOrder: campaignForm.sortOrder,
+        renderConfig: campaignForm.renderConfig,
         startsAt: fromLocalDateInput(campaignForm.startsAt),
         endsAt: fromLocalDateInput(campaignForm.endsAt),
       }
@@ -404,67 +402,45 @@ export default function ClubPublicidadPage() {
                   <small>Home pública del club</small>
                 </div>
                 <button
-                  className={`mini-slot is-hero ${selectedSlotId === 'HOME_HERO_RIGHT' ? 'is-selected' : ''}`}
-                  onClick={() => setSelectedSlotId('HOME_HERO_RIGHT')}
+                  className={`mini-slot is-hero ${selectedSlotId === 'CLUB_HOME_HERO' ? 'is-selected' : ''}`}
+                  onClick={() => setSelectedSlotId('CLUB_HOME_HERO')}
                   type="button"
                 >
-                  {campaignsBySlot.get('HOME_HERO_RIGHT')?.image_url ? (
-                    <img src={campaignsBySlot.get('HOME_HERO_RIGHT')?.image_url ?? ''} alt="" />
+                  {campaignsBySlot.get('CLUB_HOME_HERO')?.image_url ? (
+                    <img src={campaignsBySlot.get('CLUB_HOME_HERO')?.image_url ?? ''} alt="" />
                   ) : null}
-                  <span>{campaignsBySlot.get('HOME_HERO_RIGHT')?.title ?? 'HOME_HERO_RIGHT'}</span>
+                  <span>{campaignsBySlot.get('CLUB_HOME_HERO')?.title ?? 'CLUB_HOME_HERO'}</span>
                 </button>
               </div>
 
               <div className="mini-news">
                 <button
-                  className={`mini-slot is-news-left ${selectedSlotId === 'HOME_NEWS_LEFT' ? 'is-selected' : ''}`}
-                  onClick={() => setSelectedSlotId('HOME_NEWS_LEFT')}
+                  className={`mini-slot is-news-left ${selectedSlotId === 'CLUB_HOME_AFTER_TOURNAMENTS' ? 'is-selected' : ''}`}
+                  onClick={() => setSelectedSlotId('CLUB_HOME_AFTER_TOURNAMENTS')}
                   type="button"
                 >
-                  {campaignsBySlot.get('HOME_NEWS_LEFT')?.image_url ? (
-                    <img src={campaignsBySlot.get('HOME_NEWS_LEFT')?.image_url ?? ''} alt="" />
+                  {campaignsBySlot.get('CLUB_HOME_AFTER_TOURNAMENTS')?.image_url ? (
+                    <img src={campaignsBySlot.get('CLUB_HOME_AFTER_TOURNAMENTS')?.image_url ?? ''} alt="" />
                   ) : null}
-                  <span>{campaignsBySlot.get('HOME_NEWS_LEFT')?.title ?? 'HOME_NEWS_LEFT'}</span>
+                  <span>{campaignsBySlot.get('CLUB_HOME_AFTER_TOURNAMENTS')?.title ?? 'CLUB_HOME_AFTER_TOURNAMENTS'}</span>
                 </button>
                 <button
-                  className={`mini-slot is-news-right ${selectedSlotId === 'HOME_NEWS_RIGHT' ? 'is-selected' : ''}`}
-                  onClick={() => setSelectedSlotId('HOME_NEWS_RIGHT')}
+                  className={`mini-slot is-news-right ${selectedSlotId === 'CLUB_HOME_AFTER_NEWS' ? 'is-selected' : ''}`}
+                  onClick={() => setSelectedSlotId('CLUB_HOME_AFTER_NEWS')}
                   type="button"
                 >
-                  {campaignsBySlot.get('HOME_NEWS_RIGHT')?.image_url ? (
-                    <img src={campaignsBySlot.get('HOME_NEWS_RIGHT')?.image_url ?? ''} alt="" />
+                  {campaignsBySlot.get('CLUB_HOME_AFTER_NEWS')?.image_url ? (
+                    <img src={campaignsBySlot.get('CLUB_HOME_AFTER_NEWS')?.image_url ?? ''} alt="" />
                   ) : null}
-                  <span>{campaignsBySlot.get('HOME_NEWS_RIGHT')?.title ?? 'HOME_NEWS_RIGHT'}</span>
+                  <span>{campaignsBySlot.get('CLUB_HOME_AFTER_NEWS')?.title ?? 'CLUB_HOME_AFTER_NEWS'}</span>
                 </button>
               </div>
-
-              <button
-                className={`mini-slot is-calendar ${selectedSlotId === 'HOME_CALENDAR_INLINE' ? 'is-selected' : ''}`}
-                onClick={() => setSelectedSlotId('HOME_CALENDAR_INLINE')}
-                type="button"
-              >
-                {campaignsBySlot.get('HOME_CALENDAR_INLINE')?.image_url ? (
-                  <img src={campaignsBySlot.get('HOME_CALENDAR_INLINE')?.image_url ?? ''} alt="" />
-                ) : null}
-                <span>{campaignsBySlot.get('HOME_CALENDAR_INLINE')?.title ?? 'HOME_CALENDAR_INLINE'}</span>
-              </button>
 
               <div className="mini-cards">
                 <span />
                 <span />
                 <span />
               </div>
-
-              <button
-                className={`mini-slot is-footer ${selectedSlotId === 'HOME_FOOTER_STRIP' ? 'is-selected' : ''}`}
-                onClick={() => setSelectedSlotId('HOME_FOOTER_STRIP')}
-                type="button"
-              >
-                {campaignsBySlot.get('HOME_FOOTER_STRIP')?.image_url ? (
-                  <img src={campaignsBySlot.get('HOME_FOOTER_STRIP')?.image_url ?? ''} alt="" />
-                ) : null}
-                <span>{campaignsBySlot.get('HOME_FOOTER_STRIP')?.title ?? 'HOME_FOOTER_STRIP'}</span>
-              </button>
             </div>
           </article>
 
@@ -578,101 +554,190 @@ export default function ClubPublicidadPage() {
               <header>
                 <div>
                   <span className="club-commercial-kicker">{selectedSlot.id}</span>
-                  <h2>{modalMode === 'image' ? 'Subir imagen del anuncio' : 'Crear anuncio'}</h2>
-                  <p>Campos básicos para preparar una campaña del club. Sin crop ni storage avanzado todavía.</p>
+                  <h2>{editingCampaignId ? 'Editar publicidad' : 'Crear publicidad'}</h2>
+                  <p>Editor visual compartido para banners del club. El preview se actualiza en tiempo real.</p>
                 </div>
                 <button type="button" onClick={() => setModalMode(null)}>Cerrar</button>
               </header>
 
-              <div className="club-commercial-formGrid">
-                <label>
-                  Título
-                  <input
-                    required
-                    value={campaignForm.title}
-                    onChange={(event) => setCampaignForm((current) => ({ ...current, title: event.target.value }))}
-                    placeholder="Banco de La Pampa"
-                  />
-                </label>
-                <label>
-                  Estado
-                  <select
-                    value={campaignForm.status}
-                    onChange={(event) => setCampaignForm((current) => ({ ...current, status: event.target.value as ClubCampaign['status'] }))}
-                  >
-                    <option value="draft">Borrador</option>
-                    <option value="active">Activo</option>
-                    <option value="paused">Pausado</option>
-                    <option value="ended">Finalizado</option>
-                  </select>
-                </label>
-                <label>
-                  Sponsor asociado
-                  <select
-                    value={campaignForm.sponsorId}
-                    onChange={(event) => setCampaignForm((current) => ({ ...current, sponsorId: event.target.value, newSponsorName: '' }))}
-                  >
-                    <option value="">Sin sponsor</option>
-                    {sponsors.map((sponsor) => (
-                      <option key={sponsor.id} value={sponsor.id}>{sponsor.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Crear sponsor rápido
-                  <input
-                    disabled={Boolean(campaignForm.sponsorId)}
-                    value={campaignForm.newSponsorName}
-                    onChange={(event) => setCampaignForm((current) => ({ ...current, newSponsorName: event.target.value }))}
-                    placeholder="Nombre del sponsor"
-                  />
-                </label>
-                <label className="is-wide">
-                  URL de imagen
-                  <input
-                    value={campaignForm.imageUrl}
-                    onChange={(event) => setCampaignForm((current) => ({ ...current, imageUrl: event.target.value }))}
-                    placeholder="https://..."
-                  />
-                </label>
-                <label className="is-wide">
-                  URL destino
-                  <input
-                    value={campaignForm.targetUrl}
-                    onChange={(event) => setCampaignForm((current) => ({ ...current, targetUrl: event.target.value }))}
-                    placeholder="https://marca.com"
-                  />
-                </label>
-                <label>
-                  Inicio
-                  <input
-                    type="datetime-local"
-                    value={campaignForm.startsAt}
-                    onChange={(event) => setCampaignForm((current) => ({ ...current, startsAt: event.target.value }))}
-                  />
-                </label>
-                <label>
-                  Fin
-                  <input
-                    type="datetime-local"
-                    value={campaignForm.endsAt}
-                    onChange={(event) => setCampaignForm((current) => ({ ...current, endsAt: event.target.value }))}
-                  />
-                </label>
-                <label className="is-wide">
-                  Descripción
-                  <textarea
-                    value={campaignForm.description}
-                    onChange={(event) => setCampaignForm((current) => ({ ...current, description: event.target.value }))}
-                    placeholder="Mensaje corto visible en el placeholder o detalle."
-                  />
-                </label>
-              </div>
-
-              <footer>
-                <button type="button" onClick={() => setModalMode(null)}>Cancelar</button>
-                <button type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Guardar anuncio'}</button>
-              </footer>
+              <AdVisualEditor
+                title={campaignForm.title}
+                description={campaignForm.description}
+                linkUrl={campaignForm.targetUrl}
+                imageUrl={campaignForm.imageUrl || null}
+                renderConfig={campaignForm.renderConfig}
+                slotLabel={selectedSlot.detailName}
+                onTitleChange={(title) => setCampaignForm((current) => ({ ...current, title }))}
+                onDescriptionChange={(description) => setCampaignForm((current) => ({ ...current, description }))}
+                onRenderConfigChange={(renderConfig) => setCampaignForm((current) => ({ ...current, renderConfig: normalizePlatformAdRenderConfig(renderConfig) }))}
+                onCancel={() => setModalMode(null)}
+                saving={saving}
+                saveLabel="Guardar anuncio"
+                submitMode
+                generalFields={(
+                  <>
+                    <div className="adGeneralRow is-two">
+                      <label>
+                        <span>Título</span>
+                        <input
+                          required
+                          value={campaignForm.title}
+                          onChange={(event) => setCampaignForm((current) => ({ ...current, title: event.target.value }))}
+                          placeholder="Banco de La Pampa"
+                        />
+                      </label>
+                      <label>
+                        <span>URL destino</span>
+                        <input
+                          value={campaignForm.targetUrl}
+                          onChange={(event) => setCampaignForm((current) => ({ ...current, targetUrl: event.target.value }))}
+                          placeholder="https://marca.com"
+                        />
+                      </label>
+                    </div>
+                    <div className="adGeneralRow is-three">
+                      <label>
+                        <span>Posición</span>
+                        <input value={selectedSlot.detailName} readOnly />
+                      </label>
+                      <label>
+                        <span>Estado</span>
+                        <select
+                          value={campaignForm.status}
+                          onChange={(event) => setCampaignForm((current) => ({ ...current, status: event.target.value as ClubCampaign['status'] }))}
+                        >
+                          <option value="active">Activa</option>
+                          <option value="paused">Oculta</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Orden</span>
+                        <input
+                          value={campaignForm.sortOrder}
+                          onChange={(event) => setCampaignForm((current) => ({ ...current, sortOrder: event.target.value }))}
+                        />
+                      </label>
+                    </div>
+                    <div className="adGeneralRow is-three">
+                      {normalizePlatformAdRenderConfig(campaignForm.renderConfig).enabled ? (
+                        <label>
+                          <span>Tema visual</span>
+                          <select
+                            value={normalizePlatformAdRenderConfig(campaignForm.renderConfig).themeMode}
+                            onChange={(event) => setCampaignForm((current) => ({
+                              ...current,
+                              renderConfig: normalizePlatformAdRenderConfig({
+                                ...current.renderConfig,
+                                themeMode: event.target.value as PlatformAdRenderConfig['themeMode'],
+                              }),
+                            }))}
+                          >
+                            <option value="AUTO">Automático</option>
+                            <option value="MANUAL">Manual</option>
+                          </select>
+                        </label>
+                      ) : null}
+                      <label>
+                        <span>Modo visual</span>
+                        <select
+                          value={normalizePlatformAdRenderConfig(campaignForm.renderConfig).enabled ? 'selpa' : 'legacy'}
+                          onChange={(event) => setCampaignForm((current) => ({
+                            ...current,
+                            renderConfig: normalizePlatformAdRenderConfig({
+                              ...current.renderConfig,
+                              enabled: event.target.value === 'selpa',
+                            }),
+                          }))}
+                        >
+                          <option value="selpa">Banner SELPA</option>
+                          <option value="legacy">Imagen legacy</option>
+                        </select>
+                      </label>
+                      {normalizePlatformAdRenderConfig(campaignForm.renderConfig).enabled ? (
+                        <label>
+                          <span>Layout</span>
+                          <select
+                            value={normalizePlatformAdRenderConfig(campaignForm.renderConfig).layout}
+                            onChange={(event) => setCampaignForm((current) => ({
+                              ...current,
+                              renderConfig: normalizePlatformAdRenderConfig({
+                                ...current.renderConfig,
+                                layout: event.target.value as PlatformAdRenderConfig['layout'],
+                              }),
+                            }))}
+                          >
+                            <option value="image-right">Imagen derecha</option>
+                            <option value="image-left">Imagen izquierda</option>
+                            <option value="image-only">Solo imagen</option>
+                            <option value="text-only">Solo texto</option>
+                          </select>
+                        </label>
+                      ) : null}
+                    </div>
+                    <div className="adGeneralRow is-full">
+                      <label>
+                        <span>Imagen base</span>
+                        <input
+                          value={campaignForm.imageUrl}
+                          onChange={(event) => setCampaignForm((current) => ({ ...current, imageUrl: event.target.value }))}
+                          placeholder="https://..."
+                        />
+                      </label>
+                    </div>
+                    <div className="adGeneralRow is-two">
+                      <label>
+                        <span>Sponsor asociado</span>
+                        <select
+                          value={campaignForm.sponsorId}
+                          onChange={(event) => setCampaignForm((current) => ({ ...current, sponsorId: event.target.value, newSponsorName: '' }))}
+                        >
+                          <option value="">Sin sponsor</option>
+                          {sponsors.map((sponsor) => (
+                            <option key={sponsor.id} value={sponsor.id}>{sponsor.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>Crear sponsor rápido</span>
+                        <input
+                          disabled={Boolean(campaignForm.sponsorId)}
+                          value={campaignForm.newSponsorName}
+                          onChange={(event) => setCampaignForm((current) => ({ ...current, newSponsorName: event.target.value }))}
+                          placeholder="Nombre del sponsor"
+                        />
+                      </label>
+                    </div>
+                    <div className="adGeneralRow is-two">
+                      <label>
+                        <span>Inicio</span>
+                        <input
+                          type="datetime-local"
+                          value={campaignForm.startsAt}
+                          onChange={(event) => setCampaignForm((current) => ({ ...current, startsAt: event.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        <span>Fin</span>
+                        <input
+                          type="datetime-local"
+                          value={campaignForm.endsAt}
+                          onChange={(event) => setCampaignForm((current) => ({ ...current, endsAt: event.target.value }))}
+                        />
+                      </label>
+                    </div>
+                  </>
+                )}
+                imageField={(
+                  <label>
+                    <span>URL de imagen</span>
+                    <input
+                      value={campaignForm.imageUrl}
+                      onChange={(event) => setCampaignForm((current) => ({ ...current, imageUrl: event.target.value }))}
+                      placeholder="https://..."
+                    />
+                  </label>
+                )}
+              />
             </form>
           </div>
         ) : null}
@@ -1391,14 +1456,14 @@ export default function ClubPublicidadPage() {
         .club-commercial-modalCard {
           background: #ffffff;
           border: 1px solid color-mix(in srgb, var(--club-commercial-accent) 18%, transparent);
-          border-radius: 22px;
+          border-radius: 18px;
           box-shadow: 0 28px 80px rgba(2, 6, 23, 0.28);
           display: grid;
-          gap: 16px;
-          max-height: min(760px, calc(100vh - 36px));
-          overflow: auto;
-          padding: 18px;
-          width: min(760px, 100%);
+          gap: 12px;
+          max-height: none;
+          overflow: visible;
+          padding: 14px;
+          width: min(1160px, 100%);
         }
 
         .club-commercial-modalCard header,
@@ -1456,8 +1521,8 @@ export default function ClubPublicidadPage() {
 
         .club-commercial-formGrid {
           display: grid;
-          gap: 12px;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
         }
 
         .club-commercial-formGrid label {
@@ -1476,15 +1541,16 @@ export default function ClubPublicidadPage() {
         .club-commercial-formGrid input,
         .club-commercial-formGrid select,
         .club-commercial-formGrid textarea {
-          background: #f8fafc;
-          border: 1px solid #dbe5ef;
-          border-radius: 12px;
+          background: #ffffff;
+          border: 1px solid rgba(15, 23, 42, 0.14);
+          border-radius: 7px;
           color: #061b3a;
           font: inherit;
-          font-size: 0.88rem;
+          font-size: 0.76rem;
           font-weight: 720;
+          min-height: 34px;
           min-width: 0;
-          padding: 11px 12px;
+          padding: 7px 9px;
           outline: none;
         }
 
