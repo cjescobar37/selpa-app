@@ -5,10 +5,15 @@ import { usePathname, useRouter } from 'next/navigation'
 import SelpaLoader from '@/components/SelpaLoader'
 import { useSession } from '@/components/session/SessionProvider'
 
+function isPublicGuestRoute(pathname: string) {
+  return /^\/torneos\/[^/]+(?:\/inscripcion)?$/.test(pathname)
+}
+
 export default function RoleGate({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const session = useSession()
+  const publicGuestRoute = isPublicGuestRoute(pathname)
 
   const allowedWithoutClub = useMemo(
     () => [
@@ -22,6 +27,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
   )
 
   useEffect(() => {
+    if (publicGuestRoute) return
     if (session.status === 'loading') return
 
     if (!session.user) {
@@ -39,6 +45,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
   }, [
     allowedWithoutClub,
     pathname,
+    publicGuestRoute,
     router,
     session.activeClubId,
     session.isApprovedMember,
@@ -48,6 +55,8 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
   ])
 
   const isAllowedWithoutClub = allowedWithoutClub.some(p => pathname.startsWith(p))
+  if (publicGuestRoute) return <>{children}</>
+
   const ready =
     session.status === 'ready' &&
     Boolean(session.user) &&

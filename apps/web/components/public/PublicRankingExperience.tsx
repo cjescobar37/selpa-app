@@ -166,12 +166,12 @@ export default function PublicRankingExperience({
 
       <style jsx>{`
         .publicRankingShell { color: #061b3a; display: grid; gap: 16px; margin: 0 auto; max-width: 1180px; width: 100%; }
-        .publicRankingHero { background: radial-gradient(circle at 10% 0%, rgba(34,211,238,.16), transparent 34%), radial-gradient(circle at 96% 6%, rgba(236,72,153,.12), transparent 30%), linear-gradient(135deg, rgba(255,255,255,.98), #f8fafc); border: 1px solid rgba(15,23,42,.08); border-radius: 22px; box-shadow: 0 22px 58px rgba(15,23,42,.08); color: #061b3a; min-height: 220px; overflow: hidden; padding: clamp(24px, 4.5vw, 42px); position: relative; }
-        .publicRankingHero::before { background: linear-gradient(135deg, rgba(6,182,212,.18), rgba(236,72,153,.12)); border-radius: 999px; content: ""; height: 8px; opacity: .55; pointer-events: none; position: absolute; right: 58px; top: 58px; transform: rotate(-24deg); width: 190px; }
-        .publicRankingHero::after { background: linear-gradient(90deg, #22d3ee, rgba(34,211,238,.82), rgba(236,72,153,.48)); bottom: 0; content: ""; height: 4px; left: 28px; position: absolute; right: 28px; }
-        .publicRankingHero span { color: #0891b2; font-size: 12px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
-        .publicRankingHero h1 { color: #061b3a; font-size: clamp(38px, 6vw, 68px); font-weight: 950; letter-spacing: -.06em; line-height: .92; margin: 8px 0; }
-        .publicRankingHero p { color: #475569; font-size: 16px; font-weight: 750; margin: 0; max-width: 620px; }
+        .publicRankingHero { background: radial-gradient(circle at 18% 6%, rgba(34,211,238,.3), transparent 34%), radial-gradient(circle at 84% 18%, rgba(236,72,153,.1), transparent 28%), linear-gradient(135deg, #020617 0%, #061b3a 58%, #071426 100%); border: 1px solid rgba(103,232,249,.14); border-radius: 22px; box-shadow: 0 16px 38px rgba(2,6,23,.14); color: #fff; display: grid; align-content: center; min-height: 156px; max-width: 1056px; margin: 0 auto; overflow: hidden; padding: clamp(14px, 2vw, 20px); position: relative; width: 100%; }
+        .publicRankingHero::before { content: none; display: none; }
+        .publicRankingHero::after { background: linear-gradient(90deg, #22d3ee 0%, #67e8f9 40%, #8bd3ed 50%, #ec4899 100%); bottom: 0; content: ""; height: 4px; left: 0; position: absolute; right: 0; }
+        .publicRankingHero span { color: #67e8f9; font-size: 12px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
+        .publicRankingHero h1 { color: #fff; font-size: clamp(30px, 4vw, 46px); font-weight: 950; letter-spacing: -.075em; line-height: .9; margin: 5px 0; }
+        .publicRankingHero p { color: rgba(255,255,255,.78); font-size: clamp(14px, 1.45vw, 17px); font-weight: 720; line-height: 1.35; margin: 0; max-width: 600px; }
         .publicRankingSelected span { color: var(--accent, #06b6d4); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
         .publicRankingSelected p { color: #64748b; font-size: 13px; font-weight: 850; margin: 0; }
         .publicRankingSelected button { background: linear-gradient(135deg, var(--accent, #06b6d4), var(--accent2, #ec4899)); border: 0; border-radius: 999px; box-shadow: 0 12px 24px color-mix(in srgb, var(--accent, #06b6d4) 18%, transparent); color: #fff; cursor: pointer; font: inherit; font-size: 12px; font-weight: 950; padding: 11px 15px; transition: transform .16s ease, filter .16s ease; white-space: nowrap; }
@@ -227,7 +227,10 @@ export default function PublicRankingExperience({
           .publicRankingBoard.mobile-gender-F .publicRankingColumn[data-ranking-gender="M"] { display: none; }
         }
         @media (max-width: 640px) {
-          .publicRankingHero { border-radius: 20px; min-height: 180px; padding: 24px 18px; }
+          .publicRankingHero { border-radius: 18px; min-height: 150px; max-width: min(100%, calc(100vw - 47px)); padding: 14px 16px; }
+          .publicRankingHero span { font-size: 10px; font-weight: 850; letter-spacing: .06em; }
+          .publicRankingHero h1 { font-size: clamp(28px, 8vw, 32px); letter-spacing: -.06em; line-height: .9; margin: 5px 0; }
+          .publicRankingHero p { font-size: 12px; line-height: 1.25; }
           .publicRankingSelected { align-items: start; flex-direction: column; }
           .publicRankingRow,
           .publicRankingRow.is-top,

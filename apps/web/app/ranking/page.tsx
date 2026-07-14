@@ -81,7 +81,7 @@ export default async function RankingPublicPage({
   const clubs = Array.from(new Set(publicPlayers.map((player) => player.clubName))).sort((a, b) => a.localeCompare(b))
 
   return (
-    <div className="px-wrap">
+    <div className="px-wrap px-publicFrame">
       <PublicRankingExperience players={publicPlayers} clubs={clubs} initialClubId={initialClubId} initialCategory={initialCategory} />
     </div>
   )

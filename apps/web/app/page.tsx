@@ -5,7 +5,7 @@ export default async function PublicHomePage() {
   const data = await getPublicHomeData()
 
   return (
-    <div className="px-wrap">
+    <div className="px-wrap px-publicFrame">
       <PublicHomeExperience
         slides={data.slides as any}
         newsArchive={data.newsArchive as any}

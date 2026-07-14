@@ -5,7 +5,7 @@ export const PLATFORM_ASSETS_BUCKET = 'platform-assets'
 export type NewsStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
 export type NewsPlacement = 'HERO' | 'GRID' | 'ARCHIVE'
 export type CampaignStatus = 'ACTIVE' | 'PAUSED'
-export type CampaignSlot = 'HOME_HERO' | 'HOME_GRID' | 'HOME_INLINE'
+export type CampaignSlot = 'HOME_AFTER_RANKING' | 'HOME_AFTER_NEWS_HERO' | 'HOME_HERO' | 'HOME_GRID' | 'HOME_INLINE'
 export type SponsorTier = 'SPONSOR' | 'PARTNER' | 'LOCAL'
 export type SponsorStatus = 'ACTIVE' | 'PAUSED'
 

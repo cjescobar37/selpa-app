@@ -273,7 +273,7 @@
     border-radius:22px;
     grid-template-columns:1fr;
     min-height:150px;
-    padding:16px;
+    padding:14px 16px;
   }
 
   .pampraxHero__body.has-logo{
@@ -291,14 +291,22 @@
   }
 
   .pampraxHero__text h1{
-    font-size:clamp(28px,8vw,36px);
+    font-size:clamp(28px,8vw,32px);
   }
 
   .pampraxHero__text p{
-    font-size:15px;
+    font-size:12px;
+    line-height:1.25;
   }
 
   .pampraxHero__actions{
-    grid-template-columns:1fr;
+    gap:8px;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
+  .pampraxHero__action{
+    font-size:11px;
+    min-height:34px;
+    padding:8px 10px;
   }
 }

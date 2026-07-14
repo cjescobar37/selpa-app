@@ -7,6 +7,27 @@
   margin-top: 14px;
 }
 
+.px-publicFrame .px-publicHome,
+.px-publicFrame .publicTournamentShell,
+.px-publicFrame .publicRankingShell,
+.px-publicFrame .publicClubsPage,
+.px-publicFrame .px-publicNewsSurface{
+  margin-left:auto !important;
+  margin-right:auto !important;
+  margin-top:0 !important;
+  max-width:100% !important;
+  width:100% !important;
+}
+
+.px-publicFrame .pampraxHero,
+.px-publicFrame .publicTournamentHero,
+.px-publicFrame .publicRankingHero,
+.px-publicFrame .publicClubsHero,
+.px-publicFrame .px-publicNewsHero{
+  max-width:100% !important;
+  width:100% !important;
+}
+
 .public-headerRow{
   display:flex;
   align-items:flex-end;
@@ -1624,6 +1645,14 @@
   width:5px;
 }
 
+.px-publicFrame .publicTournamentSection > header::before{
+  left:0;
+}
+
+.px-publicFrame .publicTournamentSection > header > div{
+  padding-left:14px;
+}
+
 .publicRankingClubCard,
 .px-homeRankingClubCard,
 .px-homeClubCards a,
@@ -1656,13 +1685,178 @@
     radial-gradient(circle at 88% 10%, rgba(236,72,153,.1), transparent 30%),
     linear-gradient(135deg, #020617, #061b3a 58%, #0f274a) !important;
   border: 1px solid rgba(103,232,249,.14) !important;
-  border-radius:20px !important;
+  border-radius:22px !important;
   box-shadow:0 16px 42px rgba(2,6,23,.14) !important;
   color:#fff !important;
-  min-height: 150px !important;
+  align-content:center !important;
+  display:grid !important;
+  margin:0 auto !important;
+  max-width:1056px !important;
+  min-height:156px !important;
   overflow:hidden !important;
-  padding:clamp(16px,3vw,26px) !important;
+  padding:clamp(14px,2vw,20px) !important;
   position:relative !important;
+  width:100% !important;
+}
+
+/* Home public ads: horizontal banner system */
+.px-publicHome .px-homeAdBanners{
+  display:grid !important;
+  gap:6px !important;
+  min-width:0 !important;
+  width:100% !important;
+}
+
+.px-publicHome .px-homeAdTrack{
+  display:grid !important;
+  grid-auto-columns:100% !important;
+  grid-auto-flow:column !important;
+  min-width:0 !important;
+  overflow-x:auto !important;
+  scroll-behavior:smooth !important;
+  scroll-snap-type:x mandatory !important;
+  scrollbar-width:none !important;
+}
+
+.px-publicHome .px-homeAdTrack::-webkit-scrollbar{
+  display:none !important;
+}
+
+.px-publicHome .px-homeAdBanner{
+  aspect-ratio:auto !important;
+  background:#061b3a !important;
+  border:0 !important;
+  border-radius:8px !important;
+  box-shadow:0 12px 28px rgba(15,23,42,.12) !important;
+  color:#fff !important;
+  display:block !important;
+  height:100px !important;
+  min-height:0 !important;
+  min-width:0 !important;
+  overflow:hidden !important;
+  padding:0 !important;
+  position:relative !important;
+  scroll-snap-align:start !important;
+  text-decoration:none !important;
+  width:100% !important;
+}
+
+.px-publicHome .px-homeAdBanner img{
+  display:block !important;
+  height:100% !important;
+  inset:0 !important;
+  object-fit:cover !important;
+  opacity:1 !important;
+  position:absolute !important;
+  width:100% !important;
+}
+
+.px-publicHome .px-homeAdBannerOverlay{
+  background:linear-gradient(90deg,rgba(2,6,23,.78) 0%,rgba(2,6,23,.34) 58%,rgba(2,6,23,.08) 100%),linear-gradient(180deg,rgba(2,6,23,.08) 0%,rgba(2,6,23,.34) 100%) !important;
+  inset:0 !important;
+  position:absolute !important;
+}
+
+.px-publicHome .px-homeAdBadge{
+  align-items:center !important;
+  background:rgba(255,255,255,.86) !important;
+  border:0 !important;
+  border-radius:999px !important;
+  color:#061b3a !important;
+  display:inline-flex !important;
+  font-size:8px !important;
+  font-weight:950 !important;
+  letter-spacing:.08em !important;
+  line-height:1 !important;
+  padding:4px 6px !important;
+  position:absolute !important;
+  right:8px !important;
+  text-transform:uppercase !important;
+  top:8px !important;
+  z-index:2 !important;
+}
+
+.px-publicHome .px-homeAdBannerBody{
+  align-content:end !important;
+  background:transparent !important;
+  bottom:0 !important;
+  display:grid !important;
+  gap:4px !important;
+  left:0 !important;
+  max-width:72% !important;
+  min-height:0 !important;
+  padding:10px 12px !important;
+  position:absolute !important;
+  top:0 !important;
+  z-index:1 !important;
+}
+
+.px-publicHome .px-homeAdBannerBody strong{
+  color:#fff !important;
+  display:-webkit-box !important;
+  font-size:clamp(14px,1.6vw,18px) !important;
+  font-weight:900 !important;
+  letter-spacing:-.02em !important;
+  line-height:1.03 !important;
+  overflow:hidden !important;
+  text-shadow:0 2px 16px rgba(2,6,23,.42) !important;
+  -webkit-box-orient:vertical !important;
+  -webkit-line-clamp:2 !important;
+}
+
+.px-publicHome .px-homeAdBannerBody em{
+  color:#e0faff !important;
+  font-size:9px !important;
+  font-style:normal !important;
+  font-weight:950 !important;
+  letter-spacing:.04em !important;
+  line-height:1 !important;
+  text-transform:uppercase !important;
+}
+
+.px-publicHome .px-homeAdDots{
+  align-items:center !important;
+  display:inline-flex !important;
+  gap:5px !important;
+  justify-content:center !important;
+  min-height:10px !important;
+}
+
+.px-publicHome .px-homeAdDots button{
+  background:rgba(15,23,42,.22) !important;
+  border:0 !important;
+  border-radius:999px !important;
+  height:5px !important;
+  padding:0 !important;
+  width:5px !important;
+}
+
+.px-publicHome .px-homeAdDots button[aria-current="true"]{
+  background:linear-gradient(90deg,#22d3ee,#ec4899) !important;
+  width:15px !important;
+}
+
+@media (max-width:720px){
+  .px-publicHome .px-homeAdBanner{
+    border-radius:7px !important;
+    height:78px !important;
+  }
+
+  .px-publicHome .px-homeAdBannerBody{
+    max-width:76% !important;
+    padding:8px 10px !important;
+  }
+
+  .px-publicHome .px-homeAdBannerBody strong{
+    font-size:13px !important;
+  }
+
+  .px-publicHome .px-homeAdBadge{
+    font-size:7px !important;
+    padding:3px 5px !important;
+    right:6px !important;
+    top:6px !important;
+  }
 }
 
 .px-homeHeroCompact::after,
@@ -2495,7 +2689,7 @@
   background:linear-gradient(135deg,rgba(2,6,23,.98),rgba(6,27,58,.96));
   border:1px solid rgba(103,232,249,.14);
   border-radius:24px;
-  display:grid;
+  display:none !important;
   gap:14px;
   overflow:hidden;
   padding:14px;
@@ -2853,6 +3047,11 @@
 }
 
 @media (max-width: 720px){
+  .px-homeRankingsExplore > .px-homeRankingClubGrid{
+    gap:10px !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+
   .publicRankingCardV2{
     border-radius:16px !important;
     box-shadow:0 12px 28px rgba(15,23,42,.07),0 0 0 1px rgba(255,255,255,.78) inset !important;
@@ -2860,42 +3059,90 @@
   }
 
   .publicRankingCardV2--home{
-    gap:9px !important;
-    grid-template-columns:88px minmax(0,1fr) !important;
-    min-height:154px !important;
-    padding:11px 12px !important;
+    aspect-ratio:1 / .82 !important;
+    background-color:#FAFBFC !important;
+    background-clip:padding-box,padding-box,border-box !important;
+    background-image:
+      radial-gradient(circle at 50% 115%,rgba(15,23,42,.07),transparent 58%),
+      linear-gradient(180deg,rgba(255,255,255,.96),#FAFBFC 54%,#f4f7fa),
+      linear-gradient(90deg,color-mix(in srgb,var(--club-primary) 58%,#cbd5e1),color-mix(in srgb,var(--club-secondary) 34%,#dbe3ec)) !important;
+    background-origin:padding-box,padding-box,border-box !important;
+    box-shadow:0 10px 22px rgba(15,23,42,.055),0 0 0 1px rgba(255,255,255,.74) inset !important;
+    gap:0 !important;
+    grid-template-columns:1fr !important;
+    min-height:0 !important;
+    padding:0 !important;
   }
 
   .publicRankingCardV2--home > span:first-child{
-    height:2px !important;
+    height:3px !important;
     left:12px !important;
-    opacity:.72 !important;
+    opacity:.78 !important;
     right:54% !important;
   }
 
   .publicRankingCardV2--home > svg{
-    bottom:-28px !important;
-    height:102px !important;
-    opacity:.05 !important;
-    right:-32px !important;
-    width:164px !important;
+    bottom:8px !important;
+    height:88px !important;
+    opacity:.07 !important;
+    right:-12px !important;
+    width:154px !important;
+  }
+
+  .publicRankingCardV2--home > svg path{
+    stroke:#0f172a !important;
+  }
+
+  .publicRankingCardV2--home .publicRankingCardV2__chartWrap{
+    bottom:0 !important;
+    height:100% !important;
+    inset:0 !important;
+    overflow:hidden !important;
+    position:absolute !important;
+    transform:none !important;
+  }
+
+  .publicRankingCardV2--home .publicRankingCardV2__steps{
+    bottom:12px !important;
+    height:73px !important;
+    left:22px !important;
+    position:absolute !important;
+    right:16px !important;
+    top:auto !important;
+    transform:none !important;
   }
 
   .publicRankingCardV2--home > div{
-    gap:5px !important;
-    grid-template-rows:auto 1fr 3px !important;
-    min-height:112px !important;
+    bottom:0 !important;
+    display:block !important;
+    gap:0 !important;
+    left:0 !important;
+    min-height:0 !important;
+    opacity:1 !important;
+    pointer-events:none !important;
+    position:absolute !important;
+    right:0 !important;
+    top:0 !important;
+    transform:none !important;
+    z-index:0 !important;
   }
 
   .publicRankingCardV2--home > div > span:first-child{
-    border-radius:999px !important;
-    box-shadow:none !important;
+    background:color-mix(in srgb,var(--club-primary) 11%,#ffffff) !important;
+    border-color:color-mix(in srgb,var(--club-primary) 34%,#dbe3ec) !important;
+    border-radius:7px !important;
+    box-shadow:0 5px 12px rgba(15,23,42,.045) !important;
     font-size:7.5px !important;
-    gap:4px !important;
+    gap:3px !important;
+    left:13px !important;
     letter-spacing:.055em !important;
     line-height:1 !important;
     min-height:16px !important;
-    padding:3px 6px !important;
+    opacity:.94 !important;
+    padding:3px 5px !important;
+    position:absolute !important;
+    top:13px !important;
+    z-index:2 !important;
   }
 
   .publicRankingCardV2--home > div > span:first-child i{
@@ -2904,14 +3151,25 @@
   }
 
   .publicRankingCardV2--home > div > div{
-    gap:4px !important;
+    align-items:end !important;
+    bottom:12px !important;
+    display:grid !important;
+    gap:7px !important;
+    height:73px !important;
+    left:22px !important;
+    opacity:.07 !important;
+    position:absolute !important;
+    right:16px !important;
+    width:100% !important;
+    z-index:0 !important;
   }
 
   .publicRankingCardV2--home > div > div > span{
-    border-radius:8px 8px 3px 3px !important;
-    box-shadow:0 6px 12px rgba(15,23,42,.055) !important;
-    font-size:11px !important;
-    padding-top:6px !important;
+    border-color:rgba(15,23,42,.08) !important;
+    border-radius:10px 10px 3px 3px !important;
+    box-shadow:none !important;
+    font-size:0 !important;
+    padding-top:0 !important;
   }
 
   .publicRankingCardV2--home > div > div > span:nth-child(1){
@@ -2919,7 +3177,7 @@
   }
 
   .publicRankingCardV2--home > div > div > span:nth-child(2){
-    height:42px !important;
+    height:40px !important;
   }
 
   .publicRankingCardV2--home > div > div > span:nth-child(3){
@@ -2927,51 +3185,123 @@
   }
 
   .publicRankingCardV2--home > div > div > span:nth-child(4){
-    height:74px !important;
+    height:76px !important;
   }
 
   .publicRankingCardV2--home > div > span:last-child{
-    height:3px !important;
-    opacity:.74 !important;
-    width:70% !important;
+    display:none !important;
   }
 
   .publicRankingCardV2--home > header{
-    align-self:center !important;
+    align-content:start !important;
+    background:transparent !important;
+    border:0 !important;
+    border-radius:0 !important;
+    box-shadow:none !important;
     gap:4px !important;
     justify-items:start !important;
+    left:13px !important;
+    min-height:0 !important;
+    padding:0 !important;
+    position:absolute !important;
+    right:34px !important;
     text-align:left !important;
+    top:39px !important;
     transform:none !important;
+    backdrop-filter:none !important;
+    z-index:2 !important;
   }
 
   .publicRankingCardV2--home > header h3{
-    font-size:21px !important;
+    font-size:17px !important;
     font-weight:900 !important;
-    letter-spacing:-.035em !important;
-    line-height:1.12 !important;
+    letter-spacing:0 !important;
+    line-height:1.02 !important;
     max-width:100% !important;
-    overflow:visible !important;
     text-shadow:none !important;
-    -webkit-line-clamp:unset !important;
+  }
+
+  .publicRankingCardV2--home .publicRankingCardV2__nameAccent{
+    background:var(--club-primary) !important;
+    border-radius:999px !important;
+    display:block !important;
+    height:3px !important;
+    margin:3px 0 1px !important;
+    opacity:.78 !important;
+    width:44px !important;
   }
 
   .publicRankingCardV2--home > header p{
     font-size:10px !important;
     font-weight:760 !important;
     letter-spacing:0 !important;
-    line-height:1.18 !important;
+    line-height:1.14 !important;
   }
 
   .publicRankingCardV2--home > header p:last-child{
     color:#64748b !important;
-    font-size:10.5px !important;
+    font-size:10px !important;
     font-weight:680 !important;
   }
 
+  .publicRankingCardV2--home .publicRankingCardV2__homeCta{
+    display:none !important;
+  }
+
+  .publicRankingCardV2--home .publicRankingCardV2__homeChevron{
+    align-items:center !important;
+    background:transparent !important;
+    border:0 !important;
+    border-radius:0 !important;
+    color:color-mix(in srgb,var(--club-primary) 72%,#020617) !important;
+    display:inline-flex !important;
+    font-size:34px !important;
+    height:30px !important;
+    justify-content:center !important;
+    line-height:1 !important;
+    position:absolute !important;
+    right:17px !important;
+    top:38px !important;
+    width:22px !important;
+    z-index:3 !important;
+  }
+
+  .publicRankingCardV2--home .publicRankingCardV2__homeChevron::after{
+    background:var(--club-primary) !important;
+    border-radius:999px !important;
+    content:"" !important;
+    height:3px !important;
+    opacity:.76 !important;
+    position:absolute !important;
+    right:-1px !important;
+    top:-3px !important;
+    width:18px !important;
+  }
+
   .publicRankingCardV2--ranking{
+    background-color:#FAFBFC !important;
+    background-clip:padding-box,padding-box,border-box !important;
+    background-image:
+      radial-gradient(circle at 54% 118%,rgba(15,23,42,.075),transparent 58%),
+      linear-gradient(180deg,rgba(255,255,255,.97),#FAFBFC 56%,#f4f7fa),
+      linear-gradient(90deg,color-mix(in srgb,var(--club-primary) 56%,#cbd5e1),color-mix(in srgb,var(--club-secondary) 34%,#dbe3ec)) !important;
+    background-origin:padding-box,padding-box,border-box !important;
     border-radius:16px !important;
     min-height:156px !important;
     padding:13px !important;
+  }
+
+  .publicRankingCardV2--ranking::before{
+    background:linear-gradient(90deg,var(--club-primary),color-mix(in srgb,var(--club-secondary) 48%,#64748b)) !important;
+    content:"" !important;
+    height:3px !important;
+    left:0 !important;
+    opacity:.82 !important;
+    pointer-events:none !important;
+    position:absolute !important;
+    right:0 !important;
+    top:0 !important;
+    z-index:3 !important;
   }
 
   .publicRankingCardV2--ranking header h2{
@@ -3160,6 +3490,14 @@
   overflow:hidden !important;
 }
 
+.px-homeAdDots{
+  display:none;
+}
+
+.px-homeAdTrack{
+  display:contents;
+}
+
 .px-publicEditorialBoard,
 .px-publicEditorialSide,
 .px-publicLatestGrid{
@@ -3195,6 +3533,351 @@
   object-fit:cover !important;
   position:absolute !important;
   width:100% !important;
+}
+
+@media (max-width: 720px){
+  .px-publicHome{
+    gap:16px !important;
+  }
+
+  .px-publicHome .px-homeSideNews button,
+  .px-publicHome .px-homeMoreNews button{
+    min-height:86px !important;
+  }
+
+  .px-publicHome .px-homeSideNews button,
+  .px-publicHome .px-homeMoreNews button,
+  .px-publicHome .px-homeNewsButton,
+  .px-publicHome .px-homePillButton{
+    border-radius:12px !important;
+  }
+
+  .px-publicHome .px-homeSideNews strong,
+  .px-publicHome .px-homeMoreNews strong{
+    display:block !important;
+    font-size:13.5px !important;
+    line-height:1.12 !important;
+    overflow:visible !important;
+    text-overflow:clip !important;
+    white-space:normal !important;
+    -webkit-line-clamp:unset !important;
+  }
+
+  .px-publicHome .px-homeNewsBadge,
+  .px-publicHome .px-homeNewsDateChip{
+    border-radius:5px !important;
+    font-size:8px !important;
+    opacity:.82 !important;
+    padding:4px 6px !important;
+    top:9px !important;
+  }
+
+  .px-publicHome .px-homeNewsBadge{
+    left:9px !important;
+  }
+
+  .px-publicHome .px-homeNewsDateChip{
+    right:9px !important;
+  }
+
+  .px-publicHome .px-homeNewsBadge::before{
+    height:10px !important;
+    width:2px !important;
+  }
+
+  .px-publicHome .px-homeNewsKicker,
+  .px-publicHome .px-homeNewsDate{
+    font-size:9px !important;
+  }
+
+  .px-publicHome .px-homeNewsButton,
+  .px-publicHome .px-homePillButton{
+    font-size:11px !important;
+    min-height:34px !important;
+    padding:7px 10px !important;
+  }
+
+  .px-publicHome .px-homeMainNews{
+    min-height:224px !important;
+  }
+
+  .px-publicHome .px-homeMainNews img,
+  .px-publicHome .px-homeMainNews > .px-homeNewsFallback{
+    opacity:.86 !important;
+  }
+
+  .px-publicHome .px-homeMainNews > div{
+    gap:5px !important;
+    padding:13px !important;
+  }
+
+  .px-publicHome .px-homeMainNews .px-homeNewsKicker{
+    display:none !important;
+  }
+
+  .px-publicHome .px-homeMainNews strong{
+    font-size:22px !important;
+    line-height:.98 !important;
+  }
+
+  .px-publicHome .px-homeMainNews p{
+    font-size:12px !important;
+    font-weight:620 !important;
+    line-height:1.25 !important;
+  }
+
+  .px-publicHome .px-homeSideNews button,
+  .px-publicHome .px-homeMoreNews button{
+    display:grid !important;
+    gap:5px !important;
+    padding:10px !important;
+    position:relative !important;
+  }
+
+  .px-publicHome .px-homeSideNews button::after,
+  .px-publicHome .px-homeMoreNews button::after{
+    background:linear-gradient(180deg, rgba(2,6,23,.08), rgba(2,6,23,.82)) !important;
+  }
+
+  .px-publicHome .px-homeSideNews button img,
+  .px-publicHome .px-homeSideNews button > .px-homeNewsFallback,
+  .px-publicHome .px-homeMoreNews img,
+  .px-publicHome .px-homeMoreNews .px-homeNewsFallback{
+    opacity:.8 !important;
+  }
+
+  .px-publicHome .px-homeSponsors{
+    border-radius:20px !important;
+    gap:10px !important;
+    padding:11px !important;
+  }
+
+  .px-publicHome .px-homeSponsorsIntro{
+    gap:5px !important;
+  }
+
+  .px-publicHome .px-homeSponsorsIntro span{
+    font-size:9px !important;
+  }
+
+  .px-publicHome .px-homeSponsorsIntro h2{
+    font-size:23px !important;
+    line-height:.94 !important;
+  }
+
+  .px-publicHome .px-homeSponsorsIntro p{
+    font-size:11px !important;
+    font-weight:560 !important;
+    line-height:1.22 !important;
+    opacity:.78 !important;
+  }
+
+  .px-publicHome .px-homeSponsorsIntro button{
+    border-radius:12px !important;
+    font-size:10px !important;
+    margin-top:1px !important;
+    min-height:30px !important;
+    padding:5px 9px !important;
+  }
+
+  .px-publicHome .px-homeSponsorCarousel{
+    display:grid !important;
+    gap:8px !important;
+    grid-auto-columns:minmax(190px,68vw) !important;
+    grid-auto-flow:column !important;
+    padding:1px 1px 8px !important;
+  }
+
+  .px-publicHome .px-homeSponsorCard{
+    display:grid !important;
+    border-radius:14px !important;
+    gap:4px !important;
+    min-height:158px !important;
+    overflow:hidden !important;
+    padding:8px !important;
+    position:relative !important;
+  }
+
+  .px-publicHome .px-homeSponsorBadge{
+    display:inline-flex !important;
+    border-radius:8px !important;
+    font-size:7.5px !important;
+    padding:3px 6px !important;
+  }
+
+  .px-publicHome .px-homeSponsorLogo{
+    display:flex !important;
+    border-radius:11px !important;
+    height:76px !important;
+    padding:5px !important;
+  }
+
+  .px-publicHome .px-homeSponsorLogo img{
+    max-height:70px !important;
+  }
+
+  .px-publicHome .px-homeSponsorBody{
+    display:grid !important;
+    gap:4px !important;
+  }
+
+  .px-publicHome .px-homeSponsorBody strong{
+    font-size:16px !important;
+    line-height:1 !important;
+  }
+
+  .px-publicHome .px-homeSponsorBody p{
+    font-size:9.5px !important;
+    font-weight:520 !important;
+    line-height:1.15 !important;
+    opacity:.72 !important;
+  }
+
+  .px-publicHome .px-homeSponsorBody em{
+    font-size:9px !important;
+    gap:4px !important;
+    margin-top:0 !important;
+  }
+
+  .px-publicHome .px-homeSponsors{
+    display:none !important;
+  }
+
+  .px-publicHome .px-homeAdBanners{
+    margin-inline:-1px !important;
+    overflow:visible !important;
+    padding:0 1px 12px !important;
+    position:relative !important;
+  }
+
+  .px-publicHome .px-homeAdTrack{
+    display:flex !important;
+    gap:10px !important;
+    overflow-x:auto !important;
+    overflow-y:hidden !important;
+    scroll-padding-inline:0 !important;
+    scroll-snap-type:x mandatory !important;
+    scrollbar-width:none !important;
+    -webkit-overflow-scrolling:touch !important;
+    overscroll-behavior-x:contain !important;
+  }
+
+  .px-publicHome .px-homeAdTrack::-webkit-scrollbar{
+    display:none !important;
+  }
+
+  .px-publicHome .px-homeAdBanner{
+    border:0 !important;
+    border-radius:8px !important;
+    box-shadow:0 8px 20px rgba(15,23,42,.08) !important;
+    display:block !important;
+    flex:0 0 100% !important;
+    height:78px !important;
+    min-height:78px !important;
+    min-width:100% !important;
+    overflow:hidden !important;
+    position:relative !important;
+    scroll-snap-align:center !important;
+    scroll-snap-stop:always !important;
+  }
+
+  .px-publicHome .px-homeAdBanner img{
+    opacity:1 !important;
+  }
+
+  .px-publicHome .px-homeAdBannerOverlay{
+    background:linear-gradient(90deg,rgba(2,6,23,.78) 0%,rgba(2,6,23,.34) 58%,rgba(2,6,23,.08) 100%),linear-gradient(180deg,rgba(2,6,23,.08) 0%,rgba(2,6,23,.34) 100%) !important;
+    display:block !important;
+    inset:0 !important;
+    position:absolute !important;
+  }
+
+  .px-publicHome .px-homeAdBannerBody{
+    align-content:end !important;
+    bottom:0 !important;
+    display:grid !important;
+    gap:4px !important;
+    left:0 !important;
+    max-width:76% !important;
+    padding:8px 10px !important;
+    position:absolute !important;
+    top:0 !important;
+  }
+
+  .px-publicHome .px-homeAdBannerBody small{
+    align-items:center !important;
+    justify-self:end !important;
+    display:inline-flex !important;
+    background:rgba(2,6,23,.52) !important;
+    border:0 !important;
+    border-radius:5px !important;
+    font-size:8px !important;
+    padding:4px 6px !important;
+    position:absolute !important;
+    right:10px !important;
+    top:10px !important;
+  }
+
+  .px-publicHome .px-homeAdBannerBody small{
+    color:transparent !important;
+    font-size:0 !important;
+    gap:0 !important;
+  }
+
+  .px-publicHome .px-homeAdBannerBody small::after{
+    color:#67e8f9 !important;
+    content:"PUBLICIDAD";
+    font-size:8px !important;
+    letter-spacing:.08em !important;
+  }
+
+  .px-publicHome .px-homeAdBannerBody strong{
+    font-size:13px !important;
+    line-height:1.03 !important;
+    max-width:none !important;
+  }
+
+  .px-publicHome .px-homeAdBannerBody p{
+    display:none !important;
+  }
+
+  .px-publicHome .px-homeAdBannerBody em{
+    display:none !important;
+  }
+
+  .px-publicHome .px-homeAdBannerBody em,
+  .px-publicHome .px-homeAdBannerBody em b{
+    visibility:hidden !important;
+  }
+
+  .px-publicHome .px-homeAdDots{
+    align-items:center !important;
+    bottom:6px !important;
+    display:inline-flex !important;
+    gap:5px !important;
+    justify-content:center !important;
+    left:50% !important;
+    position:absolute !important;
+    transform:translateX(-50%) !important;
+    z-index:4 !important;
+  }
+
+  .px-publicHome .px-homeAdDots button{
+    appearance:none !important;
+    background:rgba(6,27,58,.26) !important;
+    border:0 !important;
+    border-radius:999px !important;
+    height:5px !important;
+    padding:0 !important;
+    transition:background .18s ease, transform .18s ease, width .18s ease !important;
+    width:5px !important;
+  }
+
+  .px-publicHome .px-homeAdDots button[aria-current="true"]{
+    background:linear-gradient(90deg,#22d3ee,#ec4899) !important;
+    transform:scale(1.08) !important;
+    width:16px !important;
+  }
 }
 
 /* Public club home */
@@ -5584,25 +6267,30 @@
 }
 
 .publicClubsHero{
-  background:radial-gradient(circle at 14% 0%, rgba(34,211,238,.24), transparent 34%), radial-gradient(circle at 92% 8%, rgba(236,72,153,.08), transparent 28%), linear-gradient(135deg, #020617 0%, #061b3a 58%, #0f274a 100%);
+  background:radial-gradient(circle at 18% 6%, rgba(34,211,238,.3), transparent 34%), radial-gradient(circle at 84% 18%, rgba(236,72,153,.1), transparent 28%), linear-gradient(135deg, #020617 0%, #061b3a 58%, #071426 100%);
   border:1px solid rgba(103,232,249,.14);
   border-radius:22px;
-  box-shadow:0 22px 58px rgba(2,6,23,.16);
+  box-shadow:0 16px 38px rgba(2,6,23,.14);
   color:#fff;
-  min-height:220px;
+  align-content:center;
+  display:grid;
+  margin:0 auto;
+  max-width:1056px;
+  min-height:156px;
   overflow:hidden;
-  padding:clamp(24px, 4.5vw, 42px);
+  padding:clamp(14px, 2vw, 20px);
   position:relative;
+  width:100%;
 }
 
 .publicClubsHero::after{
-  background:linear-gradient(90deg, #22d3ee, rgba(34,211,238,.82), rgba(236,72,153,.42));
+  background:linear-gradient(90deg, #22d3ee 0%, #67e8f9 40%, #8bd3ed 50%, #ec4899 100%);
   bottom:0;
   content:"";
   height:4px;
-  left:28px;
+  left:0;
   position:absolute;
-  right:28px;
+  right:0;
 }
 
 .publicClubsHero span{
@@ -5614,19 +6302,20 @@
 }
 
 .publicClubsHero h1{
-  font-size:clamp(38px, 6vw, 68px);
+  font-size:clamp(30px, 4vw, 46px);
   font-weight:950;
-  letter-spacing:-.06em;
-  line-height:.92;
-  margin:8px 0;
+  letter-spacing:-.075em;
+  line-height:.9;
+  margin:5px 0;
 }
 
 .publicClubsHero p{
   color:rgba(255,255,255,.78);
-  font-size:16px;
-  font-weight:750;
+  font-size:clamp(14px, 1.45vw, 17px);
+  font-weight:720;
+  line-height:1.35;
   margin:0;
-  max-width:620px;
+  max-width:600px;
 }
 
 .publicClubsGrid{
@@ -5862,9 +6551,28 @@
 
 @media (max-width: 560px){
   .publicClubsHero{
-    border-radius:20px;
-    min-height:180px;
-    padding:24px 18px;
+    border-radius:18px;
+    min-height:150px;
+    max-width:min(100%, calc(100vw - 47px));
+    padding:14px 16px;
+  }
+
+  .publicClubsHero span{
+    font-size:10px;
+    font-weight:850;
+    letter-spacing:.06em;
+  }
+
+  .publicClubsHero h1{
+    font-size:clamp(28px, 8vw, 32px);
+    letter-spacing:-.06em;
+    line-height:.9;
+    margin:5px 0;
+  }
+
+  .publicClubsHero p{
+    font-size:12px;
+    line-height:1.25;
   }
 
   .publicClubCard{

@@ -55,6 +55,9 @@ type AdItem = {
   image_url: string | null
   link_url: string | null
   slot: string
+  status?: string | null
+  starts_at?: string | null
+  ends_at?: string | null
 }
 
 type SponsorItem = {
@@ -176,10 +179,100 @@ function sponsorBadge(value?: string | null) {
   return label.replace(/[_-]+/g, ' ')
 }
 
-function platformAdBadge(slot?: string | null) {
-  const normalized = String(slot ?? '').toUpperCase()
-  if (normalized.includes('HERO') || normalized.includes('INLINE')) return 'Presentado por'
-  return 'Publicidad'
+type HomeAdBannerItem = {
+  id: string
+  title: string
+  imageUrl: string | null
+  url: string | null
+}
+
+function HomeAdBannerSlot({ ads, ariaLabel }: { ads: HomeAdBannerItem[]; ariaLabel: string }) {
+  const carouselRef = useRef<HTMLDivElement | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  useEffect(() => {
+    if (ads.length <= 1) return
+    const carousel = carouselRef.current
+    if (!carousel) return
+
+    const interval = window.setInterval(() => {
+      const slides = Array.from(carousel.querySelectorAll<HTMLElement>('.px-homeAdBanner'))
+      if (!slides.length) return
+      const nextIndex = (activeIndex + 1) % slides.length
+      carousel.scrollTo({ left: slides[nextIndex].offsetLeft - carousel.offsetLeft, behavior: 'smooth' })
+      setActiveIndex(nextIndex)
+    }, 6000)
+
+    return () => window.clearInterval(interval)
+  }, [activeIndex, ads.length])
+
+  useEffect(() => {
+    if (ads.length <= 1) return
+    const carousel = carouselRef.current
+    if (!carousel) return
+    const carouselEl = carousel
+
+    function updateActiveIndex() {
+      setActiveIndex(Math.min(ads.length - 1, Math.max(0, Math.round(carouselEl.scrollLeft / Math.max(1, carouselEl.clientWidth)))))
+    }
+
+    carouselEl.addEventListener('scroll', updateActiveIndex, { passive: true })
+    return () => carouselEl.removeEventListener('scroll', updateActiveIndex)
+  }, [ads.length])
+
+  function scrollToAd(index: number) {
+    const carousel = carouselRef.current
+    const slide = carousel?.querySelectorAll<HTMLElement>('.px-homeAdBanner')[index]
+    if (!carousel || !slide) return
+    carousel.scrollTo({ left: slide.offsetLeft - carousel.offsetLeft, behavior: 'smooth' })
+    setActiveIndex(index)
+  }
+
+  if (!ads.length) return null
+
+  return (
+    <section className={`px-homeAdBanners ${ads.length === 1 ? 'is-single' : ''}`} aria-label={ariaLabel}>
+      <div className="px-homeAdTrack" ref={carouselRef}>
+        {ads.map((item) => {
+          const image = buildAssetProxyUrl(item.imageUrl)
+          const content = (
+            <>
+              {image ? <img src={image} alt="" loading="lazy" decoding="async" /> : null}
+              <span className="px-homeAdBannerOverlay" aria-hidden="true" />
+              <span className="px-homeAdBadge">PUBLICIDAD</span>
+              <span className="px-homeAdBannerBody">
+                <strong>{item.title}</strong>
+                {item.url ? <em>Conocer más</em> : null}
+              </span>
+            </>
+          )
+
+          return item.url ? (
+            <a className={`px-homeAdBanner ${image ? 'has-image' : ''}`} href={item.url} target="_blank" rel="noreferrer" key={item.id}>
+              {content}
+            </a>
+          ) : (
+            <article className={`px-homeAdBanner ${image ? 'has-image' : ''}`} key={item.id}>
+              {content}
+            </article>
+          )
+        })}
+      </div>
+      {ads.length > 1 ? (
+        <span className="px-homeAdDots" aria-label={ariaLabel}>
+          {ads.map((item, index) => (
+            <button
+              type="button"
+              key={item.id}
+              aria-label={`Ver publicidad ${index + 1}`}
+              aria-current={activeIndex === index ? 'true' : undefined}
+              onClick={() => scrollToAd(index)}
+            />
+          ))}
+        </span>
+      ) : null}
+    </section>
+  )
 }
 
 export default function PublicHomeExperience({
@@ -271,18 +364,35 @@ export default function PublicHomeExperience({
 
     return [...sponsorItems, ...adItems].slice(0, 8)
   }, [ads, sponsors])
-  const homeAds = useMemo(() => {
-    return ads
-      .filter((item) => hasMeaningfulSponsorText(item.title))
-      .map((item) => ({
+  const adsByHomeSlot = useMemo(() => {
+    const now = Date.now()
+    const activeAds = ads.filter((item) => {
+      if (!hasMeaningfulSponsorText(item.title)) return false
+      if (item.status && String(item.status).toUpperCase() !== 'ACTIVE') return false
+      const startsAt = item.starts_at ? new Date(item.starts_at).getTime() : null
+      const endsAt = item.ends_at ? new Date(item.ends_at).getTime() : null
+      if (startsAt && startsAt > now) return false
+      if (endsAt && endsAt < now) return false
+      return true
+    })
+
+    function normalize(item: AdItem): HomeAdBannerItem {
+      return {
         id: `ad-${item.id}`,
         title: item.title.trim(),
-        description: hasMeaningfulSponsorText(item.description) ? item.description?.trim() ?? null : null,
         imageUrl: item.image_url,
         url: validExternalUrl(item.link_url),
-        badge: platformAdBadge(item.slot),
-      }))
-      .slice(0, 2)
+      }
+    }
+
+    return {
+      afterRanking: activeAds
+        .filter((item) => item.slot === 'HOME_AFTER_RANKING' || item.slot === 'HOME_GRID')
+        .map(normalize),
+      afterNewsHero: activeAds
+        .filter((item) => item.slot === 'HOME_AFTER_NEWS_HERO' || item.slot === 'HOME_INLINE' || item.slot === 'HOME_HERO')
+        .map(normalize),
+    }
   }, [ads])
 
   useEffect(() => {
@@ -377,6 +487,8 @@ export default function PublicHomeExperience({
         </div>
       </section>
 
+      <HomeAdBannerSlot ads={adsByHomeSlot.afterRanking} ariaLabel="Publicidad después de rankings" />
+
       <section className="px-homeClubsFeatured">
         <div className="px-homeSectionHead is-row">
           <div>
@@ -440,35 +552,6 @@ export default function PublicHomeExperience({
         </div>
       </section>
 
-      {homeAds.length ? (
-        <section className={`px-homeAdBanners ${homeAds.length === 1 ? 'is-single' : ''}`} aria-label="Publicidad">
-          {homeAds.map((item) => {
-            const image = buildAssetProxyUrl(item.imageUrl)
-            const content = (
-              <>
-                {image ? <img src={image} alt="" loading="lazy" decoding="async" /> : null}
-                <span className="px-homeAdBannerOverlay" aria-hidden="true" />
-                <span className="px-homeAdBannerBody">
-                  <small>{item.badge}</small>
-                  <strong>{item.title}</strong>
-                  {item.description ? <p>{item.description}</p> : null}
-                  {item.url ? <em>Conocer más <b aria-hidden="true">→</b></em> : null}
-                </span>
-              </>
-            )
-            return item.url ? (
-              <a className={`px-homeAdBanner ${image ? 'has-image' : ''}`} href={item.url} target="_blank" rel="noreferrer" key={item.id}>
-                {content}
-              </a>
-            ) : (
-              <article className={`px-homeAdBanner ${image ? 'has-image' : ''}`} key={item.id}>
-                {content}
-              </article>
-            )
-          })}
-        </section>
-      ) : null}
-
       <section className="px-homeNewsPortal">
         <div className="px-homeSectionHead is-row">
           <div>
@@ -478,18 +561,21 @@ export default function PublicHomeExperience({
           <Link href="/noticias" className="px-homeNewsButton">Ver todas las noticias</Link>
         </div>
         <div className="px-homeNewsPortalGrid">
-          {mainNews ? (
-            <button type="button" className="px-homeMainNews" style={newsThemeStyle(mainNews)} onClick={() => openNews(mainNews)}>
-              {mainNews.cover_url ? <img src={mainNews.cover_url} alt={mainNews.title} /> : <div className="px-homeNewsFallback" />}
-              <span className="px-homeNewsBadge">{newsSourceLabel(mainNews)}</span>
-              <span className="px-homeNewsDateChip">{formatDate(mainNews.published_at || mainNews.updated_at)}</span>
-              <div>
-                <span className="px-homeNewsKicker">{placementLabel(mainNews.placement)}</span>
-                <strong>{mainNews.title}</strong>
-                <p>{mainNews.excerpt || `Cobertura deportiva pública de ${BRAND.name}.`}</p>
-              </div>
-            </button>
-          ) : <div className="px-homeEmpty">Todavía no hay noticias públicas.</div>}
+          <div className="px-homeNewsLead">
+            {mainNews ? (
+              <button type="button" className="px-homeMainNews" style={newsThemeStyle(mainNews)} onClick={() => openNews(mainNews)}>
+                {mainNews.cover_url ? <img src={mainNews.cover_url} alt={mainNews.title} /> : <div className="px-homeNewsFallback" />}
+                <span className="px-homeNewsBadge">{newsSourceLabel(mainNews)}</span>
+                <span className="px-homeNewsDateChip">{formatDate(mainNews.published_at || mainNews.updated_at)}</span>
+                <div>
+                  <span className="px-homeNewsKicker">{placementLabel(mainNews.placement)}</span>
+                  <strong>{mainNews.title}</strong>
+                  <p>{mainNews.excerpt || `Cobertura deportiva pública de ${BRAND.name}.`}</p>
+                </div>
+              </button>
+            ) : <div className="px-homeEmpty">Todavía no hay noticias públicas.</div>}
+            <HomeAdBannerSlot ads={adsByHomeSlot.afterNewsHero} ariaLabel="Publicidad después de la noticia destacada" />
+          </div>
           <div className="px-homeSideNews">
             {sideNews.length ? sideNews.map((item) => (
               <button key={item.id} type="button" style={newsThemeStyle(item)} onClick={() => openNews(item)}>
@@ -605,6 +691,7 @@ export default function PublicHomeExperience({
         .px-homeSectionHead p { color: #64748b; font-size: 14px; font-weight: 750; margin: 3px 0 0; max-width: 620px; }
         .px-homeNewsPortal, .px-homeTournaments, .px-homeRankingsExplore, .px-homeClubsFeatured, .px-homeJoin { display: grid; gap: 14px; }
         .px-homeNewsPortalGrid { display: grid; gap: 14px; grid-template-columns: minmax(0,1.25fr) minmax(300px,.75fr); }
+        .px-homeNewsLead { display: grid; gap: 10px; min-width: 0; }
         .px-homeMainNews, .px-homeSideNews button { border: 0; cursor: pointer; font: inherit; text-align: left; transition: transform .18s ease, box-shadow .18s ease; }
         .px-homeMainNews { background: #061b3a; border-radius: 24px; color: #fff; min-height: 360px; overflow: hidden; padding: 0; position: relative; }
         .px-homeMainNews img, .px-homeMainNews > .px-homeNewsFallback { display: block; height: 100%; inset: 0; object-fit: cover; opacity: .74; position: absolute; width: 100%; }
@@ -661,20 +748,20 @@ export default function PublicHomeExperience({
         .px-homeClubCard .publicClubBody p { line-height: 1.15; margin-top: -9px; }
         .px-homeClubNameAccent { background: linear-gradient(90deg, var(--club-card-accent, #22d3ee) 0%, color-mix(in srgb, var(--club-card-accent, #22d3ee) 64%, var(--club-card-accent-2, #ec4899)) 48%, var(--club-card-accent-2, #ec4899) 100%); background-position: var(--club-accent-position, 0 0); background-size: 220% 100%; border: 0 !important; border-radius: 999px; display: block; font-size: 0; height: 5px !important; line-height: 0; margin: 0; max-width: 88%; opacity: var(--club-accent-opacity, .84); padding: 0 !important; transform: translateX(var(--club-accent-shift, 0)); transition: width .34s ease, opacity .24s ease, transform .24s ease, background-position .42s ease; width: var(--club-accent-width, 110px); }
         .px-homeClubNameAccent::after { content: none !important; display: none !important; }
-        .px-homeAdBanners { display: grid; gap: 14px; grid-template-columns: repeat(2,minmax(0,1fr)); }
-        .px-homeAdBanners.is-single { grid-template-columns: minmax(0,1fr); }
-        .px-homeAdBanner { background: radial-gradient(circle at 8% 8%, rgba(34,211,238,.3), transparent 32%), radial-gradient(circle at 92% 18%, rgba(236,72,153,.22), transparent 30%), linear-gradient(135deg,#031225 0%,#071936 58%,#0f172a 100%); border: 1px solid rgba(103,232,249,.26); border-radius: 24px; box-shadow: 0 18px 42px rgba(2,6,23,.13), inset 0 0 0 1px rgba(255,255,255,.04); color: #fff; display: block; min-height: 126px; overflow: hidden; position: relative; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
-        .px-homeAdBanner:hover { border-color: rgba(236,72,153,.38); box-shadow: 0 24px 52px rgba(2,6,23,.18), 0 0 0 1px rgba(236,72,153,.16) inset; transform: translateY(-2px); }
-        .px-homeAdBanner img { display: block; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; }
-        .px-homeAdBannerOverlay { background: linear-gradient(90deg,rgba(2,6,23,.86) 0%,rgba(2,6,23,.58) 48%,rgba(2,6,23,.2) 100%), linear-gradient(180deg,rgba(2,6,23,.08) 0%,rgba(2,6,23,.76) 100%); inset: 0; position: absolute; }
-        .px-homeAdBannerBody { bottom: 0; display: grid; gap: 5px; left: 0; padding: 15px 18px; position: absolute; right: 0; z-index: 1; }
-        .px-homeAdBannerBody small { align-items: center; background: rgba(255,255,255,.08); border: 1px solid rgba(103,232,249,.32); border-radius: 999px; color: #67e8f9; display: inline-flex; font-size: 10px; font-weight: 950; justify-self: start; letter-spacing: .08em; padding: 5px 8px; text-transform: uppercase; }
-        .px-homeAdBannerBody strong { color: #fff; font-size: clamp(18px,2vw,25px); font-weight: 950; letter-spacing: -.04em; line-height: 1; }
-        .px-homeAdBannerBody p { color: rgba(226,250,255,.76); font-size: 12px; font-weight: 650; line-height: 1.35; margin: 0; max-width: 58ch; }
-        .px-homeAdBannerBody em { align-items: center; align-self: start; background: linear-gradient(135deg,rgba(34,211,238,.18),rgba(236,72,153,.18)); border: 1px solid rgba(103,232,249,.3); border-radius: 999px; color: #e0faff; display: inline-flex; font-size: 10px; font-style: normal; font-weight: 900; gap: 7px; padding: 5px 8px; transition: color .18s ease; }
-        .px-homeAdBannerBody b { font-size: 14px; line-height: 1; transition: transform .18s ease; }
-        .px-homeAdBanner:hover .px-homeAdBannerBody em { color: #fff; }
-        .px-homeAdBanner:hover .px-homeAdBannerBody b { transform: translateX(3px); }
+        :global(.px-homeAdBanners) { display: grid; gap: 6px; min-width: 0; width: 100%; }
+        :global(.px-homeAdTrack) { display: grid; grid-auto-columns: 100%; grid-auto-flow: column; min-width: 0; overflow-x: auto; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; }
+        :global(.px-homeAdTrack::-webkit-scrollbar) { display: none; }
+        :global(.px-homeAdBanner) { background: #061b3a; border: 0; border-radius: 8px; box-shadow: 0 12px 28px rgba(15,23,42,.12); color: #fff; display: block; height: 100px; min-width: 0; overflow: hidden; position: relative; scroll-snap-align: start; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease; width: 100%; }
+        :global(.px-homeAdBanner:hover) { box-shadow: 0 16px 34px rgba(15,23,42,.16); transform: translateY(-1px); }
+        :global(.px-homeAdBanner img) { display: block; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; }
+        :global(.px-homeAdBannerOverlay) { background: linear-gradient(90deg,rgba(2,6,23,.78) 0%,rgba(2,6,23,.34) 58%,rgba(2,6,23,.08) 100%), linear-gradient(180deg,rgba(2,6,23,.08) 0%,rgba(2,6,23,.34) 100%); inset: 0; position: absolute; }
+        :global(.px-homeAdBadge) { align-items: center; background: rgba(255,255,255,.86); border-radius: 999px; color: #061b3a; display: inline-flex; font-size: 8px; font-weight: 950; letter-spacing: .08em; line-height: 1; padding: 4px 6px; position: absolute; right: 8px; text-transform: uppercase; top: 8px; z-index: 2; }
+        :global(.px-homeAdBannerBody) { align-content: end; bottom: 0; display: grid; gap: 4px; left: 0; max-width: 72%; padding: 10px 12px; position: absolute; top: 0; z-index: 1; }
+        :global(.px-homeAdBannerBody strong) { color: #fff; display: -webkit-box; font-size: clamp(14px,1.6vw,18px); font-weight: 900; letter-spacing: -.02em; line-height: 1.03; overflow: hidden; text-shadow: 0 2px 16px rgba(2,6,23,.42); -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        :global(.px-homeAdBannerBody em) { color: #e0faff; font-size: 9px; font-style: normal; font-weight: 950; letter-spacing: .04em; line-height: 1; text-transform: uppercase; }
+        :global(.px-homeAdDots) { align-items: center; display: inline-flex; gap: 5px; justify-content: center; min-height: 10px; }
+        :global(.px-homeAdDots button) { background: rgba(15,23,42,.22); border: 0; border-radius: 999px; height: 5px; padding: 0; transition: background .18s ease, transform .18s ease, width .18s ease; width: 5px; }
+        :global(.px-homeAdDots button[aria-current="true"]) { background: linear-gradient(90deg,#22d3ee,#ec4899); width: 15px; }
         .px-homeJoin { background: linear-gradient(135deg, #fff, #f8fbff); border: 1px solid #e2e8f0; border-radius: 24px; box-shadow: 0 16px 44px rgba(15,23,42,.06); display: grid; gap: 14px; padding: 18px; }
         .px-homeReasonGrid { display: grid; gap: 12px; grid-template-columns: repeat(4,minmax(0,1fr)); }
         .px-homeReasonGrid strong { font-size: 16px; font-weight: 950; }
@@ -725,8 +812,12 @@ export default function PublicHomeExperience({
           .px-homeCtaBanners em { grid-column: 2; justify-self: start; margin-right: 0; }
           .px-homeSectionHead.is-row { align-items: start; flex-direction: column; }
           .px-homeNewsPortalGrid, .px-homeMoreNews { grid-template-columns: 1fr; }
-          .px-homeRankingsExplore > .px-homeRankingClubGrid { grid-template-columns: 1fr !important; }
+          .px-homeRankingsExplore > .px-homeRankingClubGrid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
           .px-homeMainNews { min-height: 260px; }
+          :global(.px-homeAdBanner) { border-radius: 7px; height: 78px; }
+          :global(.px-homeAdBannerBody) { max-width: 76%; padding: 8px 10px; }
+          :global(.px-homeAdBannerBody strong) { font-size: 13px; }
+          :global(.px-homeAdBadge) { font-size: 7px; padding: 3px 5px; right: 6px; top: 6px; }
           .px-homeTournamentCards article:not(.TournamentPublicCard) { grid-template-columns: 1fr; }
           .px-homeDateBlock { align-items: center; display: flex; gap: 9px; justify-content: flex-start; min-height: 0; }
         }

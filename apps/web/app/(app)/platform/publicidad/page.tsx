@@ -11,7 +11,7 @@ type Campaign = {
   description: string | null
   image_url: string | null
   link_url: string | null
-  slot: 'HOME_HERO' | 'HOME_GRID' | 'HOME_INLINE'
+  slot: 'HOME_AFTER_RANKING' | 'HOME_AFTER_NEWS_HERO' | 'HOME_HERO' | 'HOME_GRID' | 'HOME_INLINE'
   status: 'ACTIVE' | 'PAUSED'
   sort_order: number
 }
@@ -28,23 +28,38 @@ type Sponsor = {
 
 type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string } | null
 
-const emptyCampaign = { title: '', description: '', linkUrl: '', slot: 'HOME_GRID' as Campaign['slot'], status: 'ACTIVE' as Campaign['status'], sortOrder: '100' }
+const emptyCampaign = { title: '', description: '', linkUrl: '', slot: 'HOME_AFTER_RANKING' as Campaign['slot'], status: 'ACTIVE' as Campaign['status'], sortOrder: '100' }
 const emptySponsor = { name: '', websiteUrl: '', tier: 'SPONSOR' as Sponsor['tier'], status: 'ACTIVE' as Sponsor['status'], sortOrder: '100' }
 
 function slotLabel(slot: Campaign['slot']) {
-  if (slot === 'HOME_HERO') return 'Hero principal'
-  if (slot === 'HOME_INLINE') return 'Debajo de noticias'
-  return 'Home grid'
+  if (slot === 'HOME_AFTER_NEWS_HERO' || slot === 'HOME_INLINE' || slot === 'HOME_HERO') return 'Después de noticia destacada'
+  return 'Después de rankings'
 }
 
 function slotBadgeClass(slot: Campaign['slot']) {
-  if (slot === 'HOME_HERO') return 'px-slotBadge px-slotBadge--hero'
-  if (slot === 'HOME_INLINE') return 'px-slotBadge px-slotBadge--inline'
+  if (slot === 'HOME_AFTER_NEWS_HERO' || slot === 'HOME_INLINE' || slot === 'HOME_HERO') return 'px-slotBadge px-slotBadge--inline'
   return 'px-slotBadge px-slotBadge--grid'
 }
 
 function statusBadgeClass(status: 'ACTIVE' | 'PAUSED') {
   return status === 'ACTIVE' ? 'px-entityBadge px-entityBadge--active' : 'px-entityBadge px-entityBadge--paused'
+}
+
+function statusLabel(status: 'ACTIVE' | 'PAUSED') {
+  return status === 'ACTIVE' ? 'Activa' : 'Oculta'
+}
+
+function isAfterRankingSlot(slot: Campaign['slot']) {
+  return slot === 'HOME_AFTER_RANKING' || slot === 'HOME_GRID'
+}
+
+function isAfterNewsHeroSlot(slot: Campaign['slot']) {
+  return slot === 'HOME_AFTER_NEWS_HERO' || slot === 'HOME_INLINE' || slot === 'HOME_HERO'
+}
+
+function editableSlot(slot: Campaign['slot']): Campaign['slot'] {
+  if (isAfterNewsHeroSlot(slot)) return 'HOME_AFTER_NEWS_HERO'
+  return 'HOME_AFTER_RANKING'
 }
 
 function tierBadgeClass(tier: Sponsor['tier']) {
@@ -146,7 +161,7 @@ export default function PlatformPublicidadPage() {
 
   function openEditCampaign(row: Campaign) {
     setEditingCampaignId(row.id)
-    setCampaignForm({ title: row.title, description: row.description || '', linkUrl: row.link_url || '', slot: row.slot, status: row.status, sortOrder: String(row.sort_order ?? 100) })
+    setCampaignForm({ title: row.title, description: row.description || '', linkUrl: row.link_url || '', slot: editableSlot(row.slot), status: row.status, sortOrder: String(row.sort_order ?? 100) })
     setCampaignFile(null)
     setKeepImage(Boolean(row.image_url))
     setCampaignOpen(true)
@@ -249,7 +264,7 @@ export default function PlatformPublicidadPage() {
     { label: 'Campañas activas', value: String(campaigns.filter((item) => item.status === 'ACTIVE').length) },
     { label: 'Sponsors activos', value: String(sponsors.filter((item) => item.status === 'ACTIVE').length) },
     { label: 'Slots ocupados', value: String(new Set(campaigns.filter((item) => item.status === 'ACTIVE').map((item) => item.slot)).size) },
-    { label: 'Pausadas', value: String(campaigns.filter((item) => item.status === 'PAUSED').length + sponsors.filter((item) => item.status === 'PAUSED').length) },
+    { label: 'Ocultas', value: String(campaigns.filter((item) => item.status === 'PAUSED').length) },
   ]
 
   const campaignPreviewImage = campaignPreviewUrl || (editingCampaignId && keepImage ? selectedCampaign?.image_url || null : null)
@@ -261,7 +276,7 @@ export default function PlatformPublicidadPage() {
       subtitle="Organizá campañas, posiciones y logos con una lectura clara de qué sale y dónde."
       metrics={metrics}
       actions={<div className="px-mediaActions"><button className="px-btn px-btn--ghost" type="button" onClick={load}>Actualizar</button><button className="px-btn" type="button" onClick={openNewCampaign}>Nueva campaña</button></div>}
-      aside={<div className="px-platformCard px-mediaAside"><div className="px-mediaAsideHead"><h3>Impacto actual</h3></div><div className="px-mediaRuleList"><div><span>Hero principal</span><strong>{campaigns.find((item) => item.slot === 'HOME_HERO' && item.status === 'ACTIVE')?.title || 'Vacante'}</strong></div><div><span>Grilla home</span><strong>{campaigns.filter((item) => item.slot === 'HOME_GRID' && item.status === 'ACTIVE').length} activa(s)</strong></div><div><span>Debajo de noticias</span><strong>{campaigns.filter((item) => item.slot === 'HOME_INLINE' && item.status === 'ACTIVE').length} activa(s)</strong></div><div><span>Sponsors visibles</span><strong>{sponsors.filter((item) => item.status === 'ACTIVE').length}</strong></div></div></div>}
+      aside={<div className="px-platformCard px-mediaAside"><div className="px-mediaAsideHead"><h3>Impacto actual</h3></div><div className="px-mediaRuleList"><div><span>Después de rankings</span><strong>{campaigns.filter((item) => isAfterRankingSlot(item.slot) && item.status === 'ACTIVE').length} activa(s)</strong></div><div><span>Después de noticia destacada</span><strong>{campaigns.filter((item) => isAfterNewsHeroSlot(item.slot) && item.status === 'ACTIVE').length} activa(s)</strong></div><div><span>Ocultas</span><strong>{campaigns.filter((item) => item.status === 'PAUSED').length}</strong></div><div><span>Sponsors visibles</span><strong>{sponsors.filter((item) => item.status === 'ACTIVE').length}</strong></div></div></div>}
     >
       {alert ? <AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /> : null}
       {setupRequired ? <AuthAlert variant="warning" title="Contenido no inicializado" message={setupRequired} /> : null}
@@ -281,7 +296,7 @@ export default function PlatformPublicidadPage() {
                 <div className="px-mediaMain">
                   <div className="px-mediaTop">
                     <strong>{row.title}</strong>
-                    <div className="px-mediaBadges"><span className={slotBadgeClass(row.slot)}>{slotLabel(row.slot)}</span><span className={statusBadgeClass(row.status)}>{row.status === 'ACTIVE' ? 'Activa' : 'Pausada'}</span></div>
+                    <div className="px-mediaBadges"><span className={slotBadgeClass(row.slot)}>{slotLabel(row.slot)}</span><span className={statusBadgeClass(row.status)}>{statusLabel(row.status)}</span></div>
                   </div>
                   <div className="px-mediaMeta"><span>Orden {row.sort_order}</span>{row.link_url ? <span>{row.link_url}</span> : null}</div>
                 </div>
@@ -326,25 +341,25 @@ export default function PlatformPublicidadPage() {
           </div>
           <div className="px-mediaPreviewGrid">
             <article className="px-mediaPreviewCard px-mediaPreviewCard--hero">
-              <span className="px-slotBadge px-slotBadge--hero">HOME_HERO</span>
-              {selectedCampaign?.slot === 'HOME_HERO' && selectedCampaign?.image_url ? <img src={selectedCampaign.image_url} alt={selectedCampaign.title} className="px-mediaPreviewImage" /> : null}
-              <div className="px-mediaPreviewBody"><strong>{selectedCampaign?.slot === 'HOME_HERO' ? selectedCampaign.title : 'Hero principal'}</strong><p>{selectedCampaign?.slot === 'HOME_HERO' ? (selectedCampaign.description || 'Campaña principal del home.') : 'La pieza principal del home aparece acá con mayor protagonismo.'}</p></div>
+              <span className="px-slotBadge px-slotBadge--grid">HOME_AFTER_RANKING</span>
+              {selectedCampaign && isAfterRankingSlot(selectedCampaign.slot) && selectedCampaign.image_url ? <img src={selectedCampaign.image_url} alt={selectedCampaign.title} className="px-mediaPreviewImage" /> : null}
+              <div className="px-mediaPreviewBody"><strong>{selectedCampaign && isAfterRankingSlot(selectedCampaign.slot) ? selectedCampaign.title : 'Después de rankings'}</strong><p>Banner horizontal entre rankings y comunidad.</p></div>
             </article>
             <article className="px-mediaPreviewCard">
-              <span className="px-slotBadge px-slotBadge--grid">HOME_GRID</span>
+              <span className="px-slotBadge px-slotBadge--grid">Rankings</span>
               <div className="px-mediaMiniPreviewList">
-                {campaigns.filter((item) => item.slot === 'HOME_GRID').slice(0, 3).map((item) => (
+                {campaigns.filter((item) => isAfterRankingSlot(item.slot)).slice(0, 3).map((item) => (
                   <div key={item.id} className="px-mediaMiniPreview">{item.image_url ? <img src={item.image_url} alt={item.title} /> : <div />}<strong>{item.title}</strong></div>
                 ))}
               </div>
             </article>
             <article className="px-mediaPreviewCard">
-              <span className="px-slotBadge px-slotBadge--inline">Debajo de noticias</span>
+              <span className="px-slotBadge px-slotBadge--inline">HOME_AFTER_NEWS_HERO</span>
               <div className="px-mediaInlinePreview">
-                {campaigns.filter((item) => item.slot === 'HOME_INLINE').slice(0, 2).map((item) => (
-                  <div key={item.id} className="px-mediaInlineItem"><strong>{item.title}</strong><span>{item.status === 'ACTIVE' ? 'Visible' : 'Pausada'}</span></div>
+                {campaigns.filter((item) => isAfterNewsHeroSlot(item.slot)).slice(0, 2).map((item) => (
+                  <div key={item.id} className="px-mediaInlineItem"><strong>{item.title}</strong><span>{item.status === 'ACTIVE' ? 'Visible' : 'Oculta'}</span></div>
                 ))}
-                {!campaigns.some((item) => item.slot === 'HOME_INLINE') ? <span className="px-muted">Sin campañas en esta posición.</span> : null}
+                {!campaigns.some((item) => isAfterNewsHeroSlot(item.slot)) ? <span className="px-muted">Sin campañas en esta posición.</span> : null}
               </div>
             </article>
             <article className="px-mediaPreviewCard px-mediaPreviewCard--sponsors">
@@ -377,20 +392,20 @@ export default function PlatformPublicidadPage() {
                 <section className="px-mediaFormBlock">
                   <h4>Ubicación y estado</h4>
                   <div className="px-mediaSplit">
-                    <label><span>Placement</span><select value={campaignForm.slot} onChange={(event) => setCampaignForm((state) => ({ ...state, slot: event.target.value as Campaign['slot'] }))}><option value="HOME_HERO">Hero principal</option><option value="HOME_GRID">Home grid</option><option value="HOME_INLINE">Debajo de noticias</option></select></label>
-                    <label><span>Estado</span><select value={campaignForm.status} onChange={(event) => setCampaignForm((state) => ({ ...state, status: event.target.value as Campaign['status'] }))}><option value="ACTIVE">Activa</option><option value="PAUSED">Pausada</option></select></label>
+                    <label><span>Posición</span><select value={campaignForm.slot} onChange={(event) => setCampaignForm((state) => ({ ...state, slot: event.target.value as Campaign['slot'] }))}><option value="HOME_AFTER_RANKING">Después de rankings</option><option value="HOME_AFTER_NEWS_HERO">Después de noticia destacada</option></select></label>
+                    <label><span>Visibilidad</span><select value={campaignForm.status} onChange={(event) => setCampaignForm((state) => ({ ...state, status: event.target.value as Campaign['status'] }))}><option value="ACTIVE">Activa</option><option value="PAUSED">Oculta</option></select></label>
                     <label><span>Orden</span><input value={campaignForm.sortOrder} onChange={(event) => setCampaignForm((state) => ({ ...state, sortOrder: event.target.value }))} /></label>
                   </div>
                 </section>
                 <section className="px-mediaFormBlock">
                   <h4>Imagen</h4>
-                  <label className="px-mediaUpload"><span>{campaignForm.slot === 'HOME_HERO' ? 'Banner hero 16:8' : campaignForm.slot === 'HOME_GRID' ? 'Banner grid 4:3' : 'Pieza inline horizontal'}</span><input type="file" accept="image/*" onChange={(event) => setCampaignFile(event.target.files?.[0] || null)} /></label>
+                  <label className="px-mediaUpload"><span>Banner horizontal ancho</span><input type="file" accept="image/*" onChange={(event) => setCampaignFile(event.target.files?.[0] || null)} /></label>
                   {editingCampaignId ? <label className="px-mediaCheckbox"><input type="checkbox" checked={keepImage} onChange={(event) => setKeepImage(event.target.checked)} />Mantener imagen actual si no subo otra.</label> : null}
                 </section>
               </div>
               <aside className="px-mediaFormPreview">
                 <div className="px-mediaFormPreviewHead"><h4>Preview</h4><span className={slotBadgeClass(campaignForm.slot)}>{slotLabel(campaignForm.slot)}</span></div>
-                <div className={`px-mediaLiveCard ${campaignForm.slot === 'HOME_HERO' ? 'is-hero' : campaignForm.slot === 'HOME_INLINE' ? 'is-inline' : 'is-grid'}`}>
+                <div className="px-mediaLiveCard is-inline">
                   {campaignPreviewImage ? <img src={campaignPreviewImage} alt={campaignForm.title || 'Preview campaña'} /> : <div className="px-mediaLiveFallback">Sin imagen</div>}
                   <div className="px-mediaLiveCopy"><strong>{campaignForm.title || 'Nombre de campaña'}</strong><p>{campaignForm.description || 'La pieza seleccionada se va a ver acá con el ratio y jerarquía de su posición.'}</p></div>
                 </div>

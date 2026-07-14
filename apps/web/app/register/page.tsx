@@ -126,6 +126,7 @@ export default function RegisterPage() {
             <label className="px-label">Email</label>
             <input
               className="px-input"
+              type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="tu@email.com"

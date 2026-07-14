@@ -71,7 +71,7 @@ export default async function TorneosPublicPage() {
   const clubs = Array.from(new Set(tournaments.map((item) => item.clubName))).sort((a, b) => a.localeCompare(b))
 
   return (
-    <div className="px-wrap">
+    <div className="px-wrap px-publicFrame">
       <PublicTournamentsExperience tournaments={tournaments} clubs={clubs} />
     </div>
   )

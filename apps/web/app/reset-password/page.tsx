@@ -65,6 +65,7 @@ export default function ResetPasswordPage() {
             <label className="px-label">Email</label>
             <input
               className="px-input"
+              type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="tu@email.com"

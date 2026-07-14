@@ -80,52 +80,54 @@ export default async function ClubesPublicPage() {
   })
 
   return (
-    <main className="publicClubsPage">
-      <section className="publicClubsHero">
-        <span>Clubes {BRAND.name}</span>
-        <h1>Comunidades activas</h1>
-        <p>Explorá clubes, torneos, jugadores y categorías disponibles dentro del circuito.</p>
-      </section>
+    <div className="px-wrap px-publicFrame">
+      <main className="publicClubsPage">
+        <section className="publicClubsHero">
+          <span>Comunidad {BRAND.name}</span>
+          <h1>Clubes {BRAND.name}</h1>
+          <p>Explorá clubes, torneos, jugadores y categorías disponibles dentro del circuito.</p>
+        </section>
 
-      <section className="publicClubsGrid">
-        {clubs.length ? clubs.map((club) => {
-          const logo = buildAssetProxyUrl(club.logo_url)
-          const location = [club.city, club.province].filter(Boolean).join(' · ') || `Club ${BRAND.name}`
-          const nameSize = club.name.length > 30 ? '22px' : club.name.length > 18 ? '26px' : club.name.length > 15 ? '30px' : undefined
-          const theme = getClubTheme(club.theme_key)
-          const clubStyle = {
-            ['--club-card-accent' as string]: theme.vars.accent,
-            ['--club-card-accent-2' as string]: theme.vars.accent2,
-            ['--club-card-soft' as string]: theme.vars.soft,
-            ['--club-card-glow' as string]: theme.vars.glow,
-          } satisfies CSSProperties
-          return (
-            <Link className="publicClubCard" href={`/clubs/${club.id}`} key={club.id} aria-label={`Ver club ${club.name}`} style={clubStyle}>
-              <span className={`publicClubLogo ${logo ? 'has-image' : ''}`}>
-                {logo ? <img src={logo} alt="" loading="lazy" decoding="async" /> : getClubInitials(club.name)}
-              </span>
-              <div className="publicClubBody">
-                <small>Club activo</small>
-                <h2 style={nameSize ? { ['--club-name-size' as string]: nameSize } : undefined}>{club.name}</h2>
-                <span className="px-homeClubNameAccent" aria-hidden="true" />
-                <p>{location}</p>
-                <div className="publicClubStats">
-                  <span><b>{club.players}</b> jugadores</span>
-                  <span><b>{club.tournaments}</b> torneos</span>
+        <section className="publicClubsGrid">
+          {clubs.length ? clubs.map((club) => {
+            const logo = buildAssetProxyUrl(club.logo_url)
+            const location = [club.city, club.province].filter(Boolean).join(' · ') || `Club ${BRAND.name}`
+            const nameSize = club.name.length > 30 ? '22px' : club.name.length > 18 ? '26px' : club.name.length > 15 ? '30px' : undefined
+            const theme = getClubTheme(club.theme_key)
+            const clubStyle = {
+              ['--club-card-accent' as string]: theme.vars.accent,
+              ['--club-card-accent-2' as string]: theme.vars.accent2,
+              ['--club-card-soft' as string]: theme.vars.soft,
+              ['--club-card-glow' as string]: theme.vars.glow,
+            } satisfies CSSProperties
+            return (
+              <Link className="publicClubCard" href={`/clubs/${club.id}`} key={club.id} aria-label={`Ver club ${club.name}`} style={clubStyle}>
+                <span className={`publicClubLogo ${logo ? 'has-image' : ''}`}>
+                  {logo ? <img src={logo} alt="" loading="lazy" decoding="async" /> : getClubInitials(club.name)}
+                </span>
+                <div className="publicClubBody">
+                  <small>Club activo</small>
+                  <h2 style={nameSize ? { ['--club-name-size' as string]: nameSize } : undefined}>{club.name}</h2>
+                  <span className="px-homeClubNameAccent" aria-hidden="true" />
+                  <p>{location}</p>
+                  <div className="publicClubStats">
+                    <span><b>{club.players}</b> jugadores</span>
+                    <span><b>{club.tournaments}</b> torneos</span>
+                  </div>
                 </div>
-              </div>
-              <span className="publicClubAction">
-                <span aria-hidden="true">→</span>
-              </span>
-            </Link>
-          )
-        }) : (
-          <div className="publicClubsEmpty">
-            <strong>Todavía no hay clubes públicos</strong>
-            <p>Cuando se activen clubes, van a aparecer en este listado.</p>
-          </div>
-        )}
-      </section>
-    </main>
+                <span className="publicClubAction">
+                  <span aria-hidden="true">→</span>
+                </span>
+              </Link>
+            )
+          }) : (
+            <div className="publicClubsEmpty">
+              <strong>Todavía no hay clubes públicos</strong>
+              <p>Cuando se activen clubes, van a aparecer en este listado.</p>
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
   )
 }

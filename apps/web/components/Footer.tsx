@@ -1,8 +1,8 @@
 import { BRAND } from '@/lib/branding'
 
-export default function Footer() {
+export default function Footer({ compact = false }: { compact?: boolean }) {
   return (
-    <footer className="px-footer">
+    <footer className={`px-footer${compact ? ' px-footer--compact' : ''}`}>
       <div className="px-footer-main">
         <div className="px-footer-inner">
 
@@ -25,7 +25,8 @@ export default function Footer() {
       </div>
 
       <div className="px-footer-legal">
-        © 2026 {BRAND.company} · Privacidad · Términos · Cookies
+        <span className="px-footer-legalText">© 2026 {BRAND.name.toUpperCase()}</span>
+        <span className="px-footer-legalLine" aria-hidden="true" />
       </div>
     </footer>
   )

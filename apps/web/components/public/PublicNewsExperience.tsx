@@ -197,11 +197,11 @@ export default function PublicNewsExperience({
 
       <style jsx>{`
         .px-publicNewsSurface { display: grid; gap: clamp(14px, 2.4vw, 22px); max-width: 100%; min-width: 0; overflow: hidden; }
-        .px-publicNewsHero { background: radial-gradient(circle at 12% 0%, rgba(34,211,238,.16), transparent 34%), linear-gradient(135deg, #020617, #061b3a 58%, #0f172a); border: 1px solid rgba(103,232,249,.12); border-radius: 20px; box-shadow: 0 16px 38px rgba(2,6,23,.13); color: #fff; overflow: hidden; padding: clamp(16px, 3vw, 26px); position: relative; }
-        .px-publicNewsHero::after { background: linear-gradient(90deg, #22d3ee 0%, #2563eb 50%, #ec4899 100%); bottom: 0; content: ""; height: 3px; left: 20px; position: absolute; right: 20px; }
-        .px-publicNewsHero span { color: #67e8f9; font-size: 11px; font-weight: 950; letter-spacing: .10em; text-transform: uppercase; }
-        .px-publicNewsHero h1 { font-size: clamp(30px, 4.8vw, 48px); font-weight: 950; letter-spacing: -.055em; line-height: .94; margin: 4px 0; }
-        .px-publicNewsHero p { color: rgba(255,255,255,.78); font-size: clamp(13px, 1.9vw, 15px); font-weight: 700; line-height: 1.35; margin: 0; max-width: 620px; }
+        .px-publicNewsHero { background: radial-gradient(circle at 18% 6%, rgba(34,211,238,.3), transparent 34%), radial-gradient(circle at 84% 18%, rgba(236,72,153,.1), transparent 28%), linear-gradient(135deg, #020617 0%, #061b3a 58%, #071426 100%); border: 1px solid rgba(103,232,249,.14); border-radius: 22px; box-shadow: 0 16px 38px rgba(2,6,23,.14); color: #fff; display: grid; align-content: center; min-height: 156px; max-width: 1056px; margin: 0 auto; overflow: hidden; padding: clamp(14px, 2vw, 20px); position: relative; width: 100%; }
+        .px-publicNewsHero::after { background: linear-gradient(90deg, #22d3ee 0%, #67e8f9 40%, #8bd3ed 50%, #ec4899 100%); bottom: 0; content: ""; height: 4px; left: 0; position: absolute; right: 0; }
+        .px-publicNewsHero span { color: #67e8f9; font-size: 12px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
+        .px-publicNewsHero h1 { font-size: clamp(30px, 4vw, 46px); font-weight: 950; letter-spacing: -.075em; line-height: .9; margin: 5px 0; }
+        .px-publicNewsHero p { color: rgba(255,255,255,.78); font-size: clamp(14px, 1.45vw, 17px); font-weight: 720; line-height: 1.35; margin: 0; max-width: 600px; }
         .px-publicNewsStack { display: grid; gap: clamp(14px, 2.4vw, 22px); max-width: 100%; min-width: 0; }
         .px-publicInteractive { cursor: pointer; transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
         .px-publicInteractive:hover { transform: translateY(-2px); }
@@ -265,8 +265,11 @@ export default function PublicNewsExperience({
           .px-publicLatestGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 720px) {
-          .px-publicNewsHero { border-radius: 18px; padding: 15px 14px 18px; }
-          .px-publicNewsHero::after { left: 16px; right: 16px; }
+          .px-publicNewsHero { border-radius: 18px; min-height: 150px; max-width: min(100%, calc(100vw - 47px)); padding: 14px 16px; }
+          .px-publicNewsHero::after { left: 0; right: 0; }
+          .px-publicNewsHero span { font-size: 10px; font-weight: 850; letter-spacing: .06em; }
+          .px-publicNewsHero h1 { font-size: clamp(28px, 8vw, 32px); letter-spacing: -.06em; line-height: .9; margin: 5px 0; }
+          .px-publicNewsHero p { font-size: 12px; line-height: 1.25; }
           .px-publicEditorialMain { min-height: 315px; }
           .px-publicEditorialSide { grid-template-columns: 1fr; }
           .px-publicEditorialSideCard { min-height: 210px; padding: 17px; }

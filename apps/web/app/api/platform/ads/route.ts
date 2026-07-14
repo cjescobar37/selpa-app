@@ -13,6 +13,9 @@ function setupResponse(entity: string) {
   return NextResponse.json({ error: `Primero aplicá la migración de contenido para ${entity}.`, detail: platformContentSetupMessage(), setupRequired: true }, { status: 412 })
 }
 
+const ALLOWED_AD_SLOTS = new Set(['HOME_AFTER_RANKING', 'HOME_AFTER_NEWS_HERO'])
+const ALLOWED_AD_STATUSES = new Set(['ACTIVE', 'PAUSED'])
+
 export async function GET(req: NextRequest) {
   const auth = await assertPlatformAdmin(req)
   if (auth.error) return auth.error
@@ -32,11 +35,13 @@ export async function POST(req: NextRequest) {
     const title = String(form.get('title') ?? '').trim()
     const description = String(form.get('description') ?? '').trim()
     const linkUrl = String(form.get('linkUrl') ?? '').trim()
-    const slot = String(form.get('slot') ?? 'HOME_GRID')
+    const slot = String(form.get('slot') ?? 'HOME_AFTER_RANKING')
     const status = String(form.get('status') ?? 'ACTIVE')
     const sortOrder = Number(form.get('sortOrder') ?? 100)
     const file = form.get('image')
     if (!title) return NextResponse.json({ error: 'Falta título.' }, { status: 400 })
+    if (!ALLOWED_AD_SLOTS.has(slot)) return NextResponse.json({ error: 'Posición de publicidad inválida.' }, { status: 400 })
+    if (!ALLOWED_AD_STATUSES.has(status)) return NextResponse.json({ error: 'Estado de publicidad inválido.' }, { status: 400 })
     let imageUrl: string | null = null
     if (file instanceof File && file.size > 0) imageUrl = await uploadPlatformAsset(file, 'ads')
     const { data, error } = await supabaseAdmin.from('platform_ad_campaigns').insert({ title, description: description || null, link_url: linkUrl || null, slot, status, sort_order: sortOrder, image_url: imageUrl, created_by: auth.user!.id, updated_by: auth.user!.id }).select('*').maybeSingle()

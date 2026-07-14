@@ -23,7 +23,7 @@ export default async function NoticiasPublicPage() {
   const { heroNews, gridNews, archiveNews } = await listPublishedContent()
 
   return (
-    <div className="px-page">
+    <div className="px-page px-publicFrame">
       <PublicNewsExperience
         hero={normalizeNewsBrand(heroNews as any)}
         grid={gridNews.map((item) => normalizeNewsBrand(item as any)) as any}
