@@ -832,9 +832,9 @@ export default function PublicHomeExperience({
           .px-homeCtaBanners a { grid-template-columns: 64px minmax(0,1fr); min-height: 108px; }
           .px-homeCtaBanners em { grid-column: 2; justify-self: start; margin-right: 0; }
           .px-homeSectionHead.is-row { align-items: flex-start; flex-direction: row; flex-wrap: nowrap; padding-right: 0; position: relative; }
-          .px-homeSectionHead.is-row > div { min-width: 0; }
-          .px-homeSectionHead h2 { font-size: clamp(25px, 8vw, 32px); letter-spacing: -.04em; white-space: nowrap; }
-          .px-homeSectionHead.is-row .px-homePillButton, .px-homeSectionHead.is-row .px-homeNewsButton { font-size: 9.5px; letter-spacing: .03em; min-height: 28px; padding: 6px 9px; position: absolute; right: 0; text-transform: uppercase; top: 0; white-space: nowrap; }
+          .px-homeSectionHead.is-row > div { max-width: calc(100% - 74px); min-width: 0; }
+          .px-homeSectionHead h2 { font-size: clamp(23px, 7.2vw, 29px); letter-spacing: -.035em; white-space: nowrap; }
+          .px-homeSectionHead.is-row .px-homePillButton, .px-homeSectionHead.is-row .px-homeNewsButton { display: inline-flex; flex-shrink: 0; font-size: 9px; letter-spacing: .02em; line-height: 1; min-height: 28px; padding: 6px 8px; position: absolute; right: 0; text-align: center; text-transform: uppercase; top: 0; white-space: nowrap; width: max-content; }
           .px-homeNewsPortalGrid, .px-homeMoreNews { grid-template-columns: 1fr; }
           .px-homeRankingsExplore > .px-homeRankingClubGrid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
           .px-homeMainNews { min-height: 260px; }
