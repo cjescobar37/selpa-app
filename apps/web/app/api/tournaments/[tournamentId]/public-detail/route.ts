@@ -96,6 +96,12 @@ function isMissingSchemaObjectError(error: { code?: string; message?: string } |
   return error?.code === '42703' || error?.code === '42P01' || error?.code === 'PGRST205' || message.includes('does not exist') || message.includes('schema cache')
 }
 
+// Keep older deployments usable while the refund metadata migration reaches Supabase.
+function isMissingRefundColumnError(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? '').toLowerCase()
+  return error?.code === '42703' || error?.code === 'PGRST204' || message.includes('refund_')
+}
+
 function pointValue(sources: Array<Record<string, unknown>>, ...keys: string[]) {
   for (const source of sources) {
     for (const key of keys) {
@@ -308,7 +314,7 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
       console.warn('[public-detail] payment lookup failed', paymentError.message)
     }
 
-    const { data: changeRequestRow, error: changeRequestError } = await supabaseAdmin
+    let changeRequestResult: any = await supabaseAdmin
       .from('tournament_registration_change_requests')
       .select('id,type,status,reason,refund_percent,refund_policy_label,refund_metadata,created_at,resolved_at')
       .eq('tournament_id', tournamentId)
@@ -319,14 +325,35 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
       .limit(1)
       .maybeSingle()
 
-    if (!changeRequestError) {
-      changeRequest = changeRequestRow
-    } else if (isMissingSchemaObjectError(changeRequestError)) {
+    if (changeRequestResult.error && isMissingRefundColumnError(changeRequestResult.error)) {
+      changeRequestResult = await supabaseAdmin
+        .from('tournament_registration_change_requests')
+        .select('id,type,status,reason,created_at,resolved_at')
+        .eq('tournament_id', tournamentId)
+        .eq('registration_id', registration.id)
+        .eq('requested_by', user.id)
+        .eq('type', 'CANCEL_REGISTRATION')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    }
+
+    if (!changeRequestResult.error) {
+      const changeRequestData = changeRequestResult.data as Record<string, unknown> | null
+      changeRequest = changeRequestData
+        ? {
+            ...changeRequestData,
+            refund_percent: changeRequestData.refund_percent ?? null,
+            refund_policy_label: changeRequestData.refund_policy_label ?? 'A confirmar',
+            refund_metadata: changeRequestData.refund_metadata ?? null,
+          }
+        : null
+    } else if (isMissingSchemaObjectError(changeRequestResult.error)) {
       if (process.env.NODE_ENV !== 'production') {
-        console.warn('[public-detail] change request infra unavailable', changeRequestError.message)
+        console.warn('[public-detail] change request infra unavailable', changeRequestResult.error.message)
       }
     } else {
-      console.warn('[public-detail] change request lookup failed', changeRequestError.message)
+      console.warn('[public-detail] change request lookup failed', changeRequestResult.error.message)
     }
   }
 

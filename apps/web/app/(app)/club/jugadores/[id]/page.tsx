@@ -35,6 +35,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { buildLocalPreview, getClubInitials, uploadPlayerProfileImage } from '@/lib/clubAssets'
 import { formatRankingCategory, formatRankingGender, formatRankingPoints, normalizeRankingGender } from '@/lib/ranking'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import profileCoverFallback from '../../../../../imagenes/imagen2.jpg'
 
 type ProfileData = {
@@ -235,15 +236,6 @@ function maskEmail(value?: string | null) {
   const [name, domain] = value.split('@')
   if (!name || !domain) return 'Email disponible'
   return `${name.slice(0, 2)}***@${domain}`
-}
-
-function badgeFor(player?: PlayerProfileResponse['player'] | null, stats?: PlayerProfileResponse['stats'] | null) {
-  const badges = ['Activo']
-  if (player?.ranking_points && player.ranking_points > 0) badges.push('Ranking')
-  if ((stats?.titles ?? 0) > 0) badges.push('Campeón')
-  if ((stats?.finals ?? 0) > 0) badges.push('Finalista')
-  if (player?.is_manual) badges.push('Manual / sin cuenta')
-  return badges
 }
 
 function buildEditForm(data?: PlayerProfileResponse | null): EditProfileForm {
@@ -639,9 +631,9 @@ export default function ClubJugadorDetailPage() {
 
   return (
     <div className="px-wrap">
-      <div className="club-panel player-premium">
+      <div className={`club-panel player-premium${isOwnProfile ? ' is-own-profile' : ''}`}>
         <div className="player-premiumTopbar">
-          <Link href="/club/jugadores" className="player-backBtn">Volver a jugadores</Link>
+          <Link href={isOwnProfile ? '/player' : '/club/jugadores'} className="player-backBtn">{isOwnProfile ? 'Volver' : 'Volver a jugadores'}</Link>
           <div className="player-premiumTopActions">
             {isOwnProfile ? (
               <button type="button" className="player-editProfileBtn" onClick={openEditModal}>
@@ -649,18 +641,18 @@ export default function ClubJugadorDetailPage() {
                 Editar perfil
               </button>
             ) : null}
-            <Link href="/club/ranking" className="player-secondaryBtn">Ver ranking</Link>
+            <Link href={isOwnProfile ? '/player/ranking' : '/club/ranking'} className="player-secondaryBtn">Ver ranking</Link>
           </div>
         </div>
 
         {message ? <div className="player-message">{message}</div> : null}
 
         {!activeClub?.id ? (
-          <div className="px-empty">Primero seleccioná un club activo.</div>
+          <PlayerStatePanel kind="empty" title="Seleccioná un club activo" message="Necesitamos un club para mostrar tu perfil deportivo." action={{ label: 'Seleccionar club', href: '/seleccionar-club' }} compact />
         ) : loading ? (
-          <div className="px-empty">Cargando perfil premium...</div>
+          <PlayerStatePanel kind="loading" title="Cargando perfil" message="Preparando tu información" compact />
         ) : !player || !data ? (
-          <div className="px-empty">No encontramos el perfil solicitado.</div>
+          <PlayerStatePanel kind="error" title="No encontramos el perfil" message="Volvé a intentarlo desde tu espacio de jugador." action={{ label: 'Volver a Mi espacio', href: '/player' }} compact />
         ) : (
           <>
             <section className={`profileHeroV2 ${profileAccentClass}`}>
@@ -680,6 +672,7 @@ export default function ClubJugadorDetailPage() {
                     <span className="profileHeroV2__position">{preferredPosition}</span>
                     <span>{formatRankingCategory(player.category)}</span>
                     <span>{formatRankingGender(player.gender)}</span>
+                    {isOwnProfile ? <span>{activeClub.name}</span> : null}
                   </p>
                   {data.frequent_partner ? (
                     <Link className="profileHeroV2__partner" href={`/club/jugadores/${data.frequent_partner.user_id}`}>
@@ -1193,7 +1186,7 @@ export default function ClubJugadorDetailPage() {
         .player-activePartnerIcon img { object-fit: cover; }
         .player-activePartnerContent { display: grid; gap: 3px; min-width: 0; }
         .player-activePartnerContent b { background: rgba(14,165,233,.12); border: 1px solid rgba(14,165,233,.22); border-radius: 999px; color: #0369a1; font-size: 10px; font-weight: 950; justify-self: start; padding: 4px 8px; text-transform: uppercase; }
-        .player-activePartnerContent strong { color: #061b3a; font-size: 16px; font-weight: 950; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .player-activePartnerContent strong { color: #061b3a; font-size: 16px; font-weight: 950; line-height: 1.18; overflow-wrap: anywhere; }
         .player-activePartnerContent small { color: #64748b; font-size: 11px; font-weight: 800; }
         .player-activePartnerBox i { align-items: center; background: rgba(255,255,255,.78); border: 1px solid rgba(14,165,233,.18); border-radius: 11px; color: #0891b2; display: flex; font-style: normal; height: 32px; justify-content: center; width: 32px; }
         .player-partnerStack { display: grid; gap: 9px; }
@@ -1290,6 +1283,127 @@ export default function ClubJugadorDetailPage() {
           .player-editGrid, .player-editMediaGrid { grid-template-columns: 1fr; }
         }
         @media (max-width: 560px) {
+          .player-premium.is-own-profile {
+            gap: 10px;
+            padding: 10px;
+          }
+          .player-premium.is-own-profile .player-premiumTopbar {
+            flex-wrap: nowrap;
+            gap: 6px;
+          }
+          .player-premium.is-own-profile .player-premiumTopActions {
+            flex-wrap: nowrap;
+            gap: 6px;
+          }
+          .player-premium.is-own-profile .player-backBtn,
+          .player-premium.is-own-profile .player-secondaryBtn,
+          .player-premium.is-own-profile .player-editProfileBtn {
+            align-items: center;
+            display: inline-flex;
+            font-size: 11px;
+            justify-content: center;
+            min-height: 40px;
+            padding: 0 9px;
+            white-space: nowrap;
+          }
+          .player-premium.is-own-profile .profileHeroV2 {
+            background: linear-gradient(145deg, #071426, #10233c 62%, #17182c);
+            border-radius: 18px;
+            margin: 0;
+            width: 100%;
+          }
+          .player-premium.is-own-profile .profileHeroV2__background img {
+            filter: grayscale(.2) saturate(.7);
+            opacity: .08;
+          }
+          .player-premium.is-own-profile .profileHeroV2__wash {
+            background: radial-gradient(circle at 10% 10%, var(--profile-accent-glow, rgba(103,232,249,.18)), transparent 36%), linear-gradient(135deg, rgba(2,6,23,.22), rgba(15,23,42,.58));
+          }
+          .player-premium.is-own-profile .profileHeroV2__band {
+            background: rgba(255,255,255,.045);
+            border-color: rgba(255,255,255,.08);
+            border-left-color: var(--profile-accent, rgba(103,232,249,.72));
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            top: 10px;
+          }
+          .player-premium.is-own-profile .profileHeroV2__content {
+            align-items: center;
+            gap: 10px 12px;
+            grid-template-columns: 92px minmax(0, 1fr);
+            padding: 14px;
+          }
+          .player-premium.is-own-profile .profileHeroV2__avatar {
+            font-size: 28px;
+            height: 92px;
+            justify-self: start;
+            width: 92px;
+          }
+          .player-premium.is-own-profile .profileHeroV2__identity {
+            min-width: 0;
+          }
+          .player-premium.is-own-profile .profileHeroV2__identity h1 {
+            display: -webkit-box;
+            font-size: clamp(20px, 5.6vw, 22px);
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            line-height: 1.02;
+            margin-bottom: 7px;
+            overflow: hidden;
+            white-space: normal;
+          }
+          .player-premium.is-own-profile .profileHeroV2__meta {
+            gap: 5px;
+          }
+          .player-premium.is-own-profile .profileHeroV2__meta > span {
+            font-size: 11px;
+          }
+          .player-premium.is-own-profile .profileHeroV2__meta > span:not(.profileHeroV2__position)::before {
+            margin-right: 5px;
+          }
+          .player-premium.is-own-profile .profileHeroV2__partner {
+            display: none;
+          }
+          .player-premium.is-own-profile .profileHeroV2__rank {
+            align-items: center;
+            display: grid;
+            grid-column: 1 / -1;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            min-height: 66px;
+            padding: 9px 10px;
+          }
+          .player-premium.is-own-profile .profileHeroV2__rank > span,
+          .player-premium.is-own-profile .profileHeroV2__crown {
+            display: none;
+          }
+          .player-premium.is-own-profile .profileHeroV2__rankMain,
+          .player-premium.is-own-profile .profileHeroV2__rankMain--text {
+            gap: 10px;
+            grid-template-columns: minmax(88px, .9fr) minmax(78px, 1fr);
+          }
+          .player-premium.is-own-profile .profileHeroV2__rankMain em {
+            font-size: 20px;
+            max-width: none;
+          }
+          .player-premium.is-own-profile .profileHeroV2__rankMain em::after {
+            bottom: -5px;
+            left: 0;
+            right: 12px;
+          }
+          .player-premium.is-own-profile .profileHeroV2__rankMain strong {
+            font-size: 21px;
+          }
+          .player-premium.is-own-profile .profileHeroV2__rank i {
+            justify-self: end;
+          }
+          .player-premium.is-own-profile .player-statGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .player-premium.is-own-profile .player-statGrid article:nth-child(n + 5) {
+            display: none;
+          }
           .profileHeroV2 {
             margin-left: -12px;
             margin-right: -12px;

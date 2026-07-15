@@ -153,6 +153,12 @@ function isMissingSchemaObjectError(error: { code?: string; message?: string } |
   return error?.code === '42703' || error?.code === '42P01' || error?.code === 'PGRST205' || message.includes('does not exist') || message.includes('schema cache')
 }
 
+// Keep older deployments usable while the refund metadata migration reaches Supabase.
+function isMissingRefundColumnError(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? '').toLowerCase()
+  return error?.code === '42703' || error?.code === 'PGRST204' || message.includes('refund_')
+}
+
 function isAdmissionEligible(admissionStatus: AdmissionStatus) {
   return (
     admissionStatus === 'MANUAL_PAYMENT_VALIDATED' ||
@@ -323,18 +329,37 @@ export async function GET(
         return map
       }, new Map<string, PaymentRow[]>())
 
-      const { data: changeRequestRows, error: changeRequestsError } = await supabaseAdmin
+      const modernChangeRequestsResult = await supabaseAdmin
         .from('tournament_registration_change_requests')
         .select('id,registration_id,type,status,reason,refund_percent,refund_policy_label,created_at,resolved_at')
         .in('registration_id', registrationIds)
         .eq('type', 'CANCEL_REGISTRATION')
         .order('created_at', { ascending: false })
 
-      if (changeRequestsError && !isMissingSchemaObjectError(changeRequestsError)) {
-        return NextResponse.json({ error: changeRequestsError.message }, { status: 500 })
+      let changeRequestsData = modernChangeRequestsResult.data as Array<Record<string, unknown>> | null
+      let changeRequestsError = modernChangeRequestsResult.error
+      if (changeRequestsError && isMissingRefundColumnError(changeRequestsError)) {
+        const legacyChangeRequestsResult = await supabaseAdmin
+          .from('tournament_registration_change_requests')
+          .select('id,registration_id,type,status,reason,created_at,resolved_at')
+          .in('registration_id', registrationIds)
+          .eq('type', 'CANCEL_REGISTRATION')
+          .order('created_at', { ascending: false })
+        changeRequestsData = legacyChangeRequestsResult.data as Array<Record<string, unknown>> | null
+        changeRequestsError = legacyChangeRequestsResult.error
       }
 
-      changeRequestsByRegistration = ((changeRequestRows ?? []) as RegistrationChangeRequestRow[]).reduce((map, request) => {
+      if (changeRequestsError && !isMissingSchemaObjectError(changeRequestsError)) {
+        return NextResponse.json({ error: 'No se pudieron consultar las solicitudes de baja.' }, { status: 500 })
+      }
+
+      const normalizedChangeRequests = (changeRequestsData ?? []).map((request) => ({
+        ...request,
+        refund_percent: request.refund_percent ?? null,
+        refund_policy_label: request.refund_policy_label ?? 'A confirmar',
+      })) as RegistrationChangeRequestRow[]
+
+      changeRequestsByRegistration = normalizedChangeRequests.reduce((map, request) => {
         if (!request.registration_id || map.has(request.registration_id)) return map
         map.set(request.registration_id, request)
         return map

@@ -9402,6 +9402,82 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 ALTER EVENT TRIGGER pgrst_drop_watch OWNER TO supabase_admin;
 
 --
+-- Schema synchronized from migrations 20260604 and 20260605.
+--
+
+create table if not exists public.tournament_registration_change_requests (
+  id uuid primary key default gen_random_uuid(),
+  tournament_id uuid not null references public.tournaments(id) on delete cascade,
+  club_id uuid not null references public.clubs(id) on delete cascade,
+  team_id uuid null references public.tournament_teams(id) on delete set null,
+  registration_id uuid null references public.tournament_registrations(id) on delete set null,
+  requested_by uuid not null references public.profiles(user_id) on delete cascade,
+  type text not null,
+  status text not null default 'PENDING',
+  reason text null,
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz null,
+  resolved_by uuid null references public.profiles(user_id) on delete set null
+);
+
+alter table public.tournament_registration_change_requests
+  drop constraint if exists tournament_registration_change_requests_type_chk,
+  add constraint tournament_registration_change_requests_type_chk
+    check (type in ('CANCEL_REGISTRATION'));
+
+alter table public.tournament_registration_change_requests
+  drop constraint if exists tournament_registration_change_requests_status_chk,
+  add constraint tournament_registration_change_requests_status_chk
+    check (status in ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'));
+
+create index if not exists idx_tournament_change_requests_tournament on public.tournament_registration_change_requests(tournament_id);
+create index if not exists idx_tournament_change_requests_club on public.tournament_registration_change_requests(club_id);
+create index if not exists idx_tournament_change_requests_team on public.tournament_registration_change_requests(team_id);
+create index if not exists idx_tournament_change_requests_registration on public.tournament_registration_change_requests(registration_id);
+create index if not exists idx_tournament_change_requests_requested_by on public.tournament_registration_change_requests(requested_by);
+create index if not exists idx_tournament_change_requests_status on public.tournament_registration_change_requests(status);
+
+alter table public.tournament_registration_change_requests enable row level security;
+
+drop policy if exists tournament_change_requests_select_participant_or_admin on public.tournament_registration_change_requests;
+create policy tournament_change_requests_select_participant_or_admin
+on public.tournament_registration_change_requests
+for select
+using (
+  public.is_platform_admin()
+  or public.is_club_admin(club_id)
+  or requested_by = auth.uid()
+  or exists (
+    select 1
+    from public.tournament_teams tt
+    where tt.id = tournament_registration_change_requests.team_id
+      and (tt.player1_user_id = auth.uid() or tt.player2_user_id = auth.uid())
+  )
+);
+
+drop policy if exists tournament_change_requests_insert_requester on public.tournament_registration_change_requests;
+create policy tournament_change_requests_insert_requester
+on public.tournament_registration_change_requests
+for insert
+with check (
+  public.is_platform_admin()
+  or public.is_club_admin(club_id)
+  or requested_by = auth.uid()
+);
+
+drop policy if exists tournament_change_requests_update_admin on public.tournament_registration_change_requests;
+create policy tournament_change_requests_update_admin
+on public.tournament_registration_change_requests
+for update
+using (public.is_platform_admin() or public.is_club_admin(club_id))
+with check (public.is_platform_admin() or public.is_club_admin(club_id));
+
+alter table public.tournament_registration_change_requests
+  add column if not exists refund_percent integer null,
+  add column if not exists refund_policy_label text null,
+  add column if not exists refund_metadata jsonb null;
+
+--
 -- PostgreSQL database dump complete
 --
 

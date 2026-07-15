@@ -3,7 +3,26 @@
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Bell, Mail, Search, ChevronDown, X, Menu } from 'lucide-react'
+import {
+  Activity,
+  Bell,
+  BookOpen,
+  Building2,
+  CalendarDays,
+  ChevronDown,
+  CircleUserRound,
+  Compass,
+  Home,
+  LogOut,
+  Mail,
+  Menu,
+  Newspaper,
+  Radio,
+  Search,
+  Settings,
+  Trophy,
+  X,
+} from 'lucide-react'
 
 import { NAV_CONFIG, type NavChild, type NavItem } from '@/lib/navConfig'
 import { useSession } from '@/components/session/SessionProvider'
@@ -62,6 +81,10 @@ function toTitleCaseName(text?: string) {
     .trim()
     .toLocaleLowerCase('es-AR')
     .replace(/(^|\s|-)(\p{L})/gu, (match) => match.toLocaleUpperCase('es-AR'))
+}
+
+function getFirstVisibleName(text?: string) {
+  return toTitleCaseName(text).split(/\s+/).filter(Boolean)[0] || 'Jugador'
 }
 
 function normalizePath(p?: string | null) {
@@ -416,14 +439,14 @@ export default function AppNavbarClient() {
       return
     }
 
-    let unreadNotificationsQuery = supabase
+    const unreadNotificationsQuery = supabase
       .from('notifications')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .neq('type', 'message')
       .eq('read', false)
 
-    let previewNotificationsQuery = supabase
+    const previewNotificationsQuery = supabase
       .from('notifications')
       .select('id, type, title, message, read, link, href, created_at, metadata')
       .eq('user_id', user.id)
@@ -628,8 +651,27 @@ export default function AppNavbarClient() {
     return <span>{getClubInitials(user?.name || 'Usuario')}</span>
   }
 
-  function renderUserMenu() {
+  function renderUserMenu(mobile = false) {
     if (!userOpen) return null
+
+    if (role === 'player' && mobile) {
+      return (
+        <div className="px-navDropdown px-navDropdown--right px-playerUserMenu" role="menu">
+          <div className="px-playerUserMenu__identity">
+            <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
+            <div>
+              <strong>{toTitleCaseName(user?.name)}</strong>
+              {user?.email ? <small>{user.email}</small> : null}
+            </div>
+          </div>
+          <Link className="px-ddItem" href="/perfil" onClick={closeAllMenus}><CircleUserRound size={18} />Mi perfil</Link>
+          <Link className="px-ddItem" href="/actividad" onClick={closeAllMenus}><Activity size={18} />Mi actividad</Link>
+          <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}><Settings size={18} />Preferencias</Link>
+          <div className="px-ddSep" />
+          <button className="px-ddItem px-ddItem--danger" onClick={signOut}><LogOut size={18} />Cerrar sesión</button>
+        </div>
+      )
+    }
 
     if (role === 'club') {
       return (
@@ -865,13 +907,14 @@ export default function AppNavbarClient() {
                 className="px-iconBtn"
                 aria-label="Notificaciones"
                 aria-expanded={notificationsOpen}
-                onClick={async () => {
-                  await loadPreviewData()
-                  setNotificationsOpen((v) => !v)
+                onClick={() => {
+                  const shouldOpen = !notificationsOpen
+                  setNotificationsOpen(shouldOpen)
                   setUserOpen(false)
                   setClubOpen(false)
                   setMobileMenuOpen(false)
                   setSearchOpen(false)
+                  if (shouldOpen) void loadPreviewData()
                 }}
               >
                 <Bell size={18} />
@@ -980,7 +1023,7 @@ export default function AppNavbarClient() {
           </button>
         ) : null}
         {showRight.messages ? (
-          <Link className="px-iconBtn" href={messageHrefForRole(role)} aria-label="Mensajes">
+          <Link className="px-iconBtn" href={messageHrefForRole(role)} aria-label="Mensajes" onClick={closeAllMenus}>
             <Mail size={17} />
             {unreadMessages > 0 ? <span className="px-iconBadge">{unreadMessages > 99 ? '99+' : unreadMessages}</span> : null}
           </Link>
@@ -992,13 +1035,14 @@ export default function AppNavbarClient() {
               className="px-iconBtn"
               aria-label="Notificaciones"
               aria-expanded={notificationsOpen}
-              onClick={async () => {
-                await loadPreviewData()
-                setNotificationsOpen((value) => !value)
+              onClick={() => {
+                const shouldOpen = !notificationsOpen
+                setNotificationsOpen(shouldOpen)
                 setUserOpen(false)
                 setClubOpen(false)
                 setMobileMenuOpen(false)
                 setSearchOpen(false)
+                if (shouldOpen) void loadPreviewData()
               }}
             >
               <Bell size={17} />
@@ -1021,9 +1065,10 @@ export default function AppNavbarClient() {
             aria-label="Mi cuenta y actividad"
           >
             <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
+            {role === 'player' ? <span className="px-mobileUserName">{getFirstVisibleName(user?.name)}</span> : null}
             <ChevronDown size={14} className="px-caret" />
           </button>
-          {renderUserMenu()}
+          {renderUserMenu(true)}
         </div>
       </div>
     )
@@ -1035,29 +1080,47 @@ export default function AppNavbarClient() {
     return (
       <div className="px-mobileClubMenu" role="menu" aria-label="Contexto del club">
         <div className="px-mobileClubMenu__head">
-          <span>Club</span>
-          <strong>{shorten(displayClubName, 24)}</strong>
+          <span className="px-mobileClubMenu__logo" aria-hidden="true"><ClubLogo /></span>
+          <div>
+            <small>Club</small>
+            <strong>{displayClubName}</strong>
+          </div>
         </div>
 
-        {nav.map((item) => (
-          <div key={item.href} className="px-mobileRow">
-            <Link className={`px-mobileLink ${isActiveItem(pathname, currentSearch, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}>
-              {item.label}
-            </Link>
-            {item.children?.length ? (
-              <div className="px-mobileChildren">
-                {item.children.map((child) => (
-                  <Link
-                    key={child.href}
-                    className={`px-mobileChild ${isActiveChild(pathname, currentSearch, child) ? 'is-active' : ''}`}
-                    href={child.href}
-                    onClick={closeAllMenus}
-                  >
-                    {child.label}
-                  </Link>
-                ))}
+        {role === 'player' ? (
+          <div className="px-playerClubNav">
+            <div className="px-playerClubNav__group">
+              <span className="px-playerClubNav__title"><Home size={15} />Inicio</span>
+              {nav.filter((item) => item.label === 'Inicio').map((item) => (
+                <Link key={item.href} className={`px-mobileChild ${isActiveItem(pathname, currentSearch, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}>Inicio</Link>
+              ))}
+            </div>
+            {nav.filter((item) => item.label === 'Torneos').map((item) => (
+              <div className="px-playerClubNav__group" key={item.href}>
+                <span className="px-playerClubNav__title"><Trophy size={15} />Torneos</span>
+                {(item.children ?? []).map((child, index) => {
+                  const Icon = index === 0 ? Trophy : index === 1 ? CalendarDays : index === 2 ? Compass : BookOpen
+                  return <Link key={child.href} className={`px-mobileChild ${isActiveChild(pathname, currentSearch, child) ? 'is-active' : ''}`} href={child.href} onClick={closeAllMenus}><Icon size={17} />{child.label}</Link>
+                })}
               </div>
-            ) : null}
+            ))}
+            {nav.filter((item) => item.label === 'Ranking').map((item) => (
+              <div className="px-playerClubNav__group" key={item.href}>
+                <span className="px-playerClubNav__title"><Activity size={15} />Ranking</span>
+                {(item.children ?? []).map((child) => <Link key={child.href} className={`px-mobileChild ${isActiveChild(pathname, currentSearch, child) ? 'is-active' : ''}`} href={child.href} onClick={closeAllMenus}><Activity size={17} />{child.label}</Link>)}
+              </div>
+            ))}
+            <div className="px-playerClubNav__group">
+              <span className="px-playerClubNav__title"><Building2 size={15} />Otros</span>
+              {nav.filter((item) => !['Inicio', 'Torneos', 'Ranking'].includes(item.label)).map((item) => {
+                const Icon = item.label === 'En vivo' ? Radio : Newspaper
+                return <Link key={item.href} className={`px-mobileChild ${isActiveItem(pathname, currentSearch, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}><Icon size={17} />{item.label}</Link>
+              })}
+            </div>
+          </div>
+        ) : nav.map((item) => (
+          <div key={item.href} className="px-mobileRow">
+            <Link className={`px-mobileLink ${isActiveItem(pathname, currentSearch, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}>{item.label}</Link>
           </div>
         ))}
 
@@ -1066,8 +1129,9 @@ export default function AppNavbarClient() {
             <div className="px-ddSep" />
             {role === 'player' ? (
               <>
-                <Link className="px-mobileLink px-mobileLink--muted" href="/clubs" onClick={closeAllMenus}>Ver clubes activos</Link>
-                <Link className="px-mobileLink px-mobileLink--muted" href="/seleccionar-club" onClick={closeAllMenus}>Seleccionar club</Link>
+                <span className="px-playerClubNav__title px-playerClubNav__title--utility"><Building2 size={15} />Clubes</span>
+                <Link className="px-mobileLink px-mobileLink--muted" href="/clubs" onClick={closeAllMenus}><Compass size={17} />Ver clubes activos</Link>
+                <Link className="px-mobileLink px-mobileLink--muted" href="/seleccionar-club" onClick={closeAllMenus}><Settings size={17} />Seleccionar club</Link>
               </>
             ) : (
               <>
@@ -1077,6 +1141,7 @@ export default function AppNavbarClient() {
             )}
             {clubs.length > 0 ? (
               <div className="px-mobileClubList" aria-label="Clubes disponibles">
+                {role === 'player' ? <small className="px-mobileClubList__title">Clubes aprobados</small> : null}
                 {clubs.map((club) => (
                   <button
                     key={club.id}

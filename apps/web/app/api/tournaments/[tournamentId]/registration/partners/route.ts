@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, context: PartnerSearchContext) {
   if (!me?.id) return NextResponse.json({ error: 'No tenés perfil de jugador en este club.' }, { status: 403 })
 
   const query = String(req.nextUrl.searchParams.get('q') ?? '').trim()
-  if (query.length < 2) return NextResponse.json({ partners: [] })
+  if (query.length < 1) return NextResponse.json({ partners: [] })
 
   const { data: players, error: playersError } = await supabaseAdmin
     .from('club_players')

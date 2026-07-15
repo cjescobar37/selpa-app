@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Search } from 'lucide-react'
+import { ChevronRight, Search } from 'lucide-react'
 import RankingBoard, { type RankingBoardRow } from '@/components/ranking/RankingBoard'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { useSession } from '@/components/session/SessionProvider'
 import {
   filterRankingRows,
@@ -52,6 +53,7 @@ export default function PlayerClubRankingPage() {
   const [data, setData] = useState<RankingResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -65,35 +67,34 @@ export default function PlayerClubRankingPage() {
 
       setLoading(true)
       setMessage('')
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      if (!token) {
-        setMessage('Sesión inválida.')
-        setLoading(false)
-        return
-      }
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        if (!token) throw new Error('AUTH_REQUIRED')
 
-      const res = await fetch(`/api/clubs/${session.activeClub.id}/ranking`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      })
-      const json = (await res.json().catch(() => ({}))) as RankingResponse
+        const res = await fetch(`/api/clubs/${session.activeClub.id}/ranking`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        })
+        const json = (await res.json().catch(() => ({}))) as RankingResponse
 
-      if (!alive) return
-      if (!res.ok) {
-        setMessage(json.error ?? 'No pude cargar el ranking del club.')
-        setData(null)
-      } else {
+        if (!alive) return
+        if (!res.ok) throw new Error(json.error ?? 'RANKING_LOAD_FAILED')
         setData(json)
+      } catch {
+        if (!alive) return
+        setMessage('No pudimos cargar el ranking. Revisá tu conexión e intentá nuevamente.')
+        setData(null)
+      } finally {
+        if (alive) setLoading(false)
       }
-      setLoading(false)
     }
 
     void loadRanking()
     return () => {
       alive = false
     }
-  }, [session.activeClub?.id, session.status])
+  }, [reloadKey, session.activeClub?.id, session.status])
 
   const filtered = useMemo(() => {
     return sortRankingRows(filterRankingRows(data?.individual ?? [], { category, gender, query }))
@@ -117,10 +118,35 @@ export default function PlayerClubRankingPage() {
         points: player.ranking_points,
         position: player.visualPosition,
         isTied: player.isTied,
-        href: `/club/jugadores/${player.player_id}`,
       } satisfies RankingBoardRow)),
     }))
   }, [columns, filtered])
+
+  const leaderGroups = useMemo(() => {
+    const grouped = new Map<number, RankingRow[]>()
+    const orderedRows = [...(data?.individual ?? [])].sort((a, b) => {
+      if (b.ranking_points !== a.ranking_points) return b.ranking_points - a.ranking_points
+      return a.full_name.localeCompare(b.full_name, 'es')
+    })
+
+    for (const row of orderedRows) {
+      if (row.category == null) continue
+      const rows = grouped.get(row.category) ?? []
+      const branch = normalizeRankingGender(row.gender)
+      if (!rows.some((leader) => normalizeRankingGender(leader.gender) === branch)) rows.push(row)
+      grouped.set(row.category, rows)
+    }
+
+    return [...grouped.entries()]
+      .sort(([categoryA], [categoryB]) => categoryA - categoryB)
+      .map(([groupCategory, rows]) => ({
+        category: groupCategory,
+        rows: rows.sort((a, b) => {
+          const order = { F: 0, M: 1, MIXED: 2 } as Record<string, number>
+          return (order[normalizeRankingGender(a.gender)] ?? 3) - (order[normalizeRankingGender(b.gender)] ?? 3)
+        }),
+      }))
+  }, [data?.individual])
 
   return (
     <main
@@ -142,10 +168,67 @@ export default function PlayerClubRankingPage() {
       </section>
 
       {!session.activeClub?.id ? (
-        <div className="playerClubRankEmpty">Seleccioná un club activo para ver el ranking.</div>
+        <PlayerStatePanel kind="empty" title="Seleccioná un club activo" message="Elegí el club cuyo ranking querés consultar." action={{ label: 'Seleccionar club', href: '/seleccionar-club' }} compact />
       ) : (
         <>
-          <section className="playerClubRankFilters">
+          {!loading && !message && leaderGroups.length ? (
+            <section className="playerClubRankLeaders" aria-labelledby="club-ranking-leaders-title">
+              <header>
+                <div>
+                  <span>Líderes del club</span>
+                  <h2 id="club-ranking-leaders-title">Los líderes del ranking</h2>
+                  <p>Conocé quién encabeza cada categoría.</p>
+                </div>
+              </header>
+              <div className="playerClubRankLeaderGrid">
+                {leaderGroups.map((group) => (
+                  <article className="playerClubRankLeaderCard" key={group.category}>
+                    <div className="playerClubRankLeaderCard__head">
+                      <strong>{formatRankingCategory(group.category)}</strong>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCategory(String(group.category))
+                          setGender('all')
+                          document.getElementById('ranking-completo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                        }}
+                      >
+                        Ver ranking <ChevronRight size={16} />
+                      </button>
+                    </div>
+                    <div className="playerClubRankLeaderCard__rows">
+                      {group.rows.map((leader) => {
+                        const branch = normalizeRankingGender(leader.gender)
+                        const branchLabel = branch === 'F' ? 'Damas' : branch === 'M' ? 'Caballeros' : 'Mixto'
+                        const initials = leader.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'SE'
+                        return (
+                          <div key={`${group.category}:${branch}`} className="playerClubRankLeader">
+                            <div className="playerClubRankLeader__avatar">
+                              {leader.avatar_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={leader.avatar_url} alt="" />
+                              ) : initials}
+                            </div>
+                            <div className="playerClubRankLeader__identity">
+                              <span>{branchLabel}</span>
+                              <strong>{leader.full_name}</strong>
+                              <small>Pareja por confirmar</small>
+                            </div>
+                            <div className="playerClubRankLeader__score">
+                              <b>#1</b>
+                              <span>{leader.ranking_points} pts</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="playerClubRankFilters" id="ranking-completo">
             <label>
               <span>Categoría</span>
               <select value={category} onChange={(event) => setCategory(event.target.value)}>
@@ -164,11 +247,14 @@ export default function PlayerClubRankingPage() {
             </label>
           </section>
 
-          {loading ? <div className="playerClubRankEmpty">Cargando ranking...</div> : null}
-          {message ? <div className="playerClubRankEmpty playerClubRankEmpty--danger">{message}</div> : null}
+          {loading ? <PlayerStatePanel kind="loading" title="Cargando ranking" message="Ordenando posiciones y categorías" compact /> : null}
+          {message ? <PlayerStatePanel kind="error" title="No pudimos cargar el ranking" message={message} onRetry={() => setReloadKey((value) => value + 1)} compact /> : null}
 
-          {!loading && !message ? (
+          {!loading && !message && filtered.length ? (
             <RankingBoard columns={rankingBoardColumns} />
+          ) : null}
+          {!loading && !message && !filtered.length ? (
+            <PlayerStatePanel kind="empty" title="Sin posiciones para mostrar" message="Probá con otra categoría, rama o búsqueda." compact />
           ) : null}
         </>
       )}
@@ -181,6 +267,26 @@ export default function PlayerClubRankingPage() {
         .playerClubRankHero h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 4px 0 5px; }
         .playerClubRankHero p { color: #64748b; font-size: 13px; font-weight: 800; margin: 0; }
         .playerClubRankHero a { background: linear-gradient(135deg, var(--rank-accent), var(--rank-accent-2)); border-radius: 999px; color: #fff; font-weight: 950; min-height: 38px; padding: 0 13px; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; }
+        .playerClubRankLeaders { display: grid; gap: 12px; }
+        .playerClubRankLeaders > header span { color: var(--rank-accent); font-size: 11px; font-weight: 950; text-transform: uppercase; }
+        .playerClubRankLeaders > header h2 { font-size: clamp(22px, 3vw, 30px); line-height: 1; margin: 3px 0 4px; }
+        .playerClubRankLeaders > header p { color: #64748b; font-size: 13px; font-weight: 750; margin: 0; }
+        .playerClubRankLeaderGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .playerClubRankLeaderCard { background: #fafbfc; border: 1px solid #dfe7ef; border-radius: 16px; box-shadow: 0 10px 28px rgba(15,23,42,.06); min-width: 0; overflow: hidden; }
+        .playerClubRankLeaderCard__head { align-items: center; border-top: 3px solid var(--rank-accent); display: flex; justify-content: space-between; min-height: 42px; padding: 7px 10px; }
+        .playerClubRankLeaderCard__head > strong { font-size: 14px; }
+        .playerClubRankLeaderCard__head button { align-items: center; background: transparent; border: 0; color: #075985; cursor: pointer; display: inline-flex; font: inherit; font-size: 11px; font-weight: 900; gap: 1px; min-height: 34px; padding: 0 2px 0 8px; }
+        .playerClubRankLeaderCard__rows { display: grid; }
+        .playerClubRankLeader { align-items: center; border-top: 1px solid #e7edf3; color: #061b3a; display: grid; gap: 9px; grid-template-columns: 58px minmax(0, 1fr) auto; min-height: 76px; padding: 8px 10px; text-decoration: none; }
+        .playerClubRankLeader__avatar { align-items: center; background: linear-gradient(135deg, var(--rank-accent), #172554); border: 3px solid #fff; border-radius: 50%; box-shadow: 0 8px 20px color-mix(in srgb, var(--rank-accent) 15%, transparent); color: #fff; display: flex; font-size: 14px; font-weight: 950; height: 58px; justify-content: center; overflow: hidden; width: 58px; }
+        .playerClubRankLeader__avatar img { height: 100%; object-fit: cover; width: 100%; }
+        .playerClubRankLeader__identity { display: grid; gap: 1px; min-width: 0; }
+        .playerClubRankLeader__identity > span { color: var(--rank-accent); font-size: 10px; font-weight: 950; text-transform: uppercase; }
+        .playerClubRankLeader__identity > strong { display: -webkit-box; font-size: 14px; line-height: 1.12; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        .playerClubRankLeader__identity > small { color: #64748b; font-size: 10px; font-weight: 750; }
+        .playerClubRankLeader__score { align-items: flex-end; display: grid; gap: 2px; text-align: right; }
+        .playerClubRankLeader__score b { color: var(--rank-accent); font-size: 14px; }
+        .playerClubRankLeader__score span { color: #475569; font-size: 11px; font-weight: 850; white-space: nowrap; }
         .playerClubRankFilters { display: grid; gap: 12px; grid-template-columns: 160px 160px minmax(0, 1fr); padding: 13px; }
         .playerClubRankFilters label { display: grid; gap: 6px; }
         .playerClubRankFilters select, .playerClubRankFilters input { background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; color: #061b3a; font: inherit; font-weight: 850; min-width: 0; padding: 10px 11px; }
@@ -232,8 +338,15 @@ export default function PlayerClubRankingPage() {
           .playerClubRankBoard.mobile-gender-M .playerClubRankColumn[data-ranking-gender="F"],
           .playerClubRankBoard.mobile-gender-F .playerClubRankColumn[data-ranking-gender="M"] { display: none; }
           .playerClubRankLabels { top: 64px; }
+          .playerClubRankLeaderGrid { grid-template-columns: 1fr; }
         }
         @media (max-width: 520px) {
+          .playerClubRankShell { gap: 12px; padding: 10px; }
+          .playerClubRankLeaders { gap: 9px; }
+          .playerClubRankLeaders > header h2 { font-size: 22px; }
+          .playerClubRankLeaderCard__head { min-height: 38px; padding: 5px 9px; }
+          .playerClubRankLeader { grid-template-columns: 56px minmax(0, 1fr) auto; min-height: 72px; padding: 7px 9px; }
+          .playerClubRankLeader__avatar { height: 56px; width: 56px; }
           .playerClubRankColumn { padding: 10px; }
           .playerClubRankLabels { gap: 6px; grid-template-columns: 32px minmax(0, 1fr) 54px 64px; padding: 6px 8px; }
           .playerClubRankRow, .playerClubRankRow.is-top {

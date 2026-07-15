@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Compass, FileText, Search, Trophy, UsersRound } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
@@ -411,8 +412,8 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
             </section>
           ) : null}
 
-          {loading ? <div className="playerTournamentEmpty">Cargando torneos...</div> : null}
-          {message ? <div className="playerTournamentEmpty playerTournamentEmpty--danger">{message}</div> : null}
+          {loading ? <PlayerStatePanel kind="loading" title="Cargando torneos" message="Buscando la actividad de tu club" compact /> : null}
+          {message ? <PlayerStatePanel kind="error" title="No pudimos cargar los torneos" message="Revisá tu conexión e intentá nuevamente." action={{ label: 'Volver a Mi espacio', href: '/player' }} compact /> : null}
 
           {!loading && !message ? (
             mode === 'explore' ? (

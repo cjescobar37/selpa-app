@@ -5,6 +5,7 @@ import { Plus, Send, MessageSquareText, X } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
+import SelpaLoader from '@/components/SelpaLoader'
 
 type InboxScope = 'player' | 'club' | 'platform'
 
@@ -394,14 +395,16 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
       {error ? <div className="px-inboxAlert">{error}</div> : null}
       {notice ? <div className="px-inboxNotice">{notice}</div> : null}
 
-      <section className="px-inboxGrid">
+      <section className={`px-inboxGrid${!loading && threads.length === 0 ? ' is-empty' : ''}`}>
         <aside className="px-threadPanel" aria-label="Conversaciones">
           <div className="px-threadPanel__head">
             <strong>Conversaciones</strong>
             <span>{threads.length}</span>
           </div>
           {loading ? (
-            <div className="px-inboxEmpty">Cargando mensajes...</div>
+            <div className="px-inboxLoading">
+              <SelpaLoader title="Cargando mensajes" subtitle="Buscando tus conversaciones" />
+            </div>
           ) : threads.length === 0 ? (
             <div className="px-inboxEmpty px-inboxEmpty--cta">
               <MessageSquareText size={28} />
@@ -599,6 +602,8 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
         .px-threadPanel__head { align-items: center; background: linear-gradient(135deg, rgba(248,250,252,.98), rgba(238,251,255,.58)); border-bottom: 1px solid rgba(15,23,42,.08); display: flex; justify-content: space-between; padding: 14px; }
         .px-threadPanel__head strong { color: #061b3a; font-size: 14px; font-weight: 950; }
         .px-threadPanel__head span { background: color-mix(in srgb, var(--px-inbox-accent) 11%, white); border: 1px solid color-mix(in srgb, var(--px-inbox-accent) 20%, transparent); border-radius: 999px; color: #0e7490; font-size: 12px; font-weight: 950; padding: 4px 9px; }
+        .px-inboxLoading { display: grid; padding: 14px; place-items: center; }
+        .px-inboxLoading .px-loginLoading { max-width: 360px; width: 100%; }
         .px-threadList { align-content: flex-start; align-items: stretch; display: flex; flex-direction: column; gap: 8px; justify-content: flex-start; max-height: 620px; min-height: 0; min-width: 0; overflow: auto; padding: 10px; }
         .px-threadItem { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 16px; color: #061b3a; cursor: pointer; display: grid; gap: 10px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; padding: 10px; text-align: left; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background-color .18s ease; }
         .px-threadItem:hover, .px-threadItem.is-active { background: linear-gradient(135deg, #fff, var(--px-inbox-soft)); border-color: color-mix(in srgb, var(--px-inbox-accent) 34%, transparent); box-shadow: 0 12px 28px var(--px-inbox-glow); transform: translateY(-1px); }
@@ -672,6 +677,7 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
           .px-inboxGrid { grid-template-columns: 1fr; }
           .px-conversationPanel { min-height: 520px; }
           .px-threadList { max-height: 360px; }
+          .px-inboxGrid.is-empty .px-conversationPanel { display: none; }
         }
         @media (max-width: 560px) {
           .px-inboxShell { gap: 10px; padding: 8px 8px 24px; }
@@ -681,13 +687,14 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
           .px-inboxHero span { font-size: 10px; letter-spacing: .05em; }
           .px-inboxHero h1 { font-size: clamp(24px, 9vw, 34px); }
           .px-inboxHero p { font-size: 12px; line-height: 1.25; }
-          .px-newMessageBtn { min-height: 34px; padding: 0 12px; }
+          .px-newMessageBtn { min-height: 44px; padding: 0 12px; }
           .px-threadPanel, .px-conversationPanel { border-radius: 16px; box-shadow: 0 10px 26px rgba(15,23,42,.055); }
           .px-conversationPanel { grid-template-rows: auto minmax(0, 1fr) auto; min-height: calc(100dvh - 92px); }
           .px-threadPanel__head, .px-conversationHead { padding: 12px; }
           .px-conversationHead h2 { font-size: 19px; }
           .px-messageStream { gap: 8px; max-height: none; min-height: 0; overscroll-behavior: contain; padding: 10px; }
           .px-threadItem { border-radius: 13px; grid-template-columns: auto minmax(0, 1fr); padding: 10px; }
+          .px-threadBody strong { display: -webkit-box; line-height: 1.2; overflow: hidden; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
           .px-threadMeta { grid-column: 2; justify-items: start; }
           .px-threadAvatar { height: 38px; width: 38px; }
           .px-messageBubble { border-radius: 13px; max-width: 94%; padding: 9px 10px; }
@@ -698,7 +705,7 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
             background: rgba(255,255,255,.94);
             bottom: env(safe-area-inset-bottom, 0px);
             gap: 7px;
-            grid-template-columns: minmax(0, 1fr) 42px;
+            grid-template-columns: minmax(0, 1fr) 44px;
             padding: 8px;
             position: sticky;
             z-index: 3;
@@ -708,18 +715,18 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
             font-size: 16px;
             line-height: 1.25;
             max-height: 82px;
-            min-height: 40px;
+            min-height: 44px;
             padding: 9px 10px;
             resize: none;
           }
           .px-replyBox button {
             font-size: 0;
             gap: 0;
-            height: 40px;
+            height: 44px;
             justify-content: center;
-            min-height: 40px;
+            min-height: 44px;
             padding: 0;
-            width: 42px;
+            width: 44px;
           }
           .px-replyBox button svg { height: 17px; width: 17px; }
           .px-composerOverlay { align-items: end; padding: 10px 10px max(10px, env(safe-area-inset-bottom)); }
@@ -729,18 +736,19 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
           .px-composerBody { gap: 9px; padding: 12px 14px; }
           .px-composerActions { padding: 10px 14px 14px; }
           .px-composerHead h2 { font-size: 22px; }
+          .px-composerHead button { height: 44px; width: 44px; }
           .px-composeField { gap: 5px; }
           .px-composeField input, .px-composeField select, .px-composeField textarea {
             border-radius: 12px;
             font-size: 16px;
-            min-height: 40px;
+            min-height: 44px;
             padding: 8px 10px;
           }
           .px-composeField textarea {
             max-height: 118px;
             min-height: 84px;
           }
-          .px-composeCancel, .px-composeSubmit { justify-content: center; width: 100%; }
+          .px-composeCancel, .px-composeSubmit { justify-content: center; min-height: 44px; width: 100%; }
         }
       `}</style>
     </main>

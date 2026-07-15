@@ -17,7 +17,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubTheme } from '@/lib/clubThemes'
 import { BRAND } from '@/lib/branding'
-import SelpaLoader from '@/components/SelpaLoader'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import PublicHomeEmbed from '@/components/public/PublicHomeEmbed'
 import ModeSegmentedControl, { type HomeMode } from '@/components/ModeSegmentedControl'
@@ -156,51 +156,20 @@ function initials(name: string) {
   return `${parts[0]?.[0] ?? 'P'}${parts[1]?.[0] ?? ''}`.toUpperCase()
 }
 
+function compactPersonName(name: string) {
+  const parts = name.split(/\s+/).filter(Boolean)
+  if (parts.length < 2) return name
+  return `${parts[0]} ${parts[parts.length - 1]}`
+}
+
 function PlayerHomeLoader() {
   return (
-    <>
-      <div className="playerHomeShell playerHomeShell--loading">
-        <div className="playerHomePanel playerHomePanel--loading">
-          <SelpaLoader title="Preparando tu perfil..." subtitle="Cargando tu información" />
-        </div>
-      </div>
-      <style>{`
-        .playerHomeShell--loading {
-          align-items: start;
-          background:
-            radial-gradient(circle at 8% 0%, rgba(34,211,238,.16), transparent 34%),
-            #f3f7fb;
-          color: #061b3a;
-          display: grid;
-          margin: 0 auto;
-          max-width: 1180px;
-          min-height: 132px;
-          padding: 18px;
-          width: 100%;
-        }
-        .playerHomePanel--loading {
-          align-items: center;
-          background: rgba(255,255,255,.86);
-          border: 1px solid rgba(226,232,240,.86);
-          border-radius: 18px;
-          box-shadow: 0 14px 34px rgba(15,23,42,.06);
-          display: flex;
-          justify-content: center;
-          min-height: 108px;
-          padding: 14px;
-        }
-        @media (max-width: 560px) {
-          .playerHomeShell--loading {
-            min-height: 112px;
-            padding: 8px;
-          }
-          .playerHomePanel--loading {
-            min-height: 92px;
-            padding: 12px;
-          }
-        }
-      `}</style>
-    </>
+    <PlayerStatePanel
+      kind="loading"
+      title="Preparando tu perfil..."
+      message="Cargando tu información"
+      viewport
+    />
   )
 }
 
@@ -252,7 +221,7 @@ export default function PlayerHomePage() {
       ? activePartnership.player2
       : activePartnership.player1
 
-    return partner?.full_name ?? '-'
+    return partner?.full_name ? compactPersonName(partner.full_name) : '-'
   }, [activeClub, partnerships, playerByClubId])
 
   const upcomingTournaments = useMemo(() => {
@@ -447,7 +416,13 @@ export default function PlayerHomePage() {
             }
           }))
 
-          activeRows = partnerResults.flatMap((result) => result.partnerships)
+          activeRows = Array.from(
+            new Map(
+              partnerResults
+                .flatMap((result) => result.partnerships)
+                .map((partnership) => [partnership.id, partnership])
+            ).values()
+          )
           inviteRows = partnerResults.flatMap((result) => result.invites)
         }
 
@@ -523,23 +498,24 @@ export default function PlayerHomePage() {
         <div>
           <span className="playerHomeKicker">Inicio jugador</span>
           <h1>Hola, {session.user.name}</h1>
-          <p>
-            {activeClub ? (
-              <>
-                Estás dentro del club{' '}
-                <Link href={`/clubs/${activeClub.id}`} className="playerHomeHeroClubLink">
-                  {activeClub.name}
-                </Link>
-                .
-              </>
-            ) : (
-              `Elegí un club para empezar a operar en ${BRAND.name}.`
-            )}
-          </p>
+          {activeClub ? (
+            <Link href={`/clubs/${activeClub.id}`} className="playerHomeActiveClub">
+              <span className="playerHomeActiveClub__logo" aria-hidden="true">
+                {activeClub.logoUrl ? <img src={activeClub.logoUrl} alt="" /> : initials(activeClub.name)}
+              </span>
+              <span className="playerHomeActiveClub__copy">
+                <small>Jugando en</small>
+                <strong>{activeClub.name}</strong>
+              </span>
+              <ChevronRight size={18} aria-hidden="true" />
+            </Link>
+          ) : (
+            <p>{`Elegí un club para empezar a competir en ${BRAND.name}.`}</p>
+          )}
           {message ? <div className="playerHomeMessage">{message}</div> : null}
         </div>
         <div className="playerHomeHeroCard" aria-label="Resumen deportivo actual">
-          <span className="playerHomeHeroCard__club">{activeClub?.name ?? 'Sin club activo'}</span>
+          <span className="playerHomeHeroCard__club">Tu nivel actual</span>
           <div className="playerHomeHeroStats">
             <span>
               <small>Categoría</small>
@@ -946,8 +922,14 @@ export default function PlayerHomePage() {
         .playerHomeHero .playerHomeKicker { color: color-mix(in srgb, var(--active-club-accent, #67e8f9) 76%, white); }
         .playerHomeHero h1 { font-size: clamp(32px, 5vw, 58px); font-weight: 950; letter-spacing: -.03em; line-height: .98; margin: 7px 0 10px; }
         .playerHomeHero p { color: rgba(255,255,255,.76); font-size: 16px; font-weight: 750; margin: 0; max-width: 640px; }
-        .playerHomeHeroClubLink { color: #fff; font-weight: 950; text-decoration: none; text-shadow: 0 8px 22px rgba(0,0,0,.22); transition: color .18s ease, text-shadow .18s ease; }
-        .playerHomeHeroClubLink:hover { color: color-mix(in srgb, var(--active-club-accent, #67e8f9) 74%, white); text-shadow: 0 0 18px color-mix(in srgb, var(--active-club-accent, #67e8f9) 38%, transparent); }
+        .playerHomeActiveClub { align-items: center; background: rgba(2,6,23,.24); border: 1px solid rgba(255,255,255,.15); border-radius: 16px; color: #fff; display: grid; gap: 10px; grid-template-columns: 42px minmax(0, 1fr) auto; max-width: 520px; padding: 9px 11px; text-decoration: none; transition: border-color .18s ease, background .18s ease, transform .18s ease; }
+        .playerHomeActiveClub:hover { background: rgba(2,6,23,.34); border-color: color-mix(in srgb, var(--active-club-accent, #67e8f9) 52%, white); transform: translateY(-1px); }
+        .playerHomeActiveClub__logo { align-items: center; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; display: flex; font-size: 12px; font-weight: 950; height: 42px; justify-content: center; overflow: hidden; width: 42px; }
+        .playerHomeActiveClub__logo img { height: 100%; object-fit: cover; width: 100%; }
+        .playerHomeActiveClub__copy { display: grid; gap: 2px; min-width: 0; }
+        .playerHomeActiveClub__copy small { color: color-mix(in srgb, var(--active-club-accent, #67e8f9) 72%, white); font-size: 9px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+        .playerHomeActiveClub__copy strong { font-size: 16px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .playerHomeActiveClub > svg { color: rgba(255,255,255,.68); }
         .playerHomeHeroCard { align-items: stretch; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18); border-radius: 20px; display: grid; gap: 10px; padding: 13px; }
         .playerHomeHeroCard__club { color: rgba(255,255,255,.78); font-size: 11px; font-weight: 950; letter-spacing: .035em; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
         .playerHomeHeroStats { display: grid; gap: 7px; }
@@ -1107,7 +1089,7 @@ export default function PlayerHomePage() {
         .playerClubLogo, .playerPartnerCard > span { align-items: center; background: linear-gradient(135deg, var(--club-accent, #0ea5e9), #172554); border-radius: 16px; color: #fff; display: flex; font-weight: 950; height: 50px; justify-content: center; overflow: hidden; width: 50px; }
         .playerClubCard.is-active .playerClubLogo { box-shadow: 0 12px 24px color-mix(in srgb, var(--club-accent, #06b6d4) 22%, transparent); }
         .playerClubLogo img, .playerPartnerCard img { height: 100%; object-fit: cover; width: 100%; }
-        .playerClubCard strong { display: block; font-size: 15px; font-weight: 950; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .playerClubCard strong { display: block; font-size: 15px; font-weight: 950; line-height: 1.18; overflow-wrap: anywhere; }
         .playerClubCard span { color: #64748b; display: block; font-size: 12px; font-weight: 800; margin-top: 3px; }
         .playerClubCard em { background: linear-gradient(135deg, var(--club-accent, #06b6d4), var(--club-accent-2, #ec4899)); border-radius: 999px; color: #fff; display: inline-flex; font-size: 10px; font-style: normal; font-weight: 950; letter-spacing: .03em; margin-top: 8px; padding: 4px 8px; text-transform: uppercase; }
         .playerClubActions { align-items: end; display: grid; gap: 7px; justify-items: end; }
@@ -1131,7 +1113,7 @@ export default function PlayerHomePage() {
         .playerMyTournamentCard__cta { align-items: center; background: #061b3a; border: 1px solid rgba(14,165,233,.24); border-radius: 999px; color: #fff; display: inline-flex; height: 34px; justify-content: center; justify-self: end; transition: transform .18s ease, background .18s ease; width: 34px; }
         .playerMyTournamentCard:hover .playerMyTournamentCard__cta { background: #020817; transform: translateX(2px); }
         .playerPartnerCard { align-items: center; background: linear-gradient(135deg, #f8fafc, rgba(236,253,255,.72)); border: 1px solid rgba(103,232,249,.32); border-radius: 16px; display: grid; gap: 12px; grid-template-columns: 50px minmax(0, 1fr); padding: 12px; }
-        .playerPartnerCard strong { display: block; font-size: 16px; font-weight: 950; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .playerPartnerCard strong { display: block; font-size: 16px; font-weight: 950; line-height: 1.18; overflow-wrap: anywhere; }
         .playerPartnerCard small { color: #64748b; display: block; font-size: 12px; font-weight: 800; margin-top: 3px; }
         .playerInviteStack { border-top: 1px solid #e2e8f0; margin-top: 3px; padding-top: 12px; }
         .playerInviteStack b { align-items: center; color: #0e7490; display: flex; font-size: 12px; font-weight: 950; gap: 6px; text-transform: uppercase; }
@@ -1199,7 +1181,7 @@ export default function PlayerHomePage() {
             font-size: clamp(26px, 10vw, 34px);
             font-weight: 850;
             line-height: .96;
-            margin: 4px 0 6px;
+            margin: 4px 0 8px;
           }
           .playerHomeHero p {
             font-size: 13px;
@@ -1223,7 +1205,7 @@ export default function PlayerHomePage() {
           }
           .playerHomeHeroStats {
             gap: 6px;
-            grid-template-columns: .72fr .76fr 1fr;
+            grid-template-columns: .72fr .76fr 1.25fr;
           }
           .playerHomeHeroStats span {
             border-radius: 11px;
@@ -1238,6 +1220,31 @@ export default function PlayerHomePage() {
           .playerHomeHeroStats strong {
             font-size: 12px;
             font-weight: 850;
+            overflow: visible;
+            text-overflow: clip;
+            white-space: normal;
+          }
+          .playerHomeActiveClub {
+            border-radius: 13px;
+            gap: 8px;
+            grid-template-columns: 34px minmax(0, 1fr) auto;
+            max-width: none;
+            padding: 7px 9px;
+          }
+          .playerHomeActiveClub__logo {
+            border-radius: 10px;
+            height: 34px;
+            width: 34px;
+          }
+          .playerHomeActiveClub__copy strong {
+            display: -webkit-box;
+            font-size: 14px;
+            line-height: 1.1;
+            overflow: hidden;
+            text-overflow: clip;
+            white-space: normal;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
           }
           .playerPriorityPanel {
             gap: 7px;
@@ -1259,12 +1266,15 @@ export default function PlayerHomePage() {
             letter-spacing: .025em;
           }
           .playerPriorityCard strong {
+            display: -webkit-box;
             font-size: 19px;
             font-weight: 850;
             max-width: 100%;
             overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            text-overflow: clip;
+            white-space: normal;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
           }
           .playerPriorityCard small {
             font-size: 11px;
@@ -1422,10 +1432,7 @@ export default function PlayerHomePage() {
         }
         @media (max-width: 390px) {
           .playerHomeHeroStats {
-            grid-template-columns: 1fr 1fr;
-          }
-          .playerHomeHeroStats span:last-child {
-            grid-column: 1 / -1;
+            grid-template-columns: .7fr .72fr 1.25fr;
           }
           .playerQuickGrid a {
             min-height: 54px;

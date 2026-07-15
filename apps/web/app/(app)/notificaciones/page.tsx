@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, CheckCheck } from 'lucide-react'
+import { CheckCheck } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -16,7 +17,7 @@ type NotificationRow = {
   link: string | null
   href?: string | null
   created_at: string
-  metadata?: Record<string, any> | null
+  metadata?: Record<string, unknown> | null
 }
 
 function formatDate(value: string) {
@@ -96,7 +97,7 @@ export default function NotificacionesPage() {
     const { data: userData } = await supabase.auth.getUser()
     const me = userData?.user
     if (!me) {
-      setMsg('Sesión inválida.')
+      setMsg('No pudimos validar tu sesión. Volvé a ingresar para ver tus notificaciones.')
       setLoading(false)
       return
     }
@@ -119,7 +120,7 @@ export default function NotificacionesPage() {
     }
 
     if (error) {
-      setMsg(error.message)
+      setMsg('No pudimos cargar tus notificaciones. Revisá tu conexión e intentá nuevamente.')
       setLoading(false)
       return
     }
@@ -134,7 +135,7 @@ export default function NotificacionesPage() {
   }
 
   async function markAllRead() {
-    let markAllQuery = supabase
+    const markAllQuery = supabase
       .from('notifications')
       .update({ read: true })
       .eq('user_id', currentUserId)
@@ -207,21 +208,18 @@ export default function NotificacionesPage() {
         </div>
       </div>
 
-      {msg ? (
-        <div className="px-notificationsMsg">
-          {msg}
-        </div>
-      ) : null}
-
       <div className="px-notificationsList">
-        {loading ? (
-          <div className="px-notificationsEmpty">Cargando notificaciones...</div>
+        {msg ? (
+          <PlayerStatePanel kind="error" title="No pudimos abrir tus notificaciones" message={msg} onRetry={load} compact />
+        ) : loading ? (
+          <PlayerStatePanel kind="loading" title="Cargando notificaciones" message="Buscando tus novedades más recientes" compact />
         ) : rows.length === 0 ? (
-          <div className="px-notificationsEmpty">
-            <Bell size={30} />
-            <strong>No tenés notificaciones todavía.</strong>
-            <p>Cuando haya novedades de torneos, pagos, clubes o mensajes, van a aparecer acá.</p>
-          </div>
+          <PlayerStatePanel
+            kind="empty"
+            title="No tenés notificaciones todavía"
+            message="Cuando haya novedades de torneos, pagos, clubes o mensajes, van a aparecer acá."
+            compact
+          />
         ) : (
           rows.map((n) => (
             <button
@@ -359,7 +357,7 @@ export default function NotificacionesPage() {
           font-size: 12px;
           font-weight: 950;
           gap: 8px;
-          min-height: 40px;
+          min-height: 44px;
           padding: 0 14px;
           transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease;
         }
@@ -372,17 +370,6 @@ export default function NotificacionesPage() {
         .px-notificationsActions button:disabled {
           cursor: not-allowed;
           opacity: .48;
-        }
-
-        .px-notificationsMsg {
-          background: #fff7df;
-          border: 1px solid rgba(217,119,6,.22);
-          border-radius: 14px;
-          color: #854d0e;
-          font-size: 13px;
-          font-weight: 850;
-          margin: 16px 18px 0;
-          padding: 12px 14px;
         }
 
         .px-notificationsList {
@@ -478,29 +465,6 @@ export default function NotificacionesPage() {
           box-shadow: 0 0 0 5px rgba(225,29,72,.10);
           height: 10px;
           width: 10px;
-        }
-
-        .px-notificationsEmpty {
-          align-items: center;
-          color: #64748b;
-          display: grid;
-          gap: 7px;
-          justify-items: center;
-          padding: 42px 18px;
-          text-align: center;
-        }
-
-        .px-notificationsEmpty strong {
-          color: #061b3a;
-          font-size: 18px;
-          font-weight: 950;
-        }
-
-        .px-notificationsEmpty p {
-          font-size: 14px;
-          font-weight: 760;
-          margin: 0;
-          max-width: 440px;
         }
 
         @media (max-width: 640px) {

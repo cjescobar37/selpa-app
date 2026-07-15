@@ -1,9 +1,9 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/components/session/SessionProvider'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { supabase } from '@/lib/supabaseClient'
 
 type ClubPlayerRow = {
@@ -18,7 +18,8 @@ export default function PerfilPage() {
   const router = useRouter()
   const session = useSession()
   const { activeClubId, setActiveClub, status, user } = session
-  const [message, setMessage] = useState('Buscando tu perfil jugador premium...')
+  const [state, setState] = useState<'loading' | 'empty' | 'error'>('loading')
+  const [message, setMessage] = useState('Cargando tu información')
 
   useEffect(() => {
     let alive = true
@@ -40,7 +41,8 @@ export default function PerfilPage() {
       if (!alive) return
 
       if (error) {
-        setMessage(error.message)
+        setState('error')
+        setMessage('No pudimos abrir tu perfil. Intentá nuevamente.')
         return
       }
 
@@ -48,6 +50,7 @@ export default function PerfilPage() {
       const preferred = rows.find((row) => row.club_id === activeClubId) ?? rows[0] ?? null
 
       if (!preferred) {
+        setState('empty')
         setMessage('Todavía no tenés un jugador aprobado en un club.')
         return
       }
@@ -56,9 +59,10 @@ export default function PerfilPage() {
         if (activeClubId !== preferred.club_id) {
           await setActiveClub(preferred.club_id)
         }
-      } catch (error: unknown) {
+      } catch {
         if (!alive) return
-        setMessage(error instanceof Error ? error.message : 'No pude activar el club del perfil.')
+        setState('error')
+        setMessage('No pudimos activar el club de tu perfil. Intentá nuevamente.')
         return
       }
 
@@ -73,23 +77,14 @@ export default function PerfilPage() {
   }, [activeClubId, router, setActiveClub, status, user])
 
   return (
-    <div className="px-wrap">
-      <div className="club-panel perfil-redirect">
-        <span>Mi perfil</span>
-        <h1>Abriendo tu perfil premium</h1>
-        <p>{message}</p>
-        <div>
-          <Link href="/player">Volver al inicio jugador</Link>
-        </div>
-      </div>
-
-      <style>{`
-        .perfil-redirect { align-content: center; display: grid; gap: 10px; min-height: 260px; text-align: center; }
-        .perfil-redirect span { color: #0891b2; font-size: 12px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
-        .perfil-redirect h1 { color: #061b3a; font-size: 30px; font-weight: 950; margin: 0; }
-        .perfil-redirect p { color: #64748b; font-size: 14px; font-weight: 750; margin: 0; }
-        .perfil-redirect a { background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 999px; color: #0e7490; display: inline-flex; font-size: 13px; font-weight: 950; margin-top: 8px; padding: 9px 13px; text-decoration: none; }
-      `}</style>
+    <div className="px-wrap perfil-redirect">
+      <PlayerStatePanel
+        kind={state}
+        title={state === 'loading' ? 'Cargando perfil' : state === 'empty' ? 'Tu perfil todavía no está activo' : 'No pudimos abrir tu perfil'}
+        message={message}
+        action={state === 'loading' ? undefined : { label: 'Volver a Mi espacio', href: '/player' }}
+        viewport
+      />
     </div>
   )
 }

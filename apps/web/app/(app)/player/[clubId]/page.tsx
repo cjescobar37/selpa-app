@@ -10,10 +10,10 @@ import {
   ShieldCheck,
   Swords,
   Trophy,
-  UserRound,
   UsersRound,
 } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubTheme } from '@/lib/clubThemes'
 
@@ -253,9 +253,9 @@ export default function PlayerClubHomePage() {
         setTeams(teamRows)
         setMatches(matchRows)
         setActivePartnership(partnership)
-      } catch (error: unknown) {
+      } catch {
         if (!alive) return
-        setMessage(error instanceof Error ? error.message : 'No pude cargar el inicio del club.')
+        setMessage('No pudimos cargar este espacio del club. Intentá nuevamente en unos instantes.')
       } finally {
         if (alive) {
           setHasLoaded(true)
@@ -281,7 +281,7 @@ export default function PlayerClubHomePage() {
   }
 
   if ((session.status === 'loading' || loading) && !hasLoaded) {
-    return <div className="playerClubHome"><div className="playerClubPanel">Cargando club del jugador...</div></div>
+    return <div className="playerClubHome"><PlayerStatePanel kind="loading" title="Cargando club" message="Preparando tu espacio deportivo" viewport /></div>
   }
 
   return (
@@ -303,7 +303,7 @@ export default function PlayerClubHomePage() {
           ) : initials(displayClubName)}
         </div>
         <div>
-          <span>Player Club Home</span>
+          <span>Mi club</span>
           <h1>{displayClubName}</h1>
           <p>{club?.city ? `${club.city} · ` : ''}Tu resumen deportivo dentro de este club.</p>
           {message ? <b>{message}</b> : null}
@@ -370,11 +370,11 @@ export default function PlayerClubHomePage() {
         </article>
 
         <article className="playerClubPanel">
-          <header><span>Contenido</span><h2>Noticias y sponsors</h2></header>
+          <header><span>Contenido</span><h2>Novedades del club</h2></header>
           <div className="playerClubNews">
             <Newspaper size={18} />
-            <strong>Contenido del club pendiente</strong>
-            <p>Cuando el club active noticias, sponsors o campañas propias, las vas a ver en este espacio.</p>
+            <strong>Todavía no hay novedades</strong>
+            <p>Las noticias y comunicaciones del club van a aparecer en este espacio.</p>
           </div>
         </article>
       </section>
@@ -423,7 +423,7 @@ export default function PlayerClubHomePage() {
         .playerClubStats { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .playerClubStats article { align-items: center; display: grid; gap: 4px; min-width: 0; padding: 15px; }
         .playerClubStats svg { color: var(--club-accent, #0891b2); }
-        .playerClubStats strong { font-size: 20px; font-weight: 950; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .playerClubStats strong { font-size: 20px; font-weight: 950; line-height: 1.12; overflow-wrap: anywhere; }
         .playerClubStats small { color: #64748b; font-weight: 850; }
         .playerClubGrid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); }
         .playerClubGrid--bottom { grid-template-columns: minmax(0, 1fr) minmax(320px, .85fr); }
@@ -432,7 +432,7 @@ export default function PlayerClubHomePage() {
         .playerClubList, .playerClubMatchList { display: grid; gap: 9px; }
         .playerClubList a { align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 15px; color: #061b3a; display: grid; gap: 10px; grid-template-columns: 36px minmax(0, 1fr) 18px; padding: 12px; text-decoration: none; }
         .playerClubList a > svg:first-child { color: var(--club-accent, #0891b2); }
-        .playerClubList strong, .playerClubPartner strong, .playerClubMatchList strong { display: block; font-weight: 950; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .playerClubList strong, .playerClubPartner strong, .playerClubMatchList strong { display: block; font-weight: 950; line-height: 1.18; overflow-wrap: anywhere; }
         .playerClubList small, .playerClubPartner small, .playerClubMatchList span { color: #64748b; display: block; font-size: 12px; font-weight: 800; margin-top: 3px; }
         .playerClubPartner { align-items: center; background: linear-gradient(135deg, #f8fafc, color-mix(in srgb, var(--club-accent, #06b6d4) 8%, white)); border: 1px solid color-mix(in srgb, var(--club-accent, #06b6d4) 28%, #e2e8f0); border-radius: 16px; display: grid; gap: 12px; grid-template-columns: 54px minmax(0, 1fr); padding: 13px; }
         .playerClubPartner i { align-items: center; background: linear-gradient(135deg, var(--club-accent, #0ea5e9), #172554); border-radius: 999px; color: #fff; display: flex; font-style: normal; font-weight: 950; height: 54px; justify-content: center; overflow: hidden; width: 54px; }
@@ -537,11 +537,6 @@ export default function PlayerClubHomePage() {
           .playerClubEmpty {
             border-radius: 13px;
             padding: 10px;
-          }
-        }
-        @media (max-width: 370px) {
-          .playerClubStats {
-            grid-template-columns: 1fr;
           }
         }
       `}</style>

@@ -30,15 +30,21 @@ type PampraxHeroBadge = {
 
 export type PampraxHeroProps = {
   kicker?: string
+  mobileKicker?: string
   title: string
   subtitle?: string
+  mobileSubtitle?: string
   primaryAction?: PampraxHeroAction
   secondaryAction?: PampraxHeroAction
   logo?: PampraxHeroLogo
   stats?: PampraxHeroStat[]
+  mobileStats?: PampraxHeroStat[]
+  mobilePrimaryAction?: PampraxHeroAction
   statusBadge?: PampraxHeroBadge
+  mobileStatusBadge?: PampraxHeroBadge
   themeKey?: string | null
   coverUrl?: string | null
+  variant?: 'default' | 'player-tournament'
 }
 
 function renderAction(action: PampraxHeroAction | undefined, className: string) {
@@ -60,20 +66,26 @@ function renderAction(action: PampraxHeroAction | undefined, className: string) 
 
 export default function PampraxHero({
   kicker,
+  mobileKicker,
   title,
   subtitle,
+  mobileSubtitle,
   primaryAction,
   secondaryAction,
   logo,
   stats,
+  mobileStats,
+  mobilePrimaryAction,
   statusBadge,
+  mobileStatusBadge,
   themeKey,
   coverUrl,
+  variant = 'default',
 }: PampraxHeroProps) {
   const theme = getClubTheme(themeKey)
   const cover = buildAssetProxyUrl(coverUrl)
   const logoSrc = buildAssetProxyUrl(logo?.src)
-  const hasActions = Boolean(primaryAction || secondaryAction || statusBadge)
+  const hasActions = Boolean(primaryAction || secondaryAction || mobilePrimaryAction || statusBadge || mobileStatusBadge)
   const style = {
     ['--pamprax-hero-accent' as string]: theme.vars.accent,
     ['--pamprax-hero-accent-2' as string]: theme.vars.accent2,
@@ -85,7 +97,7 @@ export default function PampraxHero({
   } as CSSProperties
 
   return (
-    <section className={`pampraxHero ${cover ? 'has-cover' : ''} ${logo ? 'has-identity-logo' : ''}`} style={style}>
+    <section className={`pampraxHero ${cover ? 'has-cover' : ''} ${logo ? 'has-identity-logo' : ''} ${mobileKicker ? 'has-mobile-kicker' : ''} ${mobileSubtitle ? 'has-mobile-subtitle' : ''} ${mobileStats?.length ? 'has-mobile-stats' : ''} ${variant === 'player-tournament' ? 'is-player-tournament' : ''}`} style={style}>
       <div className="pampraxHero__texture" aria-hidden="true" />
       <div className={`pampraxHero__body ${logo ? 'has-logo' : ''}`}>
         {logo ? (
@@ -94,13 +106,26 @@ export default function PampraxHero({
           </div>
         ) : null}
         <div className="pampraxHero__text">
-          {kicker ? <span>{kicker}</span> : null}
+          {kicker ? <span className="pampraxHero__kicker--default">{kicker}</span> : null}
+          {mobileKicker ? <span className="pampraxHero__onlyMobile">{mobileKicker}</span> : null}
           <h1>{title}</h1>
-          {subtitle ? <p>{subtitle}</p> : null}
+          {subtitle ? <p className="pampraxHero__subtitle--default">{subtitle}</p> : null}
+          {mobileSubtitle ? <p className="pampraxHero__onlyMobile">{mobileSubtitle}</p> : null}
           {stats?.length ? (
             <div className="pampraxHero__stats">
               {stats.map((stat) => (
                 <em key={`${stat.label}:${stat.value}`}>
+                  {stat.icon}
+                  <span>{stat.label}:</span>
+                  <strong>{stat.value}</strong>
+                </em>
+              ))}
+            </div>
+          ) : null}
+          {mobileStats?.length ? (
+            <div className="pampraxHero__stats pampraxHero__stats--mobile">
+              {mobileStats.map((stat) => (
+                <em key={`mobile:${stat.label}:${stat.value}`}>
                   {stat.icon}
                   <span>{stat.label}:</span>
                   <strong>{stat.value}</strong>
@@ -118,7 +143,14 @@ export default function PampraxHero({
               {statusBadge.label}
             </div>
           ) : null}
+          {mobileStatusBadge ? (
+            <div className={`pampraxHero__statusBadge pampraxHero__onlyMobile is-${mobileStatusBadge.tone ?? 'info'}`}>
+              <span />
+              {mobileStatusBadge.label}
+            </div>
+          ) : null}
           {renderAction(primaryAction, 'pampraxHero__action pampraxHero__action--primary')}
+          {renderAction(mobilePrimaryAction, 'pampraxHero__action pampraxHero__action--primary pampraxHero__action--mobileOnly')}
           {renderAction(secondaryAction, 'pampraxHero__action pampraxHero__action--secondary')}
         </div>
       ) : null}

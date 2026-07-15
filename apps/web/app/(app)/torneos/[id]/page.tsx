@@ -4,7 +4,7 @@ import Link from 'next/link'
 import type { CSSProperties } from 'react'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { CheckCircle2, Trophy, Users } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ShieldCheck, Trophy, Users } from 'lucide-react'
 import SelpaLoader from '@/components/SelpaLoader'
 import PampraxHero from '@/components/ui/PampraxHero'
 import { getClubTheme } from '@/lib/clubThemes'
@@ -155,6 +155,7 @@ function formatSystem(value?: string | null) {
   const normalized = String(value ?? '').toUpperCase()
   const labels: Record<string, string> = {
     GROUPS_PLAYOFF: 'Zonas + Playoff',
+    GROUPS_AND_PLAYOFF: 'Zonas + Playoff',
     GROUPS_ELIMINATION: 'Zonas + Playoff',
     ROUND_ROBIN: 'Todos contra todos',
     SINGLE_ELIMINATION: 'Eliminación directa',
@@ -482,9 +483,6 @@ export default function TorneoDetallePage() {
           refundEstimatePercent: refundEstimate.percent,
           refundEstimateAmount: refundEstimate.amount,
           refundPolicyLabel: refundEstimate.label,
-          hoursBeforeStart: detail.dates.startDate
-            ? (new Date(detail.dates.startDate).getTime() - Date.now()) / 36e5
-            : null,
         }),
       })
       const payload = await response.json()
@@ -543,13 +541,21 @@ export default function TorneoDetallePage() {
     <main className="tournamentPublicDetail" style={themeStyle}>
       <PampraxHero
         kicker={clubLocation || detail.club?.name || `Torneo ${BRAND.name}`}
+        mobileKicker={detail.club?.name || `Torneo ${BRAND.name}`}
         title={detail.tournament.name}
         subtitle={subtitle}
+        mobileSubtitle={`${subtitle} · ${formatSystem(detail.tournament.rulesSummary.competitionSystem ?? detail.tournament.format)}`}
         statusBadge={registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : detail.status.key === 'registration_open' ? { label: 'Inscripción abierta', tone: 'success' } : { label: detail.status.label, tone: 'info' }}
+        mobilePrimaryAction={{ label: 'Volver a torneos', href: '/torneos' }}
         secondaryAction={detail.club ? { label: 'Ver club', href: `/clubs/${detail.club.id}` } : { label: 'Calendario', href: '/torneos' }}
         logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'SE' }}
+        mobileStats={[
+          { label: 'Cierre', value: formatDate(detail.tournament.registrationDeadline), icon: <CalendarDays size={15} /> },
+          { label: 'Valor', value: formatMoney(detail.tournament.pricePerPlayer), icon: <ShieldCheck size={15} /> },
+        ]}
         themeKey={detail.club?.themeKey}
         coverUrl={detail.flyerUrl}
+        variant={detail.viewer.isAuthenticated ? 'player-tournament' : 'default'}
       />
 
       <section id="estado-jugador" className="tournamentPublicDetail__landingPitch">
@@ -1308,26 +1314,25 @@ export default function TorneoDetallePage() {
         }
 
         .tournamentPublicDetail__withdrawPending {
-          align-items: center;
-          background: rgba(245,158,11,.10);
-          border: 1px solid rgba(245,158,11,.24);
-          border-radius: 999px;
-          color: #92400e;
-          display: inline-flex;
-          gap: 8px;
-          min-height: 34px;
-          padding: 0 12px;
+          background: rgba(245,158,11,.13);
+          border: 1px solid rgba(253,230,138,.34);
+          border-radius: 13px;
+          display: grid;
+          gap: 2px;
+          min-height: 44px;
+          padding: 7px 11px;
+          width: 100%;
         }
 
         .tournamentPublicDetail__withdrawPending b {
-          color: #92400e;
+          color: #fef3c7;
           font-size: 12px;
           font-weight: 950;
           margin: 0;
         }
 
         .tournamentPublicDetail__withdrawPending small {
-          color: #a16207;
+          color: #fde68a;
           font-size: 11px;
           font-weight: 850;
           margin: 0;
@@ -1417,6 +1422,16 @@ export default function TorneoDetallePage() {
           padding: 5px 8px;
           text-transform: none;
           width: fit-content;
+        }
+
+        .tournamentPublicDetail__registeredStatus .tournamentPublicDetail__withdrawPending small {
+          background: transparent;
+          border: 0;
+          border-radius: 0;
+          color: #fde68a;
+          display: block;
+          padding: 0;
+          width: auto;
         }
 
         .tournamentPublicDetail__registeredStatus button,
@@ -2216,6 +2231,68 @@ export default function TorneoDetallePage() {
         @media (max-width: 560px) {
           .tournamentPublicDetail {
             padding-bottom: 34px;
+          }
+
+          .tournamentPublicDetail__modalBackdrop {
+            padding: 10px;
+          }
+
+          .tournamentPublicDetail__messageModal {
+            border-radius: 18px;
+            gap: 10px;
+            max-height: calc(100dvh - 20px);
+            overflow-y: auto;
+            padding: 12px;
+          }
+
+          .tournamentPublicDetail__messageModal h3 {
+            font-size: 20px;
+          }
+
+          .tournamentPublicDetail__messageModal > div:first-child > button {
+            min-height: 44px;
+            padding: 0;
+            width: 44px;
+          }
+
+          .tournamentPublicDetail__withdrawalModal > p {
+            font-size: 12.5px;
+            line-height: 1.35;
+          }
+
+          .tournamentPublicDetail__refundSummary {
+            border-radius: 14px;
+            gap: 2px;
+            padding: 9px 10px;
+          }
+
+          .tournamentPublicDetail__refundSummary strong {
+            font-size: 19px;
+          }
+
+          .tournamentPublicDetail__refundSummary small,
+          .tournamentPublicDetail__refundSummary em {
+            font-size: 11px;
+          }
+
+          .tournamentPublicDetail__withdrawalReason {
+            gap: 5px;
+          }
+
+          .tournamentPublicDetail__withdrawalReason textarea {
+            border-radius: 13px;
+            min-height: 78px;
+            padding: 10px;
+          }
+
+          .tournamentPublicDetail__modalActions {
+            gap: 7px;
+          }
+
+          .tournamentPublicDetail__modalActions button {
+            flex: 1 1 0;
+            min-height: 42px;
+            padding: 0 10px;
           }
 
           .tournamentPublicDetail__summary {

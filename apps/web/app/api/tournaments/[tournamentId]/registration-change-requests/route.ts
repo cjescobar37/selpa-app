@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { notifyClubAdmins } from '@/lib/operationalNotifications'
+import { createOperationalNotification, notifyClubAdmins } from '@/lib/operationalNotifications'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type RegistrationChangeRequestContext = {
@@ -22,6 +22,34 @@ async function getTokenUser(req: NextRequest) {
 function isMissingSchemaObjectError(error: { code?: string; message?: string } | null | undefined) {
   const message = String(error?.message ?? '').toLowerCase()
   return error?.code === '42703' || error?.code === '42P01' || error?.code === 'PGRST205' || message.includes('does not exist') || message.includes('schema cache')
+}
+
+// Keep older deployments usable while the refund metadata migration reaches Supabase.
+function isMissingRefundColumnError(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? '').toLowerCase()
+  return (
+    error?.code === '42703' ||
+    error?.code === 'PGRST204' ||
+    message.includes('refund_percent') ||
+    message.includes('refund_policy_label') ||
+    message.includes('refund_metadata')
+  )
+}
+
+type RefundCompatibleRow = Record<string, unknown> & {
+  refund_percent: unknown
+  refund_policy_label: unknown
+  refund_metadata: unknown
+}
+
+function withRefundFallback(row: Record<string, unknown> | null): RefundCompatibleRow | null {
+  if (!row) return null
+  return {
+    ...row,
+    refund_percent: row.refund_percent ?? null,
+    refund_policy_label: row.refund_policy_label ?? 'A confirmar',
+    refund_metadata: row.refund_metadata ?? null,
+  }
 }
 
 function normalizeRefundPercent(value: unknown) {
@@ -48,15 +76,6 @@ export async function POST(req: NextRequest, context: RegistrationChangeRequestC
   const reason = String(body?.reason ?? '').trim()
   const refundPercent = normalizeRefundPercent(body?.refundEstimatePercent ?? body?.refundPercent)
   const refundPolicyLabel = String(body?.refundPolicyLabel ?? '').trim() || buildRefundPolicyLabel(refundPercent)
-  const refundMetadata = {
-    hours_before_start: Number.isFinite(Number(body?.hoursBeforeStart)) ? Number(body.hoursBeforeStart) : null,
-    estimated_refund_percent: refundPercent,
-    estimated_refund_amount: Number.isFinite(Number(body?.refundEstimateAmount)) ? Number(body.refundEstimateAmount) : null,
-    policy_label: refundPolicyLabel,
-    calculated_at: new Date().toISOString(),
-    method: 'client_estimate',
-  }
-
   if (type !== 'CANCEL_REGISTRATION') {
     return NextResponse.json({ error: 'Tipo de solicitud inválido.' }, { status: 400 })
   }
@@ -67,12 +86,22 @@ export async function POST(req: NextRequest, context: RegistrationChangeRequestC
 
   const { data: tournament, error: tournamentError } = await supabaseAdmin
     .from('tournaments')
-    .select('id,club_id')
+    .select('id,club_id,start_date')
     .eq('id', tournamentId)
     .maybeSingle()
 
   if (tournamentError) return NextResponse.json({ error: tournamentError.message }, { status: 500 })
   if (!tournament) return NextResponse.json({ error: 'Torneo no encontrado.' }, { status: 404 })
+
+  const startTimestamp = tournament.start_date ? new Date(String(tournament.start_date)).getTime() : Number.NaN
+  const refundMetadata = {
+    hours_before_start: Number.isFinite(startTimestamp) ? (startTimestamp - Date.now()) / 36e5 : null,
+    estimated_refund_percent: refundPercent,
+    estimated_refund_amount: Number.isFinite(Number(body?.refundEstimateAmount)) ? Number(body.refundEstimateAmount) : null,
+    policy_label: refundPolicyLabel,
+    calculated_at: new Date().toISOString(),
+    method: 'server_estimate',
+  }
 
   const { data: teams, error: teamsError } = await supabaseAdmin
     .from('tournament_teams')
@@ -97,7 +126,7 @@ export async function POST(req: NextRequest, context: RegistrationChangeRequestC
   const registration = (registrations ?? []).find((row) => String(row.status ?? '').toUpperCase() !== 'CANCELLED')
   if (!registration) return NextResponse.json({ error: 'No encontramos una inscripción activa.' }, { status: 404 })
 
-  const { data: existing, error: existingError } = await supabaseAdmin
+  const existingModernResult = await supabaseAdmin
     .from('tournament_registration_change_requests')
     .select('id,status,type,reason,refund_percent,refund_policy_label,refund_metadata,created_at,resolved_at,resolved_by')
     .eq('tournament_id', tournamentId)
@@ -107,20 +136,32 @@ export async function POST(req: NextRequest, context: RegistrationChangeRequestC
     .eq('status', 'PENDING')
     .maybeSingle()
 
-  if (existingError && isMissingSchemaObjectError(existingError)) {
-    return NextResponse.json(
-      {
-        error: 'No se pudo procesar la solicitud de baja porque falta activar las columnas de reintegro.',
-        code: 'REFUND_METADATA_SCHEMA_MISSING',
-      },
-      { status: 503 }
-    )
+  let existingData = existingModernResult.data as Record<string, unknown> | null
+  let existingError = existingModernResult.error
+  if (existingError && isMissingRefundColumnError(existingError)) {
+    const existingLegacyResult = await supabaseAdmin
+      .from('tournament_registration_change_requests')
+      .select('id,status,type,reason,created_at,resolved_at,resolved_by')
+      .eq('tournament_id', tournamentId)
+      .eq('registration_id', registration.id)
+      .eq('requested_by', user.id)
+      .eq('type', 'CANCEL_REGISTRATION')
+      .eq('status', 'PENDING')
+      .maybeSingle()
+    existingData = existingLegacyResult.data as Record<string, unknown> | null
+    existingError = existingLegacyResult.error
   }
 
-  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
+  if (existingError) {
+    const message = isMissingSchemaObjectError(existingError)
+      ? 'No pudimos registrar la baja en este momento. Intentá nuevamente o contactá al club.'
+      : 'No pudimos consultar tu solicitud de baja.'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+  const existing = withRefundFallback(existingData)
   if (existing) return NextResponse.json({ ok: true, request: existing })
 
-  const { data: requestRow, error: insertError } = await supabaseAdmin
+  const insertModernResult = await supabaseAdmin
     .from('tournament_registration_change_requests')
     .insert({
       tournament_id: tournamentId,
@@ -138,17 +179,36 @@ export async function POST(req: NextRequest, context: RegistrationChangeRequestC
     .select('id,tournament_id,club_id,team_id,registration_id,requested_by,type,status,reason,refund_percent,refund_policy_label,refund_metadata,created_at,resolved_at,resolved_by')
     .single()
 
-  if (insertError && isMissingSchemaObjectError(insertError)) {
-    return NextResponse.json(
-      {
-        error: 'No se pudo guardar la solicitud de baja porque falta activar las columnas de reintegro.',
-        code: 'REFUND_METADATA_SCHEMA_MISSING',
-      },
-      { status: 503 }
-    )
+  let insertData = insertModernResult.data as Record<string, unknown> | null
+  let insertError = insertModernResult.error
+  if (insertError && isMissingRefundColumnError(insertError)) {
+    const insertLegacyResult = await supabaseAdmin
+      .from('tournament_registration_change_requests')
+      .insert({
+        tournament_id: tournamentId,
+        club_id: tournament.club_id,
+        team_id: registration.team_id,
+        registration_id: registration.id,
+        requested_by: user.id,
+        type: 'CANCEL_REGISTRATION',
+        status: 'PENDING',
+        reason,
+      })
+      .select('id,tournament_id,club_id,team_id,registration_id,requested_by,type,status,reason,created_at,resolved_at,resolved_by')
+      .single()
+    insertData = insertLegacyResult.data as Record<string, unknown> | null
+    insertError = insertLegacyResult.error
   }
 
-  if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
+  if (insertError) {
+    const message = isMissingSchemaObjectError(insertError)
+      ? 'No pudimos registrar la baja en este momento. Intentá nuevamente o contactá al club.'
+      : 'No pudimos guardar tu solicitud de baja.'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+
+  const requestRow = withRefundFallback(insertData)
+  if (!requestRow) return NextResponse.json({ error: 'No pudimos confirmar la solicitud de baja.' }, { status: 500 })
 
   await notifyClubAdmins(tournament.club_id, {
     tournamentId,
@@ -163,6 +223,24 @@ export async function POST(req: NextRequest, context: RegistrationChangeRequestC
       team_id: registration.team_id,
       refund_percent: refundPercent,
       refund_policy_label: refundPolicyLabel,
+    },
+  })
+
+  await createOperationalNotification({
+    userId: user.id,
+    clubId: tournament.club_id,
+    tournamentId,
+    actorId: user.id,
+    type: 'registration_cancel_requested',
+    title: 'Solicitud de baja enviada',
+    body: 'El club recibió tu solicitud y la revisará. El reintegro queda a confirmar hasta su resolución.',
+    href: `/torneos/${tournamentId}`,
+    metadata: {
+      request_id: requestRow.id,
+      registration_id: registration.id,
+      team_id: registration.team_id,
+      refund_percent: requestRow.refund_percent,
+      refund_policy_label: requestRow.refund_policy_label,
     },
   })
 

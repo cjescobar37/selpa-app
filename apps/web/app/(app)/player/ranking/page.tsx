@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Crown, TrendingUp } from 'lucide-react'
 import RankingPlayerAvatar from '@/components/ranking/RankingPlayerAvatar'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { useSession } from '@/components/session/SessionProvider'
 import {
   formatRankingCategory,
@@ -49,6 +50,7 @@ export default function PlayerMyRankingPage() {
   const [data, setData] = useState<RankingResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -62,35 +64,33 @@ export default function PlayerMyRankingPage() {
 
       setLoading(true)
       setMessage('')
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      if (!token) {
-        setMessage('Sesión inválida.')
-        setLoading(false)
-        return
-      }
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        if (!token) throw new Error('AUTH_REQUIRED')
 
-      const res = await fetch(`/api/clubs/${session.activeClub.id}/ranking`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      })
-      const json = (await res.json().catch(() => ({}))) as RankingResponse
+        const res = await fetch(`/api/clubs/${session.activeClub.id}/ranking`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        })
+        const json = (await res.json().catch(() => ({}))) as RankingResponse
+        if (!res.ok) throw new Error(json.error ?? 'RANKING_LOAD_FAILED')
 
-      if (!alive) return
-      if (!res.ok) {
-        setMessage(json.error ?? 'No pude cargar tu ranking.')
+        if (alive) setData(json)
+      } catch {
+        if (!alive) return
+        setMessage('No pudimos cargar tu ranking. Revisá tu conexión e intentá nuevamente.')
         setData(null)
-      } else {
-        setData(json)
+      } finally {
+        if (alive) setLoading(false)
       }
-      setLoading(false)
     }
 
     void loadRanking()
     return () => {
       alive = false
     }
-  }, [session.activeClub?.id, session.status, session.user?.id])
+  }, [reloadKey, session.activeClub?.id, session.status, session.user?.id])
 
   const myRow = useMemo(() => {
     return (data?.individual ?? []).find((row) => row.user_id === session.user?.id) ?? null
@@ -151,11 +151,11 @@ export default function PlayerMyRankingPage() {
       </section>
 
       {!session.activeClub?.id ? (
-        <div className="playerRankEmpty">Seleccioná un club activo para ver tu ranking.</div>
+        <PlayerStatePanel kind="empty" title="Seleccioná un club activo" message="Elegí el club cuyo ranking querés consultar." action={{ label: 'Seleccionar club', href: '/seleccionar-club' }} compact />
       ) : loading ? (
-        <div className="playerRankEmpty">Cargando ranking...</div>
+        <PlayerStatePanel kind="loading" title="Cargando tu ranking" message="Preparando tu posición y estadísticas" compact />
       ) : message ? (
-        <div className="playerRankEmpty playerRankEmpty--danger">{message}</div>
+        <PlayerStatePanel kind="error" title="No pudimos cargar tu ranking" message={message} onRetry={() => setReloadKey((value) => value + 1)} compact />
       ) : myRow ? (
         <>
           <section className="playerRankCard">
@@ -228,7 +228,12 @@ export default function PlayerMyRankingPage() {
           </div>
         </>
       ) : (
-        <div className="playerRankEmpty">Todavía no aparecés en el ranking de este club.</div>
+        <PlayerStatePanel
+          kind="empty"
+          title="Todavía no aparecés en el ranking"
+          message="Cuando el club publique tu posición y tus puntos, los vas a ver acá."
+          compact
+        />
       )}
 
       <style>{`
@@ -243,7 +248,7 @@ export default function PlayerMyRankingPage() {
           padding: 18px;
           width: 100%;
         }
-        .playerRankHero, .playerRankCard, .playerRankStats article, .playerRankContext, .playerRankEmpty, .playerRankActions {
+        .playerRankHero, .playerRankCard, .playerRankStats article, .playerRankContext, .playerRankActions {
           background: rgba(255,255,255,.9);
           border: 1px solid #e2e8f0;
           border-radius: 22px;
@@ -293,8 +298,6 @@ export default function PlayerMyRankingPage() {
         .playerRankContextRow i { color: #061b3a; font-style: normal; font-weight: 950; white-space: nowrap; }
         .playerRankActions { align-items: center; display: flex; gap: 12px; justify-content: space-between; padding: 14px; }
         .playerRankActions span { color: #64748b; font-weight: 800; }
-        .playerRankEmpty { color: #64748b; font-weight: 850; padding: 20px; }
-        .playerRankEmpty--danger { color: #be123c; }
         @media (max-width: 720px) {
           .playerRankShell { padding: 12px; }
           .playerRankHero, .playerRankCard, .playerRankActions { align-items: stretch; display: grid; grid-template-columns: 1fr; }

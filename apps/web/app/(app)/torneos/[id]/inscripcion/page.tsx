@@ -277,6 +277,7 @@ export default function TorneoInscripcionPage() {
   const [search, setSearch] = useState('')
   const [searching, setSearching] = useState(false)
   const [partners, setPartners] = useState<PartnerOption[]>([])
+  const [partnerSearchError, setPartnerSearchError] = useState('')
   const [selectedPartner, setSelectedPartner] = useState<PartnerOption | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
   const [currentStep, setCurrentStep] = useState<WizardStep>(1)
@@ -285,6 +286,7 @@ export default function TorneoInscripcionPage() {
   const [modalPartner, setModalPartner] = useState<PartnerOption | null>(null)
   const [withdrawalModalOpen, setWithdrawalModalOpen] = useState(false)
   const [withdrawalReason, setWithdrawalReason] = useState('')
+  const [withdrawalFeedback, setWithdrawalFeedback] = useState('')
   const [withdrawalSaving, setWithdrawalSaving] = useState(false)
   const [clubMessageModalOpen, setClubMessageModalOpen] = useState(false)
   const [clubMessage, setClubMessage] = useState('')
@@ -325,11 +327,13 @@ export default function TorneoInscripcionPage() {
 
   useEffect(() => {
     let alive = true
+    const controller = new AbortController()
     const q = search.trim()
 
     async function runSearch() {
       setPartners([])
-      if (!detail || q.length < 2) return
+      setPartnerSearchError('')
+      if (!detail || q.length < 1) return
       setSearching(true)
       try {
         const { data: sessionData } = await supabase.auth.getSession()
@@ -337,12 +341,15 @@ export default function TorneoInscripcionPage() {
         if (!token) return
         const response = await fetch(`/api/tournaments/${detail.tournament.id}/registration/partners?q=${encodeURIComponent(q)}`, {
           headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
         })
         const payload = await response.json()
         if (!response.ok) throw new Error(payload?.error ?? 'No pude buscar jugadores.')
         if (alive) setPartners(payload.partners ?? [])
       } catch (error) {
-        if (alive) setMessage(error instanceof Error ? error.message : 'No pude buscar jugadores.')
+        if (alive && !(error instanceof DOMException && error.name === 'AbortError')) {
+          setPartnerSearchError(error instanceof Error ? error.message : 'No pude buscar jugadores.')
+        }
       } finally {
         if (alive) setSearching(false)
       }
@@ -351,6 +358,7 @@ export default function TorneoInscripcionPage() {
     const timer = window.setTimeout(runSearch, 280)
     return () => {
       alive = false
+      controller.abort()
       window.clearTimeout(timer)
     }
   }, [search, detail])
@@ -536,11 +544,11 @@ export default function TorneoInscripcionPage() {
     if (!detail) return
     const reason = withdrawalReason.trim()
     if (reason.length < 8) {
-      setMessage('Contanos brevemente el motivo de la baja.')
+      setWithdrawalFeedback('Contanos brevemente el motivo de la baja.')
       return
     }
     setWithdrawalSaving(true)
-    setMessage('')
+    setWithdrawalFeedback('')
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData.session?.access_token
@@ -566,10 +574,34 @@ export default function TorneoInscripcionPage() {
       if (!response.ok) throw new Error(payload?.error ?? 'No pude enviar la solicitud de baja.')
 
       setMessage('Solicitud de baja enviada. El club debe revisarla.')
+      setDetail((current) => {
+        if (!current?.viewer.myTeam) return current
+        const request = payload?.request ?? {}
+        return {
+          ...current,
+          viewer: {
+            ...current.viewer,
+            myTeam: {
+              ...current.viewer.myTeam,
+              registrationChangeRequest: {
+                id: String(request.id ?? ''),
+                type: String(request.type ?? 'CANCEL_REGISTRATION'),
+                status: String(request.status ?? 'PENDING'),
+                reason,
+                refundPercent: request.refund_percent ?? null,
+                refundPolicyLabel: request.refund_policy_label ?? 'A confirmar',
+                refundMetadata: request.refund_metadata ?? null,
+                createdAt: request.created_at ?? new Date().toISOString(),
+                resolvedAt: request.resolved_at ?? null,
+              },
+            },
+          },
+        }
+      })
       setWithdrawalModalOpen(false)
       setWithdrawalReason('')
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'No pude enviar la solicitud de baja.')
+      setWithdrawalFeedback(error instanceof Error ? error.message : 'No pude enviar la solicitud de baja.')
     } finally {
       setWithdrawalSaving(false)
     }
@@ -687,8 +719,10 @@ export default function TorneoInscripcionPage() {
     <main className={`tournamentSignupPage ${!detail.viewer.isAuthenticated ? 'is-guest-signup' : ''}`} style={themeStyle}>
       <PampraxHero
         kicker="Inscripción al torneo"
+        mobileKicker={detail.club?.name ?? 'Inscripción al torneo'}
         title={detail.tournament.name}
         subtitle={`${detail.club?.name ?? 'Club'} · ${detail.labels.category} · ${detail.labels.gender} · ${detail.labels.segment}`}
+        mobileStatusBadge={registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : { label: 'Inscripción abierta', tone: 'success' }}
         primaryAction={{ label: 'Volver al torneo', href: `/torneos/${detail.tournament.id}` }}
         secondaryAction={detail.club ? { label: 'Ver club', href: `/clubs/${detail.club.id}` } : undefined}
         logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'SE' }}
@@ -697,8 +731,13 @@ export default function TorneoInscripcionPage() {
           { label: 'Cierre', value: formatDate(detail.tournament.registrationDeadline), icon: <CalendarDays size={16} /> },
           { label: 'Valor', value: formatMoney(detail.tournament.pricePerPlayer), icon: <ShieldCheck size={16} /> },
         ]}
+        mobileStats={[
+          { label: 'Cierre', value: formatDate(detail.tournament.registrationDeadline), icon: <CalendarDays size={16} /> },
+          { label: 'Valor', value: formatMoney(detail.tournament.pricePerPlayer), icon: <ShieldCheck size={16} /> },
+        ]}
         themeKey={detail.club?.themeKey}
         coverUrl={detail.flyerUrl}
+        variant="player-tournament"
       />
 
       {message ? <div className="tournamentSignupPage__message">{message}</div> : null}
@@ -984,7 +1023,10 @@ export default function TorneoInscripcionPage() {
 
                       <div className="tournamentSignupPage__results">
                         {searching ? <div className="tournamentSignupPage__emptyPartner">Buscando jugadores...</div> : null}
-                        {!searching && search.trim().length >= 2 && !partners.length ? (
+                        {partnerSearchError ? (
+                          <div className="tournamentSignupPage__emptyPartner is-error">{partnerSearchError}</div>
+                        ) : null}
+                        {!searching && !partnerSearchError && search.trim().length >= 1 && !partners.length ? (
                           <div className="tournamentSignupPage__emptyPartner">No se encontraron jugadores.</div>
                         ) : null}
                         {partners.map((partner) => (
@@ -1240,11 +1282,14 @@ export default function TorneoInscripcionPage() {
 
               <div className="tournamentSignupPage__modalResults">
                 {searching ? <div className="tournamentSignupPage__emptyPartner">Buscando jugadores...</div> : null}
-                {!searching && search.trim().length >= 2 && !partners.length ? (
+                {partnerSearchError ? (
+                  <div className="tournamentSignupPage__emptyPartner is-error">{partnerSearchError}</div>
+                ) : null}
+                {!searching && !partnerSearchError && search.trim().length >= 1 && !partners.length ? (
                   <div className="tournamentSignupPage__emptyPartner">No se encontraron jugadores.</div>
                 ) : null}
-                {!searching && search.trim().length < 2 ? (
-                  <div className="tournamentSignupPage__emptyPartner">Escribí al menos 2 letras para buscar.</div>
+                {!searching && search.trim().length < 1 ? (
+                  <div className="tournamentSignupPage__emptyPartner">Empezá a escribir para buscar.</div>
                 ) : null}
                 {partners.map((partner) => (
                   <button
@@ -1299,11 +1344,15 @@ export default function TorneoInscripcionPage() {
               <span>Motivo</span>
               <textarea
                 value={withdrawalReason}
-                onChange={(event) => setWithdrawalReason(event.target.value)}
+                onChange={(event) => {
+                  setWithdrawalReason(event.target.value)
+                  setWithdrawalFeedback('')
+                }}
                 placeholder="Ej: No voy a poder asistir en la fecha del torneo."
                 rows={4}
               />
             </label>
+            {withdrawalFeedback ? <p className="tournamentSignupPage__modalError" role="alert">{withdrawalFeedback}</p> : null}
             <div className="tournamentSignupPage__modalActions">
               <button type="button" className="is-secondary" onClick={() => setWithdrawalModalOpen(false)} disabled={withdrawalSaving}>Cancelar</button>
               <button type="button" onClick={requestWithdrawal} disabled={withdrawalSaving || withdrawalReason.trim().length < 8}>
@@ -1944,6 +1993,12 @@ export default function TorneoInscripcionPage() {
           font-weight: 900;
           padding: 14px;
           text-align: center;
+        }
+
+        .tournamentSignupPage__emptyPartner.is-error {
+          background: rgba(244,63,94,.07);
+          border-color: rgba(244,63,94,.22);
+          color: #9f1239;
         }
 
         .tournamentSignupPage__modalBackdrop {
@@ -2790,15 +2845,49 @@ export default function TorneoInscripcionPage() {
           }
 
           .tournamentSignupPage__modal {
+            max-height: calc(100dvh - 20px);
+            overflow-y: auto;
             padding: 14px;
           }
 
           .tournamentSignupPage__modalActions {
-            flex-direction: column-reverse;
+            flex-direction: row;
           }
 
           .tournamentSignupPage__modalActions button {
-            width: 100%;
+            flex: 1 1 0;
+            min-height: 42px;
+          }
+
+          .tournamentSignupPage__modal--compact {
+            border-radius: 18px;
+            gap: 10px;
+            padding: 12px;
+          }
+
+          .tournamentSignupPage__modal--compact .tournamentSignupPage__modalHeader h3 {
+            font-size: 20px;
+          }
+
+          .tournamentSignupPage__modal--compact .tournamentSignupPage__modalHeader > button {
+            font-size: 20px;
+            height: 34px;
+            width: 34px;
+          }
+
+          .tournamentSignupPage__modal--compact .tournamentSignupPage__modalText {
+            font-size: 13px;
+            line-height: 1.35;
+          }
+
+          .tournamentSignupPage__modal--compact .tournamentSignupPage__withdrawalReason {
+            gap: 5px;
+          }
+
+          .tournamentSignupPage__modal--compact .tournamentSignupPage__withdrawalReason textarea {
+            border-radius: 13px;
+            min-height: 78px;
+            padding: 10px;
           }
 
           .tournamentSignupPage__panel--center {

@@ -40,7 +40,7 @@ export default function PartnerSearch({
     (async () => {
       setError(null);
 
-      if (!clubId || qDebounced.length < 2) {
+      if (!clubId || qDebounced.length < 1) {
         setResults([]);
         return;
       }
@@ -108,7 +108,7 @@ export default function PartnerSearch({
         </div>
       )}
 
-      {!loading && qDebounced.length >= 2 && results.length === 0 && !error && (
+      {!loading && qDebounced.length >= 1 && results.length === 0 && !error && (
         <div>No se encontraron resultados.</div>
       )}
     </div>

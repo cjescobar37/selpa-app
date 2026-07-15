@@ -1105,9 +1105,13 @@
 }
 
 .px-notifPreview__head .px-link{
+  align-items: center;
   color: var(--px-club-accent, #0e7490);
+  display: inline-flex;
   font-size: 12px;
   font-weight: 900;
+  min-height: 44px;
+  padding: 0 4px;
   text-decoration: none;
 }
 
@@ -2800,65 +2804,296 @@
 
   .px-mobileBar--authed{
     align-items: center;
-    gap: 8px;
-    min-height: 46px;
+    gap: 5px;
+    grid-template-columns: minmax(102px, 1fr) 0 auto;
+    min-height: calc(60px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) 8px 0;
   }
 
   .px-mobileBar--authed .px-mobileActions{
     align-items: center;
-    gap: 6px;
+    gap: 4px;
   }
 
   .px-mobileBar--authed .px-iconBtn,
   .px-mobileBar--authed .px-mobileUserBtn,
   .px-mobileBar--authed .px-mobileClubBtn{
     align-items: center;
-    border-radius: 14px;
-    height: 34px;
+    border-radius: 15px;
+    height: 48px;
     justify-content: center;
-    min-height: 34px;
+    min-height: 48px;
     padding-top: 0;
     padding-bottom: 0;
   }
 
   .px-mobileBar--authed .px-iconBtn{
-    min-width: 34px;
-    width: 34px;
+    min-width: 48px;
+    width: 48px;
   }
 
   .px-mobileBar--authed .px-mobileClubBtn{
     gap: 6px;
-    max-width: min(47vw, 180px);
-    padding-left: 4px;
-    padding-right: 9px;
+    max-width: min(38vw, 152px);
+    min-width: 102px;
+    padding-left: 5px;
+    padding-right: 8px;
   }
 
   .px-mobileBar--authed .px-mobileClubName{
-    max-width: 92px;
+    font-size: 12px;
+    max-width: 70px;
     line-height: 1;
   }
 
   .px-mobileBar--authed .px-mobileUserBtn{
-    gap: 4px;
-    padding-left: 4px;
+    gap: 5px;
+    max-width: 98px;
+    min-width: 76px;
+    padding-left: 5px;
     padding-right: 7px;
   }
 
   .px-mobileBar--authed .px-mobileUserBtn .px-avatar,
   .px-mobileBar--authed .px-mobileClubBtn .px-clubLogo{
-    border-radius: 10px;
-    height: 26px;
-    width: 26px;
+    border-radius: 11px;
+    height: 34px;
+    width: 34px;
   }
 
   .px-mobileClubMenu,
-  .px-userWrap .px-navDropdown--right{
+  .px-userWrap .px-playerUserMenu,
+  .px-mobileNotifWrap .px-notifPreview{
     border-radius: 0 0 18px 18px;
     left: 8px;
-    max-height: calc(100dvh - 64px - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - 68px - env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
     overscroll-behavior: contain;
+    position: fixed;
     right: 8px;
-    top: 52px;
+    top: calc(60px + env(safe-area-inset-top, 0px));
+    width: auto;
+  }
+
+  .px-mobileBar--authed .px-mobileBar__center{
+    overflow: hidden;
+    width: 0;
+  }
+
+  .px-mobileUserName{
+    color: var(--px-nav-text);
+    display: block;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    max-width: 46px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .px-mobileClubMenu,
+  .px-userWrap .px-playerUserMenu{
+    padding: 12px;
+  }
+
+  .px-mobileClubMenu__head{
+    align-items: center;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 38px minmax(0, 1fr);
+    justify-content: initial;
+    padding: 0 2px 11px;
+  }
+
+  .px-mobileClubMenu__logo{
+    align-items: center;
+    background: rgba(255,255,255,.08);
+    border: 1px solid color-mix(in srgb, var(--px-club-accent, #22d3ee) 42%, rgba(255,255,255,.16));
+    border-radius: 12px;
+    display: flex;
+    height: 38px;
+    justify-content: center;
+    overflow: hidden;
+    width: 38px;
+  }
+
+  .px-mobileClubMenu__logo img{
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+  }
+
+  .px-mobileClubMenu__head > div{
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .px-mobileClubMenu__head small,
+  .px-playerClubNav__title{
+    color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 68%, white);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+  }
+
+  .px-mobileClubMenu__head strong{
+    font-size: 15px;
+    max-width: 100%;
+  }
+
+  .px-playerClubNav,
+  .px-playerClubNav__group{
+    display: grid;
+    gap: 8px;
+  }
+
+  .px-playerClubNav__group{
+    gap: 3px;
+  }
+
+  .px-playerClubNav__group + .px-playerClubNav__group{
+    border-top: 1px solid rgba(255,255,255,.08);
+    padding-top: 8px;
+  }
+
+  .px-playerClubNav__title{
+    align-items: center;
+    display: flex;
+    gap: 7px;
+    min-height: 28px;
+    padding: 0 8px;
+  }
+
+  .px-playerClubNav__title--utility{
+    margin: 2px 0 3px;
+  }
+
+  .px-playerClubNav .px-mobileChild,
+  .px-mobileClubMenu .px-mobileLink--muted,
+  .px-mobileClubList .px-mobileChild{
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    min-height: 48px;
+  }
+
+  .px-playerClubNav .px-mobileChild{
+    font-size: 13px;
+    font-weight: 750;
+    letter-spacing: 0;
+    padding: 0 12px;
+    text-transform: none;
+  }
+
+  .px-playerClubNav .px-mobileChild svg{
+    color: rgba(255,255,255,.66);
+    flex: 0 0 auto;
+  }
+
+  .px-playerClubNav .px-mobileChild.is-active svg{
+    color: var(--px-club-accent, #22d3ee);
+  }
+
+  .px-mobileClubList{
+    display: grid;
+    gap: 3px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .px-mobileClubList__title{
+    color: rgba(255,255,255,.52);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: .06em;
+    padding: 8px 10px 3px;
+    text-transform: uppercase;
+  }
+
+  .px-playerUserMenu__identity{
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,.1);
+    display: grid;
+    gap: 11px;
+    grid-template-columns: 44px minmax(0, 1fr);
+    margin-bottom: 6px;
+    padding: 2px 4px 12px;
+  }
+
+  .px-playerUserMenu__identity .px-avatar{
+    border-radius: 14px;
+    height: 44px;
+    width: 44px;
+  }
+
+  .px-playerUserMenu__identity div{
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .px-playerUserMenu__identity strong,
+  .px-playerUserMenu__identity small{
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .px-playerUserMenu__identity strong{
+    color: #fff;
+    font-size: 15px;
+  }
+
+  .px-playerUserMenu__identity small{
+    color: rgba(255,255,255,.58);
+    font-size: 11px;
+  }
+
+  .px-playerUserMenu .px-ddItem{
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 750;
+    min-height: 50px;
+    padding: 0 12px;
+  }
+
+  .px-playerUserMenu .px-ddItem svg{
+    color: rgba(255,255,255,.7);
+  }
+
+  .px-playerUserMenu .px-ddItem--danger svg{
+    color: #fda4af;
+  }
+}
+
+@media (max-width: 360px){
+  .px-mobileBar--authed{
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .px-mobileBar--authed .px-mobileActions{
+    gap: 2px;
+  }
+
+  .px-mobileBar--authed .px-iconBtn{
+    min-width: 48px;
+    width: 48px;
+  }
+
+  .px-mobileBar--authed .px-mobileClubBtn{
+    max-width: 118px;
+  }
+
+  .px-mobileBar--authed .px-mobileUserBtn{
+    max-width: 82px;
+    min-width: 72px;
+  }
+
+  .px-mobileUserName{
+    max-width: 32px;
   }
 }
