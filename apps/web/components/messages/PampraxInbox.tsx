@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Plus, Send, MessageSquareText, X } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
@@ -85,6 +86,8 @@ function counterpartLabel(scope: InboxScope, thread: ThreadSummary) {
 
 export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxProps) {
   const session = useSession()
+  const searchParams = useSearchParams()
+  const requestedThreadId = searchParams.get('thread')
   const [threads, setThreads] = useState<ThreadSummary[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ThreadMessage[]>([])
@@ -293,7 +296,8 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
 
     const loadedThreads = (payload?.threads ?? []) as ThreadSummary[]
     setThreads(loadedThreads)
-    const nextThreadId = preferredThreadId ?? selectedThreadId ?? loadedThreads[0]?.id ?? null
+    const requestedId = preferredThreadId ?? requestedThreadId ?? selectedThreadId
+    const nextThreadId = loadedThreads.some((thread) => thread.id === requestedId) ? requestedId : loadedThreads[0]?.id ?? null
     setSelectedThreadId(nextThreadId)
     if (!nextThreadId) setMessages([])
     setLoading(false)
@@ -365,7 +369,7 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
   useEffect(() => {
     loadThreads()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope])
+  }, [requestedThreadId, scope])
 
   useEffect(() => {
     loadThemeAndComposerOptions()

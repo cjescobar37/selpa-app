@@ -36,7 +36,6 @@ import { useSession } from '@/components/session/SessionProvider'
 import { buildLocalPreview, getClubInitials, uploadPlayerProfileImage } from '@/lib/clubAssets'
 import { formatRankingCategory, formatRankingGender, formatRankingPoints, normalizeRankingGender } from '@/lib/ranking'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
-import profileCoverFallback from '../../../../../imagenes/imagen2.jpg'
 
 type ProfileData = {
   user_id: string
@@ -286,6 +285,7 @@ export default function ClubJugadorDetailPage() {
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [profileTab, setProfileTab] = useState<'summary' | 'tournaments' | 'stats' | 'achievements'>('summary')
 
   const age = useMemo(() => getAge(data?.profile?.birth_date), [data?.profile?.birth_date])
 
@@ -575,20 +575,13 @@ export default function ClubJugadorDetailPage() {
   const player = data?.player ?? null
   const profile = data?.profile ?? null
   const stats = data?.stats ?? null
-  const heroCover = profile?.cover_url || profileCoverFallback
-  const hasLongDisplayName = (player?.full_name.trim().split(/\s+/).length ?? 0) >= 3
-  const genderTone = String(player?.gender ?? '').toUpperCase()
-  const profileAccentClass = genderTone === 'F' || genderTone === 'FEMALE'
-    ? 'profileHeroV2--female'
-    : 'profileHeroV2--male'
+  const heroCover = profile?.cover_url ?? null
   const matchesPlayed = stats?.matches_played ?? 0
   const winRate = matchesPlayed > 0 ? Math.round(((stats?.wins ?? 0) / matchesPlayed) * 100) : null
   const lossRate = matchesPlayed > 0 ? Math.round(((stats?.losses ?? 0) / matchesPlayed) * 100) : null
   const preferredPosition = formatPreferredPosition(player?.preferred_position)
   const rankingPositionLabel = player?.ranking_points && player.ranking_points > 0 ? 'A definir' : 'Sin ranking'
-  const rankingPositionIsText = !rankingPositionLabel.startsWith('#')
   const rankingPointsLabel = formatRankingPoints(player?.ranking_points ?? null)
-  const rankingStatusLabel = player?.ranking_points && player.ranking_points > 0 ? 'Sin posición pública' : 'Sin ranking'
   const isOwnProfile = Boolean(player?.user_id && user?.id && player.user_id === user.id)
   const recentMatches = data?.recent_matches.slice(0, 5) ?? []
   const activePartnership = player
@@ -632,213 +625,72 @@ export default function ClubJugadorDetailPage() {
   return (
     <div className="px-wrap">
       <div className={`club-panel player-premium${isOwnProfile ? ' is-own-profile' : ''}`}>
-        <div className="player-premiumTopbar">
-          <Link href={isOwnProfile ? '/player' : '/club/jugadores'} className="player-backBtn">{isOwnProfile ? 'Volver' : 'Volver a jugadores'}</Link>
-          <div className="player-premiumTopActions">
-            {isOwnProfile ? (
-              <button type="button" className="player-editProfileBtn" onClick={openEditModal}>
-                <Pencil size={15} />
-                Editar perfil
-              </button>
-            ) : null}
-            <Link href={isOwnProfile ? '/player/ranking' : '/club/ranking'} className="player-secondaryBtn">Ver ranking</Link>
-          </div>
-        </div>
-
         {message ? <div className="player-message">{message}</div> : null}
 
         {!activeClub?.id ? (
           <PlayerStatePanel kind="empty" title="Seleccioná un club activo" message="Necesitamos un club para mostrar tu perfil deportivo." action={{ label: 'Seleccionar club', href: '/seleccionar-club' }} compact />
         ) : loading ? (
-          <PlayerStatePanel kind="loading" title="Cargando perfil" message="Preparando tu información" compact />
+          <PlayerStatePanel kind="loading" title="Cargando perfil" message="Preparando tu información" viewport />
         ) : !player || !data ? (
           <PlayerStatePanel kind="error" title="No encontramos el perfil" message="Volvé a intentarlo desde tu espacio de jugador." action={{ label: 'Volver a Mi espacio', href: '/player' }} compact />
         ) : (
           <>
-            <section className={`profileHeroV2 ${profileAccentClass}`}>
-              <div className="profileHeroV2__background">
-                <Image src={heroCover} alt="" fill sizes="1200px" priority />
+            <section className="playerProfileV3">
+              <div className="playerProfileV3__cover">
+                {heroCover ? <Image src={heroCover} alt="" fill sizes="1200px" priority /> : null}
+                <Link className="playerProfileV3__back" href={isOwnProfile ? '/player' : '/club/jugadores'}>Volver</Link>
+                {isOwnProfile ? <button type="button" className="playerProfileV3__coverEdit" onClick={openEditModal}><ImageIcon size={15} />Editar portada</button> : null}
               </div>
-              <div className="profileHeroV2__wash" />
-              <div className="profileHeroV2__band" />
-              <div className="profileHeroV2__content">
-                <button className="profileHeroV2__avatar" type="button" onClick={() => setAvatarOpen(true)} aria-label="Ver foto de perfil">
-                  {profile?.avatar_url ? <Image src={profile.avatar_url} alt={player.full_name} fill sizes="132px" /> : getClubInitials(player.full_name)}
-                  <span className="profileHeroV2__camera">CAM</span>
+              <div className="playerProfileV3__intro">
+                <button className="playerProfileV3__avatar" type="button" onClick={() => setAvatarOpen(true)} aria-label="Ver foto de perfil">
+                  {profile?.avatar_url ? <Image src={profile.avatar_url} alt={player.full_name} fill sizes="120px" /> : getClubInitials(player.full_name)}
+                  {isOwnProfile ? <span><Pencil size={14} /></span> : null}
                 </button>
-                <div className={`profileHeroV2__identity${hasLongDisplayName ? ' profileHeroV2__identity--long' : ''}`}>
+                <div className="playerProfileV3__identity">
                   <h1>{player.full_name}</h1>
-                  <p className="profileHeroV2__meta">
-                    <span className="profileHeroV2__position">{preferredPosition}</span>
-                    <span>{formatRankingCategory(player.category)}</span>
-                    <span>{formatRankingGender(player.gender)}</span>
-                    {isOwnProfile ? <span>{activeClub.name}</span> : null}
-                  </p>
-                  {data.frequent_partner ? (
-                    <Link className="profileHeroV2__partner" href={`/club/jugadores/${data.frequent_partner.user_id}`}>
-                      <span>{getClubInitials(data.frequent_partner.full_name)}</span>
-                      Pareja: {data.frequent_partner.full_name} ›
-                    </Link>
-                  ) : null}
+                  <p>{formatRankingCategory(player.category)} · {formatRankingGender(player.gender)}</p>
+                  <Link href={`/clubs/${activeClub.id}`} className="playerProfileV3__club">{activeClub.name}</Link>
                 </div>
-                <div className={`profileHeroV2__rank profileHeroV2__rank--${normalizeRankingGender(player.gender) === 'F' ? 'magenta' : 'cyan'}`}>
-                  <span>Ranking actual</span>
-                  <span className="profileHeroV2__crown">♕</span>
-                  <div className={`profileHeroV2__rankMain${rankingPositionIsText ? ' profileHeroV2__rankMain--text' : ''}`}>
-                    <em>{rankingPositionLabel}</em>
-                    <div>
-                      <small>Puntos</small>
-                      <strong>{rankingPointsLabel}</strong>
-                      <b>Derivado</b>
-                    </div>
-                  </div>
-                  <i>{(stats?.titles ?? 0) > 0 ? 'Campeón activo' : rankingStatusLabel}</i>
+                <div className="playerProfileV3__metrics" aria-label="Resumen competitivo">
+                  <span><small>Posición</small><strong>{rankingPositionLabel}</strong></span>
+                  <span><small>Puntos</small><strong>{rankingPointsLabel}</strong></span>
+                  <span><small>Partidos</small><strong>{matchesPlayed}</strong></span>
+                </div>
+                <div className="playerProfileV3__actions">
+                  {isOwnProfile ? <button type="button" onClick={openEditModal}><Pencil size={15} />Editar perfil</button> : null}
+                  <Link className="is-primary" href={isOwnProfile ? '/player/ranking' : '/club/ranking'}>Ver ranking</Link>
                 </div>
               </div>
-            </section>
+              <nav className="playerProfileV3__tabs" aria-label="Secciones del perfil">
+                {[
+                  ['summary', 'Resumen'],
+                  ['tournaments', 'Torneos'],
+                  ['stats', 'Estadísticas'],
+                  ['achievements', 'Logros'],
+                ].map(([key, label]) => <button key={key} type="button" className={profileTab === key ? 'is-active' : ''} onClick={() => setProfileTab(key as typeof profileTab)}>{label}</button>)}
+              </nav>
 
-            <section className="player-statGrid">
-              <article className="player-statCard player-statCard--blue">
-                <span className="player-statIcon"><Activity size={22} strokeWidth={2.35} /></span>
-                <span className="player-statLabel">Partidos</span>
-                <strong className="player-statValue">{matchesPlayed}</strong>
-              </article>
-              <article className="player-statCard player-statCard--green">
-                <span className="player-statIcon"><Trophy size={22} strokeWidth={2.35} /></span>
-                <span className="player-statLabel">Ganados</span>
-                <strong className="player-statValue">{stats?.wins ?? 0}</strong>
-                {winRate !== null ? <small className="player-statMeta">{winRate}%</small> : null}
-              </article>
-              <article className="player-statCard player-statCard--red">
-                <span className="player-statIcon"><ShieldX size={22} strokeWidth={2.35} /></span>
-                <span className="player-statLabel">Perdidos</span>
-                <strong className="player-statValue">{stats?.losses ?? 0}</strong>
-                {lossRate !== null ? <small className="player-statMeta">{lossRate}%</small> : null}
-              </article>
-              <article className="player-statCard player-statCard--pink">
-                <span className="player-statIcon"><TrendingUp size={22} strokeWidth={2.35} /></span>
-                <span className="player-statLabel">Efectividad</span>
-                <strong className="player-statValue">{typeof stats?.effectiveness === 'number' ? `${stats.effectiveness}%` : '-'}</strong>
-              </article>
-              <article className="player-statCard player-statCard--blue">
-                <span className="player-statIcon"><CalendarDays size={22} strokeWidth={2.35} /></span>
-                <span className="player-statLabel">Torneos</span>
-                <strong className="player-statValue">{stats?.tournaments_played ?? 0}</strong>
-              </article>
-              <article className="player-statCard player-statCard--gold">
-                <span className="player-statIcon"><Star size={22} strokeWidth={2.35} /></span>
-                <span className="player-statLabel">Títulos</span>
-                <strong className="player-statValue">{stats?.titles ?? 0}</strong>
-              </article>
-            </section>
+              {profileTab === 'summary' ? <section className="playerProfileV3__summary">
+                <article><span>Trayectoria</span><strong>{stats?.tournaments_played ?? 0} torneos</strong><p>{matchesPlayed} partidos · {stats?.wins ?? 0} ganados</p></article>
+                <article><span>Próximo torneo</span><strong>Sin inscripción próxima</strong><Link href="/player/torneos/explorar">Explorar torneos</Link></article>
+                <article><span>Último resultado</span>{recentMatches[0] ? <><strong>{recentMatches[0].result} · {recentMatches[0].score}</strong><p>{recentMatches[0].tournament_name}</p></> : <><strong>Sin partidos todavía</strong><p>Tu actividad aparecerá acá.</p></>}</article>
+                <article><span>Club y pareja</span>{activePartner ? <Link href={`/club/jugadores/${activePartner.user_id}`}><strong>{activePartner.full_name}</strong><p>Pareja activa · {activeClub.name}</p></Link> : <><strong>{activeClub.name}</strong><p>Sin pareja activa</p>{isOwnProfile ? <button type="button" onClick={openInviteModal}>Buscar pareja</button> : null}</>}</article>
+              </section> : null}
 
-            <section className="player-infoDeck">
-              <article className="player-card">
-                <header><span className="club-kicker">Información personal</span><h2>Datos del jugador</h2></header>
-                <div className="player-infoGrid">
-                  <div><i><Mail size={17} /></i><span>Contacto admin</span><strong>{maskEmail(profile?.email)}</strong></div>
-                  <div><i><MapPin size={17} /></i><span>Ciudad</span><strong>{profile?.city ?? 'Sin datos'}</strong></div>
-                  <div><i><Cake size={17} /></i><span>Nacimiento</span><strong>{profile?.birth_date ? `${formatDate(profile.birth_date)}${age ? ` · ${age} años` : ''}` : 'Sin datos'}</strong></div>
-                  <div><i><CalendarCheck size={17} /></i><span>Alta en club</span><strong>{formatDate(player.approved_at ?? player.created_at)}</strong></div>
-                </div>
-              </article>
+              {profileTab === 'tournaments' ? <section className="playerProfileV3__list"><h2>Torneos</h2>{data.tournament_history.length ? data.tournament_history.map((tournament) => <article key={`${tournament.tournament_id}-${tournament.date ?? ''}`}><strong>{tournament.tournament_name}</strong><span>{formatDate(tournament.date)} · {tournament.partner_name}</span><small>{tournament.result}{tournament.points !== null ? ` · ${tournament.points} pts` : ''}</small></article>) : <div className="playerProfileV3__empty">Todavía no hay torneos para mostrar.</div>}</section> : null}
 
-              <article className="player-card">
-                <header><span className="club-kicker">Información deportiva</span><h2>Perfil competitivo</h2></header>
-                <div className="player-infoGrid">
-                  <div><i><Hand size={17} /></i><span>Mano hábil</span><strong>{formatDominantHand(profile?.dominant_hand)}</strong></div>
-                  <div><i><Target size={17} /></i><span>Posición preferida</span><strong>{preferredPosition}</strong></div>
-                  <div><i><Ruler size={17} /></i><span>Altura</span><strong>{profile?.height_cm ? `${profile.height_cm} cm` : 'Sin datos'}</strong></div>
-                  <div><i><Crown size={17} /></i><span>Mejor ranking</span><strong>Historial pendiente</strong></div>
-                  <div><i><CheckCircle2 size={17} /></i><span>Estado</span><strong>Activo</strong></div>
-                </div>
-              </article>
+              {profileTab === 'stats' ? <section className="playerProfileV3__stats">
+                <article><Activity size={18} /><span>Partidos</span><strong>{matchesPlayed}</strong></article>
+                <article><Trophy size={18} /><span>Ganados</span><strong>{stats?.wins ?? 0}</strong><small>{winRate !== null ? `${winRate}%` : ''}</small></article>
+                <article><ShieldX size={18} /><span>Perdidos</span><strong>{stats?.losses ?? 0}</strong><small>{lossRate !== null ? `${lossRate}%` : ''}</small></article>
+                <article><TrendingUp size={18} /><span>Efectividad</span><strong>{typeof stats?.effectiveness === 'number' ? `${stats.effectiveness}%` : '-'}</strong></article>
+              </section> : null}
 
-              <article className="player-card">
-                <header><span className="club-kicker">Pareja activa</span><h2>Vínculo deportivo</h2></header>
-                {activePartnership && activePartner ? (
-                  <Link className="player-activePartnerBox" href={`/club/jugadores/${activePartner.user_id}`}>
-                    <span className="player-activePartnerIcon">
-                      {activePartner.avatar_url ? <Image src={activePartner.avatar_url} alt={activePartner.full_name} fill sizes="42px" /> : getClubInitials(activePartner.full_name)}
-                    </span>
-                    <span className="player-activePartnerContent">
-                      <b>Pareja activa</b>
-                      <strong>{activePartner.full_name}</strong>
-                      <small>Desde {formatDate(activePartnership.accepted_at ?? activePartnership.created_at)}</small>
-                    </span>
-                    <i><UsersRound size={17} /></i>
-                  </Link>
-                ) : (
-                  <div className="player-partnerStack">
-                    {pendingPartnerInvite && pendingInviteOtherPlayer ? (
-                      <div className="player-pendingInviteBox">
-                        <span className="player-pendingInviteIcon"><Clock size={18} /></span>
-                        <div>
-                          <b>Invitación pendiente</b>
-                          <strong>{pendingInviteOtherPlayer.full_name}</strong>
-                          <small>
-                            {pendingPartnerInvite.sender_club_player_id === player.id ? 'Enviada' : 'Recibida'} el {formatDate(pendingPartnerInvite.created_at)}
-                          </small>
-                        </div>
-                        <div className="player-pendingInviteActions">
-                          {pendingPartnerInvite.sender_club_player_id === player.id ? (
-                            <button type="button" onClick={() => updatePartnerInvite(pendingPartnerInvite.id, 'cancel')} disabled={partnerActionBusy}>Cancelar</button>
-                          ) : (
-                            <>
-                              <button type="button" onClick={() => updatePartnerInvite(pendingPartnerInvite.id, 'accept')} disabled={partnerActionBusy}>Aceptar</button>
-                              <button type="button" onClick={() => updatePartnerInvite(pendingPartnerInvite.id, 'decline')} disabled={partnerActionBusy}>Rechazar</button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="player-placeholder player-placeholder--activePartner">
-                        <strong>Sin pareja activa</strong>
-                        <span>No hay invitaciones pendientes. Cuando acepte o se asigne una pareja activa, aparecerá destacada acá.</span>
-                        <button type="button" className="player-inviteButton" onClick={openInviteModal}>
-                          <UserPlus size={15} />
-                          Invitar pareja
-                        </button>
-                      </div>
-                    )}
-                    {partnerActionMessage ? <p className="player-partnerFeedback">{partnerActionMessage}</p> : null}
-                    {!pendingPartnerInvite && data.frequent_partner ? (
-                      <Link className="player-partnerBox player-partnerBox--suggestion" href={`/club/jugadores/${data.frequent_partner.user_id}`}>
-                        <strong>{data.frequent_partner.full_name}</strong>
-                        <span>{data.frequent_partner.tournaments_together} torneos juntos · {data.frequent_partner.matches_together} partidos</span>
-                        <p>Pareja frecuente detectada por historial.</p>
-                      </Link>
-                    ) : null}
-                  </div>
-                )}
-              </article>
-            </section>
-
-            <section className="player-lowerGrid">
-              <article className="player-card player-card--wide">
-                <header><span className="club-kicker">Últimos partidos</span><h2>Resultados recientes</h2></header>
-                <div className="player-list">
-                  {recentMatches.length ? recentMatches.map((match) => (
-                    <div key={match.id}>
-                      <strong>{match.result} · {match.score}</strong>
-                      <span>{formatDate(match.date)} · {match.tournament_name}</span>
-                      <em>{match.partner_name} vs {match.rival_name}</em>
-                    </div>
-                  )) : <div className="player-placeholder">Sin partidos jugados.</div>}
-                </div>
-              </article>
-
-              <article className="player-card">
-                <header><span className="club-kicker">Resumen rápido</span><h2>Perfil competitivo</h2></header>
-                <div className="player-summaryList">
-                  <div><span>Puntos actuales</span><strong>{rankingPointsLabel}</strong></div>
-                  <div><span>Ranking actual</span><strong>{rankingPositionLabel}</strong></div>
-                  <div><span>Torneos jugados</span><strong>{stats?.tournaments_played ?? 0}</strong></div>
-                  <div><span>Partidos jugados</span><strong>{stats?.matches_played ?? 0}</strong></div>
-                  <div><span>Efectividad</span><strong>{typeof stats?.effectiveness === 'number' ? `${stats.effectiveness}%` : '-'}</strong></div>
-                  <div><span>Mejor ranking</span><strong>Historial pendiente</strong></div>
-                </div>
-              </article>
+              {profileTab === 'achievements' ? <section className="playerProfileV3__summary playerProfileV3__summary--achievements">
+                <article><span>Títulos</span><strong>{stats?.titles ?? 0}</strong><p>Campeonatos registrados</p></article>
+                <article><span>Finales</span><strong>{stats?.finals ?? 0}</strong><p>Definiciones alcanzadas</p></article>
+                <article><span>Mejor ranking</span><strong>{rankingPositionLabel}</strong><p>Según el ranking disponible</p></article>
+              </section> : null}
             </section>
 
             {avatarOpen ? (
@@ -1038,6 +890,79 @@ export default function ClubJugadorDetailPage() {
 
       <style>{`
         .player-premium { background: linear-gradient(180deg, #ffffff, #f8fafc); display: grid; gap: 13px; overflow: hidden; }
+        .playerProfileV3 { --profile-accent: var(--px-club-accent, #06b6d4); --profile-accent-2: var(--px-club-accent-2, #ec4899); --profile-soft: var(--px-club-soft, rgba(34,211,238,.13)); --profile-glow: var(--px-club-glow, rgba(14,165,233,.16)); display: grid; gap: 14px; margin: -18px; padding-bottom: 18px; }
+        .playerProfileV3__cover { background: linear-gradient(120deg, #071426, #102744 58%, color-mix(in srgb, var(--profile-accent) 28%, #071426)); height: 224px; overflow: hidden; position: relative; }
+        .playerProfileV3__cover::after { background: linear-gradient(180deg, transparent 28%, rgba(2,6,23,.62)); content: ''; inset: 0; position: absolute; }
+        .playerProfileV3__cover img { object-fit: cover; opacity: .74; }
+        .playerProfileV3__back { background: rgba(2,6,23,.56); border: 1px solid rgba(255,255,255,.22); border-radius: 10px; color: #fff; font-size: 12px; font-weight: 700; left: 14px; min-height: 34px; padding: 8px 10px; position: absolute; text-decoration: none; top: 12px; z-index: 1; }
+        .playerProfileV3__coverEdit { align-items: center; background: rgba(2,6,23,.64); border: 1px solid rgba(255,255,255,.28); border-radius: 10px; bottom: 12px; color: #fff; cursor: pointer; display: inline-flex; font: inherit; font-size: 12px; font-weight: 700; gap: 6px; min-height: 36px; padding: 0 10px; position: absolute; right: 14px; z-index: 1; }
+        .playerProfileV3__intro { align-items: center; display: grid; gap: 12px; grid-template-columns: 128px minmax(0, 1fr) auto; margin: -72px auto 0; max-width: 1100px; padding: 0 26px; position: relative; width: 100%; z-index: 2; }
+        .playerProfileV3__avatar { align-items: center; background: linear-gradient(135deg, #10233c, var(--profile-accent)); border: 5px solid #fff; border-radius: 999px; box-shadow: 0 0 0 2px var(--profile-accent), 0 16px 32px rgba(15,23,42,.2); color: #fff; cursor: pointer; display: flex; font: inherit; font-size: 36px; font-weight: 900; height: 120px; justify-content: center; overflow: visible; padding: 0; position: relative; width: 120px; }
+        .playerProfileV3__avatar img { border-radius: inherit; object-fit: cover; }
+        .playerProfileV3__avatar > span { align-items: center; background: #061b3a; border: 2px solid #fff; border-radius: 999px; bottom: 2px; color: #fff; display: flex; height: 30px; justify-content: center; position: absolute; right: 2px; width: 30px; }
+        .playerProfileV3__identity { align-self: end; min-width: 0; padding-bottom: 5px; }
+        .playerProfileV3__identity h1 { color: #061b3a; font-size: clamp(26px, 3.2vw, 38px); font-weight: 780; line-height: 1.04; margin: 0; overflow-wrap: anywhere; }
+        .playerProfileV3__identity p { color: #64748b; font-size: 14px; font-weight: 550; line-height: 1.3; margin: 5px 0 2px; }
+        .playerProfileV3__club { color: color-mix(in srgb, var(--profile-accent) 78%, #061b3a); font-size: 14px; font-weight: 750; text-decoration: none; }
+        .playerProfileV3__club:hover { text-decoration: underline; }
+        .playerProfileV3__metrics { align-self: end; background: rgba(255,255,255,.95); border: 1px solid rgba(226,232,240,.9); border-radius: 14px; box-shadow: 0 10px 24px rgba(15,23,42,.07); display: grid; gap: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 290px; overflow: hidden; }
+        .playerProfileV3__metrics span { display: grid; gap: 2px; min-width: 0; padding: 10px 12px; text-align: center; }
+        .playerProfileV3__metrics span + span { border-left: 1px solid #e2e8f0; }
+        .playerProfileV3__metrics small, .playerProfileV3__summary > article > span, .playerProfileV3__list h2 { color: #64748b; font-size: 10px; font-weight: 750; text-transform: uppercase; }
+        .playerProfileV3__metrics strong { color: #061b3a; font-size: 15px; font-weight: 800; overflow-wrap: anywhere; }
+        .playerProfileV3__actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 0 auto; max-width: 1100px; padding: 0 26px; width: 100%; }
+        .playerProfileV3__actions a, .playerProfileV3__actions button { align-items: center; background: #fff; border: 1px solid #dbe5ef; border-radius: 11px; color: #173457; cursor: pointer; display: inline-flex; font: inherit; font-size: 13px; font-weight: 720; gap: 6px; justify-content: center; min-height: 40px; padding: 0 13px; text-decoration: none; }
+        .playerProfileV3__actions .is-primary { background: #061b3a; border-color: color-mix(in srgb, var(--profile-accent) 36%, #061b3a); color: #fff; }
+        .playerProfileV3__tabs { border-bottom: 1px solid #e2e8f0; display: flex; gap: 4px; justify-content: center; padding: 4px 18px 0; }
+        .playerProfileV3__tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: #64748b; cursor: pointer; font: inherit; font-size: 13px; font-weight: 680; min-height: 42px; padding: 0 14px; }
+        .playerProfileV3__tabs button.is-active { border-bottom-color: var(--profile-accent); color: #061b3a; }
+        .playerProfileV3__summary, .playerProfileV3__stats, .playerProfileV3__list { display: grid; gap: 10px; margin: 0 auto; max-width: 1100px; padding: 0 26px; width: 100%; }
+        .playerProfileV3__summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .playerProfileV3__summary article, .playerProfileV3__stats article, .playerProfileV3__list article, .playerProfileV3__empty { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 8px 20px rgba(15,23,42,.04); min-width: 0; }
+        .playerProfileV3__summary article { display: grid; gap: 5px; min-height: 112px; padding: 13px; }
+        .playerProfileV3__summary strong { color: #061b3a; font-size: 16px; font-weight: 780; line-height: 1.15; overflow-wrap: anywhere; }
+        .playerProfileV3__summary p { color: #64748b; font-size: 12px; font-weight: 550; line-height: 1.35; margin: 0; }
+        .playerProfileV3__summary a { color: #061b3a; display: grid; gap: 5px; text-decoration: none; }
+        .playerProfileV3__summary button { background: transparent; border: 0; color: color-mix(in srgb, var(--profile-accent) 76%, #061b3a); cursor: pointer; font: inherit; font-size: 12px; font-weight: 750; justify-self: start; padding: 0; }
+        .playerProfileV3__stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .playerProfileV3__stats article { align-items: center; display: grid; gap: 4px; min-height: 108px; padding: 14px; text-align: center; }
+        .playerProfileV3__stats svg { color: var(--profile-accent); justify-self: center; }
+        .playerProfileV3__stats span { color: #64748b; font-size: 11px; font-weight: 650; }
+        .playerProfileV3__stats strong { color: #061b3a; font-size: 24px; font-weight: 800; }
+        .playerProfileV3__stats small { color: color-mix(in srgb, var(--profile-accent) 72%, #061b3a); font-size: 11px; font-weight: 750; }
+        .playerProfileV3__list { max-width: 760px; }
+        .playerProfileV3__list h2 { margin: 0; }
+        .playerProfileV3__list article { display: grid; gap: 3px; padding: 12px 13px; }
+        .playerProfileV3__list strong { color: #061b3a; font-size: 15px; font-weight: 760; overflow-wrap: anywhere; }
+        .playerProfileV3__list span, .playerProfileV3__list small { color: #64748b; font-size: 12px; font-weight: 550; }
+        .playerProfileV3__empty { color: #64748b; font-size: 13px; font-weight: 600; padding: 16px; text-align: center; }
+        .playerProfileV3__summary--achievements { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 760px; }
+        @media (max-width: 700px) {
+          .playerProfileV3 { gap: 10px; margin: -10px; padding-bottom: 10px; }
+          .playerProfileV3__cover { height: 164px; }
+          .playerProfileV3__back { left: 10px; top: 8px; }
+          .playerProfileV3__coverEdit { bottom: 8px; font-size: 11px; min-height: 32px; right: 10px; }
+          .playerProfileV3__intro { display: flex; flex-direction: column; gap: 7px; margin-top: -58px; padding: 0 12px; text-align: center; }
+          .playerProfileV3__avatar { flex: 0 0 112px; font-size: 32px; height: 112px; width: 112px; }
+          .playerProfileV3__identity { align-self: auto; padding: 0; }
+          .playerProfileV3__identity h1 { display: -webkit-box; font-size: clamp(24px, 7vw, 30px); -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.06; overflow: hidden; }
+          .playerProfileV3__identity p, .playerProfileV3__club { font-size: 13px; }
+          .playerProfileV3__metrics { min-width: 0; width: 100%; }
+          .playerProfileV3__metrics span { padding: 9px 6px; }
+          .playerProfileV3__metrics strong { font-size: 13px; }
+          .playerProfileV3__actions { gap: 6px; padding: 0 12px; }
+          .playerProfileV3__actions a, .playerProfileV3__actions button { flex: 1 1 0; font-size: 12px; min-height: 40px; padding: 0 8px; white-space: nowrap; }
+          .playerProfileV3__tabs { gap: 0; justify-content: stretch; overflow-x: auto; padding: 0 8px; }
+          .playerProfileV3__tabs button { flex: 1 0 auto; font-size: 12px; min-height: 40px; padding: 0 9px; }
+          .playerProfileV3__summary, .playerProfileV3__stats, .playerProfileV3__list { gap: 8px; padding: 0 12px; }
+          .playerProfileV3__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .playerProfileV3__summary article { min-height: 104px; padding: 11px; }
+          .playerProfileV3__summary strong { font-size: 14px; }
+          .playerProfileV3__summary p { font-size: 11px; }
+          .playerProfileV3__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .playerProfileV3__stats article { min-height: 94px; padding: 10px; }
+          .playerProfileV3__summary--achievements { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
         .player-premiumTopbar { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
         .player-premiumTopActions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
         .player-backBtn, .player-secondaryBtn { border-radius: 10px; font-size: 13px; font-weight: 850; padding: 9px 12px; text-decoration: none; }

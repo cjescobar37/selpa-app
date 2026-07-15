@@ -46,6 +46,19 @@ type PreviewNotification = {
   metadata?: Record<string, any> | null
 }
 
+type PreviewThread = {
+  id: string
+  subject: string
+  updated_at: string
+  player: { name: string; avatar_url: string | null } | null
+  club: { name: string; logo_url: string | null } | null
+  latest_message: { body: string; created_at: string; sender_name: string } | null
+  unread_count: number
+}
+
+type NavbarOverlay = 'club' | 'player' | 'messages' | 'notifications' | null
+type ClubMenuSection = 'tournaments' | 'ranking' | 'clubs' | null
+
 function shorten(text?: string, max = 16) {
   const value = (text || '').trim()
   if (!value) return ''
@@ -183,6 +196,19 @@ function notificationIconLabel(type: string) {
   return 'P'
 }
 
+function notificationGroup(type: string) {
+  const key = String(type ?? '').toLowerCase()
+  if (key.includes('payment') || key.includes('pago')) return 'payments'
+  if (key.includes('registration') || key.includes('inscrip') || key.includes('tournament') || key.includes('torneo')) return 'tournaments'
+  return 'other'
+}
+
+function messageScopeForRole(role: string | null | undefined): 'player' | 'club' | 'platform' {
+  if (role === 'club') return 'club'
+  if (role === 'platform') return 'platform'
+  return 'player'
+}
+
 function isMissingColumnError(error: { code?: string; message?: string } | null | undefined) {
   const message = String(error?.message ?? '').toLowerCase()
   return error?.code === '42703' || error?.code === 'PGRST204' || message.includes('column') || message.includes('schema cache')
@@ -236,6 +262,7 @@ export default function AppNavbarClient() {
   const router = useRouter()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const overlayTriggerRefs = useRef<Partial<Record<Exclude<NavbarOverlay, null>, HTMLButtonElement | null>>>({})
 
   const navCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -269,21 +296,31 @@ export default function AppNavbarClient() {
 
   const [navOpenIndex, setNavOpenIndex] = useState<number | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [userOpen, setUserOpen] = useState(false)
-  const [clubOpen, setClubOpen] = useState(false)
-  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [navbarOverlay, setNavbarOverlay] = useState<NavbarOverlay>(null)
+  const [clubMenuSection, setClubMenuSection] = useState<ClubMenuSection>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<NavSearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [notificationPreview, setNotificationPreview] = useState<PreviewNotification[]>([])
+  const [notificationFilter, setNotificationFilter] = useState<'all' | 'unread' | 'payments' | 'tournaments'>('all')
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [notificationError, setNotificationError] = useState('')
+  const [messagePreview, setMessagePreview] = useState<PreviewThread[]>([])
+  const [messagesLoading, setMessagesLoading] = useState(false)
+  const [messageError, setMessageError] = useState('')
   const [previewModal, setPreviewModal] = useState<PreviewNotification | null>(null)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [activeClubThemeKey, setActiveClubThemeKey] = useState<string | null>(null)
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null)
+  const [playerCategory, setPlayerCategory] = useState<number | null>(null)
 
   const isAuthed = (role || 'guest') !== 'guest'
+  const clubOpen = navbarOverlay === 'club'
+  const userOpen = navbarOverlay === 'player'
+  const messagesOpen = navbarOverlay === 'messages'
+  const notificationsOpen = navbarOverlay === 'notifications'
   const showRight = cfg.right || {}
   const displayClub = activeClub ?? clubs?.[0] ?? null
   const isGlobalPublicNav = !isAuthed && !displayClub?.id
@@ -307,12 +344,50 @@ export default function AppNavbarClient() {
     [activeClubTheme]
   )
 
-  useEffect(() => {
-    document.documentElement.style.setProperty('--px-active-club-accent', activeClubTheme.vars.accent)
-    return () => {
-      document.documentElement.style.removeProperty('--px-active-club-accent')
+  const playerIdentityMeta = useMemo(() => {
+    const category = playerCategory ? `${playerCategory}ta categoría` : null
+    return [category, displayClubName].filter(Boolean).join(' · ')
+  }, [displayClubName, playerCategory])
+
+  const visibleNotifications = useMemo(() => {
+    if (notificationFilter === 'unread') return notificationPreview.filter((item) => !item.read)
+    if (notificationFilter === 'payments') return notificationPreview.filter((item) => notificationGroup(item.type) === 'payments')
+    if (notificationFilter === 'tournaments') return notificationPreview.filter((item) => notificationGroup(item.type) === 'tournaments')
+    return notificationPreview
+  }, [notificationFilter, notificationPreview])
+
+  function closeNavbarOverlay(restoreFocus = false) {
+    const previousOverlay = navbarOverlay
+    setNavbarOverlay(null)
+    setClubMenuSection(null)
+    if (restoreFocus && previousOverlay) {
+      window.requestAnimationFrame(() => overlayTriggerRefs.current[previousOverlay]?.focus())
     }
-  }, [activeClubTheme.vars.accent])
+  }
+
+  function toggleNavbarOverlay(nextOverlay: Exclude<NavbarOverlay, null>, trigger?: HTMLButtonElement | null) {
+    if (trigger) overlayTriggerRefs.current[nextOverlay] = trigger
+    setNavbarOverlay((current) => current === nextOverlay ? null : nextOverlay)
+    setClubMenuSection(null)
+    setMobileMenuOpen(false)
+    setSearchOpen(false)
+  }
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty('--px-active-club-accent', activeClubTheme.vars.accent)
+    root.style.setProperty('--px-club-accent', activeClubTheme.vars.accent)
+    root.style.setProperty('--px-club-accent-2', activeClubTheme.vars.accent2)
+    root.style.setProperty('--px-club-soft', activeClubTheme.vars.soft)
+    root.style.setProperty('--px-club-glow', activeClubTheme.vars.glow)
+    return () => {
+      root.style.removeProperty('--px-active-club-accent')
+      root.style.removeProperty('--px-club-accent')
+      root.style.removeProperty('--px-club-accent-2')
+      root.style.removeProperty('--px-club-soft')
+      root.style.removeProperty('--px-club-glow')
+    }
+  }, [activeClubTheme.vars.accent, activeClubTheme.vars.accent2, activeClubTheme.vars.glow, activeClubTheme.vars.soft])
 
   useEffect(() => {
     let alive = true
@@ -365,15 +440,37 @@ export default function AppNavbarClient() {
   }, [displayClub?.id])
 
   useEffect(() => {
+    let alive = true
+
+    ;(async () => {
+      if (role !== 'player' || !user?.id || !displayClub?.id) {
+        setPlayerCategory(null)
+        return
+      }
+
+      const { data } = await supabase
+        .from('club_players')
+        .select('category')
+        .eq('club_id', displayClub.id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (alive) setPlayerCategory(typeof data?.category === 'number' ? data.category : null)
+    })()
+
+    return () => {
+      alive = false
+    }
+  }, [displayClub?.id, role, user?.id])
+
+  useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const target = e.target as Node
       if (!rootRef.current) return
       if (!rootRef.current.contains(target)) {
         setNavOpenIndex(null)
         setMobileMenuOpen(false)
-        setUserOpen(false)
-        setClubOpen(false)
-        setNotificationsOpen(false)
+        closeNavbarOverlay()
         setSearchOpen(false)
       }
     }
@@ -382,9 +479,7 @@ export default function AppNavbarClient() {
       if (e.key === 'Escape') {
         setNavOpenIndex(null)
         setMobileMenuOpen(false)
-        setUserOpen(false)
-        setClubOpen(false)
-        setNotificationsOpen(false)
+        closeNavbarOverlay(true)
         setSearchOpen(false)
         setPreviewModal(null)
       }
@@ -398,15 +493,14 @@ export default function AppNavbarClient() {
       document.removeEventListener('mousedown', onDown)
       window.removeEventListener('keydown', onKey)
     }
-  }, [])
+  }, [navbarOverlay])
 
   useEffect(() => {
     clearNavCloseTimeout()
     setNavOpenIndex(null)
     setMobileMenuOpen(false)
-    setUserOpen(false)
-    setClubOpen(false)
-    setNotificationsOpen(false)
+    setNavbarOverlay(null)
+    setClubMenuSection(null)
     setSearchOpen(false)
     setPreviewModal(null)
   }, [currentSearch, pathname])
@@ -414,7 +508,7 @@ export default function AppNavbarClient() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const isMobile = window.matchMedia('(max-width: 980px)').matches
-    const hasOverlay = mobileMenuOpen || clubOpen || userOpen || notificationsOpen || searchOpen
+    const hasOverlay = mobileMenuOpen || Boolean(navbarOverlay) || searchOpen
     if (!isMobile || !hasOverlay) return
 
     const previousOverflow = document.body.style.overflow
@@ -423,7 +517,7 @@ export default function AppNavbarClient() {
     return () => {
       document.body.style.overflow = previousOverflow
     }
-  }, [clubOpen, mobileMenuOpen, notificationsOpen, searchOpen, userOpen])
+  }, [mobileMenuOpen, navbarOverlay, searchOpen])
 
   useEffect(() => {
     if (!searchOpen) return
@@ -438,6 +532,9 @@ export default function AppNavbarClient() {
       setNotificationPreview([])
       return
     }
+
+    setNotificationsLoading(true)
+    setNotificationError('')
 
     const unreadNotificationsQuery = supabase
       .from('notifications')
@@ -454,7 +551,7 @@ export default function AppNavbarClient() {
       .order('created_at', { ascending: false })
       .limit(10)
 
-    const [{ count: nCount }, { count: mCount }, previewInitialRes] = await Promise.all([
+    const [{ count: nCount, error: notificationsCountError }, { count: mCount, error: messagesCountError }, previewInitialRes] = await Promise.all([
       unreadNotificationsQuery,
       supabase
         .from('messages')
@@ -477,8 +574,38 @@ export default function AppNavbarClient() {
 
     setUnreadNotifications(nCount ?? 0)
     setUnreadMessages(mCount ?? 0)
-    if (!previewRes.error) {
+    if (!previewRes.error && !notificationsCountError && !messagesCountError) {
       setNotificationPreview((previewRes.data ?? []) as PreviewNotification[])
+    } else {
+      setNotificationError('No pudimos cargar tus notificaciones. Intentá nuevamente.')
+    }
+    setNotificationsLoading(false)
+  }
+
+  async function loadMessagePreview() {
+    if (!isAuthed || !user?.id) {
+      setMessagePreview([])
+      return
+    }
+
+    setMessagesLoading(true)
+    setMessageError('')
+    try {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (!token) throw new Error('Sesión inválida.')
+
+      const response = await fetch(`/api/message-threads?scope=${messageScopeForRole(role)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload?.error || 'No pudimos cargar tus mensajes.')
+      setMessagePreview(((payload?.threads ?? []) as PreviewThread[]).slice(0, 4))
+    } catch {
+      setMessageError('No pudimos cargar tus conversaciones. Intentá nuevamente.')
+    } finally {
+      setMessagesLoading(false)
     }
   }
 
@@ -496,9 +623,8 @@ export default function AppNavbarClient() {
   function closeAllMenus() {
     setNavOpenIndex(null)
     setMobileMenuOpen(false)
-    setUserOpen(false)
-    setClubOpen(false)
-    setNotificationsOpen(false)
+    setNavbarOverlay(null)
+    setClubMenuSection(null)
     setSearchOpen(false)
   }
 
@@ -506,9 +632,8 @@ export default function AppNavbarClient() {
     setSearchOpen((value) => !value)
     setNavOpenIndex(null)
     setMobileMenuOpen(false)
-    setUserOpen(false)
-    setClubOpen(false)
-    setNotificationsOpen(false)
+    setNavbarOverlay(null)
+    setClubMenuSection(null)
   }
 
   useEffect(() => {
@@ -618,7 +743,7 @@ export default function AppNavbarClient() {
       setUnreadNotifications((cur) => Math.max(0, cur - 1))
     }
 
-    setNotificationsOpen(false)
+    setNavbarOverlay(null)
 
     const destination = item.href || item.link
     if (destination) {
@@ -651,24 +776,35 @@ export default function AppNavbarClient() {
     return <span>{getClubInitials(user?.name || 'Usuario')}</span>
   }
 
+  function MessageAvatar({ thread }: { thread: PreviewThread }) {
+    const source = thread.club?.logo_url || thread.player?.avatar_url || null
+    const label = thread.club?.name || thread.player?.name || 'SELPA'
+    if (source) return <img src={source} alt="" />
+    return <span>{getClubInitials(label)}</span>
+  }
+
   function renderUserMenu(mobile = false) {
     if (!userOpen) return null
 
     if (role === 'player' && mobile) {
       return (
-        <div className="px-navDropdown px-navDropdown--right px-playerUserMenu" role="menu">
+        <div id="player-navbar-player-popover" className="px-navDropdown px-navDropdown--right px-playerUserMenu" role="menu" aria-label="Mi espacio">
           <div className="px-playerUserMenu__identity">
             <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
             <div>
               <strong>{toTitleCaseName(user?.name)}</strong>
               {user?.email ? <small>{user.email}</small> : null}
+              {playerIdentityMeta ? <em>{playerIdentityMeta}</em> : null}
             </div>
           </div>
           <Link className="px-ddItem" href="/perfil" onClick={closeAllMenus}><CircleUserRound size={18} />Mi perfil</Link>
+          <Link className="px-ddItem" href="/player/torneos" onClick={closeAllMenus}><Trophy size={18} />Mis torneos</Link>
+          <Link className="px-ddItem" href="/player/ranking" onClick={closeAllMenus}><Activity size={18} />Mi ranking</Link>
           <Link className="px-ddItem" href="/actividad" onClick={closeAllMenus}><Activity size={18} />Mi actividad</Link>
+          <Link className="px-ddItem" href="/player/mensajes" onClick={closeAllMenus}><Mail size={18} />Mensajes</Link>
           <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}><Settings size={18} />Preferencias</Link>
           <div className="px-ddSep" />
-          <button className="px-ddItem px-ddItem--danger" onClick={signOut}><LogOut size={18} />Cerrar sesión</button>
+          <button className="px-ddItem px-ddItem--danger" onClick={() => { closeAllMenus(); void signOut() }}><LogOut size={18} />Cerrar sesión</button>
         </div>
       )
     }
@@ -731,7 +867,7 @@ export default function AppNavbarClient() {
             className={`px-ddItem ${club.id === displayClub?.id ? 'is-active' : ''}`}
             onClick={async () => {
               await setActiveClub(club.id)
-              setClubOpen(false)
+              closeAllMenus()
             }}
           >
             {club.name}
@@ -762,7 +898,8 @@ export default function AppNavbarClient() {
                 type="button"
                 className="px-clubBtn px-clubBtn--themed"
                 style={clubThemeStyle}
-                onClick={() => setClubOpen((v) => !v)}
+                aria-expanded={clubOpen}
+                onClick={(event) => toggleNavbarOverlay('club', event.currentTarget)}
               >
                 {clubHomeContent}
                 <ChevronDown size={16} className="px-caret" />
@@ -850,21 +987,39 @@ export default function AppNavbarClient() {
   function renderNotificationsDropdown() {
     if (!notificationsOpen) return null
 
+    const filters = [
+      { key: 'all' as const, label: 'Todas', visible: true },
+      { key: 'unread' as const, label: 'No leídas', visible: notificationPreview.some((item) => !item.read) },
+      { key: 'payments' as const, label: 'Pagos', visible: notificationPreview.some((item) => notificationGroup(item.type) === 'payments') },
+      { key: 'tournaments' as const, label: 'Torneos', visible: notificationPreview.some((item) => notificationGroup(item.type) === 'tournaments') },
+    ]
+
     return (
-      <div className="px-navDropdown px-navDropdown--right px-notifPreview" role="menu">
+      <div id="player-navbar-notifications-popover" className="px-navDropdown px-navDropdown--right px-notifPreview" role="menu" aria-label="Notificaciones">
         <div className="px-notifPreview__head">
           <strong>Notificaciones</strong>
-          <Link href="/notificaciones" className="px-link" onClick={() => setNotificationsOpen(false)}>Ver todas</Link>
+          <Link href="/notificaciones" className="px-link" onClick={closeAllMenus}>Ver todas</Link>
         </div>
-
-        {notificationPreview.length === 0 ? (
+        {filters.filter((filter) => filter.visible).length > 1 ? (
+          <div className="px-notifPreview__filters" aria-label="Filtrar notificaciones">
+            {filters.filter((filter) => filter.visible).map((filter) => (
+              <button key={filter.key} type="button" className={notificationFilter === filter.key ? 'is-active' : ''} onClick={() => setNotificationFilter(filter.key)}>{filter.label}</button>
+            ))}
+          </div>
+        ) : null}
+        {notificationsLoading ? <div className="px-notifPreview__status">Cargando notificaciones...</div> : null}
+        {!notificationsLoading && notificationError ? <div className="px-notifPreview__status px-notifPreview__status--error">{notificationError}</div> : null}
+        {!notificationsLoading && !notificationError && notificationPreview.length === 0 ? (
           <div className="px-notifPreview__empty">
             <span className="px-notifPreview__emptyIcon">N</span>
             <strong>No tenés notificaciones todavía.</strong>
             <p>Cuando haya novedades importantes van a aparecer acá.</p>
           </div>
-        ) : (
-          notificationPreview.map((item) => (
+        ) : null}
+        {!notificationsLoading && !notificationError && notificationPreview.length > 0 && visibleNotifications.length === 0 ? (
+          <div className="px-notifPreview__status">No hay notificaciones en este filtro.</div>
+        ) : null}
+        {!notificationsLoading && !notificationError ? visibleNotifications.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -877,19 +1032,58 @@ export default function AppNavbarClient() {
                   <div className="px-notifPreview__title">{item.title}</div>
                   <div className="px-notifPreview__date">{relativeDate(item.created_at)}</div>
                 </div>
-                <div className="px-notifPreview__meta">
-                  <span className={item.read ? 'is-read' : 'is-unread'}>{item.read ? 'Leída' : 'No leída'}</span>
-                  <span>{previewText(item.message)}</span>
-                </div>
+                <div className="px-notifPreview__msg">{previewText(item.message)}</div>
               </div>
               {!item.read ? <span className="px-notifPreview__dot" aria-label="No leída" /> : null}
             </button>
-          ))
-        )}
+          )) : null}
 
-        <Link href="/notificaciones" className="px-notifPreview__footer" onClick={() => setNotificationsOpen(false)}>
+        <Link href="/notificaciones" className="px-notifPreview__footer" onClick={closeAllMenus}>
           Ver todas las notificaciones
         </Link>
+      </div>
+    )
+  }
+
+  function openPreviewThread(thread: PreviewThread) {
+    closeAllMenus()
+    router.push(`${messageHrefForRole(role)}?thread=${encodeURIComponent(thread.id)}`)
+  }
+
+  function renderMessagesDropdown() {
+    if (!messagesOpen) return null
+
+    return (
+      <div id="player-navbar-messages-popover" className="px-navDropdown px-navDropdown--right px-notifPreview px-messagePreview" role="menu" aria-label="Mensajes">
+        <div className="px-notifPreview__head">
+          <strong>Mensajes</strong>
+          <Link href={messageHrefForRole(role)} className="px-link" onClick={closeAllMenus}>Ver todos</Link>
+        </div>
+        {messagesLoading ? <div className="px-notifPreview__status">Cargando mensajes...</div> : null}
+        {!messagesLoading && messageError ? <div className="px-notifPreview__status px-notifPreview__status--error">{messageError}</div> : null}
+        {!messagesLoading && !messageError && messagePreview.length === 0 ? (
+          <div className="px-notifPreview__empty">
+            <span className="px-notifPreview__emptyIcon">M</span>
+            <strong>No tenés conversaciones recientes.</strong>
+          </div>
+        ) : null}
+        {!messagesLoading && !messageError ? messagePreview.map((thread) => {
+          const counterpart = role === 'player' ? thread.club?.name || 'Club' : thread.player?.name || 'Jugador'
+          return (
+            <button key={thread.id} type="button" className={`px-notifPreview__item ${thread.unread_count > 0 ? 'is-unread' : 'is-read'}`} onClick={() => openPreviewThread(thread)}>
+              <span className="px-messagePreview__avatar" aria-hidden="true"><MessageAvatar thread={thread} /></span>
+              <div className="px-notifPreview__body">
+                <div className="px-notifPreview__row">
+                  <div className="px-notifPreview__title">{counterpart}</div>
+                  <div className="px-notifPreview__date">{relativeDate(thread.latest_message?.created_at || thread.updated_at)}</div>
+                </div>
+                <div className="px-notifPreview__msg">{previewText(thread.latest_message?.body || thread.subject)}</div>
+              </div>
+              {thread.unread_count > 0 ? <span className="px-notifPreview__dot" aria-label={`${thread.unread_count} sin leer`}>{thread.unread_count}</span> : null}
+            </button>
+          )
+        }) : null}
+        <Link href={messageHrefForRole(role)} className="px-notifPreview__footer" onClick={closeAllMenus}>Ver todos los mensajes</Link>
       </div>
     )
   }
@@ -907,13 +1101,10 @@ export default function AppNavbarClient() {
                 className="px-iconBtn"
                 aria-label="Notificaciones"
                 aria-expanded={notificationsOpen}
-                onClick={() => {
+                aria-controls="player-navbar-notifications-popover"
+                onClick={(event) => {
                   const shouldOpen = !notificationsOpen
-                  setNotificationsOpen(shouldOpen)
-                  setUserOpen(false)
-                  setClubOpen(false)
-                  setMobileMenuOpen(false)
-                  setSearchOpen(false)
+                  toggleNavbarOverlay('notifications', event.currentTarget)
                   if (shouldOpen) void loadPreviewData()
                 }}
               >
@@ -924,10 +1115,17 @@ export default function AppNavbarClient() {
             </div>
           ) : null}
           {showRight.messages ? (
-            <Link className="px-iconBtn" href={messageHrefForRole(role)} aria-label="Mensajes">
-              <Mail size={18} />
-              {unreadMessages > 0 ? <span className="px-iconBadge">{unreadMessages > 99 ? '99+' : unreadMessages}</span> : null}
-            </Link>
+            <div className="px-dd" style={{ position: 'relative' }}>
+              <button className="px-iconBtn" type="button" aria-label="Mensajes" aria-expanded={messagesOpen} aria-controls="player-navbar-messages-popover" onClick={(event) => {
+                const shouldOpen = !messagesOpen
+                toggleNavbarOverlay('messages', event.currentTarget)
+                if (shouldOpen) void loadMessagePreview()
+              }}>
+                <Mail size={18} />
+                {unreadMessages > 0 ? <span className="px-iconBadge">{unreadMessages > 99 ? '99+' : unreadMessages}</span> : null}
+              </button>
+              {renderMessagesDropdown()}
+            </div>
           ) : null}
         </div>
 
@@ -935,7 +1133,7 @@ export default function AppNavbarClient() {
           <Link className="px-loginBtn" href="/login">Login</Link>
         ) : (
           <div className="px-userWrap px-dd">
-            <button type="button" className="px-userBtn" onClick={() => setUserOpen((v) => !v)}>
+            <button type="button" className="px-userBtn" aria-expanded={userOpen} onClick={(event) => toggleNavbarOverlay('player', event.currentTarget)}>
               <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
               <span className="px-userName">{shorten(toTitleCaseName(user?.name), 14)}</span>
               <ChevronDown size={16} className="px-caret" />
@@ -966,13 +1164,9 @@ export default function AppNavbarClient() {
           type="button"
           className="px-mobileClubBtn px-clubBtn--themed"
           style={clubThemeStyle}
-          onClick={() => {
-            setClubOpen((v) => !v)
-            setUserOpen(false)
-            setNotificationsOpen(false)
-            setMobileMenuOpen(false)
-            setSearchOpen(false)
-          }}
+          aria-expanded={clubOpen}
+          aria-controls="player-navbar-club-popover"
+          onClick={(event) => toggleNavbarOverlay('club', event.currentTarget)}
           aria-label={`Club activo: ${displayClubName}`}
         >
           <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
@@ -1003,8 +1197,8 @@ export default function AppNavbarClient() {
             aria-expanded={mobileMenuOpen}
             onClick={() => {
               setMobileMenuOpen((value) => !value)
-              setClubOpen(false)
-              setUserOpen(false)
+              setNavbarOverlay(null)
+              setClubMenuSection(null)
               setSearchOpen(false)
             }}
           >
@@ -1023,10 +1217,17 @@ export default function AppNavbarClient() {
           </button>
         ) : null}
         {showRight.messages ? (
-          <Link className="px-iconBtn" href={messageHrefForRole(role)} aria-label="Mensajes" onClick={closeAllMenus}>
-            <Mail size={17} />
-            {unreadMessages > 0 ? <span className="px-iconBadge">{unreadMessages > 99 ? '99+' : unreadMessages}</span> : null}
-          </Link>
+          <div className="px-dd px-mobileMessageWrap">
+            <button type="button" className="px-iconBtn" aria-label="Mensajes" aria-expanded={messagesOpen} aria-controls="player-navbar-messages-popover" onClick={(event) => {
+              const shouldOpen = !messagesOpen
+              toggleNavbarOverlay('messages', event.currentTarget)
+              if (shouldOpen) void loadMessagePreview()
+            }}>
+              <Mail size={17} />
+              {unreadMessages > 0 ? <span className="px-iconBadge">{unreadMessages > 99 ? '99+' : unreadMessages}</span> : null}
+            </button>
+            {renderMessagesDropdown()}
+          </div>
         ) : null}
         {showRight.notifications ? (
           <div className="px-dd px-mobileNotifWrap">
@@ -1035,13 +1236,10 @@ export default function AppNavbarClient() {
               className="px-iconBtn"
               aria-label="Notificaciones"
               aria-expanded={notificationsOpen}
-              onClick={() => {
+              aria-controls="player-navbar-notifications-popover"
+              onClick={(event) => {
                 const shouldOpen = !notificationsOpen
-                setNotificationsOpen(shouldOpen)
-                setUserOpen(false)
-                setClubOpen(false)
-                setMobileMenuOpen(false)
-                setSearchOpen(false)
+                toggleNavbarOverlay('notifications', event.currentTarget)
                 if (shouldOpen) void loadPreviewData()
               }}
             >
@@ -1055,14 +1253,10 @@ export default function AppNavbarClient() {
           <button
             type="button"
             className="px-mobileUserBtn"
-            onClick={() => {
-              setUserOpen((v) => !v)
-              setClubOpen(false)
-              setNotificationsOpen(false)
-              setMobileMenuOpen(false)
-              setSearchOpen(false)
-            }}
+            onClick={(event) => toggleNavbarOverlay('player', event.currentTarget)}
             aria-label="Mi cuenta y actividad"
+            aria-expanded={userOpen}
+            aria-controls="player-navbar-player-popover"
           >
             <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
             {role === 'player' ? <span className="px-mobileUserName">{getFirstVisibleName(user?.name)}</span> : null}
@@ -1078,44 +1272,54 @@ export default function AppNavbarClient() {
     if (!clubOpen) return null
 
     return (
-      <div className="px-mobileClubMenu" role="menu" aria-label="Contexto del club">
+      <div id="player-navbar-club-popover" className="px-mobileClubMenu" role="menu" aria-label="Espacio Club">
         <div className="px-mobileClubMenu__head">
           <span className="px-mobileClubMenu__logo" aria-hidden="true"><ClubLogo /></span>
           <div>
-            <small>Club</small>
+            <small>Espacio Club</small>
             <strong>{displayClubName}</strong>
           </div>
         </div>
 
         {role === 'player' ? (
-          <div className="px-playerClubNav">
+          <div className="px-playerClubNav" aria-label="Espacio Club">
+            <Link className={`px-mobileLink px-playerClubNav__primary ${isActiveHref(pathname, currentSearch, '/player', true) ? 'is-active' : ''}`} href="/player" onClick={closeAllMenus}>
+              <Home size={18} />Inicio
+            </Link>
             <div className="px-playerClubNav__group">
-              <span className="px-playerClubNav__title"><Home size={15} />Inicio</span>
-              {nav.filter((item) => item.label === 'Inicio').map((item) => (
-                <Link key={item.href} className={`px-mobileChild ${isActiveItem(pathname, currentSearch, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}>Inicio</Link>
-              ))}
+              <button type="button" className={`px-mobileLink px-playerClubNav__primary ${clubMenuSection === 'tournaments' ? 'is-active' : ''}`} aria-expanded={clubMenuSection === 'tournaments'} onClick={() => setClubMenuSection((section) => section === 'tournaments' ? null : 'tournaments')}>
+                <Trophy size={18} />Torneos<ChevronDown size={16} className="px-playerClubNav__chevron" />
+              </button>
+              {clubMenuSection === 'tournaments' ? (
+                <div className="px-playerClubNav__subitems">
+                  <Link className="px-mobileChild" href="/player/torneos/calendario" onClick={closeAllMenus}><CalendarDays size={17} />Calendario</Link>
+                  <Link className="px-mobileChild" href="/player/torneos/explorar" onClick={closeAllMenus}><Compass size={17} />Explorar torneos</Link>
+                  <Link className="px-mobileChild" href="/player/torneos/reglamento" onClick={closeAllMenus}><BookOpen size={17} />Reglamento</Link>
+                </div>
+              ) : null}
             </div>
-            {nav.filter((item) => item.label === 'Torneos').map((item) => (
-              <div className="px-playerClubNav__group" key={item.href}>
-                <span className="px-playerClubNav__title"><Trophy size={15} />Torneos</span>
-                {(item.children ?? []).map((child, index) => {
-                  const Icon = index === 0 ? Trophy : index === 1 ? CalendarDays : index === 2 ? Compass : BookOpen
-                  return <Link key={child.href} className={`px-mobileChild ${isActiveChild(pathname, currentSearch, child) ? 'is-active' : ''}`} href={child.href} onClick={closeAllMenus}><Icon size={17} />{child.label}</Link>
-                })}
-              </div>
-            ))}
-            {nav.filter((item) => item.label === 'Ranking').map((item) => (
-              <div className="px-playerClubNav__group" key={item.href}>
-                <span className="px-playerClubNav__title"><Activity size={15} />Ranking</span>
-                {(item.children ?? []).map((child) => <Link key={child.href} className={`px-mobileChild ${isActiveChild(pathname, currentSearch, child) ? 'is-active' : ''}`} href={child.href} onClick={closeAllMenus}><Activity size={17} />{child.label}</Link>)}
-              </div>
-            ))}
             <div className="px-playerClubNav__group">
-              <span className="px-playerClubNav__title"><Building2 size={15} />Otros</span>
-              {nav.filter((item) => !['Inicio', 'Torneos', 'Ranking'].includes(item.label)).map((item) => {
-                const Icon = item.label === 'En vivo' ? Radio : Newspaper
-                return <Link key={item.href} className={`px-mobileChild ${isActiveItem(pathname, currentSearch, item) ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}><Icon size={17} />{item.label}</Link>
-              })}
+              <button type="button" className={`px-mobileLink px-playerClubNav__primary ${clubMenuSection === 'ranking' ? 'is-active' : ''}`} aria-expanded={clubMenuSection === 'ranking'} onClick={() => setClubMenuSection((section) => section === 'ranking' ? null : 'ranking')}>
+                <Activity size={18} />Ranking<ChevronDown size={16} className="px-playerClubNav__chevron" />
+              </button>
+              {clubMenuSection === 'ranking' ? (
+                <div className="px-playerClubNav__subitems">
+                  <Link className="px-mobileChild" href="/player/ranking/club" onClick={closeAllMenus}><Trophy size={17} />Ranking del club</Link>
+                </div>
+              ) : null}
+            </div>
+            <Link className={`px-mobileLink px-playerClubNav__primary ${isActiveHref(pathname, currentSearch, '/envivo') ? 'is-active' : ''}`} href="/envivo" onClick={closeAllMenus}><Radio size={18} />En vivo</Link>
+            <Link className={`px-mobileLink px-playerClubNav__primary ${isActiveHref(pathname, currentSearch, '/noticias') ? 'is-active' : ''}`} href="/noticias" onClick={closeAllMenus}><Newspaper size={18} />Noticias</Link>
+            <div className="px-playerClubNav__group">
+              <button type="button" className={`px-mobileLink px-playerClubNav__primary ${clubMenuSection === 'clubs' ? 'is-active' : ''}`} aria-expanded={clubMenuSection === 'clubs'} onClick={() => setClubMenuSection((section) => section === 'clubs' ? null : 'clubs')}>
+                <Building2 size={18} />Clubes<ChevronDown size={16} className="px-playerClubNav__chevron" />
+              </button>
+              {clubMenuSection === 'clubs' ? (
+                <div className="px-playerClubNav__subitems">
+                  <Link className="px-mobileChild" href="/clubs" onClick={closeAllMenus}><Compass size={17} />Ver clubes</Link>
+                  <Link className="px-mobileChild" href="/seleccionar-club" onClick={closeAllMenus}><Settings size={17} />Cambiar club</Link>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : nav.map((item) => (
@@ -1124,32 +1328,21 @@ export default function AppNavbarClient() {
           </div>
         ))}
 
-        {role !== 'platform' ? (
+        {role !== 'platform' && role !== 'player' ? (
           <>
             <div className="px-ddSep" />
-            {role === 'player' ? (
-              <>
-                <span className="px-playerClubNav__title px-playerClubNav__title--utility"><Building2 size={15} />Clubes</span>
-                <Link className="px-mobileLink px-mobileLink--muted" href="/clubs" onClick={closeAllMenus}><Compass size={17} />Ver clubes activos</Link>
-                <Link className="px-mobileLink px-mobileLink--muted" href="/seleccionar-club" onClick={closeAllMenus}><Settings size={17} />Seleccionar club</Link>
-              </>
-            ) : (
-              <>
-                <Link className="px-mobileLink px-mobileLink--muted" href="/club" onClick={closeAllMenus}>Info del club</Link>
-                <Link className="px-mobileLink px-mobileLink--muted" href="/seleccionar-club" onClick={closeAllMenus}>Cambiar club</Link>
-              </>
-            )}
+            <Link className="px-mobileLink px-mobileLink--muted" href="/club" onClick={closeAllMenus}>Info del club</Link>
+            <Link className="px-mobileLink px-mobileLink--muted" href="/seleccionar-club" onClick={closeAllMenus}>Cambiar club</Link>
             {clubs.length > 0 ? (
               <div className="px-mobileClubList" aria-label="Clubes disponibles">
-                {role === 'player' ? <small className="px-mobileClubList__title">Clubes aprobados</small> : null}
                 {clubs.map((club) => (
                   <button
                     key={club.id}
                     className={`px-mobileChild ${club.id === displayClub?.id ? 'is-active' : ''}`}
-                    onClick={async () => {
-                      await setActiveClub(club.id)
-                      setClubOpen(false)
-                    }}
+            onClick={async () => {
+              await setActiveClub(club.id)
+              closeAllMenus()
+            }}
                     type="button"
                   >
                     {club.name}
@@ -1185,7 +1378,7 @@ export default function AppNavbarClient() {
 
   return (
     <>
-      <header className={`px-nav${isGlobalPublicNav ? ' px-nav--global' : ''}`} ref={rootRef} style={clubThemeStyle}>
+      <header className={`px-nav${isGlobalPublicNav ? ' px-nav--global' : ''}${role === 'guest' ? ' px-nav--guest' : ' px-nav--authed'}`} ref={rootRef} style={clubThemeStyle}>
         <div className="px-navgrid px-desktopBar">
           {renderDesktopLeft()}
           {renderDesktopCenter()}
