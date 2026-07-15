@@ -951,20 +951,38 @@
     padding-inline: 5px 7px;
   }
 
+  .px-mobileBar--authed .px-clubBtn--themed {
+    background: var(--px-nav-surface);
+    box-shadow: none;
+  }
+
+  .px-mobileBar--authed .px-clubBtn--themed:hover,
+  .px-mobileBar--authed .px-clubBtn--themed:focus-visible {
+    background: var(--px-nav-surface);
+    box-shadow: none;
+    transform: none;
+  }
+
   .px-mobileBar--authed .px-mobileUserBtn {
     gap: 5px;
     justify-content: flex-start;
-    max-width: min(34vw, 136px);
-    min-width: 92px;
+    max-width: min(36vw, 144px);
+    min-width: 100px;
     padding-inline: 5px 7px;
   }
 
-  .px-mobileBar--authed .px-mobileUserBtn .px-avatar,
   .px-mobileBar--authed .px-mobileClubBtn .px-clubLogo {
     border-radius: 10px;
     flex: 0 0 30px;
     height: 30px;
     width: 30px;
+  }
+
+  .px-mobileBar--authed .px-mobileUserBtn .px-avatar {
+    border-radius: 999px;
+    flex: 0 0 34px;
+    height: 34px;
+    width: 34px;
   }
 
   .px-mobileBar--authed .px-mobileClubName,
@@ -3259,8 +3277,8 @@
   }
 
   .px-mobileBar--authed .px-mobileUserBtn{
-    max-width: 116px;
-    min-width: 90px;
+    max-width: 130px;
+    min-width: 104px;
   }
 
   .px-mobileBar--authed .px-mobileUserName{
