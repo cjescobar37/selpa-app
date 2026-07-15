@@ -322,6 +322,29 @@ function getPointDistribution(detail: PublicTournamentDetail) {
   return []
 }
 
+const loadingPageStyle: CSSProperties = {
+  alignItems: 'center',
+  boxSizing: 'border-box',
+  display: 'grid',
+  justifyItems: 'center',
+  margin: '0 auto',
+  minHeight: 'calc(100dvh - 96px)',
+  padding: '16px 11px 36px',
+  width: 'min(100% - 22px, 1180px)',
+}
+
+const loadingStateStyle: CSSProperties = {
+  alignItems: 'center',
+  boxSizing: 'border-box',
+  display: 'grid',
+  justifyItems: 'center',
+  margin: '0 auto',
+  minHeight: 220,
+  padding: '16px 12px',
+  textAlign: 'center',
+  width: 'min(100%, 340px)',
+}
+
 export default function TorneoDetallePage() {
   const params = useParams<{ id: string }>()
   const tournamentId = params?.id
@@ -380,9 +403,9 @@ export default function TorneoDetallePage() {
 
   if (loading) {
     return (
-      <main className="tournamentPublicDetail">
-        <div className="tournamentPublicDetail__loading">
-          <SelpaLoader title="Cargando torneo..." subtitle="Preparando la información" />
+      <main className="tournamentPublicDetail" style={loadingPageStyle}>
+        <div className="tournamentPublicDetail__loading" style={loadingStateStyle}>
+          <SelpaLoader className="tournamentPublicDetail__loader" title="Cargando torneo..." subtitle="Preparando la información" />
         </div>
       </main>
     )
@@ -2047,6 +2070,95 @@ export default function TorneoDetallePage() {
             padding-top: 12px;
           }
 
+          .tournamentPublicDetail__loading {
+            align-content: center;
+            align-items: center;
+            box-sizing: border-box;
+            display: grid;
+            justify-items: center;
+            margin: 0 auto;
+            min-height: calc(100dvh - 128px);
+            padding: 16px 12px;
+            text-align: center;
+            width: min(100%, 360px);
+          }
+
+          .tournamentPublicDetail__loader {
+            justify-self: center;
+            margin-inline: auto;
+            max-width: 320px;
+            width: min(100%, 320px);
+          }
+
+          .tournamentPublicDetail .pampraxHero {
+            background:
+              linear-gradient(135deg, rgba(2, 6, 23, .94), rgba(6, 27, 58, .9) 62%, rgba(7, 20, 38, .96)),
+              var(--pamprax-hero-cover, linear-gradient(transparent, transparent));
+            background-position: center;
+            background-size: cover;
+            border-color: color-mix(in srgb, var(--pamprax-hero-accent, #22d3ee) 34%, rgba(255, 255, 255, .14));
+            border-radius: 18px;
+            box-shadow: 0 18px 40px rgba(2, 6, 23, .16);
+            gap: 9px;
+            grid-template-columns: 1fr;
+            min-height: 158px;
+            padding: 12px 14px;
+          }
+
+          .tournamentPublicDetail .pampraxHero__texture {
+            opacity: .16;
+          }
+
+          .tournamentPublicDetail .pampraxHero__body.has-logo {
+            gap: 0;
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .tournamentPublicDetail .pampraxHero__logo {
+            display: none;
+          }
+
+          .tournamentPublicDetail .pampraxHero__text {
+            gap: 5px;
+          }
+
+          .tournamentPublicDetail .pampraxHero__text > span {
+            font-size: 9px;
+          }
+
+          .tournamentPublicDetail .pampraxHero__text h1 {
+            display: -webkit-box;
+            font-size: clamp(24px, 7.3vw, 30px);
+            letter-spacing: -.045em;
+            line-height: .96;
+            max-width: 100%;
+            overflow: hidden;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+          }
+
+          .tournamentPublicDetail .pampraxHero__text p {
+            display: -webkit-box;
+            font-size: 11.5px;
+            line-height: 1.2;
+            overflow: hidden;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+          }
+
+          .tournamentPublicDetail .pampraxHero__actions {
+            gap: 6px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%;
+          }
+
+          .tournamentPublicDetail .pampraxHero__action,
+          .tournamentPublicDetail .pampraxHero__statusBadge {
+            font-size: 10.5px;
+            min-height: 32px;
+            padding: 6px 9px;
+          }
+
           .tournamentPublicDetail__grid {
             grid-template-columns: 1fr;
           }
@@ -2155,8 +2267,9 @@ export default function TorneoDetallePage() {
 
           .tournamentPublicDetail__signupCard {
             border-radius: 18px;
-            gap: 10px;
-            padding: 12px;
+            box-shadow: none;
+            gap: 8px;
+            padding: 10px;
           }
 
           .tournamentPublicDetail__countdown {

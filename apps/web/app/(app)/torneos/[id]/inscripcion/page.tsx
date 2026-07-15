@@ -241,6 +241,29 @@ const wizardSteps: Array<{ id: WizardStep; label: string }> = [
   { id: 4, label: 'Confirmación' },
 ]
 
+const loadingPageStyle: CSSProperties = {
+  alignItems: 'center',
+  boxSizing: 'border-box',
+  display: 'grid',
+  justifyItems: 'center',
+  margin: '0 auto',
+  minHeight: 'calc(100dvh - 96px)',
+  padding: '16px 11px 36px',
+  width: 'min(100% - 22px, 1180px)',
+}
+
+const loadingStateStyle: CSSProperties = {
+  alignItems: 'center',
+  boxSizing: 'border-box',
+  display: 'grid',
+  justifyItems: 'center',
+  margin: '0 auto',
+  minHeight: 220,
+  padding: '16px 12px',
+  textAlign: 'center',
+  width: 'min(100%, 340px)',
+}
+
 export default function TorneoInscripcionPage() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
@@ -624,9 +647,9 @@ export default function TorneoInscripcionPage() {
 
   if (loading) {
     return (
-      <main className="tournamentSignupPage">
-        <div className="tournamentSignupPage__state">
-          <SelpaLoader title="Preparando inscripción..." subtitle="Cargando datos del torneo" />
+      <main className="tournamentSignupPage" style={loadingPageStyle}>
+        <div className="tournamentSignupPage__state" style={loadingStateStyle}>
+          <SelpaLoader className="tournamentSignupPage__loader" title="Preparando inscripción..." subtitle="Cargando datos del torneo" />
         </div>
       </main>
     )
@@ -661,7 +684,7 @@ export default function TorneoInscripcionPage() {
   } as CSSProperties
 
   return (
-    <main className="tournamentSignupPage" style={themeStyle}>
+    <main className={`tournamentSignupPage ${!detail.viewer.isAuthenticated ? 'is-guest-signup' : ''}`} style={themeStyle}>
       <PampraxHero
         kicker="Inscripción al torneo"
         title={detail.tournament.name}
@@ -681,11 +704,16 @@ export default function TorneoInscripcionPage() {
       {message ? <div className="tournamentSignupPage__message">{message}</div> : null}
 
       {!detail.viewer.isAuthenticated ? (
-        <section className="tournamentSignupPage__panel tournamentSignupPage__panel--center">
-          <h2>Ingresá para inscribirte</h2>
-          <p>Necesitamos tu cuenta para validar tu perfil de jugador y registrar la pareja.</p>
+        <section className="tournamentSignupPage__panel tournamentSignupPage__panel--center tournamentSignupPage__guestGate">
+          <span>Cuenta SELPA</span>
+          <strong className="tournamentSignupPage__guestTournament">{detail.tournament.name}</strong>
+          <h2>Iniciá sesión para anotarte</h2>
+          <p>Entrás con tu cuenta y volvés directo a esta inscripción.</p>
           <Link className="tournamentSignupPage__primary" href={`/login?next=/torneos/${detail.tournament.id}/inscripcion`}>
-            Ingresar para inscribirme
+            Ingresar y continuar
+          </Link>
+          <Link className="tournamentSignupPage__guestBack" href={`/torneos/${detail.tournament.id}`}>
+            Volver al torneo
           </Link>
         </section>
       ) : registrationClosed && !alreadyRegistered ? (
@@ -1510,6 +1538,41 @@ export default function TorneoInscripcionPage() {
           display: grid;
           gap: 12px;
           justify-items: center;
+        }
+
+        .tournamentSignupPage__guestGate {
+          background:
+            radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--tournament-signup-accent, #22d3ee) 14%, transparent), transparent 44%),
+            rgba(255,255,255,.9);
+          border-color: color-mix(in srgb, var(--tournament-signup-accent, #22d3ee) 24%, rgba(15,23,42,.1));
+        }
+
+        .tournamentSignupPage__guestGate > span {
+          color: #0284c7;
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+        }
+
+        .tournamentSignupPage__guestTournament {
+          color: #0b2554;
+          display: block;
+          font-size: 13px;
+          font-weight: 950;
+          line-height: 1.15;
+          max-width: 340px;
+        }
+
+        .tournamentSignupPage__guestBack {
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 900;
+          text-decoration: none;
+        }
+
+        .tournamentSignupPage__guestBack:hover {
+          color: #0b2554;
         }
 
         .tournamentSignupPage__panel h2 {
@@ -2634,6 +2697,39 @@ export default function TorneoInscripcionPage() {
             width: min(100% - 22px, 1180px);
           }
 
+          .tournamentSignupPage.is-guest-signup {
+            align-content: center;
+            display: grid;
+            min-height: calc(100dvh - 96px);
+            padding-bottom: 44px;
+            padding-top: 14px;
+          }
+
+          .tournamentSignupPage.is-guest-signup .pampraxHero,
+          .tournamentSignupPage.is-guest-signup .tournamentSignupPage__message {
+            display: none;
+          }
+
+          .tournamentSignupPage__state {
+            align-content: center;
+            align-items: center;
+            box-sizing: border-box;
+            display: grid;
+            justify-items: center;
+            margin: 0 auto;
+            min-height: calc(100dvh - 128px);
+            padding: 16px 12px;
+            text-align: center;
+            width: min(100%, 360px);
+          }
+
+          .tournamentSignupPage__loader {
+            justify-self: center;
+            margin-inline: auto;
+            max-width: 320px;
+            width: min(100%, 320px);
+          }
+
           .tournamentSignupPage__panel--wide {
             grid-row: auto;
           }
@@ -2706,28 +2802,65 @@ export default function TorneoInscripcionPage() {
           }
 
           .tournamentSignupPage__panel--center {
+            background: rgba(255, 255, 255, .82);
             border-radius: 18px;
-            gap: 8px;
-            margin-top: 10px;
-            padding: 14px;
+            box-shadow: none;
+            gap: 7px;
+            margin-top: 8px;
+            padding: 12px;
           }
 
           .tournamentSignupPage__panel--center h2 {
-            font-size: 20px;
+            font-size: 19px;
             line-height: 1.05;
           }
 
           .tournamentSignupPage__panel--center p {
-            font-size: 13px;
-            line-height: 1.3;
+            font-size: 12.5px;
+            line-height: 1.25;
             max-width: 310px;
           }
 
+          .tournamentSignupPage__guestGate {
+            border-color: color-mix(in srgb, var(--tournament-signup-accent, #22d3ee) 28%, rgba(15,23,42,.09));
+            box-shadow: 0 18px 40px rgba(15,23,42,.08);
+            gap: 7px;
+            margin: 0 auto;
+            padding: 17px 16px 15px;
+            width: min(100%, 334px);
+          }
+
+          .tournamentSignupPage__guestGate > span {
+            font-size: 9.5px;
+          }
+
+          .tournamentSignupPage__guestTournament {
+            display: -webkit-box;
+            font-size: 12px;
+            max-width: 260px;
+            overflow: hidden;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+          }
+
+          .tournamentSignupPage__guestGate h2 {
+            font-size: 20px;
+          }
+
+          .tournamentSignupPage__guestGate p {
+            max-width: 250px;
+          }
+
           .tournamentSignupPage__panel--center .tournamentSignupPage__primary {
-            font-size: 13px;
-            min-height: 42px;
-            padding: 0 15px;
+            font-size: 12.5px;
+            min-height: 38px;
+            min-width: 196px;
+            padding: 0 18px;
             width: auto;
+          }
+
+          .tournamentSignupPage__guestBack {
+            margin-top: 1px;
           }
 
           .tournamentSignupPage__toast {

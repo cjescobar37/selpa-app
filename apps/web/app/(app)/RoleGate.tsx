@@ -25,7 +25,6 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
       '/clubs',
       '/clubs/nuevo',
       '/perfil',
-      '/player',
     ],
     []
   )

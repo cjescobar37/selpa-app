@@ -43,9 +43,9 @@ function AlertBox({ alert }: { alert: AlertState }) {
       color: '#166534',
     },
     warning: {
-      border: '1px solid #f7d58d',
-      background: '#fff8e6',
-      color: '#8a5a00',
+      border: '1px solid rgba(83,199,217,.24)',
+      background: 'linear-gradient(180deg, rgba(83,199,217,.08), rgba(255,255,255,.9))',
+      color: '#17324d',
     },
     error: {
       border: '1px solid #f0b2b2',
@@ -64,11 +64,11 @@ function AlertBox({ alert }: { alert: AlertState }) {
       style={{
         ...styles[alert.type],
         borderRadius: 18,
-        padding: 15,
-        boxShadow: '0 10px 30px rgba(0,0,0,0.06)',
+        padding: 12,
+        boxShadow: '0 10px 24px rgba(15,23,42,0.05)',
       }}
     >
-      <div style={{ fontWeight: 900 }}>{alert.title}</div>
+      <div style={{ fontWeight: 850 }}>{alert.title}</div>
       {alert.message ? <div style={{ marginTop: 6, opacity: 0.95 }}>{alert.message}</div> : null}
     </div>
   )
@@ -230,61 +230,41 @@ export default function SeleccionarClubPage() {
   }
 
   return (
-    <div className="px-auth">
+    <div className="px-auth px-playerFlow px-playerFlow--wide">
       <div
         className="px-authCard"
-        style={{
-          maxWidth: 980,
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,248,252,0.96))',
-          boxShadow: '0 20px 60px rgba(16,24,40,0.10)',
-        }}
       >
         <div className="px-authTop">
           <div className="px-authBrand">
-            <div
-              className="px-authLogo"
-              style={{
-                background: 'linear-gradient(135deg, #3558a5, #28457f)',
-                boxShadow: '0 10px 24px rgba(53,88,165,0.22)',
-              }}
-            >
+            <div className="px-authLogo">
               <img src="/brand/selpa-isotipo.png" alt="SELPA" />
             </div>
             <div className="px-authBrandText">
+              <span className="px-playerFlowKicker">Contexto jugador</span>
               <h1 className="px-authTitle">Seleccionar club</h1>
-              <p className="px-authSub">Definí tu club activo para trabajar con el contexto correcto.</p>
+              <p className="px-authSub">Elegí el club con el que vas a jugar, competir y recibir actividad.</p>
             </div>
           </div>
         </div>
 
-        <div
-          style={{
-            height: 2,
-            borderRadius: 999,
-            background: 'linear-gradient(90deg, rgba(255,78,114,0.28), rgba(105,223,227,0.20))',
-            marginBottom: 14,
-          }}
-        />
-
         <div className="px-authBody">
           <AlertBox alert={alert} />
 
-          <div className="px-help" style={{ marginTop: 12, color: '#41506c' }}>
-            El club activo impacta en <b>navbar, permisos, ranking, torneos e inscripciones</b>.
+          <div className="px-playerFlowNotice">
+            El club activo define navbar, permisos, rankings, torneos e inscripciones.
           </div>
 
-          <div className="px-sepRow" style={{ color: '#727f97', marginTop: 16 }}>clubes aprobados</div>
+          <div className="px-playerSectionHead">
+            <div>
+              <h2>Clubes aprobados</h2>
+              <p>Usalos como contexto principal de SELPA.</p>
+            </div>
+          </div>
 
           {loading ? (
             <div className="px-help">Cargando clubes…</div>
           ) : approved.length > 0 ? (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: 12,
-              }}
-            >
+            <div className="px-playerClubGrid">
               {approved.map((item) => {
                 const club = item.club
                 if (!club) return null
@@ -298,34 +278,10 @@ export default function SeleccionarClubPage() {
                     type="button"
                     onClick={() => activateClub(item.club_id)}
                     disabled={isSaving}
-                    style={{
-                      textAlign: 'left',
-                      padding: 16,
-                      borderRadius: 18,
-                      border: isActive
-                        ? '1px solid rgba(105,223,227,.55)'
-                        : '1px solid rgba(26,46,90,.10)',
-                      background: isActive
-                        ? 'linear-gradient(180deg, rgba(105,223,227,.14), rgba(105,223,227,.07))'
-                        : 'linear-gradient(180deg, rgba(255,255,255,.95), rgba(246,248,252,.95))',
-                      color: '#13213c',
-                      display: 'grid',
-                      gap: 10,
-                      cursor: 'pointer',
-                      boxShadow: isActive ? '0 14px 30px rgba(105,223,227,.12)' : '0 10px 24px rgba(16,24,40,.05)',
-                    }}
+                    className={`px-playerClubCard ${isActive ? 'is-active' : ''}`}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span
-                        className="px-clubLogo"
-                        style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 15,
-                          background: 'linear-gradient(135deg, rgba(53,88,165,.14), rgba(105,223,227,.12))',
-                          color: '#28457f',
-                        }}
-                      >
+                    <div className="px-playerClubMain">
+                      <span className="px-playerClubLogo">
                         {club.logo_url ? (
                           <img src={club.logo_url} alt="" />
                         ) : (
@@ -334,55 +290,69 @@ export default function SeleccionarClubPage() {
                       </span>
 
                       <div>
-                        <div style={{ fontWeight: 900 }}>{club.name}</div>
-                        <div style={{ color: '#667085', fontSize: 13 }}>
+                        <h3 className="px-playerClubName">{club.name}</h3>
+                        <div className="px-playerClubMeta">
                           {club.city ?? 'Sin ciudad'}
                         </div>
                       </div>
                     </div>
 
-                    <div style={{ fontSize: 13, color: '#667085' }}>
-                      Rol: <b style={{ color: '#21314f' }}>{item.role}</b>
+                    <div className="px-playerClubFoot">
+                      <span className="px-playerStatus px-playerStatus--approved">
+                        {isActive ? 'Aprobado · Activo' : 'Aprobado'}
+                      </span>
+                      <span className="px-playerClubCta">
+                        {isSaving ? 'Activando...' : isActive ? 'Activo' : 'Usar club'}
+                      </span>
                     </div>
 
-                    <div style={{ fontSize: 13, color: '#667085' }}>
-                      {isActive ? 'Club activo actual' : 'Hacé click para activarlo'}
-                    </div>
-
-                    <div style={{ fontWeight: 800, color: '#21314f' }}>
-                      {isSaving ? 'Activando…' : isActive ? 'Activo' : 'Usar este club'}
-                    </div>
+                    <div className="px-playerClubMeta">Rol: <b>{item.role}</b></div>
                   </button>
                 )
               })}
             </div>
           ) : (
-            <div className="px-help" style={{ color: '#667085' }}>No tenés clubes aprobados todavía.</div>
+            <div className="px-playerFlowPanel">
+              <strong>Todavía no tenés clubes aprobados.</strong>
+              <span className="px-help">Podés pedir acceso a un club existente o dar de alta el tuyo.</span>
+            </div>
           )}
 
           {pending.length > 0 ? (
             <>
-              <div className="px-sepRow" style={{ color: '#727f97', marginTop: 18 }}>
-                solicitudes / membresías pendientes
+              <div className="px-playerSectionHead">
+                <div>
+                  <h2>Solicitudes en curso</h2>
+                  <p>Estados pendientes de revisión del club.</p>
+                </div>
               </div>
 
-              <div style={{ display: 'grid', gap: 10 }}>
+              <div className="px-playerClubGrid">
                 {pending.map((item) => {
                   const club = item.club
                   return (
                     <div
                       key={`${item.club_id}-${item.status}`}
-                      className="px-help"
-                      style={{
-                        border: '1px solid rgba(255,196,0,.22)',
-                        background: 'linear-gradient(180deg, rgba(255,196,0,.08), rgba(255,196,0,.04))',
-                        borderRadius: 14,
-                        padding: 12,
-                        color: '#665200',
-                      }}
+                      className="px-playerClubCard"
                     >
-                      <b>{club?.name ?? 'Club'}</b> · Estado: <b>{item.status}</b> · Rol:{' '}
-                      <b>{item.role}</b>
+                      <div className="px-playerClubMain">
+                        <span className="px-playerClubLogo">
+                          {club?.logo_url ? (
+                            <img src={club.logo_url} alt="" />
+                          ) : (
+                            <span>{getClubInitials(club?.name ?? 'Club')}</span>
+                          )}
+                        </span>
+                        <div>
+                          <h3 className="px-playerClubName">{club?.name ?? 'Club'}</h3>
+                          <div className="px-playerClubMeta">{club?.city ?? 'Sin ciudad'} · Rol: <b>{item.role}</b></div>
+                        </div>
+                      </div>
+                      <div className="px-playerClubFoot">
+                        <span className={`px-playerStatus ${item.status === 'REJECTED' ? 'px-playerStatus--rejected' : 'px-playerStatus--pending'}`}>
+                          {membershipStatusLabel(item.status)}
+                        </span>
+                      </div>
                     </div>
                   )
                 })}
@@ -390,23 +360,19 @@ export default function SeleccionarClubPage() {
             </>
           ) : null}
 
-          <div className="px-sepRow" style={{ color: '#727f97', marginTop: 18 }}>acciones</div>
+          <div className="px-playerSectionHead">
+            <div>
+              <h2>Acciones disponibles</h2>
+              <p>Elegí cómo continuar si todavía no tenés un club activo.</p>
+            </div>
+          </div>
 
-          <div
-            className="px-authRow"
-            style={{
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 10,
-              borderTop: '1px solid rgba(26,46,90,.08)',
-              paddingTop: 14,
-            }}
-          >
-            <Link className="px-link" href="/clubs">
+          <div className="px-playerFlowActions">
+            <Link className="px-btn" href="/clubs">
               Ver clubes disponibles
             </Link>
 
-            <Link className="px-link" href="/clubs/nuevo">
+            <Link className="px-btn px-btn--ghost" href="/clubs/nuevo">
               Dar de alta mi club
             </Link>
 
@@ -415,11 +381,6 @@ export default function SeleccionarClubPage() {
               type="button"
               onClick={() => router.replace('/player')}
               disabled={loading}
-              style={{
-                background: 'white',
-                color: '#1c2d4d',
-                border: '1px solid rgba(26,46,90,.12)',
-              }}
             >
               Seguir en modo jugador
             </button>
@@ -428,4 +389,11 @@ export default function SeleccionarClubPage() {
       </div>
     </div>
   )
+}
+
+function membershipStatusLabel(status: string) {
+  if (status === 'PENDING') return 'Pendiente'
+  if (status === 'APPROVED') return 'Aprobado'
+  if (status === 'REJECTED') return 'Rechazado'
+  return status || 'Sin solicitud'
 }

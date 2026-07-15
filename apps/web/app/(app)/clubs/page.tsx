@@ -87,175 +87,122 @@ export default function ClubsPage() {
   }
 
   return (
-    <div style={{ maxWidth: 980 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ fontSize: 30, fontWeight: 900, marginBottom: 6 }}>Clubes activos</h1>
-          <p style={{ opacity: 0.8 }}>
-            Explorá todos los clubes activos de {BRAND.name} y solicitá tu alta como jugador en el que quieras.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <Link href="/seleccionar-club" style={linkBtn}>Seleccionar club</Link>
-          <Link href="/clubs/nuevo" style={linkBtn}>Dar de alta mi club</Link>
-        </div>
-      </div>
-
-      {msg ? (
-        <div
-          style={{
-            marginTop: 14,
-            padding: 12,
-            borderRadius: 14,
-            border: '1px solid rgba(105,223,227,.25)',
-            background: 'rgba(105,223,227,.08)',
-          }}
-        >
-          {msg}
-        </div>
-      ) : null}
-
-      {loading ? <div style={{ marginTop: 18 }}>Cargando clubes…</div> : null}
-
-      <div
-        style={{
-          marginTop: 18,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-          gap: 14,
-        }}
-      >
-        {ordered.map((club) => {
-          const status = club.membership_status
-          const canRequest = !status || status === 'REJECTED'
-          const isPending = status === 'PENDING'
-          const isApproved = club.membership_approved
-          const isBusy = requestingId === club.id
-
-          return (
-            <div
-              key={club.id}
-              style={{
-                padding: 16,
-                borderRadius: 18,
-                border: '1px solid rgba(255,255,255,0.12)',
-                background: 'linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03))',
-                display: 'grid',
-                gap: 12,
-              }}
-            >
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <span
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 16,
-                    overflow: 'hidden',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'rgba(105,223,227,.12)',
-                    fontWeight: 900,
-                  }}
-                >
-                  {club.logo_url ? (
-                    <img src={club.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span>{getClubInitials(club.name)}</span>
-                  )}
-                </span>
-
-                <div>
-                  <div style={{ fontWeight: 900, fontSize: 16 }}>{club.name}</div>
-                  <div style={{ opacity: 0.78, fontSize: 13 }}>
-                    {[club.city, club.province].filter(Boolean).join(', ') || 'Sin ubicación'}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ fontSize: 13, opacity: 0.78 }}>
-                Estado actual:{' '}
-                <b>
-                  {status ?? 'SIN SOLICITUD'}
-                </b>
-                {club.membership_role ? <> · Rol: <b>{club.membership_role}</b></> : null}
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {canRequest ? (
-                  <button
-                    type="button"
-                    onClick={() => requestJoin(club.id)}
-                    disabled={isBusy}
-                    style={primaryBtn}
-                  >
-                    {isBusy ? 'Enviando…' : status === 'REJECTED' ? 'Volver a solicitar' : 'Solicitar unirme'}
-                  </button>
-                ) : null}
-
-                {isPending ? (
-                  <span style={pill('warning')}>Pendiente de aprobación</span>
-                ) : null}
-
-                {isApproved ? (
-                  <Link href="/seleccionar-club" style={{ ...linkBtn, display: 'inline-flex' }}>
-                    Ir a activarlo
-                  </Link>
-                ) : null}
-              </div>
+    <div className="px-playerFlow px-playerFlow--wide">
+      <div className="px-playerFlowCard">
+        <div className="px-authTop">
+          <div className="px-playerSectionHead">
+            <div className="px-playerFlowIntro">
+              <span className="px-playerFlowKicker">Comunidad jugador</span>
+              <h1 className="px-authTitle">Clubes activos</h1>
+              <p className="px-authSub">
+                Explorá clubes de {BRAND.name} y solicitá tu alta para jugar desde tu perfil.
+              </p>
             </div>
-          )
-        })}
-      </div>
 
-      {!loading && ordered.length === 0 ? (
-        <div style={{ marginTop: 18, opacity: 0.8 }}>Todavía no hay clubes cargados.</div>
-      ) : null}
+            <div className="px-playerFlowActions" style={{ borderTop: 0, paddingTop: 0 }}>
+              <Link href="/seleccionar-club" className="px-btn px-btn--ghost">Seleccionar club</Link>
+              <Link href="/clubs/nuevo" className="px-btn">Dar de alta mi club</Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-authBody">
+          {msg ? (
+            <div className="px-playerFlowNotice">
+              {msg}
+            </div>
+          ) : null}
+
+          {loading ? <div className="px-playerFlowPanel">Cargando clubes...</div> : null}
+
+          <div className="px-playerClubGrid">
+            {ordered.map((club) => {
+              const status = club.membership_status
+              const canRequest = !status || status === 'REJECTED'
+              const isPending = status === 'PENDING'
+              const isApproved = club.membership_approved
+              const isRejected = status === 'REJECTED'
+              const isBusy = requestingId === club.id
+
+              return (
+                <article
+                  key={club.id}
+                  className={`px-playerClubCard ${isApproved ? 'is-active' : ''}`}
+                >
+                  <div className="px-playerClubMain">
+                    <span className="px-playerClubLogo">
+                      {club.logo_url ? (
+                        <img src={club.logo_url} alt="" />
+                      ) : (
+                        <span>{getClubInitials(club.name)}</span>
+                      )}
+                    </span>
+
+                    <div>
+                      <h2 className="px-playerClubName">{club.name}</h2>
+                      <div className="px-playerClubMeta">
+                        {[club.city, club.province].filter(Boolean).join(', ') || 'Sin ubicación'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-playerClubFoot">
+                    <span className={`px-playerStatus ${statusClass(status, isApproved)}`}>
+                      {statusLabel(status, isApproved)}
+                    </span>
+
+                    {canRequest ? (
+                      <button
+                        type="button"
+                        onClick={() => requestJoin(club.id)}
+                        disabled={isBusy}
+                        className="px-playerClubCta"
+                      >
+                        {isBusy ? 'Enviando...' : isRejected ? 'Volver a solicitar' : 'Solicitar unirme'}
+                      </button>
+                    ) : null}
+
+                    {isPending ? (
+                      <span className="px-playerClubCta px-playerClubCta--soft">En revisión</span>
+                    ) : null}
+
+                    {isApproved ? (
+                      <Link href="/seleccionar-club" className="px-playerClubCta">
+                        Ir a activarlo
+                      </Link>
+                    ) : null}
+                  </div>
+
+                  {club.membership_role ? (
+                    <div className="px-playerClubMeta">Rol: <b>{club.membership_role}</b></div>
+                  ) : null}
+                </article>
+              )
+            })}
+          </div>
+
+          {!loading && ordered.length === 0 ? (
+            <div className="px-playerFlowPanel">
+              <strong>Todavía no hay clubes cargados.</strong>
+              <span className="px-help">Podés volver más tarde o dar de alta tu club para empezar.</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }
 
-const primaryBtn: React.CSSProperties = {
-  padding: '10px 14px',
-  borderRadius: 12,
-  border: '1px solid rgba(105,223,227,.35)',
-  background: 'rgba(105,223,227,.12)',
-  color: 'white',
-  cursor: 'pointer',
-  fontWeight: 800,
+function statusLabel(status: string | null, approved: boolean) {
+  if (approved) return 'Aprobado'
+  if (status === 'PENDING') return 'Pendiente'
+  if (status === 'REJECTED') return 'Rechazado'
+  return 'Sin solicitud'
 }
 
-const linkBtn: React.CSSProperties = {
-  padding: '10px 14px',
-  borderRadius: 12,
-  border: '1px solid rgba(255,255,255,.15)',
-  background: 'rgba(255,255,255,.05)',
-  color: 'white',
-  textDecoration: 'none',
-  fontWeight: 700,
-}
-
-function pill(kind: 'warning' | 'success'): React.CSSProperties {
-  if (kind === 'success') {
-    return {
-      padding: '8px 12px',
-      borderRadius: 999,
-      border: '1px solid rgba(84,214,120,.28)',
-      background: 'rgba(84,214,120,.12)',
-      color: 'white',
-      fontSize: 13,
-      fontWeight: 700,
-    }
-  }
-
-  return {
-    padding: '8px 12px',
-    borderRadius: 999,
-    border: '1px solid rgba(255,196,0,.28)',
-    background: 'rgba(255,196,0,.12)',
-    color: 'white',
-    fontSize: 13,
-    fontWeight: 700,
-  }
+function statusClass(status: string | null, approved: boolean) {
+  if (approved) return 'px-playerStatus--approved'
+  if (status === 'PENDING') return 'px-playerStatus--pending'
+  if (status === 'REJECTED') return 'px-playerStatus--rejected'
+  return ''
 }

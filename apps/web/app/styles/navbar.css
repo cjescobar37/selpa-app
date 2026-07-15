@@ -1227,6 +1227,41 @@
   white-space: nowrap;
 }
 
+.px-notifPreview__meta{
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.px-notifPreview__meta span{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.px-notifPreview__meta span:first-child{
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: rgba(15,23,42,.06);
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.px-notifPreview__meta span:first-child.is-unread{
+  background: rgba(225,29,72,.08);
+  color: #be123c;
+}
+
 .px-notifPreview__dot{
   background: #e11d48;
   border-radius: 999px;
@@ -1256,6 +1291,44 @@
 .px-notifPreview__footer:hover{
   box-shadow: 0 16px 34px var(--px-club-glow, rgba(14,165,233,.24));
   transform: translateY(-1px);
+}
+
+@media (max-width: 980px) {
+  .px-mobileNotifWrap .px-notifPreview {
+    left: auto;
+    right: 8px;
+    top: 52px;
+    position: fixed;
+    width: min(360px, calc(100vw - 16px));
+    min-width: 0;
+    max-height: min(70dvh, 520px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 0 0 18px 18px;
+    z-index: 1250;
+  }
+
+  .px-mobileNotifWrap .px-notifPreview__item {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px 9px;
+  }
+
+  .px-mobileNotifWrap .px-notifPreview__icon {
+    height: 30px;
+    width: 30px;
+  }
+
+  .px-mobileNotifWrap .px-notifPreview__row {
+    gap: 8px;
+  }
+
+  .px-mobileNotifWrap .px-notifPreview__title {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
 }
 
 @media (max-width: 430px) {
@@ -2726,31 +2799,66 @@
   }
 
   .px-mobileBar--authed{
+    align-items: center;
     gap: 8px;
-    min-height: 44px;
+    min-height: 46px;
   }
 
   .px-mobileBar--authed .px-mobileActions{
+    align-items: center;
     gap: 6px;
   }
 
   .px-mobileBar--authed .px-iconBtn,
   .px-mobileBar--authed .px-mobileUserBtn,
   .px-mobileBar--authed .px-mobileClubBtn{
-    height: 32px;
-    min-height: 32px;
+    align-items: center;
+    border-radius: 14px;
+    height: 34px;
+    justify-content: center;
+    min-height: 34px;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
   .px-mobileBar--authed .px-iconBtn{
-    min-width: 32px;
-    width: 32px;
+    min-width: 34px;
+    width: 34px;
   }
 
   .px-mobileBar--authed .px-mobileClubBtn{
-    padding-right: 8px;
+    gap: 6px;
+    max-width: min(47vw, 180px);
+    padding-left: 4px;
+    padding-right: 9px;
   }
 
   .px-mobileBar--authed .px-mobileClubName{
-    max-width: 82px;
+    max-width: 92px;
+    line-height: 1;
+  }
+
+  .px-mobileBar--authed .px-mobileUserBtn{
+    gap: 4px;
+    padding-left: 4px;
+    padding-right: 7px;
+  }
+
+  .px-mobileBar--authed .px-mobileUserBtn .px-avatar,
+  .px-mobileBar--authed .px-mobileClubBtn .px-clubLogo{
+    border-radius: 10px;
+    height: 26px;
+    width: 26px;
+  }
+
+  .px-mobileClubMenu,
+  .px-userWrap .px-navDropdown--right{
+    border-radius: 0 0 18px 18px;
+    left: 8px;
+    max-height: calc(100dvh - 64px - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    right: 8px;
+    top: 52px;
   }
 }

@@ -683,21 +683,63 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
           .px-inboxHero p { font-size: 12px; line-height: 1.25; }
           .px-newMessageBtn { min-height: 34px; padding: 0 12px; }
           .px-threadPanel, .px-conversationPanel { border-radius: 16px; box-shadow: 0 10px 26px rgba(15,23,42,.055); }
-          .px-conversationPanel { grid-template-rows: auto minmax(220px, 1fr) auto; min-height: 430px; }
+          .px-conversationPanel { grid-template-rows: auto minmax(0, 1fr) auto; min-height: calc(100dvh - 92px); }
           .px-threadPanel__head, .px-conversationHead { padding: 12px; }
           .px-conversationHead h2 { font-size: 19px; }
-          .px-messageStream { gap: 8px; max-height: 430px; padding: 10px; }
+          .px-messageStream { gap: 8px; max-height: none; min-height: 0; overscroll-behavior: contain; padding: 10px; }
           .px-threadItem { border-radius: 13px; grid-template-columns: auto minmax(0, 1fr); padding: 10px; }
           .px-threadMeta { grid-column: 2; justify-items: start; }
           .px-threadAvatar { height: 38px; width: 38px; }
           .px-messageBubble { border-radius: 13px; max-width: 94%; padding: 9px 10px; }
           .px-messageBubble p { font-size: 12px; line-height: 1.38; }
-          .px-replyBox { gap: 8px; grid-template-columns: 1fr; padding: 10px; }
-          .px-replyBox textarea { border-radius: 12px; min-height: 72px; padding: 9px 10px; }
-          .px-replyBox button { justify-content: center; min-height: 36px; width: 100%; }
+          .px-replyBox {
+            align-items: end;
+            backdrop-filter: blur(14px);
+            background: rgba(255,255,255,.94);
+            bottom: env(safe-area-inset-bottom, 0px);
+            gap: 7px;
+            grid-template-columns: minmax(0, 1fr) 42px;
+            padding: 8px;
+            position: sticky;
+            z-index: 3;
+          }
+          .px-replyBox textarea {
+            border-radius: 13px;
+            font-size: 16px;
+            line-height: 1.25;
+            max-height: 82px;
+            min-height: 40px;
+            padding: 9px 10px;
+            resize: none;
+          }
+          .px-replyBox button {
+            font-size: 0;
+            gap: 0;
+            height: 40px;
+            justify-content: center;
+            min-height: 40px;
+            padding: 0;
+            width: 42px;
+          }
+          .px-replyBox button svg { height: 17px; width: 17px; }
+          .px-composerOverlay { align-items: end; padding: 10px 10px max(10px, env(safe-area-inset-bottom)); }
+          .px-composerModal { border-radius: 20px 20px 0 0; max-height: min(82dvh, 640px); width: 100%; }
           .px-composerActions { align-items: stretch; flex-direction: column-reverse; }
-          .px-composerHead, .px-composerBody, .px-composerActions { padding-left: 14px; padding-right: 14px; }
+          .px-composerHead { padding: 13px 14px 11px; }
+          .px-composerBody { gap: 9px; padding: 12px 14px; }
+          .px-composerActions { padding: 10px 14px 14px; }
           .px-composerHead h2 { font-size: 22px; }
+          .px-composeField { gap: 5px; }
+          .px-composeField input, .px-composeField select, .px-composeField textarea {
+            border-radius: 12px;
+            font-size: 16px;
+            min-height: 40px;
+            padding: 8px 10px;
+          }
+          .px-composeField textarea {
+            max-height: 118px;
+            min-height: 84px;
+          }
           .px-composeCancel, .px-composeSubmit { justify-content: center; width: 100%; }
         }
       `}</style>

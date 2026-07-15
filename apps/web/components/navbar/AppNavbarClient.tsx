@@ -389,6 +389,20 @@ export default function AppNavbarClient() {
   }, [currentSearch, pathname])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const isMobile = window.matchMedia('(max-width: 980px)').matches
+    const hasOverlay = mobileMenuOpen || clubOpen || userOpen || notificationsOpen || searchOpen
+    if (!isMobile || !hasOverlay) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [clubOpen, mobileMenuOpen, notificationsOpen, searchOpen, userOpen])
+
+  useEffect(() => {
     if (!searchOpen) return
     const timeout = window.setTimeout(() => searchInputRef.current?.focus(), 40)
     return () => window.clearTimeout(timeout)
@@ -821,7 +835,10 @@ export default function AppNavbarClient() {
                   <div className="px-notifPreview__title">{item.title}</div>
                   <div className="px-notifPreview__date">{relativeDate(item.created_at)}</div>
                 </div>
-                <div className="px-notifPreview__msg">{previewText(item.message)}</div>
+                <div className="px-notifPreview__meta">
+                  <span className={item.read ? 'is-read' : 'is-unread'}>{item.read ? 'Leída' : 'No leída'}</span>
+                  <span>{previewText(item.message)}</span>
+                </div>
               </div>
               {!item.read ? <span className="px-notifPreview__dot" aria-label="No leída" /> : null}
             </button>
@@ -844,7 +861,19 @@ export default function AppNavbarClient() {
           ) : null}
           {showRight.notifications ? (
             <div className="px-dd" style={{ position: 'relative' }}>
-              <button className="px-iconBtn" aria-label="Notificaciones" onClick={async () => { await loadPreviewData(); setNotificationsOpen((v) => !v) }}>
+              <button
+                className="px-iconBtn"
+                aria-label="Notificaciones"
+                aria-expanded={notificationsOpen}
+                onClick={async () => {
+                  await loadPreviewData()
+                  setNotificationsOpen((v) => !v)
+                  setUserOpen(false)
+                  setClubOpen(false)
+                  setMobileMenuOpen(false)
+                  setSearchOpen(false)
+                }}
+              >
                 <Bell size={18} />
                 {unreadNotifications > 0 ? <span className="px-iconBadge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span> : null}
               </button>
@@ -898,6 +927,8 @@ export default function AppNavbarClient() {
             setClubOpen((v) => !v)
             setUserOpen(false)
             setNotificationsOpen(false)
+            setMobileMenuOpen(false)
+            setSearchOpen(false)
           }}
           aria-label={`Club activo: ${displayClubName}`}
         >
@@ -929,6 +960,8 @@ export default function AppNavbarClient() {
             aria-expanded={mobileMenuOpen}
             onClick={() => {
               setMobileMenuOpen((value) => !value)
+              setClubOpen(false)
+              setUserOpen(false)
               setSearchOpen(false)
             }}
           >
@@ -953,10 +986,26 @@ export default function AppNavbarClient() {
           </Link>
         ) : null}
         {showRight.notifications ? (
-          <Link className="px-iconBtn" href="/notificaciones" aria-label="Notificaciones">
-            <Bell size={17} />
-            {unreadNotifications > 0 ? <span className="px-iconBadge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span> : null}
-          </Link>
+          <div className="px-dd px-mobileNotifWrap">
+            <button
+              type="button"
+              className="px-iconBtn"
+              aria-label="Notificaciones"
+              aria-expanded={notificationsOpen}
+              onClick={async () => {
+                await loadPreviewData()
+                setNotificationsOpen((value) => !value)
+                setUserOpen(false)
+                setClubOpen(false)
+                setMobileMenuOpen(false)
+                setSearchOpen(false)
+              }}
+            >
+              <Bell size={17} />
+              {unreadNotifications > 0 ? <span className="px-iconBadge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span> : null}
+            </button>
+            {renderNotificationsDropdown()}
+          </div>
         ) : null}
         <div className="px-userWrap px-dd">
           <button
@@ -966,6 +1015,8 @@ export default function AppNavbarClient() {
               setUserOpen((v) => !v)
               setClubOpen(false)
               setNotificationsOpen(false)
+              setMobileMenuOpen(false)
+              setSearchOpen(false)
             }}
             aria-label="Mi cuenta y actividad"
           >

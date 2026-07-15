@@ -65,6 +65,14 @@ type ClubRow = {
   status?: string | null
 }
 
+function mapClubRows(rows: ClubRow[]) {
+  return rows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    logoUrl: buildAssetProxyUrl(c.logo_url ?? null),
+  }))
+}
+
 function getNameFromUser(u: AuthUserLike) {
   return (
     u?.user_metadata?.full_name ||
@@ -172,18 +180,25 @@ async function resolveContext() {
       const json = await response.json().catch(() => ({}))
 
       if (response.ok) {
-        clubs = await Promise.all(
-          (((json?.clubs ?? []) as ClubRow[]).filter((club) => approvedClubIds.includes(club.id))).map(async (c) => ({
-            id: c.id,
-            name: c.name,
-            logoUrl: buildAssetProxyUrl(c.logo_url ?? null),
-          }))
-        )
+        clubs = mapClubRows(((json?.clubs ?? []) as ClubRow[]).filter((club) => approvedClubIds.includes(club.id)))
       } else {
         console.warn('[SessionProvider] No pude cargar clubes miembro.', json?.error ?? response.statusText)
       }
     } catch (error) {
       console.warn('[SessionProvider] Falló fetch /api/clubs/member-clubs.', error)
+    }
+
+    if (clubs.length === 0) {
+      const { data: clubRows, error: clubsError } = await supabase
+        .from('clubs')
+        .select('id,name,logo_url')
+        .in('id', approvedClubIds)
+
+      if (!clubsError) {
+        clubs = mapClubRows((clubRows ?? []) as ClubRow[])
+      } else {
+        console.warn('[SessionProvider] Fallback de clubes falló.', clubsError.message)
+      }
     }
   }
 
@@ -269,6 +284,7 @@ async function resolveContext() {
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const hasResolvedContextRef = useRef(false)
+  const refreshPromiseRef = useRef<Promise<void> | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready'>('loading')
   const [role, setRole] = useState<AppRole>('guest')
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
@@ -283,26 +299,34 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [postLoginDestination, setPostLoginDestination] = useState<PostLoginDestination>('/login')
 
   const refresh = useCallback(async (options?: RefreshOptions) => {
+    if (refreshPromiseRef.current) return refreshPromiseRef.current
     if (!options?.silent && !hasResolvedContextRef.current) setStatus('loading')
-    try {
-      const r = await resolveContext()
-      setRole(r.role)
-      setIsPlatformAdmin(r.isPlatformAdmin)
-      setUser(r.user)
-      setActiveClubState(r.activeClub)
-      setActiveClubId(r.activeClubId)
-      setClubs(r.clubs)
-      setIsApprovedMember(r.isApprovedMember)
-      setClubRole(r.clubRole)
-      setMembershipStatus(r.membershipStatus)
-      setMembershipApprovedAt(r.membershipApprovedAt)
-      setPostLoginDestination(r.postLoginDestination)
-      hasResolvedContextRef.current = true
-    } catch (error) {
-      console.warn('[SessionProvider] No pude refrescar la sesión. Mantengo el contexto actual.', error)
-    } finally {
-      setStatus('ready')
-    }
+
+    const promise = (async () => {
+      try {
+        const r = await resolveContext()
+        setRole(r.role)
+        setIsPlatformAdmin(r.isPlatformAdmin)
+        setUser(r.user)
+        setActiveClubState(r.activeClub)
+        setActiveClubId(r.activeClubId)
+        setClubs(r.clubs)
+        setIsApprovedMember(r.isApprovedMember)
+        setClubRole(r.clubRole)
+        setMembershipStatus(r.membershipStatus)
+        setMembershipApprovedAt(r.membershipApprovedAt)
+        setPostLoginDestination(r.postLoginDestination)
+        hasResolvedContextRef.current = true
+      } catch (error) {
+        console.warn('[SessionProvider] No pude refrescar la sesión. Mantengo el contexto actual.', error)
+      } finally {
+        refreshPromiseRef.current = null
+        setStatus('ready')
+      }
+    })()
+
+    refreshPromiseRef.current = promise
+    return promise
   }, [])
 
   const setActiveClub = useCallback(
@@ -366,8 +390,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     })()
 
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'INITIAL_SESSION') return
       if (
-        event === 'INITIAL_SESSION' ||
         event === 'SIGNED_IN' ||
         event === 'TOKEN_REFRESHED' ||
         event === 'USER_UPDATED'

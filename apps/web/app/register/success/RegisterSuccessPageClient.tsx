@@ -8,35 +8,35 @@ export default function RegisterSuccessPageClient() {
   const email = searchParams.get('email') || 'tu casilla de correo'
 
   return (
-    <div className="px-auth">
+    <div className="px-auth px-playerFlow px-playerFlow--success">
       <div className="px-authCard">
         <div className="px-authTop">
           <div className="px-authBrand">
             <div className="px-authLogo"><img src="/brand/selpa-isotipo.png" alt="SELPA" /></div>
 
             <div className="px-authBrandText">
-              <h1 className="px-authTitle">¡Felicitaciones!</h1>
-              <p className="px-authSub">
-                Tu cuenta fue creada con éxito.
-              </p>
+              <span className="px-playerFlowKicker">Cuenta creada</span>
+              <h1 className="px-authTitle">Registro exitoso</h1>
+              <p className="px-authSub">Validá tu email para activar el acceso.</p>
             </div>
           </div>
         </div>
 
-        <div className="px-authBody" style={{ gap: 18 }}>
-          <div className="px-card px-card--flat">
-            <p style={{ margin: 0, lineHeight: 1.6 }}>
-              Ahora recibirás un mail en <strong>{email}</strong> para validar tu cuenta.
-              Revisá también spam o promociones.
+        <div className="px-authBody">
+          <div className="px-playerFlowPanel">
+            <p style={{ margin: 0, color: '#334155', fontSize: 13.5, lineHeight: 1.45 }}>
+              Te enviamos un enlace de confirmación a <strong>{email}</strong>.
             </p>
+            <ol className="px-playerSuccessSteps">
+              <li>Abrí el mail de SELPA.</li>
+              <li>Confirmá tu cuenta desde el enlace.</li>
+              <li>Volvé al login para ingresar.</li>
+            </ol>
           </div>
 
-          <div className="px-card px-card--flat">
-            <p style={{ margin: 0, lineHeight: 1.6 }}>
-              Cuando hagas clic en el enlace de activación,
-              volverás al login para ingresar.
-            </p>
-          </div>
+          <p className="px-help" style={{ margin: 0 }}>
+            Si no lo encontrás, revisá spam o promociones.
+          </p>
 
           <Link
             href="/login"

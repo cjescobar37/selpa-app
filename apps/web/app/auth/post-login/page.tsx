@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import AuthAlert from '@/components/AuthAlert'
 import SelpaLoader from '@/components/SelpaLoader'
 import { useSession } from '@/components/session/SessionProvider'
+import { supabase } from '@/lib/supabaseClient'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
@@ -28,33 +29,46 @@ export default function PostLoginPage() {
 
   useEffect(() => {
     let alive = true
+    let timeout: ReturnType<typeof setTimeout> | null = null
+
+    setStuck(false)
 
     if (session.status === 'loading') return
 
     if (!session.user) {
-      const retry = setTimeout(() => {
+      ;(async () => {
+        const { data } = await supabase.auth.getSession()
         if (!alive) return
-        setStuck(true)
-      }, 1600)
+
+        if (data.session?.user) {
+          await session.refresh({ silent: true })
+          return
+        }
+
+        timeout = setTimeout(() => {
+          if (!alive) return
+          setStuck(true)
+        }, 4500)
+      })()
 
       return () => {
         alive = false
-        clearTimeout(retry)
+        if (timeout) clearTimeout(timeout)
       }
     }
 
     router.replace(safeNextPath || session.postLoginDestination)
 
-    const slow = setTimeout(() => {
+    timeout = setTimeout(() => {
       if (!alive) return
       setStuck(true)
     }, 9000)
 
     return () => {
       alive = false
-      clearTimeout(slow)
+      if (timeout) clearTimeout(timeout)
     }
-  }, [router, safeNextPath, session.postLoginDestination, session.status, session.user])
+  }, [router, safeNextPath, session.postLoginDestination, session.refresh, session.status, session.user])
 
   if (!alert) {
     return (
