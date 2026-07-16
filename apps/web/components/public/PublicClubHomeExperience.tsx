@@ -438,8 +438,8 @@ export default function PublicClubHomeExperience({
       <section>
         <SectionTitle
           kicker="Agenda competitiva"
-          title="Torneos activos y próximos"
-          action={<Link className="clubPublicSectionLink" href="/torneos">Ver calendario</Link>}
+          title="Agenda del club"
+          action={<Link className="clubPublicSectionLink" href="/torneos">Ver agenda</Link>}
         />
         <div className="clubPublicTournamentGrid">
           {visibleTournaments.length ? visibleTournaments.map((tournament) => (
@@ -469,8 +469,8 @@ export default function PublicClubHomeExperience({
       <section>
         <SectionTitle
           kicker="Ranking del club"
-          title="Los números 1 del club por categoría"
-          action={<Link className="clubPublicSectionLink" href={`/ranking?clubId=${club.id}`}>Ver todos los rankings</Link>}
+          title="Ranking por categoría"
+          action={<Link className="clubPublicSectionLink" href={`/ranking?clubId=${club.id}`}>Ver todos</Link>}
         />
         <div className="clubPublicRankingGrid">
           {rankingCategories.length ? rankingCategories.map((category) => (

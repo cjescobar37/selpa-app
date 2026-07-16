@@ -643,7 +643,7 @@ export default function ClubJugadorDetailPage() {
               </div>
               <div className="playerProfileV3__intro">
                 <button className="playerProfileV3__avatar" type="button" onClick={() => setAvatarOpen(true)} aria-label="Ver foto de perfil">
-                  {profile?.avatar_url ? <Image src={profile.avatar_url} alt={player.full_name} fill sizes="120px" /> : getClubInitials(player.full_name)}
+                  {profile?.avatar_url ? <Image src={profile.avatar_url} alt={player.full_name} fill sizes="144px" /> : getClubInitials(player.full_name)}
                   {isOwnProfile ? <span><Pencil size={14} /></span> : null}
                 </button>
                 <div className="playerProfileV3__identity">
@@ -890,14 +890,15 @@ export default function ClubJugadorDetailPage() {
 
       <style>{`
         .player-premium { background: linear-gradient(180deg, #ffffff, #f8fafc); display: grid; gap: 13px; overflow: hidden; }
+        .club-panel.player-premium::before { background: linear-gradient(90deg, #22d3ee, #2563eb 52%, #ec4899); opacity: .86; }
         .playerProfileV3 { --profile-accent: var(--px-club-accent, #06b6d4); --profile-accent-2: var(--px-club-accent-2, #ec4899); --profile-soft: var(--px-club-soft, rgba(34,211,238,.13)); --profile-glow: var(--px-club-glow, rgba(14,165,233,.16)); display: grid; gap: 14px; margin: -18px; padding-bottom: 18px; }
         .playerProfileV3__cover { background: linear-gradient(120deg, #071426, #102744 58%, color-mix(in srgb, var(--profile-accent) 28%, #071426)); height: 224px; overflow: hidden; position: relative; }
         .playerProfileV3__cover::after { background: linear-gradient(180deg, transparent 28%, rgba(2,6,23,.62)); content: ''; inset: 0; position: absolute; }
         .playerProfileV3__cover img { object-fit: cover; opacity: .74; }
         .playerProfileV3__back { background: rgba(2,6,23,.56); border: 1px solid rgba(255,255,255,.22); border-radius: 10px; color: #fff; font-size: 12px; font-weight: 700; left: 14px; min-height: 34px; padding: 8px 10px; position: absolute; text-decoration: none; top: 12px; z-index: 1; }
         .playerProfileV3__coverEdit { align-items: center; background: rgba(2,6,23,.64); border: 1px solid rgba(255,255,255,.28); border-radius: 10px; bottom: 12px; color: #fff; cursor: pointer; display: inline-flex; font: inherit; font-size: 12px; font-weight: 700; gap: 6px; min-height: 36px; padding: 0 10px; position: absolute; right: 14px; z-index: 1; }
-        .playerProfileV3__intro { align-items: center; display: grid; gap: 12px; grid-template-columns: 128px minmax(0, 1fr) auto; margin: -72px auto 0; max-width: 1100px; padding: 0 26px; position: relative; width: 100%; z-index: 2; }
-        .playerProfileV3__avatar { align-items: center; background: linear-gradient(135deg, #10233c, var(--profile-accent)); border: 5px solid #fff; border-radius: 999px; box-shadow: 0 0 0 2px var(--profile-accent), 0 16px 32px rgba(15,23,42,.2); color: #fff; cursor: pointer; display: flex; font: inherit; font-size: 36px; font-weight: 900; height: 120px; justify-content: center; overflow: visible; padding: 0; position: relative; width: 120px; }
+        .playerProfileV3__intro { align-items: center; display: grid; gap: 12px; grid-template-columns: 136px minmax(0, 1fr) auto; margin: -76px auto 0; max-width: 1100px; padding: 0 26px; position: relative; width: 100%; z-index: 2; }
+        .playerProfileV3__avatar { align-items: center; background: linear-gradient(135deg, #10233c, var(--profile-accent)); border: 5px solid #fff; border-radius: 999px; box-shadow: 0 0 0 2px var(--profile-accent), 0 16px 32px rgba(15,23,42,.2); color: #fff; cursor: pointer; display: flex; font: inherit; font-size: 38px; font-weight: 900; height: 128px; justify-content: center; overflow: visible; padding: 0; position: relative; width: 128px; }
         .playerProfileV3__avatar img { border-radius: inherit; object-fit: cover; }
         .playerProfileV3__avatar > span { align-items: center; background: #061b3a; border: 2px solid #fff; border-radius: 999px; bottom: 2px; color: #fff; display: flex; height: 30px; justify-content: center; position: absolute; right: 2px; width: 30px; }
         .playerProfileV3__identity { align-self: end; min-width: 0; padding-bottom: 5px; }
@@ -942,8 +943,8 @@ export default function ClubJugadorDetailPage() {
           .playerProfileV3__cover { height: 164px; }
           .playerProfileV3__back { left: 10px; top: 8px; }
           .playerProfileV3__coverEdit { bottom: 8px; font-size: 11px; min-height: 32px; right: 10px; }
-          .playerProfileV3__intro { display: flex; flex-direction: column; gap: 7px; margin-top: -58px; padding: 0 12px; text-align: center; }
-          .playerProfileV3__avatar { flex: 0 0 112px; font-size: 32px; height: 112px; width: 112px; }
+          .playerProfileV3__intro { display: flex; flex-direction: column; gap: 7px; margin-top: -64px; padding: 0 12px; text-align: center; }
+          .playerProfileV3__avatar { flex: 0 0 124px; font-size: 34px; height: 124px; width: 124px; }
           .playerProfileV3__identity { align-self: auto; padding: 0; }
           .playerProfileV3__identity h1 { display: -webkit-box; font-size: clamp(24px, 7vw, 30px); -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.06; overflow: hidden; }
           .playerProfileV3__identity p, .playerProfileV3__club { font-size: 13px; }

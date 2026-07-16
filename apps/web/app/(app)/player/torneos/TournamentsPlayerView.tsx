@@ -161,8 +161,8 @@ function pageCopy(mode: ViewMode) {
   }
   return {
     kicker: 'Mis torneos',
-    title: 'Torneos donde participo',
-    body: 'Tus inscripciones y torneos vinculados como jugador.',
+    title: 'Mi agenda de torneos',
+    body: 'Inscripciones, fechas y estados de tu temporada.',
     icon: Trophy,
   }
 }
@@ -509,10 +509,39 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         .playerRulesGrid p { color: #64748b; font-weight: 800; line-height: 1.45; margin: 0; }
         .playerRulesGrid a { justify-self: start; margin-top: 4px; }
         @media (max-width: 820px) {
-          .playerTournamentsShell { padding: 12px; }
-          .playerTournamentsHero, .playerTournamentFilters, .playerTournamentCard, .playerRulesGrid { display: grid; grid-template-columns: 1fr; }
-          .playerTournamentCard__actions { justify-items: start; }
-          .playerTournamentCard__main strong { white-space: normal; }
+          .playerTournamentsShell { gap:12px; padding:12px; }
+          .playerTournamentsHero { border-radius:16px; min-height:104px; padding:13px 14px; }
+          .playerTournamentsHero::before { left:14px; right:14px; }
+          .playerTournamentsHero h1 { font-size:25px; line-height:1.02; margin:4px 0; }
+          .playerTournamentsHero p { font-size:12px; max-width:250px; }
+          .playerTournamentsHero i { border-radius:13px; height:40px; width:40px; }
+          .playerTournamentsHero i svg { height:21px; width:21px; }
+          .playerTournamentFilters, .playerRulesGrid { display:grid; grid-template-columns:1fr; }
+          .playerTournamentCard { align-items:start; border-radius:16px; gap:9px; grid-template-columns:62px minmax(0,1fr); min-height:126px; padding:10px; }
+          .playerTournamentCard::before { bottom:10px; top:10px; width:3px; }
+          .playerTournamentCard__date { border-radius:13px; min-height:66px; padding:6px; }
+          .playerTournamentCard__date strong { font-size:27px; }
+          .playerTournamentCard__date span { font-size:10px; }
+          .playerTournamentCard__date small { font-size:9px; }
+          .playerTournamentCard__club { gap:6px; margin-bottom:4px; }
+          .playerTournamentClubMark { border-radius:9px; height:24px; width:24px; }
+          .playerTournamentCard__club b { font-size:10px; }
+          .playerTournamentCard__main > strong { font-size:18px; letter-spacing:0; line-height:1.08; }
+          .playerTournamentCard__main p { font-size:11px; margin:4px 0 7px; }
+          .playerTournamentCard__meta { gap:5px; }
+          .playerTournamentCard__meta span { font-size:10px; padding:4px 7px; }
+          .playerTournamentCard__actions { align-items:center; display:flex; gap:7px; grid-column:2; justify-content:flex-end; justify-items:initial; min-width:0; }
+          .playerTournamentCard__actions a, .playerRulesGrid a { border-radius:10px; font-size:11px; padding:8px 10px; }
+          .playerTournamentCard__main strong { white-space:normal; }
+        }
+        @media (max-width: 390px) {
+          .playerTournamentsShell { padding:10px; }
+          .playerTournamentsHero h1 { font-size:23px; }
+          .playerTournamentsHero p { font-size:11px; }
+          .playerTournamentCard { grid-template-columns:58px minmax(0,1fr); padding:9px; }
+          .playerTournamentCard__date { min-height:62px; }
+          .playerTournamentCard__main > strong { font-size:17px; }
+          .playerTournamentCard__actions a:first-child { padding-inline:9px; }
         }
       `}</style>
     </main>

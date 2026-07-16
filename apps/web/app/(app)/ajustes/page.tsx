@@ -1,8 +1,5 @@
+import PlayerAccountHub from '@/components/player/PlayerAccountHub'
+
 export default function AjustesPage() {
-  return (
-    <div>
-      <h1 className="px-h1">Preferencias</h1>
-      <p className="px-muted">(placeholder) configuración de perfil, notificaciones y privacidad.</p>
-    </div>
-  )
+  return <PlayerAccountHub view="preferences" />
 }

@@ -875,8 +875,8 @@
     align-items: center;
     display: flex;
     gap: 0;
-    min-height: calc(44px + env(safe-area-inset-top, 0px));
-    padding: calc(3px + env(safe-area-inset-top, 0px)) 8px 3px;
+    min-height: calc(46px + env(safe-area-inset-top, 0px));
+    padding: calc(7px + env(safe-area-inset-top, 0px)) 8px 5px;
   }
 
   .px-mobileBar--authed .px-mobileBar__left,
@@ -886,7 +886,7 @@
   .px-mobileBar--authed .px-userWrap {
     align-items: center;
     display: flex;
-    min-height: 38px;
+    min-height: 34px;
   }
 
   .px-mobileBar--authed .px-mobileBar__center {
@@ -914,15 +914,15 @@
   .px-mobileBar--authed .px-mobileUserBtn {
     align-items: center;
     border-radius: 12px;
-    height: 38px;
+    height: 34px;
     justify-content: center;
-    min-height: 38px;
+    min-height: 34px;
     padding-block: 0;
   }
 
   .px-mobileBar--authed .px-iconBtn {
-    min-width: 38px;
-    width: 38px;
+    min-width: 34px;
+    width: 34px;
   }
 
   .px-mobileBar--authed .px-iconBtn,
@@ -943,6 +943,10 @@
     width: calc(100% + 6px);
   }
 
+  .px-mobileBar--authed .px-mobileClubBtn::before {
+    background: transparent;
+  }
+
   .px-mobileBar--authed .px-mobileClubBtn {
     gap: 5px;
     justify-content: flex-start;
@@ -952,13 +956,17 @@
   }
 
   .px-mobileBar--authed .px-clubBtn--themed {
-    background: var(--px-nav-surface);
+    background: rgba(255, 255, 255, .06) !important;
     box-shadow: none;
+  }
+
+  .px-mobileBar--authed .px-clubBtn--themed::after {
+    bottom: 1px;
   }
 
   .px-mobileBar--authed .px-clubBtn--themed:hover,
   .px-mobileBar--authed .px-clubBtn--themed:focus-visible {
-    background: var(--px-nav-surface);
+    background: rgba(255, 255, 255, .09) !important;
     box-shadow: none;
     transform: none;
   }
@@ -973,16 +981,16 @@
 
   .px-mobileBar--authed .px-mobileClubBtn .px-clubLogo {
     border-radius: 10px;
-    flex: 0 0 30px;
-    height: 30px;
-    width: 30px;
+    flex: 0 0 28px;
+    height: 28px;
+    width: 28px;
   }
 
   .px-mobileBar--authed .px-mobileUserBtn .px-avatar {
     border-radius: 999px;
-    flex: 0 0 34px;
-    height: 34px;
-    width: 34px;
+    flex: 0 0 30px;
+    height: 30px;
+    width: 30px;
   }
 
   .px-mobileBar--authed .px-mobileClubName,
@@ -3052,6 +3060,12 @@
     grid-template-columns: 38px minmax(0, 1fr);
     justify-content: initial;
     padding: 0 2px 11px;
+    text-decoration: none;
+  }
+
+  .px-mobileClubMenu__head:hover strong,
+  .px-mobileClubMenu__head:focus-visible strong{
+    color: var(--px-club-accent, #22d3ee);
   }
 
   .px-mobileClubMenu__logo{
@@ -3078,8 +3092,7 @@
     min-width: 0;
   }
 
-  .px-mobileClubMenu__head small,
-  .px-playerClubNav__title{
+  .px-mobileClubMenu__head small{
     color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 68%, white);
     font-size: 10px;
     font-weight: 900;
@@ -3092,89 +3105,74 @@
     max-width: 100%;
   }
 
-  .px-playerClubNav,
-  .px-playerClubNav__group{
-    display: grid;
-    gap: 8px;
-  }
-
-  .px-playerClubNav__group{
-    gap: 3px;
-  }
-
-  .px-playerClubNav__group + .px-playerClubNav__group{
-    border-top: 1px solid rgba(255,255,255,.08);
-    padding-top: 8px;
-  }
-
-  .px-playerClubNav__title{
-    align-items: center;
-    display: flex;
-    gap: 7px;
-    min-height: 28px;
-    padding: 0 8px;
-  }
-
-  .px-playerClubNav__title--utility{
-    margin: 2px 0 3px;
-  }
-
-  .px-playerClubNav .px-mobileChild,
-  .px-mobileClubMenu .px-mobileLink--muted,
-  .px-mobileClubList .px-mobileChild{
-    align-items: center;
-    display: flex;
-    gap: 10px;
-    min-height: 48px;
-  }
-
-  .px-playerClubNav .px-mobileChild{
-    font-size: 13px;
-    font-weight: 750;
-    letter-spacing: 0;
-    padding: 0 12px;
-    text-transform: none;
-  }
-
-  .px-playerClubNav .px-mobileChild svg{
-    color: rgba(255,255,255,.66);
-    flex: 0 0 auto;
-  }
-
-  .px-playerClubNav .px-mobileChild.is-active svg{
-    color: var(--px-club-accent, #22d3ee);
-  }
-
-  .px-playerClubNav__primary{
-    align-items: center;
-    min-height: 46px;
-    padding: 0 12px;
-    text-align: left;
-  }
-
-  .px-playerClubNav__primary svg:first-child{
-    color: rgba(255,255,255,.72);
-    flex: 0 0 auto;
-  }
-
-  .px-playerClubNav__primary.is-active,
-  .px-playerClubNav__primary.is-active svg:first-child{
-    color: var(--px-club-accent, #22d3ee);
-  }
-
-  .px-playerClubNav__chevron{
-    margin-left: auto;
-    transition: transform .16s ease;
-  }
-
-  .px-playerClubNav__primary[aria-expanded="true"] .px-playerClubNav__chevron{
-    transform: rotate(180deg);
-  }
-
-  .px-playerClubNav__subitems{
+  .px-playerClubNav{
     display: grid;
     gap: 2px;
-    padding: 0 0 2px 12px;
+  }
+
+  .px-playerClubNav .px-ddItem{
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 650;
+    min-height: 42px;
+    padding: 0 10px;
+  }
+
+  .px-playerClubNav__item svg,
+  .px-playerClubNav__clubLogo{
+    color: rgba(255,255,255,.7);
+    flex: 0 0 auto;
+  }
+
+  .px-playerClubNav__item.is-active svg{
+    color: var(--px-club-accent, #22d3ee);
+  }
+
+  .px-playerClubNav__eyebrow{
+    color: color-mix(in srgb, var(--px-club-accent, #22d3ee) 68%, white);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: .07em;
+    padding: 3px 10px 5px;
+    text-transform: uppercase;
+  }
+
+  .px-playerClubNav__club{
+    min-height: 46px !important;
+  }
+
+  .px-playerClubNav__clubLogo{
+    align-items: center;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 8px;
+    display: inline-flex;
+    font-size: 10px;
+    font-weight: 850;
+    height: 28px;
+    justify-content: center;
+    overflow: hidden;
+    width: 28px;
+  }
+
+  .px-playerClubNav__clubLogo img{
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+  }
+
+  .px-playerClubNav__utility{
+    border-top: 1px solid rgba(255,255,255,.08);
+    align-items: center;
+    color: rgba(255,255,255,.68);
+    display: flex;
+    font-size: 12px;
+    font-weight: 650;
+    gap: 9px;
+    margin-top: 5px;
+    min-height: 42px;
+    padding: 4px 11px 0;
+    text-transform: none;
   }
 
   .px-mobileClubList{
@@ -3241,10 +3239,19 @@
 
   .px-playerUserMenu .px-ddItem{
     border-radius: 12px;
-    font-size: 14px;
-    font-weight: 750;
-    min-height: 50px;
-    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 650;
+    min-height: 44px;
+    padding: 0 10px;
+  }
+
+  .px-playerUserMenu{
+    display: grid;
+    gap: 4px;
+  }
+
+  .px-playerUserMenu .px-ddSep{
+    margin: 4px 0;
   }
 
   .px-playerUserMenu .px-ddItem svg{
@@ -3267,8 +3274,8 @@
   }
 
   .px-mobileBar--authed .px-iconBtn{
-    min-width: 38px;
-    width: 38px;
+    min-width: 34px;
+    width: 34px;
   }
 
   .px-mobileBar--authed .px-mobileClubBtn{

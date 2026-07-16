@@ -7,7 +7,6 @@ import {
   Activity,
   Bell,
   BookOpen,
-  Building2,
   CalendarDays,
   ChevronDown,
   CircleUserRound,
@@ -15,6 +14,7 @@ import {
   Home,
   LogOut,
   Mail,
+  Medal,
   Menu,
   Newspaper,
   Radio,
@@ -57,7 +57,6 @@ type PreviewThread = {
 }
 
 type NavbarOverlay = 'club' | 'player' | 'messages' | 'notifications' | null
-type ClubMenuSection = 'tournaments' | 'ranking' | 'clubs' | null
 
 function shorten(text?: string, max = 16) {
   const value = (text || '').trim()
@@ -297,7 +296,6 @@ export default function AppNavbarClient() {
   const [navOpenIndex, setNavOpenIndex] = useState<number | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [navbarOverlay, setNavbarOverlay] = useState<NavbarOverlay>(null)
-  const [clubMenuSection, setClubMenuSection] = useState<ClubMenuSection>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<NavSearchResult[]>([])
@@ -359,7 +357,6 @@ export default function AppNavbarClient() {
   function closeNavbarOverlay(restoreFocus = false) {
     const previousOverlay = navbarOverlay
     setNavbarOverlay(null)
-    setClubMenuSection(null)
     if (restoreFocus && previousOverlay) {
       window.requestAnimationFrame(() => overlayTriggerRefs.current[previousOverlay]?.focus())
     }
@@ -368,7 +365,6 @@ export default function AppNavbarClient() {
   function toggleNavbarOverlay(nextOverlay: Exclude<NavbarOverlay, null>, trigger?: HTMLButtonElement | null) {
     if (trigger) overlayTriggerRefs.current[nextOverlay] = trigger
     setNavbarOverlay((current) => current === nextOverlay ? null : nextOverlay)
-    setClubMenuSection(null)
     setMobileMenuOpen(false)
     setSearchOpen(false)
   }
@@ -500,7 +496,6 @@ export default function AppNavbarClient() {
     setNavOpenIndex(null)
     setMobileMenuOpen(false)
     setNavbarOverlay(null)
-    setClubMenuSection(null)
     setSearchOpen(false)
     setPreviewModal(null)
   }, [currentSearch, pathname])
@@ -624,7 +619,6 @@ export default function AppNavbarClient() {
     setNavOpenIndex(null)
     setMobileMenuOpen(false)
     setNavbarOverlay(null)
-    setClubMenuSection(null)
     setSearchOpen(false)
   }
 
@@ -633,7 +627,6 @@ export default function AppNavbarClient() {
     setNavOpenIndex(null)
     setMobileMenuOpen(false)
     setNavbarOverlay(null)
-    setClubMenuSection(null)
   }
 
   useEffect(() => {
@@ -799,9 +792,8 @@ export default function AppNavbarClient() {
           </div>
           <Link className="px-ddItem" href="/perfil" onClick={closeAllMenus}><CircleUserRound size={18} />Mi perfil</Link>
           <Link className="px-ddItem" href="/player/torneos" onClick={closeAllMenus}><Trophy size={18} />Mis torneos</Link>
-          <Link className="px-ddItem" href="/player/ranking" onClick={closeAllMenus}><Activity size={18} />Mi ranking</Link>
+          <Link className="px-ddItem" href="/player/ranking" onClick={closeAllMenus}><Medal size={18} />Mi ranking</Link>
           <Link className="px-ddItem" href="/actividad" onClick={closeAllMenus}><Activity size={18} />Mi actividad</Link>
-          <Link className="px-ddItem" href="/player/mensajes" onClick={closeAllMenus}><Mail size={18} />Mensajes</Link>
           <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}><Settings size={18} />Preferencias</Link>
           <div className="px-ddSep" />
           <button className="px-ddItem px-ddItem--danger" onClick={() => { closeAllMenus(); void signOut() }}><LogOut size={18} />Cerrar sesión</button>
@@ -1198,7 +1190,6 @@ export default function AppNavbarClient() {
             onClick={() => {
               setMobileMenuOpen((value) => !value)
               setNavbarOverlay(null)
-              setClubMenuSection(null)
               setSearchOpen(false)
             }}
           >
@@ -1273,54 +1264,35 @@ export default function AppNavbarClient() {
 
     return (
       <div id="player-navbar-club-popover" className="px-mobileClubMenu" role="menu" aria-label="Espacio Club">
-        <div className="px-mobileClubMenu__head">
+        <Link className="px-mobileClubMenu__head" href="/player" onClick={closeAllMenus} aria-label="Ir al inicio del espacio Club">
           <span className="px-mobileClubMenu__logo" aria-hidden="true"><ClubLogo /></span>
           <div>
             <small>Espacio Club</small>
             <strong>{displayClubName}</strong>
           </div>
-        </div>
+        </Link>
 
         {role === 'player' ? (
           <div className="px-playerClubNav" aria-label="Espacio Club">
-            <Link className={`px-mobileLink px-playerClubNav__primary ${isActiveHref(pathname, currentSearch, '/player', true) ? 'is-active' : ''}`} href="/player" onClick={closeAllMenus}>
-              <Home size={18} />Inicio
-            </Link>
-            <div className="px-playerClubNav__group">
-              <button type="button" className={`px-mobileLink px-playerClubNav__primary ${clubMenuSection === 'tournaments' ? 'is-active' : ''}`} aria-expanded={clubMenuSection === 'tournaments'} onClick={() => setClubMenuSection((section) => section === 'tournaments' ? null : 'tournaments')}>
-                <Trophy size={18} />Torneos<ChevronDown size={16} className="px-playerClubNav__chevron" />
+            <Link className={`px-ddItem px-playerClubNav__item ${isActiveHref(pathname, currentSearch, '/player', true) ? 'is-active' : ''}`} href="/player" onClick={closeAllMenus}><Home size={18} />Inicio</Link>
+            <Link className={`px-ddItem px-playerClubNav__item ${isActiveHref(pathname, currentSearch, '/player/torneos/calendario', true) ? 'is-active' : ''}`} href="/player/torneos/calendario" onClick={closeAllMenus}><CalendarDays size={18} />Calendario del club</Link>
+            <Link className={`px-ddItem px-playerClubNav__item ${isActiveHref(pathname, currentSearch, '/player/torneos/explorar', true) ? 'is-active' : ''}`} href="/player/torneos/explorar" onClick={closeAllMenus}><Compass size={18} />Explorar torneos</Link>
+            <Link className={`px-ddItem px-playerClubNav__item ${isActiveHref(pathname, currentSearch, '/player/torneos/reglamento', true) ? 'is-active' : ''}`} href="/player/torneos/reglamento" onClick={closeAllMenus}><BookOpen size={18} />Reglamento</Link>
+            <Link className={`px-ddItem px-playerClubNav__item ${isActiveHref(pathname, currentSearch, '/player/ranking/club', true) ? 'is-active' : ''}`} href="/player/ranking/club" onClick={closeAllMenus}><Trophy size={18} />Ranking del club</Link>
+            <Link className={`px-ddItem px-playerClubNav__item ${isActiveHref(pathname, currentSearch, '/envivo', true) ? 'is-active' : ''}`} href="/envivo" onClick={closeAllMenus}><Radio size={18} />En vivo</Link>
+            <Link className={`px-ddItem px-playerClubNav__item ${isActiveHref(pathname, currentSearch, '/noticias', true) ? 'is-active' : ''}`} href="/noticias" onClick={closeAllMenus}><Newspaper size={18} />Noticias</Link>
+            {clubs.some((club) => club.id !== displayClub?.id) ? <div className="px-ddSep" /> : null}
+            {clubs.some((club) => club.id !== displayClub?.id) ? <span className="px-playerClubNav__eyebrow">Cambiar a otro club</span> : null}
+            {clubs.filter((club) => club.id !== displayClub?.id).map((club) => (
+              <button key={club.id} type="button" className="px-ddItem px-playerClubNav__club" onClick={async () => {
+                await setActiveClub(club.id)
+                closeAllMenus()
+              }}>
+                <span className="px-playerClubNav__clubLogo" aria-hidden="true">{club.logoUrl ? <img src={club.logoUrl} alt="" /> : getClubInitials(club.name)}</span>
+                {club.name}
               </button>
-              {clubMenuSection === 'tournaments' ? (
-                <div className="px-playerClubNav__subitems">
-                  <Link className="px-mobileChild" href="/player/torneos/calendario" onClick={closeAllMenus}><CalendarDays size={17} />Calendario</Link>
-                  <Link className="px-mobileChild" href="/player/torneos/explorar" onClick={closeAllMenus}><Compass size={17} />Explorar torneos</Link>
-                  <Link className="px-mobileChild" href="/player/torneos/reglamento" onClick={closeAllMenus}><BookOpen size={17} />Reglamento</Link>
-                </div>
-              ) : null}
-            </div>
-            <div className="px-playerClubNav__group">
-              <button type="button" className={`px-mobileLink px-playerClubNav__primary ${clubMenuSection === 'ranking' ? 'is-active' : ''}`} aria-expanded={clubMenuSection === 'ranking'} onClick={() => setClubMenuSection((section) => section === 'ranking' ? null : 'ranking')}>
-                <Activity size={18} />Ranking<ChevronDown size={16} className="px-playerClubNav__chevron" />
-              </button>
-              {clubMenuSection === 'ranking' ? (
-                <div className="px-playerClubNav__subitems">
-                  <Link className="px-mobileChild" href="/player/ranking/club" onClick={closeAllMenus}><Trophy size={17} />Ranking del club</Link>
-                </div>
-              ) : null}
-            </div>
-            <Link className={`px-mobileLink px-playerClubNav__primary ${isActiveHref(pathname, currentSearch, '/envivo') ? 'is-active' : ''}`} href="/envivo" onClick={closeAllMenus}><Radio size={18} />En vivo</Link>
-            <Link className={`px-mobileLink px-playerClubNav__primary ${isActiveHref(pathname, currentSearch, '/noticias') ? 'is-active' : ''}`} href="/noticias" onClick={closeAllMenus}><Newspaper size={18} />Noticias</Link>
-            <div className="px-playerClubNav__group">
-              <button type="button" className={`px-mobileLink px-playerClubNav__primary ${clubMenuSection === 'clubs' ? 'is-active' : ''}`} aria-expanded={clubMenuSection === 'clubs'} onClick={() => setClubMenuSection((section) => section === 'clubs' ? null : 'clubs')}>
-                <Building2 size={18} />Clubes<ChevronDown size={16} className="px-playerClubNav__chevron" />
-              </button>
-              {clubMenuSection === 'clubs' ? (
-                <div className="px-playerClubNav__subitems">
-                  <Link className="px-mobileChild" href="/clubs" onClick={closeAllMenus}><Compass size={17} />Ver clubes</Link>
-                  <Link className="px-mobileChild" href="/seleccionar-club" onClick={closeAllMenus}><Settings size={17} />Cambiar club</Link>
-                </div>
-              ) : null}
-            </div>
+            ))}
+            <Link className="px-ddItem px-playerClubNav__utility" href="/seleccionar-club" onClick={closeAllMenus}><Settings size={18} />Gestionar mis clubes</Link>
           </div>
         ) : nav.map((item) => (
           <div key={item.href} className="px-mobileRow">

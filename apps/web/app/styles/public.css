@@ -1571,6 +1571,13 @@
   .publicRankingColumn header{ top:64px; }
 }
 @media (max-width:640px){
+  .clubPublicHome > .pampraxHero{
+    box-sizing:border-box;
+    justify-self:stretch;
+    max-width:none;
+    width:100%;
+  }
+
   .publicRankingHero{ border-radius:20px; min-height:118px; padding:12px 16px; }
   .publicRankingClubCard{ grid-template-columns:58px minmax(0,1fr); padding:16px; }
   .publicRankingClubLogo{ border-radius:15px; height:58px; width:58px; }
@@ -6921,5 +6928,396 @@
 
   .publicRankingCardV2--home .publicRankingCardV2__homeChevron{
     right:10px !important;
+  }
+}
+
+/* Public club home: keep the club identity visible without turning the mobile page into a stack of oversized panels. */
+@media (max-width:640px){
+  .clubPublicHome{
+    gap:12px;
+  }
+
+  .clubPublicHome > .pampraxHero{
+    gap:8px;
+    min-height:0;
+    padding:12px 14px;
+  }
+
+  .clubPublicHome > .pampraxHero .pampraxHero__body.has-logo{
+    align-items:center;
+    gap:10px;
+    grid-template-columns:44px minmax(0,1fr);
+  }
+
+  .clubPublicHome > .pampraxHero.has-identity-logo .pampraxHero__logo{
+    border-radius:13px;
+    border-width:2px;
+    font-size:13px;
+    height:44px;
+    width:44px;
+  }
+
+  .clubPublicHome > .pampraxHero .pampraxHero__text{
+    gap:3px;
+  }
+
+  .clubPublicHome > .pampraxHero .pampraxHero__text > span{
+    font-size:9px;
+  }
+
+  .clubPublicHome > .pampraxHero .pampraxHero__text h1{
+    font-size:clamp(24px,7vw,30px);
+    line-height:.98;
+    margin:0;
+  }
+
+  .clubPublicHome > .pampraxHero .pampraxHero__text p{
+    display:-webkit-box;
+    font-size:11px;
+    line-height:1.2;
+    margin:0;
+    overflow:hidden;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:2;
+  }
+
+  .clubPublicHome > .pampraxHero .pampraxHero__stats{
+    gap:4px;
+    margin-top:3px;
+  }
+
+  .clubPublicHome > .pampraxHero .pampraxHero__stats em{
+    font-size:9px;
+    min-height:24px;
+    padding:3px 6px;
+  }
+
+  .clubPublicHome > .pampraxHero .pampraxHero__actions{
+    gap:6px;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
+  .clubPublicHome > .pampraxHero .pampraxHero__action{
+    font-size:10.5px;
+    min-height:34px;
+    padding:7px 8px;
+  }
+
+  .clubPublicHome .clubPublicSectionTitle{
+    align-items:center;
+    flex-direction:row;
+    gap:8px;
+    margin:0 0 8px;
+  }
+
+  .clubPublicHome .clubPublicSectionTitle > div{
+    min-width:0;
+  }
+
+  .clubPublicHome .clubPublicSectionTitle .PampraxAccentBar{
+    height:34px;
+    margin-top:0;
+  }
+
+  .clubPublicHome .clubPublicSectionTitle small{
+    font-size:9px;
+  }
+
+  .clubPublicHome .clubPublicSectionTitle h2{
+    font-size:20px;
+    line-height:1.02;
+  }
+
+  .clubPublicHome .clubPublicSectionLink{
+    flex:0 0 auto;
+    font-size:10px;
+    min-height:32px;
+    padding:0 10px;
+    white-space:nowrap;
+  }
+
+  .clubPublicHome .clubPublicEmpty{
+    border-radius:16px;
+    gap:5px;
+    min-height:98px;
+    padding:12px 14px;
+  }
+
+  .clubPublicHome .clubPublicEmpty svg{
+    height:20px;
+    width:20px;
+  }
+
+  .clubPublicHome .clubPublicEmpty strong{
+    font-size:14px;
+  }
+
+  .clubPublicHome .clubPublicEmpty p{
+    font-size:10.5px;
+    line-height:1.35;
+    max-width:30ch;
+  }
+
+  .clubPublicHome .clubPublicTournamentGrid,
+  .clubPublicHome .clubPublicRankingGrid,
+  .clubPublicHome .clubPublicNewsGrid{
+    gap:8px;
+  }
+
+  .clubPublicHome .clubPublicNewsSection{
+    margin-bottom:8px;
+  }
+
+  .clubPublicHome .clubPublicNewsCard,
+  .clubPublicHome .clubPublicNewsCard.is-featured{
+    min-height:205px;
+  }
+
+  .clubPublicHome .clubPublicNewsOverlay{
+    gap:6px;
+    padding:58px 14px 14px;
+  }
+
+  .clubPublicHome .clubPublicNewsBadge,
+  .clubPublicHome .clubPublicNewsOverlay time{
+    font-size:9px;
+    top:10px;
+  }
+
+  .clubPublicHome .clubPublicNewsBadge{
+    left:10px;
+    padding:4px 7px;
+  }
+
+  .clubPublicHome .clubPublicNewsBadge i{
+    height:13px;
+    width:3px;
+  }
+
+  .clubPublicHome .clubPublicNewsOverlay time{
+    right:10px;
+    padding:4px 7px;
+  }
+
+  .clubPublicHome .clubPublicNewsOverlay strong,
+  .clubPublicHome .clubPublicNewsCard.is-featured .clubPublicNewsOverlay strong{
+    font-size:20px;
+    line-height:1;
+    max-width:20ch;
+  }
+
+  .clubPublicHome .clubPublicNewsOverlay p{
+    font-size:11px;
+    line-height:1.3;
+    margin-top:0;
+    -webkit-line-clamp:2;
+  }
+
+  .clubPublicHome .clubPublicNewsCta{
+    font-size:9px;
+    margin-top:5px;
+    min-height:26px;
+    padding:0 8px;
+  }
+
+  .clubPublicHome .clubPublicRankingCard{
+    border-radius:20px;
+    grid-template-rows:auto minmax(0,1fr) auto;
+    min-height:250px;
+  }
+
+  .clubPublicHome .clubPublicRankingCard::before{
+    transform:scaleX(1);
+  }
+
+  .clubPublicHome .clubPublicRankingCard::after{
+    bottom:auto;
+    height:calc(100% - 42px);
+    opacity:.25;
+    top:18px;
+  }
+
+  .clubPublicHome .clubPublicRankingCategoryHead{
+    align-items:baseline;
+    display:flex;
+    gap:4px;
+    justify-content:center;
+    padding:3px 10px 6px;
+  }
+
+  .clubPublicHome .clubPublicRankingCategoryHead small{
+    display:none;
+  }
+
+  .clubPublicHome .clubPublicRankingCategoryHead span{
+    align-items:baseline;
+    display:inline-flex;
+    font-size:20px;
+    gap:5px;
+    line-height:1;
+  }
+
+  .clubPublicHome .clubPublicRankingCategoryHead span::after{
+    color:#64748b;
+    content:"categoría";
+    font-size:9px;
+    font-weight:900;
+    letter-spacing:.07em;
+    text-transform:uppercase;
+  }
+
+  .clubPublicHome .clubPublicRankingCategoryHead small.is-demo-label{
+    display:none;
+  }
+
+  .clubPublicHome .clubPublicRankingBranches{
+    align-items:stretch;
+    gap:0;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    padding:10px 6px 8px;
+  }
+
+  .clubPublicHome .clubPublicRankingBranches.is-single{
+    grid-template-columns:minmax(0,1fr);
+  }
+
+  .clubPublicHome .clubPublicRankingBranch,
+  .clubPublicHome .clubPublicRankingBranches.is-single .clubPublicRankingBranch{
+    align-content:start;
+    display:grid;
+    gap:8px;
+    grid-template-columns:1fr;
+    grid-template-rows:auto minmax(0,1fr);
+    justify-items:center;
+    max-width:none;
+    padding:0 4px;
+    width:auto;
+  }
+
+  .clubPublicHome .clubPublicRankingBranches:not(.is-single) .clubPublicRankingBranch + .clubPublicRankingBranch{
+    border-left:1px solid rgba(15,23,42,.08);
+    border-top:0;
+    padding-top:0;
+  }
+
+  .clubPublicHome .clubPublicRankingBranchTop{
+    align-items:center;
+    display:flex;
+    gap:0;
+    justify-content:center;
+    white-space:nowrap;
+    width:100%;
+  }
+
+  .clubPublicHome .clubPublicRankingBranchTop span{
+    align-items:center;
+    border-radius:999px 0 0 999px;
+    border-right:0;
+    display:inline-flex;
+    font-size:7.5px;
+    letter-spacing:.045em;
+    min-height:30px;
+    padding:3px 5px;
+  }
+
+  .clubPublicHome .clubPublicRankingBranchTop b{
+    border-left:1px solid rgba(15,23,42,.08);
+    border-radius:0 999px 999px 0;
+    box-shadow:none;
+    flex:0 0 auto;
+    min-height:30px;
+    width:auto;
+  }
+
+  .clubPublicHome .clubPublicRankingBranch.is-magenta .clubPublicRankingBranchTop b{
+    border-color:rgba(236,72,153,.16);
+  }
+
+  .clubPublicHome .clubPublicRankingBranchTop b i,
+  .clubPublicHome .clubPublicRankingBranchTop b em{
+    min-height:30px;
+  }
+
+  .clubPublicHome .clubPublicRankingBranchTop b i{
+    font-size:12px;
+    min-width:30px;
+    padding:0 6px;
+  }
+
+  .clubPublicHome .clubPublicRankingBranchTop b em{
+    font-size:8.5px;
+    padding:0 6px;
+    white-space:nowrap;
+  }
+
+  .clubPublicHome .clubPublicRankingPair{
+    align-items:start;
+    gap:7px;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    justify-items:center;
+    min-height:0;
+    width:100%;
+  }
+
+  .clubPublicHome .clubPublicRankingAvatar,
+  .clubPublicHome .clubPublicRankingAvatar.is-secondary{
+    border-width:2px;
+    font-size:16px;
+    height:52px;
+    width:52px;
+  }
+
+  .clubPublicHome .clubPublicRankingPlayer{
+    align-content:start;
+    gap:5px;
+    grid-template-columns:1fr;
+    justify-items:center;
+    max-width:68px;
+    text-align:center;
+  }
+
+  .clubPublicHome .clubPublicRankingPlayer strong{
+    font-size:9px;
+    line-height:1.03;
+    text-align:center;
+  }
+
+  .clubPublicHome .clubPublicRankingPlayer strong span{
+    overflow:visible;
+    text-overflow:clip;
+    white-space:normal;
+  }
+
+  .clubPublicHome .clubPublicRankingPlayer.is-pending{
+    min-height:52px;
+  }
+
+  .clubPublicHome .clubPublicRankingPlayer.is-pending span{
+    font-size:8px;
+    line-height:1.1;
+  }
+
+  .clubPublicHome .clubPublicRankingFooter{
+    background:rgba(2,8,23,.9);
+    border:0;
+    border-radius:0 0 19px 19px;
+    bottom:auto;
+    box-shadow:none;
+    font-size:10px;
+    min-height:38px;
+    margin:0 -8px -8px;
+    padding:6px 12px;
+    position:static;
+    right:auto;
+    width:calc(100% + 16px);
+  }
+
+  .clubPublicHome .clubPublicRankingFooterText{
+    display:inline !important;
+  }
+
+  .clubPublicHome .clubPublicRankingFooter > span:last-child{
+    display:inline-block;
+    font-size:12px;
   }
 }
