@@ -179,7 +179,6 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
   const [category, setCategory] = useState('all')
   const [gender, setGender] = useState('all')
 
-  const activeTheme = getClubTheme(activeClubDetails?.theme_key ?? null)
   const copy = pageCopy(mode)
   const Icon = copy.icon
 
@@ -199,7 +198,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
       try {
         const activeClubId = session.activeClub?.id ?? null
         const activeClubQuery = activeClubId
-          ? supabase.from('clubs').select('id,name,theme_key,logo_url,rules_pdf_url').eq('id', activeClubId).maybeSingle()
+          ? supabase.from('clubs').select('id,name,logo_url,rules_pdf_url').eq('id', activeClubId).maybeSingle()
           : Promise.resolve({ data: null, error: null })
 
         let tournamentRows: TournamentRow[] = []
@@ -370,15 +369,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
   }
 
   return (
-    <main
-      className="playerTournamentsShell"
-      style={{
-        ['--t-accent' as string]: activeTheme.vars.accent,
-        ['--t-accent-2' as string]: activeTheme.vars.accent2,
-        ['--t-glow' as string]: activeTheme.vars.glow,
-        ['--t-soft' as string]: activeTheme.vars.soft,
-      }}
-    >
+    <main className="playerTournamentsShell">
       <section className="playerTournamentsHero">
         <div>
           <span>{copy.kicker}</span>
@@ -455,14 +446,14 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
       )}
 
       <style>{`
-        .playerTournamentsShell { background: radial-gradient(circle at 8% 0%, var(--t-glow), transparent 34%), #f3f7fb; color: #061b3a; display: grid; gap: 16px; margin: 0 auto; max-width: 1180px; padding: 18px; width: 100%; }
+        .playerTournamentsShell { background: radial-gradient(circle at 8% 0%, var(--club-soft), transparent 34%), #f3f7fb; color: #061b3a; display: grid; gap: 16px; margin: 0 auto; max-width: 1180px; padding: 18px; width: 100%; }
         .playerTournamentsHero, .playerTournamentFilters, .playerTournamentCard, .playerTournamentEmpty, .playerRulesGrid article { background: rgba(255,255,255,.9); border: 1px solid #e2e8f0; border-radius: 22px; box-shadow: 0 18px 48px rgba(15,23,42,.07); }
-        .playerTournamentsHero { align-items: center; background: radial-gradient(circle at 12% 0%, var(--t-soft), transparent 34%), linear-gradient(135deg, #fff, #f8fbff); display: flex; justify-content: space-between; gap: 14px; padding: 16px 18px; position: relative; overflow: hidden; }
-        .playerTournamentsHero::before { background: linear-gradient(90deg, var(--t-accent), var(--t-accent-2)); content: ""; height: 4px; left: 22px; position: absolute; right: 22px; top: 0; }
-        .playerTournamentsHero span, .playerTournamentFilters span, .playerRulesGrid span { color: var(--t-accent); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
+        .playerTournamentsHero { align-items: center; background: radial-gradient(circle at 12% 0%, var(--club-soft), transparent 34%), linear-gradient(135deg, #fff, #f8fbff); display: flex; justify-content: space-between; gap: 14px; padding: 16px 18px; position: relative; overflow: hidden; }
+        .playerTournamentsHero::before { background: var(--club-gradient); content: ""; height: 4px; left: 22px; position: absolute; right: 22px; top: 0; }
+        .playerTournamentsHero span, .playerTournamentFilters span, .playerRulesGrid span { color: var(--club-primary); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
         .playerTournamentsHero h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 4px 0 5px; }
         .playerTournamentsHero p { color: #64748b; font-size: 13px; font-weight: 800; margin: 0; }
-        .playerTournamentsHero i { align-items: center; background: color-mix(in srgb, var(--t-accent) 12%, white); border: 1px solid color-mix(in srgb, var(--t-accent) 30%, white); border-radius: 16px; color: var(--t-accent); display: flex; flex: 0 0 auto; height: 48px; justify-content: center; width: 48px; }
+        .playerTournamentsHero i { align-items: center; background: color-mix(in srgb, var(--club-primary) 12%, white); border: 1px solid color-mix(in srgb, var(--club-primary) 30%, white); border-radius: 16px; color: var(--club-primary); display: flex; flex: 0 0 auto; height: 48px; justify-content: center; width: 48px; }
         .playerTournamentFilters { display: grid; gap: 12px; grid-template-columns: 160px 160px minmax(0, 1fr); padding: 13px; }
         .playerTournamentFilters label { display: grid; gap: 6px; min-width: 0; }
         .playerTournamentFilters select, .playerTournamentFilters input { background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; color: #061b3a; font: inherit; font-weight: 850; min-width: 0; padding: 10px 11px; }
@@ -496,8 +487,8 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         .playerTournamentStatus--finished { background: #f1f5f9 !important; border-color: #e2e8f0 !important; color: #64748b !important; }
         .playerTournamentStatus--neutral { background: #fff7ed !important; border-color: #fed7aa !important; color: #9a3412 !important; }
         .playerTournamentCard__actions { align-content: center; display: grid; gap: 8px; justify-items: end; min-width: 126px; }
-        .playerTournamentCard__actions a, .playerRulesGrid a { background: linear-gradient(135deg, var(--card-accent, var(--t-accent)), var(--card-accent-2, var(--t-accent-2))); border-radius: 999px; color: #fff; font-size: 12px; font-weight: 950; padding: 10px 13px; text-decoration: none; white-space: nowrap; }
-        .playerTournamentCard__actions a:first-child { background: #fff; border: 1px solid color-mix(in srgb, var(--card-accent, var(--t-accent)) 34%, #e2e8f0); color: #075985; }
+        .playerTournamentCard__actions a, .playerRulesGrid a { background: linear-gradient(135deg, var(--card-accent, var(--club-primary)), var(--card-accent-2, var(--club-secondary))); border-radius: 999px; color: #fff; font-size: 12px; font-weight: 950; padding: 10px 13px; text-decoration: none; white-space: nowrap; }
+        .playerTournamentCard__actions a:first-child { background: #fff; border: 1px solid color-mix(in srgb, var(--card-accent, var(--club-primary)) 34%, #e2e8f0); color: #075985; }
         .playerTournamentEmpty { color: #64748b; display: grid; gap: 6px; justify-items: start; padding: 18px; }
         .playerTournamentEmpty--section { background: rgba(255,255,255,.64); border-style: dashed; box-shadow: none; }
         .playerTournamentEmpty strong { color: #061b3a; font-weight: 950; }

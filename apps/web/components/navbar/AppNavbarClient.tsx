@@ -28,7 +28,6 @@ import { NAV_CONFIG, type NavChild, type NavItem } from '@/lib/navConfig'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
 import { hasAnyClubPermission } from '@/lib/clubPermissions'
-import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import { BRAND } from '@/lib/branding'
 
@@ -310,7 +309,6 @@ export default function AppNavbarClient() {
   const [previewModal, setPreviewModal] = useState<PreviewNotification | null>(null)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
-  const [activeClubThemeKey, setActiveClubThemeKey] = useState<string | null>(null)
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null)
   const [playerCategory, setPlayerCategory] = useState<number | null>(null)
 
@@ -331,16 +329,6 @@ export default function AppNavbarClient() {
       : items
     return role === 'club' ? filterClubNavItems(contextualItems, clubRole) : contextualItems
   }, [cfg.main, clubPublicHomeHref, clubRole, role])
-  const activeClubTheme = useMemo(() => getClubTheme(activeClubThemeKey), [activeClubThemeKey])
-  const clubThemeStyle = useMemo(
-    () => ({
-      '--px-club-accent': activeClubTheme.vars.accent,
-      '--px-club-accent-2': activeClubTheme.vars.accent2,
-      '--px-club-soft': activeClubTheme.vars.soft,
-      '--px-club-glow': activeClubTheme.vars.glow,
-    }) as React.CSSProperties,
-    [activeClubTheme]
-  )
 
   const playerIdentityMeta = useMemo(() => {
     const category = playerCategory ? `${playerCategory}ta categoría` : null
@@ -370,22 +358,6 @@ export default function AppNavbarClient() {
   }
 
   useEffect(() => {
-    const root = document.documentElement
-    root.style.setProperty('--px-active-club-accent', activeClubTheme.vars.accent)
-    root.style.setProperty('--px-club-accent', activeClubTheme.vars.accent)
-    root.style.setProperty('--px-club-accent-2', activeClubTheme.vars.accent2)
-    root.style.setProperty('--px-club-soft', activeClubTheme.vars.soft)
-    root.style.setProperty('--px-club-glow', activeClubTheme.vars.glow)
-    return () => {
-      root.style.removeProperty('--px-active-club-accent')
-      root.style.removeProperty('--px-club-accent')
-      root.style.removeProperty('--px-club-accent-2')
-      root.style.removeProperty('--px-club-soft')
-      root.style.removeProperty('--px-club-glow')
-    }
-  }, [activeClubTheme.vars.accent, activeClubTheme.vars.accent2, activeClubTheme.vars.glow, activeClubTheme.vars.soft])
-
-  useEffect(() => {
     let alive = true
 
     ;(async () => {
@@ -409,31 +381,6 @@ export default function AppNavbarClient() {
       alive = false
     }
   }, [user?.id])
-
-  useEffect(() => {
-    let alive = true
-
-    ;(async () => {
-      if (!displayClub?.id) {
-        setActiveClubThemeKey(null)
-        return
-      }
-
-      const { data } = await supabase
-        .from('clubs')
-        .select('theme_key')
-        .eq('id', displayClub.id)
-        .maybeSingle()
-
-      if (alive) {
-        setActiveClubThemeKey((data?.theme_key as string | null) ?? null)
-      }
-    })()
-
-    return () => {
-      alive = false
-    }
-  }, [displayClub?.id])
 
   useEffect(() => {
     let alive = true
@@ -738,7 +685,9 @@ export default function AppNavbarClient() {
 
     setNavbarOverlay(null)
 
-    const destination = item.href || item.link
+    const destination = item.type === 'club_membership_requested'
+      ? '/club/jugadores?tab=solicitudes'
+      : item.href || item.link
     if (destination) {
       router.push(destination)
       return
@@ -882,14 +831,13 @@ export default function AppNavbarClient() {
         <div className="px-left">
           <div className="px-dd px-clubWrap">
             {cfg.leftMode === 'club-static' ? (
-              <Link href={clubPublicHomeHref} className="px-clubBtn px-clubBtn--themed" style={clubThemeStyle} aria-label="Inicio público del club">
+              <Link href={clubPublicHomeHref} className="px-clubBtn px-clubBtn--themed" aria-label="Inicio público del club">
                 {clubHomeContent}
               </Link>
             ) : (
               <button
                 type="button"
                 className="px-clubBtn px-clubBtn--themed"
-                style={clubThemeStyle}
                 aria-expanded={clubOpen}
                 onClick={(event) => toggleNavbarOverlay('club', event.currentTarget)}
               >
@@ -1155,7 +1103,6 @@ export default function AppNavbarClient() {
         <button
           type="button"
           className="px-mobileClubBtn px-clubBtn--themed"
-          style={clubThemeStyle}
           aria-expanded={clubOpen}
           aria-controls="player-navbar-club-popover"
           onClick={(event) => toggleNavbarOverlay('club', event.currentTarget)}
@@ -1350,7 +1297,7 @@ export default function AppNavbarClient() {
 
   return (
     <>
-      <header className={`px-nav${isGlobalPublicNav ? ' px-nav--global' : ''}${role === 'guest' ? ' px-nav--guest' : ' px-nav--authed'}`} ref={rootRef} style={clubThemeStyle}>
+      <header className={`px-nav${isGlobalPublicNav ? ' px-nav--global' : ''}${role === 'guest' ? ' px-nav--guest' : ' px-nav--authed'}`} ref={rootRef}>
         <div className="px-navgrid px-desktopBar">
           {renderDesktopLeft()}
           {renderDesktopCenter()}

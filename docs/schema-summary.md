@@ -205,7 +205,7 @@ Observaciones/deuda:
 
 Propósito funcional: perfil publico/usuario de la persona autenticada.
 
-Columnas principales: `user_id`, `id`, `email`, `first_name`, `last_name`, `display_name`, `city`, `birth_date`, `height_cm`, `dominant_hand`, `avatar_url`, `cover_url`, `created_at`, `updated_at`.
+Columnas principales: `user_id`, `id`, `email`, `first_name`, `last_name`, `display_name`, `gender`, `country_code`, `country`, `province_id`, `province`, `city_id`, `city`, `birth_date`, `phone_country_code`, `phone_area_code`, `phone_number`, `phone_e164`, `height_cm`, `dominant_hand`, `preferred_position`, `avatar_url`, `cover_url`, `created_at`, `updated_at`.
 
 Claves:
 
@@ -220,6 +220,18 @@ Relaciones:
 
 - Se relaciona logicamente con todas las tablas que referencian usuarios (`club_memberships`, `club_players`, contenido de plataforma, torneos, mensajes, notificaciones).
 - La relacion real de FK en esas tablas apunta a `auth.users`, no a `profiles`.
+
+### `argentina_locations`
+
+Propósito funcional: catálogo normalizado y local de provincias y localidades oficiales de Argentina para validar registros.
+
+Columnas principales: `country_code`, `province_id`, `province`, `city_id`, `city`, `department_id`, `department`.
+
+Notas:
+
+- Se genera desde la descarga completa oficial de Georef mediante `apps/web/scripts/update-argentina-locations.mjs`.
+- La migración de seed generada conserva solo IDs y nombres; no incluye coordenadas ni geometrías.
+- No tiene políticas públicas de lectura: el formulario usa el JSON local y el trigger usa la tabla para validar la combinación de IDs.
 
 RLS: habilitado.
 

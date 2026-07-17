@@ -5,12 +5,20 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import PasswordField from '@/components/auth/PasswordField'
 import SelpaLoader from '@/components/SelpaLoader'
 import { BRAND } from '@/lib/branding'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
   | null
+
+const loginInputStyle = {
+  fontFamily: '"Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+  fontSize: '14px',
+  fontWeight: 400,
+  letterSpacing: '.005em',
+}
 
 export default function LoginPageClient() {
   const router = useRouter()
@@ -152,28 +160,20 @@ export default function LoginPageClient() {
               <div className="px-sepRow">o</div>
 
               <div className="px-field">
-                <label className="px-label">Email</label>
+                <label className="px-label" htmlFor="login-email">Email</label>
                 <input
+                  id="login-email"
                   className="px-input"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="tu@email.com"
-                  autoComplete="username"
+                  placeholder="nombre@correo.com"
+                  autoComplete="email"
+                  style={loginInputStyle}
                 />
               </div>
 
-              <div className="px-field">
-                <label className="px-label">Contraseña</label>
-                <input
-                  className="px-input"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                />
-              </div>
+              <PasswordField id="login-password" label="Contraseña" value={password} onChange={setPassword} autoComplete="current-password" inputStyle={loginInputStyle} />
 
               <button className="px-btn" type="submit">
                 Ingresar

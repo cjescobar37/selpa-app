@@ -3,6 +3,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { buildAssetProxyUrl } from '@/lib/clubAssets'
+import { getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
+import { globalProfileFields, isGlobalProfileComplete, type GlobalProfile } from '@/lib/globalProfile'
 import {
   isApprovedMembership,
   isClubStaffRole,
@@ -11,12 +13,13 @@ import {
 } from '@/lib/clubMembershipRules'
 
 export type AppRole = 'guest' | 'player' | 'club' | 'platform'
-export type PostLoginDestination = '/login' | '/seleccionar-club' | '/club' | '/player' | '/platform' | `/clubs/${string}`
+export type PostLoginDestination = '/login' | '/completar-perfil' | '/seleccionar-club' | '/club' | '/player' | '/platform' | `/clubs/${string}`
 
 export type ClubMini = {
   id: string
   name: string
   logoUrl?: string | null
+  themeKey: ClubThemeKey
 }
 
 export type SessionCtx = {
@@ -29,6 +32,7 @@ export type SessionCtx = {
     email?: string
     avatarUrl?: string | null
   } | null
+  globalProfile: GlobalProfile | null
   activeClub: ClubMini | null
   activeClubId: string | null
   clubs: ClubMini[]
@@ -52,6 +56,9 @@ type AuthUserLike = {
   id: string
   email?: string
   user_metadata?: {
+    display_name?: string
+    first_name?: string
+    last_name?: string
     full_name?: string
     name?: string
     avatar_url?: string | null
@@ -62,6 +69,7 @@ type ClubRow = {
   id: string
   name: string
   logo_url: string | null
+  theme_key?: string | null
   status?: string | null
 }
 
@@ -70,11 +78,16 @@ function mapClubRows(rows: ClubRow[]) {
     id: c.id,
     name: c.name,
     logoUrl: buildAssetProxyUrl(c.logo_url ?? null),
+    themeKey: getClubTheme(c.theme_key).key,
   }))
 }
 
-function getNameFromUser(u: AuthUserLike) {
+function getNameFromUser(u: AuthUserLike, profile: GlobalProfile | null) {
+  const profileName = profile?.display_name?.trim() || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
+  const metadataName = u?.user_metadata?.display_name?.trim() || [u?.user_metadata?.first_name, u?.user_metadata?.last_name].filter(Boolean).join(' ').trim()
   return (
+    profileName ||
+    metadataName ||
     u?.user_metadata?.full_name ||
     u?.user_metadata?.name ||
     u?.email?.split('@')?.[0] ||
@@ -89,8 +102,9 @@ type MembershipRow = {
   approved_at: string | null
 }
 
-function getPostLoginDestination(ctx: Pick<SessionCtx, 'role' | 'user' | 'activeClub' | 'isApprovedMember'>): PostLoginDestination {
+function getPostLoginDestination(ctx: Pick<SessionCtx, 'role' | 'user' | 'globalProfile' | 'activeClub' | 'isApprovedMember'>): PostLoginDestination {
   if (!ctx.user) return '/login'
+  if (ctx.role === 'player' && !isGlobalProfileComplete(ctx.globalProfile)) return '/completar-perfil'
   if (ctx.role === 'platform') return '/platform'
   if (!ctx.activeClub || !ctx.isApprovedMember) return '/seleccionar-club'
   if (ctx.role === 'club') return `/clubs/${ctx.activeClub.id}`
@@ -106,6 +120,7 @@ async function resolveContext() {
       role: 'guest' as const,
       isPlatformAdmin: false,
       user: null,
+      globalProfile: null,
       activeClub: null,
       activeClubId: null,
       clubs: [] as ClubMini[],
@@ -118,6 +133,12 @@ async function resolveContext() {
   }
 
   const userId = user.id
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select(globalProfileFields)
+    .eq('user_id', userId)
+    .maybeSingle()
 
   const { data: pa } = await supabase
     .from('platform_admins')
@@ -160,6 +181,7 @@ async function resolveContext() {
         role: 'guest' as const,
         isPlatformAdmin: false,
         user: null,
+        globalProfile: null,
         activeClub: null,
         activeClubId: null,
         clubs: [] as ClubMini[],
@@ -191,7 +213,7 @@ async function resolveContext() {
     if (clubs.length === 0) {
       const { data: clubRows, error: clubsError } = await supabase
         .from('clubs')
-        .select('id,name,logo_url')
+        .select('id,name,logo_url,theme_key')
         .in('id', approvedClubIds)
 
       if (!clubsError) {
@@ -263,10 +285,11 @@ async function resolveContext() {
     isPlatformAdmin,
     user: {
       id: userId,
-      name: getNameFromUser(user),
+      name: getNameFromUser(user, profile as GlobalProfile | null),
       email: user.email,
-      avatarUrl: (user.user_metadata?.avatar_url as string | null) ?? null,
+      avatarUrl: buildAssetProxyUrl((profile as GlobalProfile | null)?.avatar_url ?? (user.user_metadata?.avatar_url as string | null) ?? null),
     },
+    globalProfile: (profile as GlobalProfile | null) ?? null,
     activeClub,
     activeClubId: activeClub?.id ?? null,
     clubs,
@@ -289,6 +312,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<AppRole>('guest')
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
   const [user, setUser] = useState<SessionCtx['user']>(null)
+  const [globalProfile, setGlobalProfile] = useState<GlobalProfile | null>(null)
   const [activeClub, setActiveClubState] = useState<ClubMini | null>(null)
   const [activeClubId, setActiveClubId] = useState<string | null>(null)
   const [clubs, setClubs] = useState<ClubMini[]>([])
@@ -308,6 +332,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setRole(r.role)
         setIsPlatformAdmin(r.isPlatformAdmin)
         setUser(r.user)
+        setGlobalProfile(r.globalProfile)
         setActiveClubState(r.activeClub)
         setActiveClubId(r.activeClubId)
         setClubs(r.clubs)
@@ -331,6 +356,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const setActiveClub = useCallback(
     async (clubId: string) => {
+      const nextClub = clubs.find((club) => club.id === clubId)
+      if (!nextClub) {
+        throw new Error('No podés activar un club que no pertenece a tu sesión.')
+      }
+
       const { data: s } = await supabase.auth.getSession()
       const u = s?.session?.user
       if (!u) return
@@ -350,9 +380,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         .from('user_settings')
         .upsert({ user_id: u.id, active_club_id: clubId }, { onConflict: 'user_id' })
 
-      await refresh()
+      // The provider can repaint immediately while the canonical context refreshes silently.
+      setActiveClubState(nextClub)
+      setActiveClubId(clubId)
+      await refresh({ silent: true })
     },
-    [refresh]
+    [clubs, refresh]
   )
 
   const signOut = useCallback(async () => {
@@ -363,6 +396,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setRole('guest')
       setIsPlatformAdmin(false)
       setUser(null)
+      setGlobalProfile(null)
       setActiveClubState(null)
       setActiveClubId(null)
       setClubs([])
@@ -415,6 +449,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       role,
       isPlatformAdmin,
       user,
+      globalProfile,
       activeClub,
       activeClubId,
       clubs,
@@ -432,6 +467,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       role,
       isPlatformAdmin,
       user,
+      globalProfile,
       activeClub,
       activeClubId,
       clubs,

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build",
+    "update:argentina-locations": "node scripts/update-argentina-locations.mjs",
     "start": "next start",
     "lint": "eslint"
   },

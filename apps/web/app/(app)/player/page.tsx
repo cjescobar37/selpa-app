@@ -123,11 +123,6 @@ type ClubContentNotice = {
   body: string
 }
 
-type ClubThemeRow = {
-  id: string
-  theme_key: string | null
-}
-
 function normalizeGender(gender: string | null) {
   const value = String(gender ?? '').toUpperCase()
   if (value === 'M' || value === 'MALE') return 'Masculino'
@@ -182,7 +177,6 @@ export default function PlayerHomePage() {
   const [matches, setMatches] = useState<MatchRow[]>([])
   const [partnerships, setPartnerships] = useState<ActivePartnership[]>([])
   const [invites, setInvites] = useState<PartnerInvite[]>([])
-  const [clubThemeKeys, setClubThemeKeys] = useState<Record<string, string | null>>({})
   const [loadingData, setLoadingData] = useState(true)
   const [hasLoadedData, setHasLoadedData] = useState(false)
   const [message, setMessage] = useState('')
@@ -206,7 +200,6 @@ export default function PlayerHomePage() {
   const pendingInvites = invites.filter((invite) => invite.status === 'PENDING')
   const activeClub = session.activeClubId ? clubsById.get(session.activeClubId) : undefined
   const activePlayer = activeClub ? playerByClubId.get(activeClub.id) : undefined
-  const activeTheme = getClubTheme(session.activeClubId ? clubThemeKeys[session.activeClubId] : null)
   const activeCategoryLabel = activePlayer?.category ? `Categoría ${activePlayer.category}` : 'Categoría por definir'
   const activePositionLabel = activePlayer ? 'Posición por definir' : 'Sin ranking'
   const activePointsLabel = `${activePlayer?.ranking_points ?? 0} pts`
@@ -311,21 +304,12 @@ export default function PlayerHomePage() {
 
       try {
         const clubIds = session.clubs.map((club) => club.id)
-        const [playersResult, themesResult] = await Promise.all([
-          supabase
-            .from('club_players')
-            .select('id,club_id,user_id,display_name,category,gender,ranking_points,approved_at')
-            .eq('user_id', session.user.id),
-          clubIds.length
-            ? supabase
-                .from('clubs')
-                .select('id,theme_key')
-                .in('id', clubIds)
-            : Promise.resolve({ data: [], error: null }),
-        ])
+        const playersResult = await supabase
+          .from('club_players')
+          .select('id,club_id,user_id,display_name,category,gender,ranking_points,approved_at')
+          .eq('user_id', session.user.id)
 
         if (playersResult.error) throw playersResult.error
-        if (themesResult.error) throw themesResult.error
 
         let tournamentRows: TournamentRow[] = []
         let teamRows: TeamRow[] = []
@@ -428,7 +412,6 @@ export default function PlayerHomePage() {
 
         if (!alive) return
         setPlayers((playersResult.data ?? []) as ClubPlayerRow[])
-        setClubThemeKeys(Object.fromEntries(((themesResult.data ?? []) as ClubThemeRow[]).map((row) => [row.id, row.theme_key])))
         setTournaments(tournamentRows)
         setMyTeams(teamRows)
         setRegistrations(registrationRows)
@@ -478,16 +461,7 @@ export default function PlayerHomePage() {
   }
 
   return (
-    <div
-      className="playerHomeShell"
-      style={{
-        ['--active-club-accent' as string]: activeTheme.vars.accent,
-        ['--active-club-accent-2' as string]: activeTheme.vars.accent2,
-        ['--active-club-hero' as string]: activeTheme.vars.hero,
-        ['--active-club-glow' as string]: activeTheme.vars.glow,
-        ['--active-club-soft' as string]: activeTheme.vars.soft,
-      }}
-    >
+    <div className="playerHomeShell">
       <ModeSegmentedControl value={homeMode} onChange={changeHomeMode} />
       <div className={`homeModePane${homeMode === 'community' ? ' is-community' : ''}`}>
       {homeMode === 'community' ? (
@@ -614,7 +588,7 @@ export default function PlayerHomePage() {
             {sortedPlayerClubs.map((club) => {
               const player = playerByClubId.get(club.id)
               const isActive = session.activeClubId === club.id
-              const theme = getClubTheme(clubThemeKeys[club.id])
+              const theme = getClubTheme(club.themeKey)
               return (
                 <article
                   key={club.id}
@@ -686,7 +660,7 @@ export default function PlayerHomePage() {
                     maxPairs: tournament.max_pairs,
                     clubName: club?.name ?? 'Club',
                     clubLogoUrl: club?.logoUrl ?? null,
-                    clubThemeKey: clubThemeKeys[tournament.club_id] ?? null,
+                    clubThemeKey: club?.themeKey ?? null,
                     rules: tournament.rules_json ?? {},
                   }}
                   showClub
@@ -857,8 +831,8 @@ export default function PlayerHomePage() {
 
       <style>{`
         .playerHomeShell { background:
-          radial-gradient(circle at 8% 0%, var(--active-club-glow, rgba(34,211,238,.16)), transparent 34%),
-          radial-gradient(circle at 94% 8%, color-mix(in srgb, var(--active-club-accent-2, #ec4899) 12%, transparent), transparent 30%),
+          radial-gradient(circle at 8% 0%, var(--club-soft, rgba(34,211,238,.16)), transparent 34%),
+          radial-gradient(circle at 94% 8%, color-mix(in srgb, var(--club-secondary, #ec4899) 12%, transparent), transparent 30%),
           #f3f7fb;
           color: #061b3a;
           display: grid;
@@ -907,8 +881,8 @@ export default function PlayerHomePage() {
         .playerHomeHero {
           align-items: center;
           background:
-            radial-gradient(circle at 30% 0%, var(--active-club-soft, rgba(103,232,249,.20)), transparent 34%),
-            linear-gradient(135deg, var(--active-club-hero, rgba(8,47,73,.96), rgba(15,23,42,.92) 52%, rgba(67,16,57,.88)));
+            radial-gradient(circle at 30% 0%, var(--club-soft, rgba(103,232,249,.20)), transparent 34%),
+            linear-gradient(135deg, #082f49, color-mix(in srgb, var(--club-primary, #06b6d4) 38%, #0f172a) 52%, color-mix(in srgb, var(--club-secondary, #ec4899) 30%, #0f172a));
           color: #fff;
           display: grid;
           gap: 16px;
@@ -917,17 +891,17 @@ export default function PlayerHomePage() {
           padding: 26px;
           position: relative;
         }
-        .playerHomeHero::after { background: linear-gradient(90deg, var(--active-club-accent, #06b6d4), var(--active-club-accent-2, #ec4899)); content: ""; height: 3px; left: 26px; position: absolute; right: 26px; top: 0; }
+        .playerHomeHero::after { background: var(--club-gradient, linear-gradient(90deg, #06b6d4, #ec4899)); content: ""; height: 3px; left: 26px; position: absolute; right: 26px; top: 0; }
         .playerHomeKicker { color: #0891b2; font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
-        .playerHomeHero .playerHomeKicker { color: color-mix(in srgb, var(--active-club-accent, #67e8f9) 76%, white); }
+        .playerHomeHero .playerHomeKicker { color: color-mix(in srgb, var(--club-primary, #67e8f9) 76%, white); }
         .playerHomeHero h1 { font-size: clamp(32px, 5vw, 58px); font-weight: 950; letter-spacing: -.03em; line-height: .98; margin: 7px 0 10px; }
         .playerHomeHero p { color: rgba(255,255,255,.76); font-size: 16px; font-weight: 750; margin: 0; max-width: 640px; }
         .playerHomeActiveClub { align-items: center; background: rgba(2,6,23,.24); border: 1px solid rgba(255,255,255,.15); border-radius: 16px; color: #fff; display: grid; gap: 10px; grid-template-columns: 42px minmax(0, 1fr) auto; max-width: 520px; padding: 9px 11px; text-decoration: none; transition: border-color .18s ease, background .18s ease, transform .18s ease; }
-        .playerHomeActiveClub:hover { background: rgba(2,6,23,.34); border-color: color-mix(in srgb, var(--active-club-accent, #67e8f9) 52%, white); transform: translateY(-1px); }
+        .playerHomeActiveClub:hover { background: rgba(2,6,23,.34); border-color: color-mix(in srgb, var(--club-primary, #67e8f9) 52%, white); transform: translateY(-1px); }
         .playerHomeActiveClub__logo { align-items: center; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; display: flex; font-size: 12px; font-weight: 950; height: 42px; justify-content: center; overflow: hidden; width: 42px; }
         .playerHomeActiveClub__logo img { height: 100%; object-fit: cover; width: 100%; }
         .playerHomeActiveClub__copy { display: grid; gap: 2px; min-width: 0; }
-        .playerHomeActiveClub__copy small { color: color-mix(in srgb, var(--active-club-accent, #67e8f9) 72%, white); font-size: 9px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+        .playerHomeActiveClub__copy small { color: color-mix(in srgb, var(--club-primary, #67e8f9) 72%, white); font-size: 9px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
         .playerHomeActiveClub__copy strong { font-size: 16px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .playerHomeActiveClub > svg { color: rgba(255,255,255,.68); }
         .playerHomeHeroCard { align-items: stretch; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18); border-radius: 20px; display: grid; gap: 10px; padding: 13px; }
@@ -961,7 +935,7 @@ export default function PlayerHomePage() {
           position: relative;
         }
         .playerPriorityCard::before {
-          background: linear-gradient(180deg, var(--active-club-accent, #06b6d4), var(--active-club-accent-2, #ec4899));
+          background: var(--club-gradient, linear-gradient(180deg, #06b6d4, #ec4899));
           bottom: 14px;
           border-radius: 999px;
           content: "";
@@ -972,8 +946,8 @@ export default function PlayerHomePage() {
         }
         .playerPriorityCard--urgent {
           background:
-            linear-gradient(135deg, color-mix(in srgb, var(--active-club-accent, #06b6d4) 10%, white), #fff);
-          border-color: color-mix(in srgb, var(--active-club-accent, #06b6d4) 38%, #e2e8f0);
+            linear-gradient(135deg, color-mix(in srgb, var(--club-primary, #06b6d4) 10%, white), #fff);
+          border-color: color-mix(in srgb, var(--club-primary, #06b6d4) 38%, #e2e8f0);
         }
         .playerPriorityCard--urgent::before {
           bottom: 10px;
@@ -982,8 +956,8 @@ export default function PlayerHomePage() {
         }
         .playerPriorityCard:hover,
         .playerPrioritySide a:hover {
-          border-color: color-mix(in srgb, var(--active-club-accent, #06b6d4) 34%, #e2e8f0);
-          box-shadow: 0 18px 42px color-mix(in srgb, var(--active-club-accent, #06b6d4) 11%, rgba(15,23,42,.08));
+          border-color: color-mix(in srgb, var(--club-primary, #06b6d4) 34%, #e2e8f0);
+          box-shadow: 0 18px 42px color-mix(in srgb, var(--club-primary, #06b6d4) 11%, rgba(15,23,42,.08));
           transform: translateY(-1px);
         }
         .playerPriorityCard span,
@@ -1009,7 +983,7 @@ export default function PlayerHomePage() {
         }
         .playerPriorityCard b {
           align-items: center;
-          color: color-mix(in srgb, var(--active-club-accent, #0891b2) 70%, #061b3a);
+          color: color-mix(in srgb, var(--club-primary, #0891b2) 70%, #061b3a);
           display: inline-flex;
           font-size: 13px;
           font-weight: 950;
@@ -1036,7 +1010,7 @@ export default function PlayerHomePage() {
           padding: 12px;
         }
         .playerPrioritySide svg {
-          color: var(--active-club-accent, #0891b2);
+          color: var(--club-primary, #0891b2);
           grid-row: 1 / span 2;
         }
         .playerPrioritySide strong {
@@ -1051,15 +1025,15 @@ export default function PlayerHomePage() {
         }
         .playerQuickGrid { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 12px; }
         .playerQuickGrid a { align-content: center; background: linear-gradient(135deg, #fff, #f8fafc); border: 1px solid #e2e8f0; border-radius: 16px; color: #061b3a; display: grid; gap: 4px 10px; grid-template-columns: 26px minmax(0, 1fr); min-height: 72px; min-width: 0; padding: 13px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
-        .playerQuickGrid a:hover { border-color: color-mix(in srgb, var(--active-club-accent, #0891b2) 35%, #e2e8f0); box-shadow: 0 12px 24px rgba(15,23,42,.06); transform: translateY(-1px); }
+        .playerQuickGrid a:hover { border-color: color-mix(in srgb, var(--club-primary, #0891b2) 35%, #e2e8f0); box-shadow: 0 12px 24px rgba(15,23,42,.06); transform: translateY(-1px); }
         .playerQuickGrid span { align-self: end; color: #64748b; font-size: 11px; font-weight: 950; letter-spacing: .03em; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
         .playerQuickGrid strong { color: #061b3a; display: block; font-size: 17px; font-weight: 950; grid-column: 2; line-height: 1.05; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .playerQuickGrid svg { align-self: center; color: var(--active-club-accent, #0891b2); flex: 0 0 auto; grid-row: 1 / span 2; }
+        .playerQuickGrid svg { align-self: center; color: var(--club-primary, #0891b2); flex: 0 0 auto; grid-row: 1 / span 2; }
         .playerSection { display: grid; gap: 13px; padding: 18px; }
         .playerSection--flat { align-content: start; box-shadow: 0 14px 36px rgba(15,23,42,.06); }
         .playerSectionHeader { align-items: end; display: flex; gap: 12px; justify-content: space-between; }
         .playerSection header h2 { font-size: 22px; font-weight: 950; letter-spacing: -.02em; margin: 3px 0 0; }
-        .playerClubSwitchHint { border: 1px solid color-mix(in srgb, var(--active-club-accent, #06b6d4) 28%, #dbeafe); border-radius: 999px; color: color-mix(in srgb, var(--active-club-accent, #0891b2) 72%, #061b3a); flex: 0 0 auto; font-size: 11px; font-weight: 950; padding: 7px 10px; }
+        .playerClubSwitchHint { border: 1px solid color-mix(in srgb, var(--club-primary, #06b6d4) 28%, #dbeafe); border-radius: 999px; color: color-mix(in srgb, var(--club-primary, #0891b2) 72%, #061b3a); flex: 0 0 auto; font-size: 11px; font-weight: 950; padding: 7px 10px; }
         .playerClubGrid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .playerClubCard { align-items: center; background:
           radial-gradient(circle at 0% 0%, var(--club-soft, rgba(103,232,249,.14)), transparent 34%),

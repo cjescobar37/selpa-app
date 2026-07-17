@@ -1028,11 +1028,97 @@ CREATE FUNCTION public.handle_new_auth_user() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
+declare
+  v_first_name text := coalesce(nullif(trim(new.raw_user_meta_data ->> 'first_name'), ''), nullif(trim(new.raw_user_meta_data ->> 'given_name'), ''));
+  v_last_name text := coalesce(nullif(trim(new.raw_user_meta_data ->> 'last_name'), ''), nullif(trim(new.raw_user_meta_data ->> 'family_name'), ''));
+  v_display_name text := nullif(trim(new.raw_user_meta_data ->> 'display_name'), '');
+  v_oauth_name text := nullif(trim(coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', new.raw_user_meta_data ->> 'display_name')), '');
+  v_country_code text := nullif(trim(new.raw_user_meta_data ->> 'country_code'), '');
+  v_country text := nullif(trim(new.raw_user_meta_data ->> 'country'), '');
+  v_province_id text := nullif(trim(new.raw_user_meta_data ->> 'province_id'), '');
+  v_city_id text := nullif(trim(new.raw_user_meta_data ->> 'city_id'), '');
+  v_birth_date_raw text := nullif(trim(new.raw_user_meta_data ->> 'birth_date'), '');
+  v_birth_date date;
+  v_gender text := nullif(trim(new.raw_user_meta_data ->> 'gender'), '');
+  v_avatar_url text := nullif(trim(coalesce(new.raw_user_meta_data ->> 'avatar_url', new.raw_user_meta_data ->> 'picture')), '');
+  v_location public.argentina_locations%rowtype;
+  v_has_location boolean := false;
 begin
-  insert into public.profiles (user_id, id, email)
-  values (new.id, new.id, new.email)
-  on conflict (id) do update
+  if v_gender is not null and v_gender not in ('FEMALE', 'MALE') then
+    raise exception 'Invalid gender metadata';
+  end if;
+
+  if v_birth_date_raw is not null then
+    begin
+      v_birth_date := v_birth_date_raw::date;
+      if to_char(v_birth_date, 'YYYY-MM-DD') <> v_birth_date_raw or v_birth_date > current_date then
+        raise exception 'Invalid birth date metadata';
+      end if;
+    exception when others then
+      raise exception 'Invalid birth date metadata';
+    end;
+  end if;
+
+  v_display_name := coalesce(
+    v_display_name,
+    nullif(trim(concat_ws(' ', v_first_name, v_last_name)), ''),
+    v_oauth_name,
+    nullif(trim(split_part(coalesce(new.email, ''), '@', 1)), '')
+  );
+
+  if v_province_id is not null or v_city_id is not null then
+    if v_country_code is distinct from 'AR' or v_province_id is null or v_city_id is null then
+      raise exception 'Invalid Argentina location metadata';
+    end if;
+
+    select *
+    into v_location
+    from public.argentina_locations
+    where country_code = 'AR'
+      and province_id = v_province_id
+      and city_id = v_city_id;
+
+    if not found then
+      raise exception 'Invalid province and city combination';
+    end if;
+
+    v_has_location := true;
+    v_country_code := 'AR';
+    v_country := 'Argentina';
+  else
+    v_country_code := null;
+    v_country := null;
+  end if;
+
+  insert into public.profiles (
+    user_id, id, email, first_name, last_name, display_name,
+    country_code, country, province_id, province, city_id, city, birth_date, gender, avatar_url
+  )
+  values (
+    new.id, new.id, new.email, v_first_name, v_last_name, v_display_name,
+    v_country_code, v_country,
+    case when v_has_location then v_location.province_id end,
+    case when v_has_location then v_location.province end,
+    case when v_has_location then v_location.city_id end,
+    case when v_has_location then v_location.city end,
+    v_birth_date,
+    v_gender,
+    v_avatar_url
+  )
+  on conflict (user_id) do update
     set email = excluded.email,
+        first_name = coalesce(excluded.first_name, public.profiles.first_name),
+        last_name = coalesce(excluded.last_name, public.profiles.last_name),
+        display_name = coalesce(excluded.display_name, public.profiles.display_name),
+        country_code = coalesce(excluded.country_code, public.profiles.country_code),
+        country = coalesce(excluded.country, public.profiles.country),
+        province_id = coalesce(excluded.province_id, public.profiles.province_id),
+        province = coalesce(excluded.province, public.profiles.province),
+        city_id = coalesce(excluded.city_id, public.profiles.city_id),
+        city = coalesce(excluded.city, public.profiles.city),
+        birth_date = coalesce(excluded.birth_date, public.profiles.birth_date),
+        gender = coalesce(excluded.gender, public.profiles.gender),
+        avatar_url = coalesce(excluded.avatar_url, public.profiles.avatar_url),
         updated_at = now();
 
   return new;
@@ -4225,15 +4311,72 @@ CREATE TABLE public.profiles (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     id uuid NOT NULL,
     city text,
+    country_code text,
+    country text,
+    province_id text,
+    province text,
+    city_id text,
     birth_date date,
+    gender text,
     height_cm integer,
     dominant_hand text,
+    preferred_position text,
     avatar_url text,
-    cover_url text
+    cover_url text,
+    phone_country_code text,
+    phone_area_code text,
+    phone_number text,
+    phone_e164 text
 );
 
 
 ALTER TABLE public.profiles OWNER TO postgres;
+
+ALTER TABLE ONLY public.profiles
+    ADD CONSTRAINT profiles_gender_check CHECK (((gender IS NULL) OR (gender = ANY (ARRAY['FEMALE'::text, 'MALE'::text]))));
+
+ALTER TABLE ONLY public.profiles
+    ADD CONSTRAINT profiles_height_cm_check CHECK (((height_cm IS NULL) OR ((height_cm >= 120) AND (height_cm <= 230))));
+
+ALTER TABLE ONLY public.profiles
+    ADD CONSTRAINT profiles_dominant_hand_check CHECK (((dominant_hand IS NULL) OR (dominant_hand = ANY (ARRAY['RIGHT'::text, 'LEFT'::text, 'AMBIDEXTROUS'::text]))));
+
+ALTER TABLE ONLY public.profiles
+    ADD CONSTRAINT profiles_preferred_position_check CHECK (((preferred_position IS NULL) OR (preferred_position = ANY (ARRAY['DRIVE'::text, 'REVES'::text, 'BOTH'::text]))));
+
+ALTER TABLE ONLY public.profiles
+    ADD CONSTRAINT profiles_phone_country_code_check CHECK (((phone_country_code IS NULL) OR (phone_country_code = '+54'::text)));
+
+ALTER TABLE ONLY public.profiles
+    ADD CONSTRAINT profiles_phone_area_code_check CHECK (((phone_area_code IS NULL) OR (phone_area_code ~ '^[0-9]{2,5}$'::text)));
+
+ALTER TABLE ONLY public.profiles
+    ADD CONSTRAINT profiles_phone_number_check CHECK (((phone_number IS NULL) OR (phone_number ~ '^[0-9]{6,8}$'::text)));
+
+ALTER TABLE ONLY public.profiles
+    ADD CONSTRAINT profiles_phone_e164_check CHECK (((phone_e164 IS NULL) OR (phone_e164 ~ '^\+[1-9][0-9]{7,14}$'::text)));
+
+--
+-- Name: argentina_locations; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.argentina_locations (
+    country_code text DEFAULT 'AR'::text NOT NULL,
+    province_id text NOT NULL,
+    province text NOT NULL,
+    city_id text NOT NULL,
+    city text NOT NULL,
+    department_id text,
+    department text,
+    CONSTRAINT argentina_locations_pkey PRIMARY KEY (city_id),
+    CONSTRAINT argentina_locations_province_id_city_id_key UNIQUE (province_id, city_id)
+);
+
+
+ALTER TABLE public.argentina_locations OWNER TO postgres;
+
+
+ALTER TABLE ONLY public.argentina_locations ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: tournament_registrations; Type: TABLE; Schema: public; Owner: postgres

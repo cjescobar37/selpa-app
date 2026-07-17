@@ -151,7 +151,9 @@ export default function NotificacionesPage() {
       await markRead(n.id)
     }
 
-    const destination = n.href || n.link
+    const destination = n.type === 'club_membership_requested'
+      ? '/club/jugadores?tab=solicitudes'
+      : n.href || n.link
     if (destination) {
       router.push(destination)
       return

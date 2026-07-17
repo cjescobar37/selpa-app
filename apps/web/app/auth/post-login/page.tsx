@@ -57,7 +57,10 @@ export default function PostLoginPage() {
       }
     }
 
-    router.replace(safeNextPath || session.postLoginDestination)
+    const destination = session.postLoginDestination === '/completar-perfil'
+      ? `/completar-perfil${safeNextPath ? `?next=${encodeURIComponent(safeNextPath)}` : ''}`
+      : safeNextPath || session.postLoginDestination
+    router.replace(destination)
 
     timeout = setTimeout(() => {
       if (!alive) return

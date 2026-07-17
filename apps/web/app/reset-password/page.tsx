@@ -21,7 +21,9 @@ export default function ResetPasswordPage() {
   async function sendReset(e?: React.FormEvent) {
     e?.preventDefault()
 
-    if (!email) {
+    const cleanEmail = email.trim().toLowerCase()
+
+    if (!cleanEmail) {
       setAlert({ variant: 'warning', title: 'Falta el email', message: 'Ingresá tu email para enviarte el link.' })
       return
     }
@@ -29,7 +31,7 @@ export default function ResetPasswordPage() {
     setLoading(true)
     setAlert({ variant: 'info', title: 'Enviando link…' })
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo })
 
     if (error) {
       setAlert({ variant: 'error', title: 'No se pudo enviar', message: error.message })
@@ -62,13 +64,14 @@ export default function ResetPasswordPage() {
 
         <form className="px-authBody" onSubmit={sendReset}>
           <div className="px-field">
-            <label className="px-label">Email</label>
+            <label className="px-label" htmlFor="reset-email">Email</label>
             <input
+              id="reset-email"
               className="px-input"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="tu@email.com"
+              placeholder="nombre@correo.com"
               autoComplete="email"
             />
           </div>

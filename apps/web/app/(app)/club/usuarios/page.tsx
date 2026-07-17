@@ -1119,10 +1119,26 @@ export default function ClubUsuariosPage() {
           .club-compactMatrixRow span:first-child { grid-column: 1 / -1; white-space: normal; }
         }
         @media (max-width: 720px) {
+          .club-users {
+            border-radius: 18px;
+            padding: 10px;
+          }
+          .club-usersHead {
+            border-radius: 14px;
+            gap: 10px;
+            padding: 13px;
+          }
+          .club-usersHead .club-title { font-size: 19px; }
+          .club-usersHead .club-sub { font-size: 12px; line-height: 1.35; }
           .club-usersHead { display: grid; }
-          .club-usersStats { justify-content: flex-start; }
-          .club-teamTabs { align-items: stretch; flex-direction: column; }
+          .club-usersStats { gap: 6px; justify-content: flex-start; }
+          .club-usersStats span { font-size: 11px; padding: 6px 8px; }
+          .club-teamTabs { align-items: stretch; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .club-teamTab { justify-content: space-between; width: 100%; }
+          .club-card { border-radius: 14px; gap: 10px; padding: 12px; }
+          .club-cardHead h2 { font-size: 16px; }
+          .club-staffLayout, .club-teamGrid { gap: 10px; margin-top: 10px; }
+          .club-staffCard, .club-staffInviteCard { padding: 10px; }
           .club-staffCardTop, .club-staffInviteFooter { align-items: flex-start; display: grid; }
           .club-staffCardBadges { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
           .club-staffMetaGrid { grid-template-columns: 1fr; }
@@ -1135,6 +1151,9 @@ export default function ClubUsuariosPage() {
           .club-rowMeta { align-items: flex-start; justify-items: start; }
           .club-historyRow { grid-template-columns: 1fr; }
           .club-historyRow > span { white-space: normal; }
+        }
+        @media (max-width: 390px) {
+          .club-teamTabs { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>

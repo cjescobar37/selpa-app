@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import PasswordField, { meetsPasswordRequirements, passwordRequirementsMessage } from '@/components/auth/PasswordField'
 
 type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string } | null
 
@@ -26,8 +27,8 @@ export default function UpdatePasswordPage() {
       setAlert({ variant: 'warning', title: 'No coinciden', message: 'Las contraseñas no coinciden.' })
       return
     }
-    if (password.length < 6) {
-      setAlert({ variant: 'warning', title: 'Contraseña débil', message: 'Debe tener al menos 6 caracteres.' })
+    if (!meetsPasswordRequirements(password)) {
+      setAlert({ variant: 'warning', title: 'Contraseña débil', message: passwordRequirementsMessage })
       return
     }
 
@@ -61,29 +62,8 @@ export default function UpdatePasswordPage() {
         </div>
 
         <form className="px-authBody" onSubmit={updatePassword}>
-          <div className="px-field">
-            <label className="px-label">Nueva contraseña</label>
-            <input
-              className="px-input"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete="new-password"
-            />
-          </div>
-
-          <div className="px-field">
-            <label className="px-label">Repetir contraseña</label>
-            <input
-              className="px-input"
-              type="password"
-              value={password2}
-              onChange={e => setPassword2(e.target.value)}
-              placeholder="••••••••"
-              autoComplete="new-password"
-            />
-          </div>
+          <PasswordField id="update-password" label="Nueva contraseña" value={password} onChange={setPassword} autoComplete="new-password" disabled={loading} minLength={8} showRequirements />
+          <PasswordField id="update-password-confirm" label="Repetir contraseña" value={password2} onChange={setPassword2} autoComplete="new-password" disabled={loading} minLength={8} />
 
           <button className="px-btn" type="submit" disabled={loading}>
             {loading ? (

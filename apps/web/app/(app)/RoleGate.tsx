@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import SelpaLoader from '@/components/SelpaLoader'
 import { useSession } from '@/components/session/SessionProvider'
+import { isGlobalProfileComplete } from '@/lib/globalProfile'
 
 function isPublicGuestRoute(pathname: string) {
   return /^\/torneos\/[^/]+(?:\/inscripcion)?$/.test(pathname)
@@ -14,6 +15,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const session = useSession()
   const publicGuestRoute = isPublicGuestRoute(pathname)
+  const requiresPlayerProfile = session.role === 'player'
   const currentPath = useMemo(() => {
     if (typeof window === 'undefined') return pathname
     return `${pathname}${window.location.search}`
@@ -38,7 +40,12 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
       return
     }
 
-    const isAllowed = allowedWithoutClub.some(p => pathname.startsWith(p))
+    if (requiresPlayerProfile && !isGlobalProfileComplete(session.globalProfile)) {
+      router.replace(`/completar-perfil?next=${encodeURIComponent(currentPath)}`)
+      return
+    }
+
+    const isAllowed = pathname === '/player' || allowedWithoutClub.some(p => pathname.startsWith(p))
 
     if (session.isPlatformAdmin) return
 
@@ -52,18 +59,21 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     publicGuestRoute,
     router,
     session.activeClubId,
+    session.globalProfile,
     session.isApprovedMember,
     session.isPlatformAdmin,
+    session.role,
     session.status,
     session.user,
   ])
 
-  const isAllowedWithoutClub = allowedWithoutClub.some(p => pathname.startsWith(p))
+  const isAllowedWithoutClub = pathname === '/player' || allowedWithoutClub.some(p => pathname.startsWith(p))
   if (publicGuestRoute) return <>{children}</>
 
   const ready =
     session.status === 'ready' &&
     Boolean(session.user) &&
+    (!requiresPlayerProfile || isGlobalProfileComplete(session.globalProfile)) &&
     (session.isPlatformAdmin ||
       Boolean(session.activeClubId && session.isApprovedMember) ||
       isAllowedWithoutClub)

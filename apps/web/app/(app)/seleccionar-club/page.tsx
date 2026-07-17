@@ -89,7 +89,7 @@ export default function SeleccionarClubPage() {
 
     async function load() {
       setLoading(true)
-      setAlert({ type: 'info', title: 'Chequeando tus clubes…' })
+      setAlert(null)
 
       const { data: sess } = await supabase.auth.getSession()
       const user = sess?.session?.user
@@ -161,20 +161,6 @@ export default function SeleccionarClubPage() {
       setActiveClubId(session.activeClubId)
       setMemberships(mergedMemberships)
 
-      if (mergedMemberships.length === 0) {
-        setAlert({
-          type: 'warning',
-          title: 'Todavía no pertenecés a ningún club',
-          message: 'Podés explorar clubes disponibles o solicitar el alta de tu club.',
-        })
-      } else {
-        setAlert({
-          type: 'info',
-          title: 'Elegí tu club activo',
-          message: 'Esto define navbar, permisos, ranking, torneos e inscripciones.',
-        })
-      }
-
       setLoading(false)
     }
 
@@ -230,7 +216,7 @@ export default function SeleccionarClubPage() {
   }
 
   return (
-    <div className="px-auth px-playerFlow px-playerFlow--wide">
+    <div className="px-auth px-playerFlow px-playerFlow--wide px-selectClubFlow">
       <div
         className="px-authCard"
       >
@@ -241,8 +227,8 @@ export default function SeleccionarClubPage() {
             </div>
             <div className="px-authBrandText">
               <span className="px-playerFlowKicker">Contexto jugador</span>
-              <h1 className="px-authTitle">Seleccionar club</h1>
-              <p className="px-authSub">Elegí el club con el que vas a jugar, competir y recibir actividad.</p>
+              <h1 className="px-authTitle">Elegí tu club</h1>
+              <p className="px-authSub">Usalo como tu contexto para competir y seguir tu actividad.</p>
             </div>
           </div>
         </div>
@@ -250,22 +236,18 @@ export default function SeleccionarClubPage() {
         <div className="px-authBody">
           <AlertBox alert={alert} />
 
-          <div className="px-playerFlowNotice">
-            El club activo define navbar, permisos, rankings, torneos e inscripciones.
-          </div>
-
-          <div className="px-playerSectionHead">
-            <div>
-              <h2>Clubes aprobados</h2>
-              <p>Usalos como contexto principal de SELPA.</p>
-            </div>
-          </div>
-
           {loading ? (
             <div className="px-help">Cargando clubes…</div>
           ) : approved.length > 0 ? (
-            <div className="px-playerClubGrid">
-              {approved.map((item) => {
+            <>
+              <div className="px-playerSectionHead">
+                <div>
+                  <h2>Mis clubes</h2>
+                  <p>Elegí cuál querés usar ahora.</p>
+                </div>
+              </div>
+              <div className="px-playerClubGrid">
+                {approved.map((item) => {
                 const club = item.club
                 if (!club) return null
 
@@ -309,12 +291,16 @@ export default function SeleccionarClubPage() {
                     <div className="px-playerClubMeta">Rol: <b>{item.role}</b></div>
                   </button>
                 )
-              })}
-            </div>
+                })}
+              </div>
+            </>
           ) : (
-            <div className="px-playerFlowPanel">
-              <strong>Todavía no tenés clubes aprobados.</strong>
-              <span className="px-help">Podés pedir acceso a un club existente o dar de alta el tuyo.</span>
+            <div className="px-selectClubEmpty">
+              <span className="px-selectClubEmptyMark">SELPA</span>
+              <div>
+                <strong>Todavía no tenés un club activo</strong>
+                <p>Explorá clubes disponibles o creá el tuyo para empezar a participar.</p>
+              </div>
             </div>
           )}
 
@@ -360,16 +346,9 @@ export default function SeleccionarClubPage() {
             </>
           ) : null}
 
-          <div className="px-playerSectionHead">
-            <div>
-              <h2>Acciones disponibles</h2>
-              <p>Elegí cómo continuar si todavía no tenés un club activo.</p>
-            </div>
-          </div>
-
-          <div className="px-playerFlowActions">
+          <div className="px-playerFlowActions px-selectClubActions">
             <Link className="px-btn" href="/clubs">
-              Ver clubes disponibles
+              Explorar clubes
             </Link>
 
             <Link className="px-btn px-btn--ghost" href="/clubs/nuevo">
@@ -377,12 +356,12 @@ export default function SeleccionarClubPage() {
             </Link>
 
             <button
-              className="px-btn px-btn--ghost"
+              className="px-selectClubContinue"
               type="button"
               onClick={() => router.replace('/player')}
               disabled={loading}
             >
-              Seguir en modo jugador
+              Seguir sin club
             </button>
           </div>
         </div>

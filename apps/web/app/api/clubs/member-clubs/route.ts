@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
   const { data: clubs, error: clubsError } = await supabaseAdmin
     .from('clubs')
-    .select('id,name,logo_url,status')
+    .select('id,name,logo_url,theme_key,status')
     .in('id', approvedClubIds)
     .order('name', { ascending: true })
 

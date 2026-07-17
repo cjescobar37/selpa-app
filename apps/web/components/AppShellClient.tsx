@@ -4,6 +4,7 @@ import { Suspense, type ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import Footer from '@/components/Footer'
 import AppNavbarClient from '@/components/navbar/AppNavbarClient'
+import { ActiveClubThemeProvider } from '@/components/ActiveClubThemeProvider'
 import { SessionProvider } from '@/components/session/SessionProvider'
 
 /**
@@ -13,21 +14,23 @@ import { SessionProvider } from '@/components/session/SessionProvider'
  */
 export default function AppShellClient({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const isAuthRoute = pathname === '/login' || pathname === '/register' || pathname === '/reset-password'
+  const isAuthRoute = ['/login', '/register', '/reset-password', '/update-password', '/completar-perfil'].includes(pathname)
 
   return (
     <SessionProvider>
-      <div className={`app-shell${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}`}>
-        <Suspense fallback={null}>
-          <AppNavbarClient />
-        </Suspense>
+      <ActiveClubThemeProvider>
+        <div className={`app-shell${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}`}>
+          <Suspense fallback={null}>
+            <AppNavbarClient />
+          </Suspense>
 
-        <main className="px-main">
-          <div className="px-wrap">{children}</div>
-        </main>
+          <main className="px-main">
+            <div className="px-wrap">{children}</div>
+          </main>
 
-        <Footer compact={isAuthRoute} />
-      </div>
+          <Footer compact={isAuthRoute} />
+        </div>
+      </ActiveClubThemeProvider>
     </SessionProvider>
   )
 }
