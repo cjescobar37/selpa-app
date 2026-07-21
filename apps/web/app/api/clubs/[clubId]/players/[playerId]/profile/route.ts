@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
 
 type PlayerRow = {
   id: string
@@ -27,6 +26,7 @@ type ProfileRow = {
   birth_date: string | null
   height_cm: number | null
   dominant_hand: string | null
+  preferred_position: string | null
 }
 
 type EditableProfilePayload = {
@@ -89,9 +89,9 @@ async function getTokenUser(req: NextRequest) {
 
 function fullName(profile?: ProfileRow | null, fallback?: string | null) {
   return (
-    fallback ||
     profile?.display_name ||
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
+    fallback ||
     profile?.email ||
     'Jugador'
   )
@@ -203,12 +203,11 @@ export async function GET(
     if (!playerData) return NextResponse.json({ error: 'Jugador no encontrado.' }, { status: 404 })
 
     const player = playerData as PlayerRow
-    const canManage = await isClubAdmin(user.id, clubId)
     const isOwnProfile = player.user_id === user.id
-    if (!canManage && !isOwnProfile) return NextResponse.json({ error: 'No autorizado para ver este perfil.' }, { status: 403 })
+    if (!isOwnProfile) return NextResponse.json({ error: 'Este endpoint contiene datos privados del propietario.' }, { status: 403 })
     const { data: profileData } = await supabaseAdmin
       .from('profiles')
-      .select('user_id,email,first_name,last_name,display_name,avatar_url,cover_url,city,birth_date,height_cm,dominant_hand')
+      .select('user_id,email,first_name,last_name,display_name,avatar_url,cover_url,city,birth_date,height_cm,dominant_hand,preferred_position')
       .eq('user_id', player.user_id)
       .maybeSingle()
 
@@ -359,7 +358,7 @@ export async function GET(
         category: player.category,
         gender: player.gender,
         ranking_points: Number(player.ranking_points ?? 0),
-        preferred_position: player.preferred_position,
+        preferred_position: profile?.preferred_position ?? player.preferred_position,
         approved_at: player.approved_at,
         created_at: player.created_at,
         is_manual: !profile?.email,
@@ -444,29 +443,20 @@ export async function PATCH(
         birth_date: birthDate,
         height_cm: heightCm,
         dominant_hand: dominantHand,
+        preferred_position: preferredPosition,
         avatar_url: avatarUrl,
         cover_url: coverUrl,
         updated_at: now,
       }, { onConflict: 'user_id' })
-      .select('user_id,email,first_name,last_name,display_name,avatar_url,cover_url,city,birth_date,height_cm,dominant_hand')
+      .select('user_id,email,first_name,last_name,display_name,avatar_url,cover_url,city,birth_date,height_cm,dominant_hand,preferred_position')
       .single()
 
     if (profileError) return NextResponse.json({ error: profileError.message }, { status: 500 })
 
-    if (displayName !== player.display_name || preferredPosition !== player.preferred_position) {
-      const { error: playerUpdateError } = await supabaseAdmin
-        .from('club_players')
-        .update({ display_name: displayName, preferred_position: preferredPosition, updated_at: now })
-        .eq('id', player.id)
-        .eq('club_id', clubId)
-
-      if (playerUpdateError) return NextResponse.json({ error: playerUpdateError.message }, { status: 500 })
-    }
-
     return NextResponse.json({
       player: {
         ...player,
-        display_name: displayName,
+        display_name: player.display_name,
         preferred_position: preferredPosition,
         full_name: fullName(profileData as ProfileRow, displayName),
       },

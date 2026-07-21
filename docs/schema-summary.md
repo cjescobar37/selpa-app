@@ -141,9 +141,11 @@ Triggers y funciones:
 
 Observaciones/deuda:
 
-- `gender` es `text` aunque existe `tournament_gender`; podria requerir enum propio de jugador o constraint.
+- `category` y `gender` son nullable: una aprobación no inventa categoría ni género deportivo.
+- La identidad, el género personal y `preferred_position` son canónicos en `profiles`; las columnas homónimas legacy de `club_players` quedan solo como fallback de lectura durante la transición.
 - `category` es `integer`, mientras `categories.id` es `smallint`; no hay FK directa.
 - La aprobacion usa `approved_at/approved_by` pero no `status`, a diferencia de `club_memberships`.
+- `approve_player_membership_atomic(uuid)` mantiene membresía, jugador por club y club activo en una única transacción.
 
 ### `club_player_private`
 
@@ -268,15 +270,15 @@ Claves:
 
 Relaciones:
 
-- Marca el club activo del usuario; no valida por FK que el usuario sea miembro de ese club.
+- Marca el club activo del usuario; la FK valida existencia y RLS valida membresía aprobada.
 
 RLS: habilitado.
 
 Policies:
 
 - `user_settings_select` y `user_settings_select_own`: ambas permiten SELECT del propio usuario.
-- `user_settings_insert` y `user_settings_upsert_own`: ambas permiten INSERT del propio usuario.
-- `user_settings_update` y `user_settings_update_own`: ambas permiten UPDATE del propio usuario.
+- `user_settings_insert_approved_club`: permite INSERT propio con club `null` o membresía aprobada.
+- `user_settings_update_approved_club`: permite UPDATE propio con club `null` o membresía aprobada.
 
 Triggers y funciones:
 
@@ -287,8 +289,7 @@ Triggers y funciones:
 Observaciones/deuda:
 
 - Tres triggers redundantes sobre `updated_at`.
-- Policies duplicadas en SELECT/INSERT/UPDATE.
-- `active_club_id` puede apuntar a un club donde el usuario no tiene membership aprobada.
+- Quedan dos policies redundantes de SELECT; INSERT y UPDATE ya están unificados.
 
 ### `tournaments`
 
@@ -582,13 +583,12 @@ Policies:
 
 - `notifications_select_own`: el usuario ve sus notificaciones.
 - `notifications_update_own`: el usuario actualiza sus notificaciones.
-- `notifications_insert_platform`: cualquier `authenticated` puede insertar porque `WITH CHECK (true)`.
+- No existe policy de INSERT para `authenticated`; las notificaciones se crean desde backend/RPC autorizado.
 
 Triggers y funciones: no se detectaron triggers directos.
 
 Observaciones/deuda:
 
-- `notifications_insert_platform` es riesgosa: cualquier usuario autenticado podria crear notificaciones para cualquier `user_id` si no hay otra capa de control.
 - Faltan FKs a usuarios.
 - `type` es `text`, sin enum/check.
 
@@ -701,12 +701,11 @@ Observaciones/deuda:
 - Varias columnas que parecen usuarios no tienen FK: `clubs.owner_user_id`, `messages.sender_user_id`, `messages.recipient_user_id`, `notifications.user_id`, `notifications.sender_user_id`.
 - Varias columnas de estado/tipo son `text` sin enum/check: `club_requests.status`, `platform_news.status`, `platform_news.placement`, `platform_sponsors.status`, `platform_sponsors.tier`, `platform_ad_campaigns.status`, `platform_ad_campaigns.slot`, `messages.kind`, `notifications.type`, `user_roles.role`.
 - `tournament_teams` tiene unique directo y unique ordenado para parejas; el indice ordenado es el que realmente evita duplicados invertidos.
-- `user_settings.active_club_id` no valida que el usuario pertenezca al club activo.
+- `user_settings.active_club_id` valida mediante RLS que exista una membresía aprobada, o permite `null`.
 - `club_player_private.dni` no tiene formato ni unicidad, aunque es dato sensible.
 
 ### Posibles riesgos de RLS
 
-- `notifications_insert_platform` permite INSERT a cualquier usuario autenticado con `WITH CHECK (true)`. Es el riesgo mas claro: podria permitir crear notificaciones para terceros.
 - `club_player_private` tiene RLS habilitado sin policies: seguro por defecto, pero puede romper lecturas legitimas si no hay RPC/backend.
 - `club_requests`, `categories`, `club_categories` y `user_roles` no tienen RLS habilitado. Conviene revisar grants efectivos antes de asumir que estan protegidas.
 - `platform_news`, `platform_sponsors` y `platform_ad_campaigns` tienen lectura publica condicionada por status, pero no policies de escritura para administradores; probablemente requieren service role o RPC.

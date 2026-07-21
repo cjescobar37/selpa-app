@@ -20,7 +20,6 @@ type RankingRow = {
   player_id: string
   user_id: string
   full_name: string
-  email: string | null
   avatar_url: string | null
   category: number | null
   gender: string | null

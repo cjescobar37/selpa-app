@@ -15,7 +15,6 @@ type ClubPlayerRow = {
 
 type ProfileRow = {
   user_id: string
-  email: string | null
   first_name: string | null
   last_name: string | null
   display_name: string | null
@@ -27,7 +26,6 @@ function fullName(profile?: ProfileRow | null, fallback?: string | null) {
     fallback ||
     profile?.display_name ||
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
-    profile?.email ||
     'Jugador'
   )
 }
@@ -54,7 +52,7 @@ async function enrichPartnerships(partnerships: ActivePartnershipRow[]) {
   if (userIds.length) {
     const { data: profilesData, error: profilesError } = await supabaseAdmin
       .from('profiles')
-      .select('user_id,email,first_name,last_name,display_name,avatar_url')
+      .select('user_id,first_name,last_name,display_name,avatar_url')
       .in('user_id', userIds)
 
     if (profilesError) throw profilesError

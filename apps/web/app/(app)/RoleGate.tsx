@@ -27,6 +27,12 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
       '/clubs',
       '/clubs/nuevo',
       '/perfil',
+      '/mis-datos',
+      '/ajustes',
+      '/actividad',
+      '/notificaciones',
+      '/mensajes',
+      '/player/mensajes',
     ],
     []
   )
@@ -45,7 +51,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
       return
     }
 
-    const isAllowed = pathname === '/player' || allowedWithoutClub.some(p => pathname.startsWith(p))
+    const isAllowed = pathname === '/player' || pathname.startsWith('/club/jugadores/') || allowedWithoutClub.some(p => pathname.startsWith(p))
 
     if (session.isPlatformAdmin) return
 
@@ -57,6 +63,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     currentPath,
     pathname,
     publicGuestRoute,
+    requiresPlayerProfile,
     router,
     session.activeClubId,
     session.globalProfile,
@@ -67,7 +74,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     session.user,
   ])
 
-  const isAllowedWithoutClub = pathname === '/player' || allowedWithoutClub.some(p => pathname.startsWith(p))
+  const isAllowedWithoutClub = pathname === '/player' || pathname.startsWith('/club/jugadores/') || allowedWithoutClub.some(p => pathname.startsWith(p))
   if (publicGuestRoute) return <>{children}</>
 
   const ready =
@@ -86,6 +93,5 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     )
   }
 
-  // ✅ ACÁ ESTABA TU BUG: faltaba devolver children
   return <>{children}</>
 }

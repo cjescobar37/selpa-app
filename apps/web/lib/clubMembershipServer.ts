@@ -81,25 +81,14 @@ export async function ensureClubPlayerForMembership(input: {
     return existingPlayer.id as string
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('display_name,first_name,last_name')
-    .eq('user_id', input.userId)
-    .maybeSingle()
-
-  const displayName =
-    profile?.display_name ||
-    [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
-    null
-
   const { data: inserted, error } = await supabaseAdmin
     .from('club_players')
     .insert({
       club_id: input.clubId,
       user_id: input.userId,
-      display_name: displayName,
-      category: 6,
-      gender: 'M',
+      display_name: null,
+      category: null,
+      gender: null,
       approved_at: approvedAt,
       approved_by: input.approvedBy,
     })

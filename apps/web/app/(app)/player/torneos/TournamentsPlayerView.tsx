@@ -2,9 +2,11 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronRight, Compass, FileText, Search, Trophy, UsersRound } from 'lucide-react'
+import { CalendarDays, Compass, FileText, Search, Trophy, UsersRound } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
+import PlayerSectionHero from '@/components/player/PlayerSectionHero'
+import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
 import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
@@ -74,13 +76,6 @@ function formatGender(value?: string | null) {
 
 function formatCategory(value?: number | null) {
   return value ? `${value}ta` : 'Sin categoría'
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return 'Fecha a definir'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Fecha a definir'
-  return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }).format(date)
 }
 
 function isRegistrationOpen(tournament: TournamentRow) {
@@ -369,15 +364,8 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
   }
 
   return (
-    <main className="playerTournamentsShell">
-      <section className="playerTournamentsHero">
-        <div>
-          <span>{copy.kicker}</span>
-          <h1>{copy.title}</h1>
-          <p>{copy.body}</p>
-        </div>
-        <i><Icon size={26} /></i>
-      </section>
+    <PlayerSpaceLayout><main className="playerTournamentsShell">
+      <PlayerSectionHero badge={copy.kicker} title={copy.title} description={copy.body} icon={<Icon />} />
 
       {mode === 'rules' ? (
         <section className="playerRulesGrid">
@@ -446,8 +434,8 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
       )}
 
       <style>{`
-        .playerTournamentsShell { background: radial-gradient(circle at 8% 0%, var(--club-soft), transparent 34%), #f3f7fb; color: #061b3a; display: grid; gap: 16px; margin: 0 auto; max-width: 1180px; padding: 18px; width: 100%; }
-        .playerTournamentsHero, .playerTournamentFilters, .playerTournamentCard, .playerTournamentEmpty, .playerRulesGrid article { background: rgba(255,255,255,.9); border: 1px solid #e2e8f0; border-radius: 22px; box-shadow: 0 18px 48px rgba(15,23,42,.07); }
+        .playerTournamentsShell { color: #061b3a; display: grid; gap: 16px; width: 100%; }
+        .playerTournamentsHero, .playerTournamentFilters, .playerTournamentCard, .playerTournamentEmpty, .playerRulesGrid article { background:#fff; border:1px solid var(--player-card-border); border-radius:var(--player-card-radius); box-shadow:var(--player-card-shadow); }
         .playerTournamentsHero { align-items: center; background: radial-gradient(circle at 12% 0%, var(--club-soft), transparent 34%), linear-gradient(135deg, #fff, #f8fbff); display: flex; justify-content: space-between; gap: 14px; padding: 16px 18px; position: relative; overflow: hidden; }
         .playerTournamentsHero::before { background: var(--club-gradient); content: ""; height: 4px; left: 22px; position: absolute; right: 22px; top: 0; }
         .playerTournamentsHero span, .playerTournamentFilters span, .playerRulesGrid span { color: var(--club-primary); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
@@ -500,7 +488,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         .playerRulesGrid p { color: #64748b; font-weight: 800; line-height: 1.45; margin: 0; }
         .playerRulesGrid a { justify-self: start; margin-top: 4px; }
         @media (max-width: 820px) {
-          .playerTournamentsShell { gap:12px; padding:12px; }
+          .playerTournamentsShell { gap:12px; }
           .playerTournamentsHero { border-radius:16px; min-height:104px; padding:13px 14px; }
           .playerTournamentsHero::before { left:14px; right:14px; }
           .playerTournamentsHero h1 { font-size:25px; line-height:1.02; margin:4px 0; }
@@ -526,7 +514,6 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
           .playerTournamentCard__main strong { white-space:normal; }
         }
         @media (max-width: 390px) {
-          .playerTournamentsShell { padding:10px; }
           .playerTournamentsHero h1 { font-size:23px; }
           .playerTournamentsHero p { font-size:11px; }
           .playerTournamentCard { grid-template-columns:58px minmax(0,1fr); padding:9px; }
@@ -535,6 +522,6 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
           .playerTournamentCard__actions a:first-child { padding-inline:9px; }
         }
       `}</style>
-    </main>
+    </main></PlayerSpaceLayout>
   )
 }

@@ -216,40 +216,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const { user } = await getUserFromRequest(req)
-    if (!user) {
-      return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
-    }
-
-    const body = await req.json()
-    const recipientUserId = String(body?.recipientUserId ?? '')
-    const subject = String(body?.subject ?? '').trim()
-    const message = String(body?.message ?? '').trim()
-    const kind = String(body?.kind ?? 'direct')
-
-    if (!recipientUserId || !subject || !message) {
-      return NextResponse.json({ error: 'Completá destinatario, asunto y mensaje.' }, { status: 400 })
-    }
-
-    const { data: inserted, error: insertError } = await supabaseAdmin
-      .from('messages')
-      .insert({
-        sender_user_id: user.id,
-        recipient_user_id: recipientUserId,
-        subject,
-        body: message,
-        kind,
-      })
-      .select('id')
-      .single()
-
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ ok: true, id: inserted.id })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Error enviando mensaje' }, { status: 500 })
-  }
+  const { user } = await getUserFromRequest(req)
+  if (!user) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
+  return NextResponse.json(
+    { error: 'El envío legacy fue retirado. Usá conversaciones seguras de /api/message-threads.' },
+    { status: 410 },
+  )
 }

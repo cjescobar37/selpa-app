@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
-  ensureClubPlayerForMembership,
   ensureValidActiveClubForUser,
   isClubAdmin,
 } from '@/lib/clubMembershipServer'
@@ -76,8 +76,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(req)
-    if (!user) {
+    const { user, token } = await getUserFromRequest(req)
+    if (!user || !token) {
       return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
     }
 
@@ -157,32 +157,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, status: 'REJECTED' })
     }
 
-    const approvedAt = new Date().toISOString()
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !anonKey) return NextResponse.json({ error: 'Configuración de Supabase incompleta.' }, { status: 500 })
 
-    const { error: approveError } = await supabaseAdmin
-      .from('club_memberships')
-      .update({
-        status: 'APPROVED',
-        approved_by: user.id,
-        approved_at: approvedAt,
-        rejection_reason: null,
-      })
-      .eq('id', membershipId)
+    const userClient = createClient(url, anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data: approval, error: approveError } = await userClient
+      .rpc('approve_player_membership_atomic', { p_membership_id: membershipId })
+      .single()
 
     if (approveError) {
-      return NextResponse.json({ error: approveError.message }, { status: 500 })
-    }
-
-    try {
-      await ensureClubPlayerForMembership({
-        clubId: membership.club_id,
-        userId: membership.user_id,
-        approvedBy: user.id,
-        approvedAt,
-      })
-      await ensureValidActiveClubForUser(membership.user_id, membership.club_id)
-    } catch (consistencyError: any) {
-      return NextResponse.json({ error: consistencyError?.message ?? 'No pude dejar consistente la membresía.' }, { status: 500 })
+      return NextResponse.json({ error: approveError.message }, { status: approveError.code === '42501' ? 403 : 500 })
     }
 
     await supabaseAdmin.from('notifications').insert({
@@ -196,7 +184,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ok: true, status: 'APPROVED' })
+    return NextResponse.json({ ok: true, status: 'APPROVED', approval })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Error gestionando solicitud' }, { status: 500 })
   }

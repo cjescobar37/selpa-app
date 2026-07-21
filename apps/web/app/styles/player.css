@@ -223,3 +223,38 @@
 .table th{ text-align:left; font-size: 12px; letter-spacing: .10em; text-transform: uppercase; color: rgba(39,57,101,.70); }
 .table tbody tr:hover{ background: rgba(41,170,225,.08); }
 .table .points{ text-align:right; }
+.px-playerSpaceFrame{
+  --player-accent:var(--club-accent, #22d3ee);
+  --player-accent-2:var(--club-secondary, #ec4899);
+  --player-card-border:#e2e8f0;
+  --player-card-radius:18px;
+  --player-card-shadow:0 14px 36px rgba(15,23,42,.07);
+}
+
+.playerSectionHero{
+  align-items:center;
+  background:radial-gradient(circle at 18% 6%, color-mix(in srgb, var(--player-accent) 24%, transparent), transparent 34%),radial-gradient(circle at 84% 18%, rgba(236,72,153,.1), transparent 28%),linear-gradient(135deg,#020617 0%,#061b3a 58%,#071426 100%);
+  border:1px solid rgba(103,232,249,.14);
+  border-radius:22px;
+  box-shadow:0 16px 38px rgba(2,6,23,.14);
+  color:#fff;
+  display:flex;
+  gap:16px;
+  justify-content:space-between;
+  min-height:128px;
+  overflow:hidden;
+  padding:clamp(12px,1.7vw,18px);
+  position:relative;
+  width:100%;
+}
+.playerSectionHero::after{background:linear-gradient(90deg,var(--player-accent),var(--player-accent-2));bottom:0;content:"";height:3px;left:18px;position:absolute;right:18px;}
+.playerSectionHero__copy>span{color:color-mix(in srgb,var(--player-accent) 70%,white);font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;}
+.playerSectionHero h1{color:#fff;font-size:clamp(28px,4vw,42px);font-weight:950;letter-spacing:-.045em;line-height:.98;margin:5px 0 6px;}
+.playerSectionHero p{color:rgba(255,255,255,.74);font-size:13px;font-weight:720;line-height:1.35;margin:0;max-width:660px;}
+.playerSectionHero__icon{align-items:center;background:color-mix(in srgb,var(--player-accent) 16%,rgba(2,6,23,.72));border:1px solid color-mix(in srgb,var(--player-accent) 40%,rgba(255,255,255,.18));border-radius:14px;color:color-mix(in srgb,var(--player-accent) 72%,white);display:flex;flex:0 0 auto;height:46px;justify-content:center;width:46px;}
+.playerSectionHero__icon svg{height:22px;stroke-width:2;width:22px;}
+.playerSectionHero__action a{align-items:center;border:1px solid color-mix(in srgb,var(--player-accent) 46%,rgba(255,255,255,.24));border-radius:999px;color:#fff;display:inline-flex;font-size:12px;font-weight:850;gap:6px;min-height:38px;padding:0 13px;text-decoration:none;white-space:nowrap;}
+.playerSectionHero__action a:hover{background:color-mix(in srgb,var(--player-accent) 16%,transparent);}
+.playerSpaceCard{background:#fff;border:1px solid var(--player-card-border);border-radius:var(--player-card-radius);box-shadow:var(--player-card-shadow);}
+.playerSpaceCard--accent{border-color:color-mix(in srgb,var(--player-accent) 38%,var(--player-card-border));}
+@media(max-width:720px){.playerSectionHero{border-radius:18px;min-height:118px;padding:12px 16px}.playerSectionHero h1{font-size:clamp(25px,7.8vw,32px)}.playerSectionHero__action{display:none}.playerSectionHero::after{left:16px;right:16px}}

@@ -32,7 +32,7 @@ Este documento resume reglas practicas para trabajar con la base de datos de Pam
 
 ## Riesgos de RLS
 
-- `notifications_insert_platform` permite `INSERT` a cualquier usuario autenticado con `WITH CHECK (true)`. No asumir que las notificaciones solo las crea plataforma.
+- `notifications` no permite `INSERT` directo a usuarios autenticados; crear notificaciones solo desde backend/RPC autorizado.
 - `club_player_private` tiene RLS habilitado sin policies. Esto bloquea acceso directo por defecto; tratarlo como dato sensible.
 - `club_requests`, `categories`, `club_categories` y `user_roles` no tienen RLS habilitado en el dump. Revisar grants efectivos antes de exponerlas desde cliente.
 - `platform_news`, `platform_sponsors` y `platform_ad_campaigns` tienen lectura publica por `status`, pero no policies de escritura para admins.

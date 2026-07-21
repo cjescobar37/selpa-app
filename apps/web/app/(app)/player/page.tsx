@@ -201,7 +201,7 @@ export default function PlayerHomePage() {
   const activeClub = session.activeClubId ? clubsById.get(session.activeClubId) : undefined
   const activePlayer = activeClub ? playerByClubId.get(activeClub.id) : undefined
   const activeCategoryLabel = activePlayer?.category ? `Categoría ${activePlayer.category}` : 'Categoría por definir'
-  const activePositionLabel = activePlayer ? 'Posición por definir' : 'Sin ranking'
+  const activePositionLabel = '-'
   const activePointsLabel = `${activePlayer?.ranking_points ?? 0} pts`
   const activePartnerName = useMemo(() => {
     const activePartnership = partnerships.find((partnership) => (

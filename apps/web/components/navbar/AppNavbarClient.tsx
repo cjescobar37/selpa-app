@@ -21,6 +21,7 @@ import {
   Search,
   Settings,
   Trophy,
+  UserRoundPen,
   X,
 } from 'lucide-react'
 
@@ -320,7 +321,7 @@ export default function AppNavbarClient() {
   const showRight = cfg.right || {}
   const displayClub = activeClub ?? clubs?.[0] ?? null
   const isGlobalPublicNav = !isAuthed && !displayClub?.id
-  const displayClubName = displayClub?.name?.trim() ? displayClub.name : 'Mi Club'
+  const displayClubName = displayClub?.name?.trim() ? displayClub.name : 'Sin club'
   const clubPublicHomeHref = displayClub?.id ? `/clubs/${displayClub.id}` : '/club'
   const nav = useMemo(() => {
     const items = cfg.main as NavItem[]
@@ -588,8 +589,12 @@ export default function AppNavbarClient() {
     setSearchLoading(true)
     const timeout = window.setTimeout(async () => {
       try {
+        const { data: authSession } = await supabase.auth.getSession()
+        const token = authSession.session?.access_token
+        if (!token) throw new Error('Sesión inválida.')
         const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&context=${encodeURIComponent(role || 'guest')}`, {
           cache: 'no-store',
+          headers: { Authorization: `Bearer ${token}` },
         })
         const data = await res.json().catch(() => [])
         if (alive) setSearchResults(Array.isArray(data) ? data : [])
@@ -740,6 +745,7 @@ export default function AppNavbarClient() {
             </div>
           </div>
           <Link className="px-ddItem" href="/perfil" onClick={closeAllMenus}><CircleUserRound size={18} />Mi perfil</Link>
+          <Link className="px-ddItem" href="/mis-datos" onClick={closeAllMenus}><UserRoundPen size={18} />Mis datos</Link>
           <Link className="px-ddItem" href="/player/torneos" onClick={closeAllMenus}><Trophy size={18} />Mis torneos</Link>
           <Link className="px-ddItem" href="/player/ranking" onClick={closeAllMenus}><Medal size={18} />Mi ranking</Link>
           <Link className="px-ddItem" href="/actividad" onClick={closeAllMenus}><Activity size={18} />Mi actividad</Link>
@@ -776,6 +782,7 @@ export default function AppNavbarClient() {
     return (
       <div className="px-navDropdown px-navDropdown--right" role="menu">
         <Link className="px-ddItem" href="/perfil">Mi perfil</Link>
+        <Link className="px-ddItem" href="/mis-datos">Mis datos</Link>
         <Link className="px-ddItem" href="/actividad">Mi actividad</Link>
         <Link className="px-ddItem" href="/ajustes">Preferencias</Link>
         <button className="px-ddItem px-ddItem--danger" onClick={signOut}>Cerrar sesión</button>

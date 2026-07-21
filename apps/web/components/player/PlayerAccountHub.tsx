@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Activity,
   Bell,
   CalendarDays,
   ChevronRight,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
+import PlayerSectionHero from '@/components/player/PlayerSectionHero'
 import { supabase } from '@/lib/supabaseClient'
 
 type HubView = 'activity' | 'preferences'
@@ -177,11 +179,7 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
   if (view === 'preferences') {
     return (
       <main className="playerAccountHub">
-        <section className="playerAccountHero">
-          <span>Mi cuenta</span>
-          <h1>Preferencias</h1>
-          <p>Todo lo importante de tu perfil y tu experiencia de juego.</p>
-        </section>
+        <PlayerSectionHero badge="Mi cuenta" title="Preferencias" description="Todo lo importante de tu perfil y tu experiencia de juego." icon={<ShieldCheck />} />
 
         <section className="playerPreferenceIdentity">
           <span className="playerPreferenceIdentity__avatar">{session.user.avatarUrl ? <img src={session.user.avatarUrl} alt="" /> : session.user.name.slice(0, 1)}</span>
@@ -189,12 +187,13 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
             <strong>{session.user.name}</strong>
             <small>{session.activeClub?.name ?? 'Sin club activo'}</small>
           </div>
-          <Link href="/perfil">Editar</Link>
+          <Link href="/mis-datos">Editar</Link>
         </section>
 
         <section className="playerPreferenceGroup" aria-label="Perfil y juego">
           <span>Perfil y juego</span>
-          <Link href="/perfil"><CircleUserRound size={19} /><div><strong>Mi perfil</strong><small>Foto, datos y perfil público</small></div><ChevronRight size={18} /></Link>
+          <Link href="/perfil"><CircleUserRound size={19} /><div><strong>Mi perfil</strong><small>Así te ven otros jugadores</small></div><ChevronRight size={18} /></Link>
+          <Link href="/mis-datos"><CircleUserRound size={19} /><div><strong>Mis datos</strong><small>Información personal, deportiva y seguridad</small></div><ChevronRight size={18} /></Link>
           <Link href="/seleccionar-club"><UsersRound size={19} /><div><strong>Club activo</strong><small>{session.activeClub?.name ?? 'Elegí dónde querés jugar'}</small></div><ChevronRight size={18} /></Link>
         </section>
 
@@ -205,13 +204,13 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
           <div className="playerPreferenceGroup__note"><ShieldCheck size={17} /><span>Tu información de juego se comparte solo dentro de los espacios donde participás.</span></div>
         </section>
         <style>{`
-          .playerAccountHub { color:#061b3a; display:grid; gap:14px; margin:0 auto; max-width:760px; padding:16px; width:100%; }
+          .playerAccountHub { color:#061b3a; display:grid; gap:14px; width:100%; }
           .playerAccountHero { background:linear-gradient(135deg,#0b1c38,#102747); border-radius:18px; box-shadow:0 16px 38px rgba(15,23,42,.14); color:#fff; overflow:hidden; padding:16px; position:relative; }
           .playerAccountHero::after { background:linear-gradient(90deg,#22d3ee,#ec4899); bottom:0; content:""; height:3px; left:0; position:absolute; right:0; }
           .playerAccountHero span { color:#67e8f9; font-size:10px; font-weight:850; letter-spacing:.07em; text-transform:uppercase; }
           .playerAccountHero h1 { font-size:28px; font-weight:800; letter-spacing:0; line-height:1; margin:5px 0 6px; }
           .playerAccountHero p { color:rgba(255,255,255,.72); font-size:13px; line-height:1.35; margin:0; }
-          .playerPreferenceIdentity,.playerPreferenceGroup { background:#fff; border:1px solid #e2e8f0; border-radius:16px; box-shadow:0 10px 28px rgba(15,23,42,.05); }
+          .playerPreferenceIdentity,.playerPreferenceGroup { background:#fff; border:1px solid var(--player-card-border); border-radius:var(--player-card-radius); box-shadow:var(--player-card-shadow); }
           .playerPreferenceIdentity { align-items:center; display:grid; gap:10px; grid-template-columns:42px minmax(0,1fr) auto; padding:10px; }
           .playerPreferenceIdentity__avatar { align-items:center; background:#0f274a; border-radius:50%; color:#fff; display:flex; font-size:15px; font-weight:800; height:42px; justify-content:center; overflow:hidden; width:42px; }
           .playerPreferenceIdentity__avatar img { height:100%; object-fit:cover; width:100%; }
@@ -229,7 +228,7 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
           .playerPreferenceGroup small { color:#64748b; font-size:11px; margin-top:2px; }
           .playerPreferenceGroup__note { align-items:start; background:#f8fafc; border-radius:10px; color:#64748b; display:flex; font-size:11px; gap:7px; line-height:1.35; margin-top:7px; padding:9px; }
           .playerPreferenceGroup__note svg { color:#0e7490; flex:0 0 auto; }
-          @media (max-width:390px) { .playerAccountHub { gap:12px; padding:12px; } .playerAccountHero h1 { font-size:26px; } }
+          @media (max-width:390px) { .playerAccountHub { gap:12px; } .playerAccountHero h1 { font-size:26px; } }
         `}</style>
       </main>
     )
@@ -237,11 +236,7 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
 
   return (
     <main className="playerAccountHub">
-      <section className="playerAccountHero">
-        <span>Tu recorrido</span>
-        <h1>Mi actividad</h1>
-        <p>Inscripciones y novedades que importan para tu juego.</p>
-      </section>
+      <PlayerSectionHero badge="Tu recorrido" title="Mi actividad" description="Inscripciones y novedades que importan para tu juego." icon={<Activity />} />
 
       {loading ? <PlayerStatePanel kind="loading" title="Cargando actividad" message="Buscando tus últimos movimientos" compact /> : null}
       {error ? <PlayerStatePanel kind="error" title="No pudimos cargar tu actividad" message="Probá de nuevo en unos segundos." action={{ label: 'Ir a Mis torneos', href: '/player/torneos' }} compact /> : null}
@@ -267,18 +262,18 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
       ) : null}
 
       <style>{`
-        .playerAccountHub { color:#061b3a; display:grid; gap:14px; margin:0 auto; max-width:760px; padding:16px; width:100%; }
+        .playerAccountHub { color:#061b3a; display:grid; gap:14px; width:100%; }
         .playerAccountHero { background:linear-gradient(135deg,#0b1c38,#102747); border-radius:18px; box-shadow:0 16px 38px rgba(15,23,42,.14); color:#fff; overflow:hidden; padding:16px; position:relative; }
         .playerAccountHero::after { background:linear-gradient(90deg,#22d3ee,#ec4899); bottom:0; content:""; height:3px; left:0; position:absolute; right:0; }
         .playerAccountHero span { color:#67e8f9; font-size:10px; font-weight:850; letter-spacing:.07em; text-transform:uppercase; }
         .playerAccountHero h1 { font-size:28px; font-weight:800; letter-spacing:0; line-height:1; margin:5px 0 6px; }
         .playerAccountHero p { color:rgba(255,255,255,.72); font-size:13px; line-height:1.35; margin:0; }
         .playerActivityStats { display:grid; gap:8px; grid-template-columns:repeat(3,minmax(0,1fr)); }
-        .playerActivityStats article { align-items:center; background:#fff; border:1px solid #e2e8f0; border-radius:14px; display:grid; gap:2px; min-height:88px; padding:11px; }
+        .playerActivityStats article { align-items:center; background:#fff; border:1px solid var(--player-card-border); border-radius:var(--player-card-radius); box-shadow:var(--player-card-shadow); display:grid; gap:2px; min-height:88px; padding:11px; }
         .playerActivityStats svg { color:#0891b2; }
         .playerActivityStats strong { font-size:22px; line-height:1; }
         .playerActivityStats span { color:#64748b; font-size:11px; font-weight:600; }
-        .playerActivityTimeline,.playerPreferenceGroup,.playerPreferenceIdentity { background:#fff; border:1px solid #e2e8f0; border-radius:16px; box-shadow:0 10px 28px rgba(15,23,42,.05); }
+        .playerActivityTimeline,.playerPreferenceGroup,.playerPreferenceIdentity { background:#fff; border:1px solid var(--player-card-border); border-radius:var(--player-card-radius); box-shadow:var(--player-card-shadow); }
         .playerActivityTimeline { display:grid; gap:2px; overflow:hidden; padding:12px; }
         .playerActivityTimeline header { align-items:center; display:flex; justify-content:space-between; padding:2px 2px 9px; }
         .playerActivityTimeline header span,.playerPreferenceGroup > span { color:#0891b2; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
@@ -314,7 +309,7 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
         .playerPreferenceGroup small { color:#64748b; font-size:11px; margin-top:2px; }
         .playerPreferenceGroup__note { align-items:start; background:#f8fafc; border-radius:10px; color:#64748b; display:flex; font-size:11px; gap:7px; line-height:1.35; margin-top:7px; padding:9px; }
         .playerPreferenceGroup__note svg { color:#0e7490; flex:0 0 auto; }
-        @media (max-width:390px) { .playerAccountHub { gap:12px; padding:12px; } .playerAccountHero h1 { font-size:26px; } .playerActivityStats article { min-height:82px; padding:9px; } .playerActivityStats strong { font-size:20px; } .playerActivityStats span { font-size:10px; } }
+        @media (max-width:390px) { .playerAccountHub { gap:12px; } .playerAccountHero h1 { font-size:26px; } .playerActivityStats article { min-height:82px; padding:9px; } .playerActivityStats strong { font-size:20px; } .playerActivityStats span { font-size:10px; } }
       `}</style>
     </main>
   )

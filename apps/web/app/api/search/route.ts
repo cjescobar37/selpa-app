@@ -13,10 +13,16 @@ function cleanQuery(value: string | null) {
 }
 
 function fullName(profile: any) {
-  return [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() || profile?.display_name || profile?.email || 'Jugador'
+  return profile?.display_name || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() || ''
 }
 
 export async function GET(req: NextRequest) {
+  const auth = req.headers.get('authorization') ?? ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!token) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
+  const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token)
+  if (authError || !authData.user) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
+
   const q = cleanQuery(req.nextUrl.searchParams.get('q'))
   const context = req.nextUrl.searchParams.get('context')
 
@@ -35,11 +41,12 @@ export async function GET(req: NextRequest) {
       .from('club_players')
       .select('id,club_id,user_id,display_name,category,gender')
       .ilike('display_name', pattern)
+      .not('approved_at', 'is', null)
       .limit(20),
     supabaseAdmin
       .from('profiles')
-      .select('user_id,email,first_name,last_name,display_name')
-      .or(`email.ilike.${pattern},display_name.ilike.${pattern},first_name.ilike.${pattern},last_name.ilike.${pattern}`)
+      .select('user_id,first_name,last_name,display_name')
+      .or(`display_name.ilike.${pattern},first_name.ilike.${pattern},last_name.ilike.${pattern}`)
       .limit(20),
     supabaseAdmin
       .from('tournaments')
@@ -66,6 +73,7 @@ export async function GET(req: NextRequest) {
         .from('club_players')
         .select('id,club_id,user_id,display_name,category,gender')
         .in('user_id', profileUserIds)
+        .not('approved_at', 'is', null)
         .limit(20)
     : { data: [], error: null }
 
@@ -76,7 +84,7 @@ export async function GET(req: NextRequest) {
 
   const [playerProfilesRes, playerClubsRes] = await Promise.all([
     playerUserIds.length
-      ? supabaseAdmin.from('profiles').select('user_id,email,first_name,last_name,display_name').in('user_id', playerUserIds)
+      ? supabaseAdmin.from('profiles').select('user_id,first_name,last_name,display_name').in('user_id', playerUserIds)
       : Promise.resolve({ data: [], error: null }),
     playerClubIds.length
       ? supabaseAdmin.from('clubs').select('id,name').in('id', playerClubIds)
@@ -90,12 +98,12 @@ export async function GET(req: NextRequest) {
 
   uniquePlayerRows.forEach((player) => {
     const profile = profiles.get(player.user_id)
-    const title = player.display_name || fullName(profile)
+    const title = fullName(profile) || player.display_name || 'Jugador'
     results.push({
       type: 'jugador',
       title,
-      subtitle: [playerClubs.get(player.club_id)?.name, profile?.email].filter(Boolean).join(' · ') || 'Jugador',
-      href: `/club/jugadores/${player.user_id || player.id}`,
+      subtitle: playerClubs.get(player.club_id)?.name || 'Jugador',
+      href: `/club/jugadores/${player.id}`,
     })
   })
 

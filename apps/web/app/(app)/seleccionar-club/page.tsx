@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { ArrowRight, Clock3, Compass, Search } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubInitials } from '@/lib/clubAssets'
 import { useSession } from '@/components/session/SessionProvider'
@@ -30,8 +31,6 @@ type MembershipRow = {
   approved_at: string | null
   club: ClubInfo | null
 }
-
-type MembershipQueryRow = Omit<MembershipRow, 'club'>
 
 function AlertBox({ alert }: { alert: AlertState }) {
   if (!alert) return null
@@ -83,6 +82,7 @@ export default function SeleccionarClubPage() {
   const [alert, setAlert] = useState<AlertState>(null)
   const [memberships, setMemberships] = useState<MembershipRow[]>([])
   const [activeClubId, setActiveClubId] = useState<string | null>(null)
+  const requestsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -99,67 +99,27 @@ export default function SeleccionarClubPage() {
         return
       }
 
-      const membershipsRes = await supabase
-        .from('club_memberships')
-        .select('club_id, role, status, approved_at')
-        .eq('user_id', user.id)
+      const accessToken = sess.session?.access_token
+      const response = await fetch('/api/clubs/my-memberships', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+      })
+      const result = await response.json().catch(() => null) as { memberships?: MembershipRow[]; error?: string } | null
 
       if (cancelled) return
 
-      if (membershipsRes.error) {
+      if (!response.ok) {
         setAlert({
           type: 'error',
           title: 'No pude leer tus clubes',
-          message: membershipsRes.error.message,
+          message: result?.error ?? 'Intentá nuevamente.',
         })
         setLoading(false)
         return
       }
 
-      const rawMemberships = (membershipsRes.data ?? []) as MembershipQueryRow[]
-      const clubIds = Array.from(new Set(rawMemberships.map((m) => m.club_id).filter(Boolean)))
-
-      let clubsMap = new Map<string, ClubInfo>()
-
-      if (clubIds.length > 0) {
-        const clubsRes = await supabase
-          .from('clubs')
-          .select('id, name, city, logo_url')
-          .in('id', clubIds)
-
-        if (clubsRes.error) {
-          setAlert({
-            type: 'error',
-            title: 'No pude leer los datos de los clubes',
-            message: clubsRes.error.message,
-          })
-          setLoading(false)
-          return
-        }
-
-        clubsMap = new Map(
-          ((clubsRes.data ?? []) as ClubInfo[]).map((club) => [
-            club.id,
-            {
-              id: club.id,
-              name: club.name,
-              city: club.city ?? null,
-              logo_url: club.logo_url ?? null,
-            },
-          ])
-        )
-      }
-
-      const mergedMemberships: MembershipRow[] = rawMemberships.map((m) => ({
-        club_id: m.club_id,
-        role: m.role,
-        status: m.status,
-        approved_at: m.approved_at ?? null,
-        club: clubsMap.get(m.club_id) ?? null,
-      }))
-
       setActiveClubId(session.activeClubId)
-      setMemberships(mergedMemberships)
+      setMemberships(result?.memberships ?? [])
 
       setLoading(false)
     }
@@ -176,8 +136,21 @@ export default function SeleccionarClubPage() {
   }, [memberships])
 
   const pending = useMemo(() => {
-    return memberships.filter((item) => !isApprovedMembership(item) && item.club)
+    return memberships.filter((item) => item.status === 'PENDING' && item.club)
   }, [memberships])
+
+  const rejected = useMemo(() => {
+    return memberships.filter((item) => item.status === 'REJECTED' && item.club)
+  }, [memberships])
+
+  const hasApproved = approved.length > 0
+  const hasPending = pending.length > 0
+  const pageTitle = hasApproved ? 'Elegí tu club' : hasPending ? 'Sin club por ahora' : 'Todavía no elegiste un club'
+  const pageSubtitle = hasApproved
+    ? 'Usalo como tu contexto para competir y seguir tu actividad.'
+    : hasPending
+      ? 'Tus solicitudes están siendo revisadas. Mientras tanto, podés explorar torneos, rankings y la comunidad SELPA.'
+      : 'Podés explorar SELPA y unirte más adelante.'
 
   async function activateClub(clubId: string) {
     setSavingClubId(clubId)
@@ -226,9 +199,9 @@ export default function SeleccionarClubPage() {
               <img src="/brand/selpa-isotipo.png" alt="SELPA" />
             </div>
             <div className="px-authBrandText">
-              <span className="px-playerFlowKicker">Contexto jugador</span>
-              <h1 className="px-authTitle">Elegí tu club</h1>
-              <p className="px-authSub">Usalo como tu contexto para competir y seguir tu actividad.</p>
+              <span className="px-playerFlowKicker">{hasApproved ? 'Contexto jugador' : 'Tu espacio SELPA'}</span>
+              <h1 className="px-authTitle">{pageTitle}</h1>
+              <p className="px-authSub">{pageSubtitle}</p>
             </div>
           </div>
         </div>
@@ -294,33 +267,33 @@ export default function SeleccionarClubPage() {
                 })}
               </div>
             </>
+          ) : hasPending ? (
+            <div className="px-noClubWaitCard">
+              <span className="px-noClubWaitIcon"><Clock3 /></span>
+              <div><small>Estado actual</small><strong>Solicitudes pendientes: {pending.length}</strong><p>Podés seguir explorando mientras los clubes las revisan.</p></div>
+              <button type="button" onClick={() => requestsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Ver mis solicitudes <ArrowRight /></button>
+            </div>
           ) : (
             <div className="px-selectClubEmpty">
-              <span className="px-selectClubEmptyMark">SELPA</span>
-              <div>
-                <strong>Todavía no tenés un club activo</strong>
-                <p>Explorá clubes disponibles o creá el tuyo para empezar a participar.</p>
-              </div>
+              <span className="px-selectClubEmptyMark"><Compass /></span>
+              <div><strong>Tu experiencia ya está lista</strong><p>Explorá la comunidad y elegí un club cuando quieras competir.</p></div>
             </div>
           )}
 
           {pending.length > 0 ? (
-            <>
+            <div id="mis-solicitudes" ref={requestsRef} className="px-noClubRequests">
               <div className="px-playerSectionHead">
                 <div>
-                  <h2>Solicitudes en curso</h2>
-                  <p>Estados pendientes de revisión del club.</p>
+                  <h2>Mis solicitudes</h2>
+                  <p>Los clubes te avisarán cuando finalice la revisión.</p>
                 </div>
               </div>
 
-              <div className="px-playerClubGrid">
+              <div className="px-noClubRequestList">
                 {pending.map((item) => {
                   const club = item.club
                   return (
-                    <div
-                      key={`${item.club_id}-${item.status}`}
-                      className="px-playerClubCard"
-                    >
+                    <div key={`${item.club_id}-${item.status}`} className="px-noClubRequestRow">
                       <div className="px-playerClubMain">
                         <span className="px-playerClubLogo">
                           {club?.logo_url ? (
@@ -331,48 +304,60 @@ export default function SeleccionarClubPage() {
                         </span>
                         <div>
                           <h3 className="px-playerClubName">{club?.name ?? 'Club'}</h3>
-                          <div className="px-playerClubMeta">{club?.city ?? 'Sin ciudad'} · Rol: <b>{item.role}</b></div>
+                          <div className="px-playerClubMeta">{club?.city ?? 'Argentina'}</div>
                         </div>
                       </div>
                       <div className="px-playerClubFoot">
-                        <span className={`px-playerStatus ${item.status === 'REJECTED' ? 'px-playerStatus--rejected' : 'px-playerStatus--pending'}`}>
-                          {membershipStatusLabel(item.status)}
-                        </span>
+                        <span className="px-playerStatus px-playerStatus--pending">En revisión</span>
                       </div>
                     </div>
                   )
                 })}
               </div>
-            </>
+            </div>
+          ) : null}
+
+          {rejected.length > 0 ? (
+            <div className="px-noClubRequests">
+              <div className="px-playerSectionHead"><div><h2>Solicitudes anteriores</h2><p>Podés elegir otro club cuando quieras.</p></div></div>
+              <div className="px-noClubRequestList">
+                {rejected.map((item) => (
+                  <div key={`${item.club_id}-rejected`} className="px-noClubRequestRow">
+                    <div className="px-playerClubMain">
+                      <span className="px-playerClubLogo">{item.club?.logo_url ? <img src={item.club.logo_url} alt="" /> : <span>{getClubInitials(item.club?.name ?? 'Club')}</span>}</span>
+                      <div><h3 className="px-playerClubName">{item.club?.name ?? 'Club'}</h3><div className="px-playerClubMeta">Solicitud finalizada</div></div>
+                    </div>
+                    <span className="px-playerStatus px-playerStatus--rejected">Rechazada</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : null}
 
           <div className="px-playerFlowActions px-selectClubActions">
-            <Link className="px-btn" href="/clubs">
-              Explorar clubes
+            {!hasApproved ? <Link className="px-btn" href="/player">
+              Ir a Mi espacio <ArrowRight />
+            </Link> : null}
+
+            <Link className="px-btn" href="/">
+              Explorar SELPA <ArrowRight />
             </Link>
 
-            <Link className="px-btn px-btn--ghost" href="/clubs/nuevo">
-              Dar de alta mi club
+            <Link className="px-btn px-btn--ghost" href="/clubs">
+              <Search /> Explorar clubes
             </Link>
 
-            <button
+            {hasApproved ? <button
               className="px-selectClubContinue"
               type="button"
               onClick={() => router.replace('/player')}
               disabled={loading}
             >
               Seguir sin club
-            </button>
+            </button> : null}
           </div>
         </div>
       </div>
     </div>
   )
-}
-
-function membershipStatusLabel(status: string) {
-  if (status === 'PENDING') return 'Pendiente'
-  if (status === 'APPROVED') return 'Aprobado'
-  if (status === 'REJECTED') return 'Rechazado'
-  return status || 'Sin solicitud'
 }

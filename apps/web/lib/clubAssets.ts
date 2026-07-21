@@ -58,6 +58,7 @@ export function extractStorageParts(rawUrl?: string | null) {
 
 export function buildAssetProxyUrl(rawUrl?: string | null) {
   if (!rawUrl) return null
+  if (!extractStorageParts(rawUrl)) return rawUrl
   return `/api/storage/object?url=${encodeURIComponent(rawUrl)}`
 }
 
@@ -200,11 +201,14 @@ export async function uploadPlayerProfileImage(params: {
 }) {
   const { file, userId, kind } = params
 
-  if (!file.type.toLowerCase().startsWith('image/')) {
-    throw new Error('El archivo debe ser una imagen.')
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type.toLowerCase())) {
+    throw new Error('La imagen debe ser JPG, PNG o WEBP.')
   }
 
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+  const maxBytes = kind === 'avatar' ? 3 * 1024 * 1024 : 5 * 1024 * 1024
+  if (file.size > maxBytes) throw new Error(`La imagen no puede superar ${kind === 'avatar' ? 3 : 5} MB.`)
+
+  const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
   const safeBase = sanitizeFileName(file.name.replace(/\.[^.]+$/, '')) || `player-${kind}`
   const folder = kind === 'avatar' ? 'avatars' : 'covers'
   const objectPath = `${folder}/${userId || 'pending'}/${Date.now()}-${safeBase}.${ext}`

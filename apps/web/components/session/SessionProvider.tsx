@@ -106,6 +106,7 @@ function getPostLoginDestination(ctx: Pick<SessionCtx, 'role' | 'user' | 'global
   if (!ctx.user) return '/login'
   if (ctx.role === 'player' && !isGlobalProfileComplete(ctx.globalProfile)) return '/completar-perfil'
   if (ctx.role === 'platform') return '/platform'
+  if (ctx.role === 'player') return '/player'
   if (!ctx.activeClub || !ctx.isApprovedMember) return '/seleccionar-club'
   if (ctx.role === 'club') return `/clubs/${ctx.activeClub.id}`
   return '/player'

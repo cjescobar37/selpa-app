@@ -1,9 +1,9 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type RefObject } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, ArrowRight, Building2, ChevronRight, ImagePlus, MapPin, Search, Upload, UserRound } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, ChevronRight, ImagePlus, MapPin, Search, Upload, UserRound, X } from 'lucide-react'
 import AuthAlert from '@/components/AuthAlert'
 import SelpaLoader from '@/components/SelpaLoader'
 import { useSession } from '@/components/session/SessionProvider'
@@ -19,6 +19,7 @@ type SportsField = 'heightCm' | 'dominantHand' | 'preferredPosition' | 'avatar' 
 type FieldName = PersonalField | SportsField
 type FieldErrors = Partial<Record<FieldName, string>>
 type AlertState = { variant?: 'error' | 'success'; title: string; message?: string } | null
+type SuccessToast = { title: string; message: string } | null
 
 type DiscoverClub = {
   id: string
@@ -59,6 +60,8 @@ function CompleteProfilePageClient() {
   const searchParams = useSearchParams()
   const session = useSession()
   const profile = session.globalProfile
+  const editSection = searchParams.get('edit')
+  const isEditMode = editSection === 'personal' || editSection === 'sports'
   const [step, setStep] = useState<Step>(1)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -87,12 +90,18 @@ function CompleteProfilePageClient() {
   const [savingClubId, setSavingClubId] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [alert, setAlert] = useState<AlertState>(null)
+  const [successToast, setSuccessToast] = useState<SuccessToast>(null)
+  const [toastClosing, setToastClosing] = useState(false)
   const [saving, setSaving] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
   const onboardingStartedRef = useRef(false)
   const clubsRequestStartedRef = useRef(false)
   const years = useMemo(() => birthYears(), [])
+
+  useEffect(() => {
+    if (editSection === 'sports') setStep(2)
+  }, [editSection])
 
   useEffect(() => {
     if (!profile) return
@@ -122,7 +131,7 @@ function CompleteProfilePageClient() {
     if (session.status !== 'ready') return
     if (!session.user) {
       router.replace('/login?next=%2Fcompletar-perfil')
-    } else if (!onboardingStartedRef.current && isGlobalProfileComplete(session.globalProfile)) {
+    } else if (!isEditMode && !onboardingStartedRef.current && isGlobalProfileComplete(session.globalProfile)) {
       router.replace(safeNextPath(searchParams.get('next')))
     }
   }, [router, searchParams, session.globalProfile, session.status, session.user])
@@ -223,7 +232,8 @@ function CompleteProfilePageClient() {
       }
       onboardingStartedRef.current = true
       await session.refresh({ silent: true })
-      setStep(2)
+      if (isEditMode) router.replace('/mis-datos?updated=personal')
+      else setStep(2)
     } catch {
       if (process.env.NODE_ENV !== 'production') {
         console.error('[complete-profile:personal]', { status: 0, code: 'NETWORK_ERROR', message: 'No pudimos conectarnos.' })
@@ -256,7 +266,8 @@ function CompleteProfilePageClient() {
     setSaving(false)
     if (!response.ok) return setAlert({ title: result?.message ?? 'No pudimos guardar tu perfil deportivo.', message: 'Intentá nuevamente.' })
     await session.refresh({ silent: true })
-    setStep(nextStep)
+    if (isEditMode) router.replace('/mis-datos?updated=sports')
+    else setStep(nextStep)
   }
 
   useEffect(() => {
@@ -287,10 +298,25 @@ function CompleteProfilePageClient() {
   }, [clubsLoaded, clubsLoading, router, step])
 
   useEffect(() => {
-    if (alert?.variant !== 'success') return
-    const timeout = window.setTimeout(() => setAlert(null), 10_000)
-    return () => window.clearTimeout(timeout)
-  }, [alert])
+    if (!successToast) return
+    const startExit = window.setTimeout(() => setToastClosing(true), 9_700)
+    const remove = window.setTimeout(() => {
+      setSuccessToast(null)
+      setToastClosing(false)
+    }, 10_000)
+    return () => {
+      window.clearTimeout(startExit)
+      window.clearTimeout(remove)
+    }
+  }, [successToast])
+
+  function dismissSuccessToast() {
+    setToastClosing(true)
+    window.setTimeout(() => {
+      setSuccessToast(null)
+      setToastClosing(false)
+    }, 220)
+  }
 
   async function requestJoin(clubId: string) {
     const token = await getAccessToken()
@@ -307,21 +333,31 @@ function CompleteProfilePageClient() {
     if (!response.ok) return setAlert({ title: result?.error ?? 'No pudimos enviar la solicitud.', message: 'Intentá nuevamente.' })
     const clubName = clubs.find((club) => club.id === clubId)?.name ?? 'este club'
     setClubs((current) => current.map((club) => club.id === clubId ? { ...club, membership: { status: result?.status ?? 'PENDING', role: 'PLAYER', approvedAt: null } } : club))
-    setAlert({ variant: 'success', title: 'Solicitud enviada', message: `Tu solicitud a ${clubName} fue enviada y está a la espera de que el club la acepte.` })
+    setToastClosing(false)
+    setSuccessToast({ title: 'Solicitud enviada', message: `Tu solicitud a ${clubName} quedó pendiente de aprobación.` })
   }
 
   function finish() {
-    router.replace(safeNextPath(searchParams.get('next')))
+    if (session.isApprovedMember && session.activeClub) {
+      router.replace(session.postLoginDestination)
+      return
+    }
+    router.replace('/player')
   }
 
   if (session.status === 'loading') return <div className="px-auth px-authModern px-auth--bridge"><SelpaLoader title="Preparando tu perfil..." subtitle="Cargando tus datos" /></div>
-  if (!session.user || (!onboardingStartedRef.current && isGlobalProfileComplete(session.globalProfile))) return null
+  if (!session.user || (!isEditMode && !onboardingStartedRef.current && isGlobalProfileComplete(session.globalProfile))) return null
 
   return (
     <div className="px-auth px-authModern px-registerAuth px-completeProfileAuth">
+      {successToast ? <div className={`px-onboardingToast ${toastClosing ? 'is-leaving' : ''}`} role="status" aria-live="polite">
+        <span className="px-onboardingToastIcon" aria-hidden="true"><CheckCircle2 /></span>
+        <div><strong>{successToast.title}</strong><p>{successToast.message}</p></div>
+        <button type="button" onClick={dismissSuccessToast} aria-label="Cerrar confirmación"><X /></button>
+      </div> : null}
       <div className="px-authCard px-onboardingCard">
         <div className="px-authTop">
-          <p className="px-onboardingStep">Paso {step} de 3</p>
+          <p className="px-onboardingStep">{isEditMode ? 'Mis datos' : `Paso ${step} de 3`}</p>
           <h1 className="px-authTitle">{step === 1 ? 'Datos personales' : step === 2 ? 'Tu perfil deportivo' : 'Encontrá tus clubes'}</h1>
           <p className="px-authSub">{step === 1 ? 'Completá la información básica para personalizar tu experiencia.' : step === 2 ? 'Definí cómo jugás y personalizá tu perfil.' : 'Descubrí comunidades, conocé sus torneos y solicitá unirte.'}</p>
           <div className={`px-onboardingProgress is-step-${step}`} role="progressbar" aria-label={`Paso ${step} de 3`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(step * 100 / 3)}><span /></div>
@@ -380,7 +416,7 @@ function CompleteProfilePageClient() {
             <Field label="Fecha de nacimiento" error={fieldErrors.birthDate}><div className="px-birthDateRow"><select id="complete-birth-day" className="px-input" value={birthDay} onChange={(event) => { setBirthDay(event.target.value); clearFieldError('birthDate') }} aria-label="Día" aria-invalid={Boolean(fieldErrors.birthDate)}><option value="">Día</option>{Array.from({ length: 31 }, (_, index) => index + 1).map((day) => <option key={day} value={day}>{day}</option>)}</select><select className="px-input" value={birthMonth} onChange={(event) => { setBirthMonth(event.target.value); clearFieldError('birthDate') }} aria-label="Mes" aria-invalid={Boolean(fieldErrors.birthDate)}><option value="">Mes</option>{birthMonths.map((month, index) => <option key={month} value={index + 1}>{month}</option>)}</select><select className="px-input" value={birthYear} onChange={(event) => { setBirthYear(event.target.value); clearFieldError('birthDate') }} aria-label="Año" aria-invalid={Boolean(fieldErrors.birthDate)}><option value="">Año</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></div></Field>
             <div className="px-registerGeoRow"><Field label="País"><select id="complete-country" className="px-input" value={countryCode} disabled>{countries.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}</select></Field><Field label="Provincia" error={fieldErrors.provinceId}><select id="complete-province" className="px-input" value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCityId(''); clearFieldError('provinceId'); clearFieldError('cityId') }} aria-invalid={Boolean(fieldErrors.provinceId)}><option value="">Seleccionar...</option>{argentinaLocations.map((province) => <option key={province.id} value={province.id}>{province.name}</option>)}</select></Field></div>
             <Field label="Ciudad o localidad" error={fieldErrors.cityId}><select id="complete-city" className="px-input" disabled={!selectedProvince} value={cityId} onChange={(event) => { setCityId(event.target.value); clearFieldError('cityId') }} aria-invalid={Boolean(fieldErrors.cityId)}><option value="">{selectedProvince ? 'Seleccionar...' : 'Elegí una provincia primero'}</option>{selectedProvince?.cities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}</select></Field>
-            <button className="px-btn px-onboardingPersonalNext" type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Siguiente →'}</button>
+            <button className="px-btn px-onboardingPersonalNext" type="submit" disabled={saving}>{saving ? 'Guardando...' : isEditMode ? 'Guardar cambios' : 'Siguiente →'}</button>
           </form> : null}
 
           {step === 2 ? <>
@@ -389,10 +425,10 @@ function CompleteProfilePageClient() {
               <Field label="Posición preferida"><select className="px-input" value={preferredPosition} onChange={(event) => setPreferredPosition(event.target.value)}><option value="">Elegir...</option><option value="DRIVE">Drive</option><option value="REVES">Revés</option><option value="BOTH">Ambas</option></select></Field>
               <Field label="Altura" error={fieldErrors.heightCm}><div className="px-onboardingHeight"><input className="px-input" inputMode="numeric" type="number" min="120" max="230" value={heightCm} onChange={(event) => { setHeightCm(event.target.value); clearFieldError('heightCm') }} /><span>cm</span></div></Field>
             </div>
-            <AssetPicker label="Foto de perfil" preview={visibleAvatar} initials={initials(firstName, lastName)} emptyIcon={<UserRound />} description="JPG, PNG o WEBP de hasta 3 MB." inputRef={avatarInputRef} onChoose={() => { setRemoveAvatar(false); avatarInputRef.current?.click() }} onRemove={() => { setAvatarFile(null); setRemoveAvatar(true); clearFieldError('avatar') }} canRemove={Boolean(avatarFile || profile?.avatar_url) && !removeAvatar} error={fieldErrors.avatar}><input ref={avatarInputRef} className="px-visuallyHidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { setAvatarFile(event.target.files?.[0] ?? null); setRemoveAvatar(false); clearFieldError('avatar') }} /></AssetPicker>
-            <AssetPicker label="Imagen de portada" preview={visibleCover} emptyIcon={<ImagePlus />} description="Panorámica, JPG, PNG o WEBP de hasta 5 MB." inputRef={coverInputRef} onChoose={() => { setRemoveCover(false); coverInputRef.current?.click() }} onRemove={() => { setCoverFile(null); setRemoveCover(true); clearFieldError('cover') }} canRemove={Boolean(coverFile || profile?.cover_url) && !removeCover} error={fieldErrors.cover}><input ref={coverInputRef} className="px-visuallyHidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { setCoverFile(event.target.files?.[0] ?? null); setRemoveCover(false); clearFieldError('cover') }} /></AssetPicker>
-            <div className="px-onboardingActions"><button className="px-btn px-btn--ghost" type="button" onClick={() => setStep(1)} disabled={saving}><ArrowLeft /> Atrás</button><button className="px-btn" type="button" onClick={() => void saveSports(3)} disabled={saving}>{saving ? 'Guardando...' : 'Guardar y continuar'} <ArrowRight /></button></div>
-            <button className="px-onboardingSkip" type="button" onClick={() => void saveSports(3)} disabled={saving}>Completar más tarde <ArrowRight /></button>
+            <AssetPicker label="Foto de perfil" preview={visibleAvatar} initials={initials(firstName, lastName)} emptyIcon={<UserRound />} description="JPG, PNG o WEBP de hasta 3 MB." onChoose={() => { setRemoveAvatar(false); avatarInputRef.current?.click() }} onRemove={() => { setAvatarFile(null); setRemoveAvatar(true); clearFieldError('avatar') }} canRemove={Boolean(avatarFile || profile?.avatar_url) && !removeAvatar} error={fieldErrors.avatar}><input ref={avatarInputRef} className="px-visuallyHidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { setAvatarFile(event.target.files?.[0] ?? null); setRemoveAvatar(false); clearFieldError('avatar') }} /></AssetPicker>
+            <AssetPicker label="Imagen de portada" preview={visibleCover} emptyIcon={<ImagePlus />} description="Panorámica, JPG, PNG o WEBP de hasta 5 MB." onChoose={() => { setRemoveCover(false); coverInputRef.current?.click() }} onRemove={() => { setCoverFile(null); setRemoveCover(true); clearFieldError('cover') }} canRemove={Boolean(coverFile || profile?.cover_url) && !removeCover} error={fieldErrors.cover}><input ref={coverInputRef} className="px-visuallyHidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { setCoverFile(event.target.files?.[0] ?? null); setRemoveCover(false); clearFieldError('cover') }} /></AssetPicker>
+            <div className="px-onboardingActions"><button className="px-btn px-btn--ghost" type="button" onClick={() => isEditMode ? router.push('/mis-datos') : setStep(1)} disabled={saving}><ArrowLeft /> Atrás</button><button className="px-btn" type="button" onClick={() => void saveSports(3)} disabled={saving}>{saving ? 'Guardando...' : isEditMode ? 'Guardar cambios' : 'Guardar y continuar'} {!isEditMode ? <ArrowRight /> : null}</button></div>
+            {!isEditMode ? <button className="px-onboardingSkip" type="button" onClick={() => void saveSports(3)} disabled={saving}>Completar más tarde <ArrowRight /></button> : null}
           </> : null}
 
           {step === 3 ? <>
@@ -421,7 +457,7 @@ function Field({ label, optional, error, children }: { label: string; optional?:
   return <div className="px-field"><label className="px-label">{label}{optional ? <span>Opcional</span> : null}</label>{children}{error ? <p className="px-fieldError">{error}</p> : null}</div>
 }
 
-function AssetPicker({ label, optional, preview, initials: fallbackInitials, emptyIcon, description, inputRef: _inputRef, onChoose, onRemove, canRemove, error, children }: { label: string; optional?: boolean; preview: string | null; initials?: string; emptyIcon: ReactNode; description: string; inputRef: RefObject<HTMLInputElement | null>; onChoose: () => void; onRemove: () => void; canRemove: boolean; error?: string; children: ReactNode }) {
+function AssetPicker({ label, optional, preview, initials: fallbackInitials, emptyIcon, description, onChoose, onRemove, canRemove, error, children }: { label: string; optional?: boolean; preview: string | null; initials?: string; emptyIcon: ReactNode; description: string; onChoose: () => void; onRemove: () => void; canRemove: boolean; error?: string; children: ReactNode }) {
   const uploadLabel = preview ? 'Reemplazar' : label === 'Foto de perfil' ? 'Cargar foto' : 'Cargar portada'
   return <div className="px-onboardingAsset"><div className={`px-onboardingAssetPreview ${fallbackInitials ? 'is-avatar' : ''}`}>{preview ? <img src={preview} alt={`Vista previa de ${label.toLowerCase()}`} /> : fallbackInitials ? <span>{fallbackInitials}</span> : emptyIcon}</div><div className="px-onboardingPhotoCopy"><p className="px-label">{label}{optional ? <span>Opcional</span> : null}</p><p>{description}</p><div className="px-onboardingPhotoActions"><button className="px-btn px-btn--ghost" type="button" onClick={onChoose}><Upload /> {uploadLabel}</button>{canRemove ? <button className="px-link" type="button" onClick={onRemove}>Quitar</button> : null}</div>{children}</div>{error ? <p className="px-fieldError">{error}</p> : null}</div>
 }

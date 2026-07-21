@@ -16,7 +16,6 @@ type PlayerRow = {
 
 type ProfileRow = {
   user_id: string
-  email: string | null
   first_name: string | null
   last_name: string | null
   display_name: string | null
@@ -99,10 +98,9 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function getFullName(profile?: ProfileRow | null, fallback?: string | null) {
   return (
-    fallback ||
     profile?.display_name ||
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
-    profile?.email ||
+    fallback ||
     'Jugador'
   )
 }
@@ -210,7 +208,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     if (userIds.length > 0) {
       const { data: profilesData, error: profilesError } = await supabaseAdmin
         .from('profiles')
-        .select('user_id,email,first_name,last_name,display_name,avatar_url')
+        .select('user_id,first_name,last_name,display_name,avatar_url')
         .in('user_id', userIds)
 
       if (profilesError) return NextResponse.json({ error: profilesError.message }, { status: 500 })
@@ -394,7 +392,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
           player_id: player.id,
           user_id: player.user_id,
           full_name: getFullName(profile, player.display_name),
-          email: profile?.email ?? null,
           avatar_url: profile?.avatar_url ?? null,
           category: player.category,
           gender: player.gender,

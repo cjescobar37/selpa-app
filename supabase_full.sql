@@ -4124,8 +4124,8 @@ CREATE TABLE public.club_players (
     club_id uuid NOT NULL,
     user_id uuid NOT NULL,
     display_name text,
-    category integer DEFAULT 6 NOT NULL,
-    gender text DEFAULT 'M'::text NOT NULL,
+    category integer,
+    gender text,
     approved_at timestamp with time zone,
     approved_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -5308,6 +5308,7 @@ COPY storage.buckets (id, name, owner, created_at, updated_at, public, avif_auto
 club-logos	club-logos	\N	2026-03-10 15:42:16.657796+00	2026-03-10 15:42:16.657796+00	t	f	\N	\N	\N	STANDARD
 club-rules	club-rules	\N	2026-03-10 15:42:16.657796+00	2026-03-10 15:42:16.657796+00	t	f	\N	\N	\N	STANDARD
 platform-assets	platform-assets	\N	2026-03-20 16:12:08.384537+00	2026-03-20 16:12:08.384537+00	f	f	5242880	{image/jpeg,image/png,image/webp}	\N	STANDARD
+player-assets	player-assets	\N	2026-07-20 00:00:00+00	2026-07-20 00:00:00+00	t	f	5242880	{image/jpeg,image/png,image/webp}	\N	STANDARD
 \.
 
 
@@ -7440,12 +7441,6 @@ CREATE POLICY messages_update_recipient ON public.messages FOR UPDATE TO authent
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: notifications notifications_insert_platform; Type: POLICY; Schema: public; Owner: postgres
---
-
-CREATE POLICY notifications_insert_platform ON public.notifications FOR INSERT TO authenticated WITH CHECK (true);
-
-
 --
 -- Name: notifications notifications_select_own; Type: POLICY; Schema: public; Owner: postgres
 --
@@ -9619,6 +9614,71 @@ alter table public.tournament_registration_change_requests
   add column if not exists refund_percent integer null,
   add column if not exists refund_policy_label text null,
   add column if not exists refund_metadata jsonb null;
+
+-- Canonical player closure (2026-07-20).
+drop policy if exists user_settings_insert on public.user_settings;
+drop policy if exists user_settings_update on public.user_settings;
+drop policy if exists user_settings_update_own on public.user_settings;
+drop policy if exists user_settings_upsert_own on public.user_settings;
+drop policy if exists user_settings_insert_approved_club on public.user_settings;
+drop policy if exists user_settings_update_approved_club on public.user_settings;
+create policy user_settings_insert_approved_club on public.user_settings for insert to authenticated with check (user_id=auth.uid() and (active_club_id is null or exists (select 1 from public.club_memberships membership where membership.user_id=auth.uid() and membership.club_id=active_club_id and membership.status='APPROVED' and membership.approved_at is not null)));
+create policy user_settings_update_approved_club on public.user_settings for update to authenticated using (user_id=auth.uid()) with check (user_id=auth.uid() and (active_club_id is null or exists (select 1 from public.club_memberships membership where membership.user_id=auth.uid() and membership.club_id=active_club_id and membership.status='APPROVED' and membership.approved_at is not null)));
+
+create or replace function public.approve_player_membership_atomic(p_membership_id uuid)
+returns table (membership_id uuid, club_id uuid, user_id uuid, player_id uuid, active_club_id uuid)
+language plpgsql security definer set search_path = pg_catalog, public
+as $$
+declare
+  v_actor_id uuid := auth.uid();
+  v_membership public.club_memberships%rowtype;
+  v_player_id uuid;
+  v_active_club_id uuid;
+  v_now timestamptz := now();
+begin
+  if v_actor_id is null then raise exception 'Sesión inválida.' using errcode = '42501'; end if;
+  select * into v_membership from public.club_memberships where id = p_membership_id for update;
+  if not found then raise exception 'Solicitud no encontrada.' using errcode = 'P0002'; end if;
+  if not exists (
+    select 1 from public.club_memberships actor_membership
+    where actor_membership.club_id=v_membership.club_id
+      and actor_membership.user_id=v_actor_id
+      and actor_membership.role in ('OWNER'::public.club_role,'ADMIN'::public.club_role)
+      and actor_membership.status='APPROVED'::public.membership_status
+      and actor_membership.approved_at is not null
+  ) and not exists (
+    select 1 from public.platform_admins platform_actor
+    where platform_actor.user_id=v_actor_id
+  ) then
+    raise exception 'No tenés permisos para gestionar esta solicitud.' using errcode = '42501';
+  end if;
+  if v_membership.role <> 'PLAYER'::public.club_role or v_membership.status = 'BANNED'::public.membership_status then
+    raise exception 'La membresía no puede aprobarse.' using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.profiles p where p.user_id = v_membership.user_id and nullif(trim(coalesce(p.first_name,'')),'') is not null and nullif(trim(coalesce(p.last_name,'')),'') is not null) then
+    raise exception 'El jugador debe completar sus datos personales antes de ser aprobado.' using errcode = '23514';
+  end if;
+  insert into public.club_players (club_id,user_id,display_name,category,gender,approved_at,approved_by)
+  values (v_membership.club_id,v_membership.user_id,null,null,null,v_now,v_actor_id)
+  on conflict (club_id,user_id) do update set approved_at=excluded.approved_at,approved_by=excluded.approved_by,updated_at=v_now
+  returning id into v_player_id;
+  update public.club_memberships set status='APPROVED',approved_by=v_actor_id,approved_at=v_now,rejection_reason=null,updated_at=v_now where id=v_membership.id;
+  select us.active_club_id into v_active_club_id from public.user_settings us where us.user_id=v_membership.user_id for update;
+  if v_active_club_id is null or not exists (select 1 from public.club_memberships cm where cm.user_id=v_membership.user_id and cm.club_id=v_active_club_id and cm.status='APPROVED' and cm.approved_at is not null) then
+    v_active_club_id := v_membership.club_id;
+  end if;
+  insert into public.user_settings (user_id,active_club_id) values (v_membership.user_id,v_active_club_id)
+  on conflict (user_id) do update set active_club_id=excluded.active_club_id,updated_at=v_now;
+  return query select v_membership.id,v_membership.club_id,v_membership.user_id,v_player_id,v_active_club_id;
+end;
+$$;
+revoke all on function public.approve_player_membership_atomic(uuid) from public, anon;
+grant execute on function public.approve_player_membership_atomic(uuid) to authenticated;
+
+create policy "player assets public read" on storage.objects for select using (bucket_id='player-assets');
+create policy "player assets insert own" on storage.objects for insert to authenticated with check (bucket_id='player-assets' and array_length(storage.foldername(name),1)=2 and (storage.foldername(name))[1] in ('avatars','covers') and (storage.foldername(name))[2]=auth.uid()::text);
+create policy "player assets update own" on storage.objects for update to authenticated using (bucket_id='player-assets' and array_length(storage.foldername(name),1)=2 and (storage.foldername(name))[1] in ('avatars','covers') and (storage.foldername(name))[2]=auth.uid()::text) with check (bucket_id='player-assets' and array_length(storage.foldername(name),1)=2 and (storage.foldername(name))[1] in ('avatars','covers') and (storage.foldername(name))[2]=auth.uid()::text);
+create policy "player assets delete own" on storage.objects for delete to authenticated using (bucket_id='player-assets' and array_length(storage.foldername(name),1)=2 and (storage.foldername(name))[1] in ('avatars','covers') and (storage.foldername(name))[2]=auth.uid()::text);
 
 --
 -- PostgreSQL database dump complete

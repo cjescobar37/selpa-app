@@ -3,18 +3,16 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import {
   Activity,
   ArrowLeft,
   Check,
   ImageIcon,
   Pencil,
-  Save,
   Search,
   Send,
   ShieldX,
-  Target,
   TrendingUp,
   Trophy,
   UserPlus,
@@ -22,7 +20,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
-import { buildLocalPreview, getClubInitials, uploadPlayerProfileImage } from '@/lib/clubAssets'
+import { getClubInitials, uploadPlayerProfileImage } from '@/lib/clubAssets'
 import { formatRankingCategory, formatRankingGender, formatRankingPoints } from '@/lib/ranking'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 
@@ -36,9 +34,13 @@ type ProfileData = {
   birth_date: string | null
   height_cm: number | null
   dominant_hand: string | null
+  preferred_position?: string | null
 }
 
 type PlayerProfileResponse = {
+  visibility?: 'public' | 'private'
+  club?: { id: string; name: string; city: string | null; province?: string | null; logo_url: string | null } | null
+  partnerships?: ActivePartnership[]
   player: {
     id: string
     user_id: string
@@ -47,9 +49,9 @@ type PlayerProfileResponse = {
     gender: string | null
     ranking_points: number
     preferred_position: string | null
-    approved_at: string | null
-    created_at: string
-    is_manual: boolean
+    approved_at?: string | null
+    created_at?: string
+    is_manual?: boolean
   }
   profile: ProfileData | null
   stats: {
@@ -153,70 +155,38 @@ type ClubPlayersResponse = {
   error?: string
 }
 
-type EditProfileForm = {
-  display_name: string
-  city: string
-  birth_date: string
-  height_cm: string
-  dominant_hand: string
-  preferred_position: string
-  avatar_url: string
-  cover_url: string
-}
-
-const LA_PAMPA_CITIES = [
-  'Santa Rosa',
-  'General Pico',
-  'Toay',
-  'Eduardo Castex',
-  'General Acha',
-  'Realicó',
-  'Intendente Alvear',
-  'General San Martín',
-  'Guatraché',
-  'Macachín',
-  'Victorica',
-  'Quemú Quemú',
-  'Catriló',
-  '25 de Mayo',
-  'Winifreda',
-  'Jacinto Arauz',
-  'Bernasconi',
-  'Doblas',
-  'Trenel',
-  'Ingeniero Luiggi',
-] as const
-
 function formatDate(value?: string | null) {
   if (!value) return 'Sin fecha'
   return new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value))
 }
 
-function buildEditForm(data?: PlayerProfileResponse | null): EditProfileForm {
-  return {
-    display_name: data?.player.full_name ?? '',
-    city: data?.profile?.city ?? '',
-    birth_date: data?.profile?.birth_date ?? '',
-    height_cm: data?.profile?.height_cm ? String(data.profile.height_cm) : '',
-    dominant_hand: data?.profile?.dominant_hand ?? '',
-    preferred_position: data?.player.preferred_position ?? '',
-    avatar_url: data?.profile?.avatar_url ?? '',
-    cover_url: data?.profile?.cover_url ?? '',
-  }
+function dominantHandLabel(value?: string | null) {
+  if (value === 'RIGHT') return 'Derecha'
+  if (value === 'LEFT') return 'Izquierda'
+  if (value === 'AMBIDEXTROUS') return 'Ambidiestro/a'
+  return 'Sin completar'
+}
+
+function preferredPositionLabel(value?: string | null) {
+  if (value === 'DRIVE') return 'Drive'
+  if (value === 'REVES') return 'Revés'
+  if (value === 'BOTH') return 'Ambas'
+  return 'Sin completar'
 }
 
 function validateProfileImage(file: File, kind: 'avatar' | 'cover') {
-  const max = kind === 'avatar' ? 4 * 1024 * 1024 : 7 * 1024 * 1024
-  if (!file.type.toLowerCase().startsWith('image/')) {
+  const max = kind === 'avatar' ? 3 * 1024 * 1024 : 5 * 1024 * 1024
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type.toLowerCase())) {
     throw new Error('Seleccioná una imagen JPG, PNG o WebP.')
   }
   if (file.size > max) {
-    throw new Error(kind === 'avatar' ? 'La foto de perfil no puede superar 4 MB.' : 'La portada no puede superar 7 MB.')
+    throw new Error(kind === 'avatar' ? 'La foto de perfil no puede superar 3 MB.' : 'La portada no puede superar 5 MB.')
   }
 }
 
 export default function ClubJugadorDetailPage() {
   const params = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
   const playerId = params?.id
   const { activeClub, user } = useSession()
   const [loading, setLoading] = useState(true)
@@ -232,14 +202,7 @@ export default function ClubJugadorDetailPage() {
   const [selectedInvitePlayerId, setSelectedInvitePlayerId] = useState('')
   const [partnerActionMessage, setPartnerActionMessage] = useState('')
   const [partnerActionBusy, setPartnerActionBusy] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
-  const [editMessage, setEditMessage] = useState('')
-  const [editForm, setEditForm] = useState<EditProfileForm>(() => buildEditForm(null))
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
-  const [coverFile, setCoverFile] = useState<File | null>(null)
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [profileTab, setProfileTab] = useState<'summary' | 'tournaments' | 'stats' | 'achievements'>('summary')
 
   async function getToken() {
@@ -248,7 +211,8 @@ export default function ClubJugadorDetailPage() {
   }
 
   async function loadProfile() {
-    if (!activeClub?.id || !playerId) {
+    const ownRequest = searchParams.get('own') === '1'
+    if (!playerId || (ownRequest && !activeClub?.id)) {
       setData(null)
       setActivePartnerships([])
       setPartnerInvites([])
@@ -267,7 +231,10 @@ export default function ClubJugadorDetailPage() {
       return
     }
 
-    const res = await fetch(`/api/clubs/${activeClub.id}/players/${playerId}/profile`, {
+    const profileEndpoint = ownRequest
+      ? `/api/clubs/${activeClub!.id}/players/${playerId}/profile`
+      : `/api/players/${playerId}/public-profile`
+    const res = await fetch(profileEndpoint, {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     })
@@ -283,16 +250,26 @@ export default function ClubJugadorDetailPage() {
       return
     }
 
+    if (!ownRequest) {
+      setData(json)
+      setActivePartnerships(json.partnerships ?? [])
+      setPartnerInvites([])
+      setClubPlayers([])
+      setLoading(false)
+      return
+    }
+
+    const ownClubId = activeClub!.id
     const [partnershipsRes, invitesRes, playersRes] = await Promise.all([
-      fetch(`/api/clubs/${activeClub.id}/active-partnerships`, {
+      fetch(`/api/clubs/${ownClubId}/active-partnerships`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       }),
-      fetch(`/api/clubs/${activeClub.id}/partner-invites`, {
+      fetch(`/api/clubs/${ownClubId}/partner-invites`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       }),
-      fetch(`/api/clubs/${activeClub.id}/players`, {
+      fetch(`/api/clubs/${ownClubId}/players`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       }),
@@ -377,20 +354,37 @@ export default function ClubJugadorDetailPage() {
     setInviteOpen(true)
   }
 
-  function openEditModal() {
-    setEditForm(buildEditForm(data))
-    setAvatarFile(null)
-    setCoverFile(null)
-    setAvatarPreview(null)
-    setCoverPreview(null)
-    setEditMessage('')
-    setEditOpen(true)
-  }
-
-  function handleQuickProfileImage(kind: 'avatar' | 'cover', file?: File | null) {
-    if (!file) return
-    openEditModal()
-    selectProfileFile(kind, file)
+  async function handleQuickProfileImage(kind: 'avatar' | 'cover', file?: File | null) {
+    if (!file || !activeClub?.id || !player) return
+    setEditSaving(true)
+    setMessage('')
+    try {
+      validateProfileImage(file, kind)
+      const token = await getToken()
+      if (!token) throw new Error('Sesión inválida.')
+      const uploaded = await uploadPlayerProfileImage({ file, userId: player.user_id, kind })
+      const res = await fetch(`/api/clubs/${activeClub.id}/players/${player.id}/profile`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          display_name: player.full_name,
+          city: profile?.city ?? '',
+          birth_date: profile?.birth_date ?? '',
+          height_cm: profile?.height_cm ? String(profile.height_cm) : '',
+          dominant_hand: profile?.dominant_hand ?? '',
+          preferred_position: player.preferred_position ?? '',
+          avatar_url: kind === 'avatar' ? uploaded.publicUrl : profile?.avatar_url ?? null,
+          cover_url: kind === 'cover' ? uploaded.publicUrl : profile?.cover_url ?? null,
+        }),
+      })
+      const json = (await res.json().catch(() => ({}))) as { error?: string; player?: Partial<PlayerProfileResponse['player']>; profile?: ProfileData }
+      if (!res.ok) throw new Error(json.error ?? 'No pude actualizar la imagen.')
+      setData((current) => current ? { ...current, player: { ...current.player, ...json.player }, profile: json.profile ?? current.profile } : current)
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : 'No pude actualizar la imagen.')
+    } finally {
+      setEditSaving(false)
+    }
   }
 
   function goToProfileSection(section: typeof profileTab) {
@@ -398,119 +392,15 @@ export default function ClubJugadorDetailPage() {
     document.getElementById(`player-profile-${section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  function updateEditField<K extends keyof EditProfileForm>(field: K, value: EditProfileForm[K]) {
-    setEditForm((current) => ({ ...current, [field]: value }))
-  }
-
-  function selectProfileFile(kind: 'avatar' | 'cover', file?: File | null) {
-    if (!file) return
-    try {
-      validateProfileImage(file, kind)
-      const preview = buildLocalPreview(file)
-      if (kind === 'avatar') {
-        if (avatarPreview) URL.revokeObjectURL(avatarPreview)
-        setAvatarFile(file)
-        setAvatarPreview(preview)
-      } else {
-        if (coverPreview) URL.revokeObjectURL(coverPreview)
-        setCoverFile(file)
-        setCoverPreview(preview)
-      }
-      setEditMessage('')
-    } catch (error: unknown) {
-      setEditMessage(error instanceof Error ? error.message : 'No pude leer la imagen.')
-    }
-  }
-
-  async function saveOwnProfile() {
-    if (!activeClub?.id || !player) return
-    setEditSaving(true)
-    setEditMessage('')
-
-    try {
-      const token = await getToken()
-      if (!token) throw new Error('Sesión inválida.')
-
-      let avatarUrl = editForm.avatar_url || null
-      let coverUrl = editForm.cover_url || null
-
-      if (avatarFile) {
-        const uploaded = await uploadPlayerProfileImage({
-          file: avatarFile,
-          userId: player.user_id,
-          kind: 'avatar',
-        })
-        avatarUrl = uploaded.publicUrl
-      }
-
-      if (coverFile) {
-        const uploaded = await uploadPlayerProfileImage({
-          file: coverFile,
-          userId: player.user_id,
-          kind: 'cover',
-        })
-        coverUrl = uploaded.publicUrl
-      }
-
-      const res = await fetch(`/api/clubs/${activeClub.id}/players/${player.id}/profile`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          display_name: editForm.display_name,
-          city: editForm.city,
-          birth_date: editForm.birth_date,
-          height_cm: editForm.height_cm,
-          dominant_hand: editForm.dominant_hand,
-          preferred_position: editForm.preferred_position,
-          avatar_url: avatarUrl,
-          cover_url: coverUrl,
-        }),
-      })
-      const json = (await res.json().catch(() => ({}))) as {
-        error?: string
-        player?: Partial<PlayerProfileResponse['player']>
-        profile?: ProfileData
-      }
-
-      if (!res.ok) throw new Error(json.error ?? 'No pude guardar tu perfil.')
-
-      setData((current) => current
-        ? {
-            ...current,
-            player: { ...current.player, ...json.player },
-            profile: json.profile ?? current.profile,
-          }
-        : current)
-      setEditOpen(false)
-      setAvatarFile(null)
-      setCoverFile(null)
-      setAvatarPreview(null)
-      setCoverPreview(null)
-    } catch (error: unknown) {
-      setEditMessage(error instanceof Error ? error.message : 'Error guardando perfil.')
-    } finally {
-      setEditSaving(false)
-    }
-  }
-
   useEffect(() => {
     void Promise.resolve().then(() => loadProfile())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClub?.id, playerId])
-
-  useEffect(() => {
-    return () => {
-      if (avatarPreview) URL.revokeObjectURL(avatarPreview)
-      if (coverPreview) URL.revokeObjectURL(coverPreview)
-    }
-  }, [avatarPreview, coverPreview])
+  }, [activeClub?.id, playerId, searchParams])
 
   const player = data?.player ?? null
   const profile = data?.profile ?? null
   const stats = data?.stats ?? null
+  const profileClub = data?.club ?? activeClub
   const heroCover = profile?.cover_url ?? null
   const matchesPlayed = stats?.matches_played ?? 0
   const winRate = matchesPlayed > 0 ? Math.round(((stats?.wins ?? 0) / matchesPlayed) * 100) : null
@@ -551,7 +441,7 @@ export default function ClubJugadorDetailPage() {
       <div className={`club-panel player-premium${isOwnProfile ? ' is-own-profile' : ''}`}>
         {message ? <div className="player-message">{message}</div> : null}
 
-        {!activeClub?.id ? (
+        {!profileClub?.id ? (
           <PlayerStatePanel kind="empty" title="Seleccioná un club activo" message="Necesitamos un club para mostrar tu perfil deportivo." action={{ label: 'Seleccionar club', href: '/seleccionar-club' }} compact />
         ) : loading ? (
           <PlayerStatePanel kind="loading" title="Cargando perfil" message="Preparando tu información" viewport />
@@ -568,7 +458,7 @@ export default function ClubJugadorDetailPage() {
                 <Link className="playerProfileV3__back" href={isOwnProfile ? '/player' : '/club/jugadores'} aria-label="Volver"><ArrowLeft size={17} /><span>Volver</span></Link>
                 {isOwnProfile ? <>
                   <label className="playerProfileV3__coverEdit" htmlFor="player-profile-cover-file"><ImageIcon size={15} />Editar portada</label>
-                  <input id="player-profile-cover-file" className="playerProfileV3__quickFile" type="file" accept="image/*" onChange={(event) => handleQuickProfileImage('cover', event.target.files?.[0])} />
+                  <input id="player-profile-cover-file" className="playerProfileV3__quickFile" type="file" accept="image/*" disabled={editSaving} onChange={(event) => { void handleQuickProfileImage('cover', event.target.files?.[0]); event.currentTarget.value = '' }} />
                 </> : null}
               </div>
               <div className="playerProfileV3__intro">
@@ -578,24 +468,29 @@ export default function ClubJugadorDetailPage() {
                   </button>
                   {isOwnProfile ? <>
                     <label className="playerProfileV3__avatarEdit" htmlFor="player-profile-avatar-file" aria-label="Editar foto de perfil"><Pencil size={14} /></label>
-                    <input id="player-profile-avatar-file" className="playerProfileV3__quickFile" type="file" accept="image/*" onChange={(event) => handleQuickProfileImage('avatar', event.target.files?.[0])} />
+                    <input id="player-profile-avatar-file" className="playerProfileV3__quickFile" type="file" accept="image/*" disabled={editSaving} onChange={(event) => { void handleQuickProfileImage('avatar', event.target.files?.[0]); event.currentTarget.value = '' }} />
                   </> : null}
                 </div>
                 <div className="playerProfileV3__identity">
                   <h1>{player.full_name}</h1>
                   <p>{formatRankingCategory(player.category)} · {formatRankingGender(player.gender)}</p>
-                  <Link href={`/clubs/${activeClub.id}`} className="playerProfileV3__club">{activeClub.name}</Link>
+                  <Link href={`/clubs/${profileClub.id}`} className="playerProfileV3__club">{profileClub.name}</Link>
                   <div className="playerProfileV3__actions">
-                    {isOwnProfile ? <button type="button" onClick={openEditModal}><Pencil size={15} />Editar perfil</button> : null}
+                    {isOwnProfile ? <Link href="/mis-datos"><Pencil size={15} />Editar perfil</Link> : null}
                     <Link className="is-primary" href={isOwnProfile ? '/player/ranking' : '/club/ranking'}>Ver ranking</Link>
                   </div>
                 </div>
                 <div className="playerProfileV3__metrics" aria-label="Resumen competitivo">
-                  <span><small>Posición</small><strong>{rankingPositionLabel}</strong></span>
+                  <span><small>Ranking</small><strong>{rankingPositionLabel}</strong></span>
                   <span><small>Puntos</small><strong>{rankingPointsLabel}</strong></span>
                   <span><small>Partidos</small><strong>{matchesPlayed}</strong></span>
                 </div>
               </div>
+              <section className="playerProfileV3__sportsFacts" aria-label="Perfil deportivo">
+                <article><span>Mano hábil</span><strong>{dominantHandLabel(profile?.dominant_hand)}</strong></article>
+                <article><span>Posición</span><strong>{preferredPositionLabel(profile?.preferred_position ?? player.preferred_position)}</strong></article>
+                <article><span>Altura</span><strong>{profile?.height_cm ? `${profile.height_cm} cm` : 'Sin completar'}</strong></article>
+              </section>
               <nav className="playerProfileV3__tabs" aria-label="Secciones del perfil">
                 {[
                   ['summary', 'Resumen'],
@@ -610,7 +505,7 @@ export default function ClubJugadorDetailPage() {
                 <article><span>Trayectoria</span><strong>{stats?.tournaments_played ?? 0} torneos</strong><p>{matchesPlayed} partidos · {stats?.wins ?? 0} ganados</p></article>
                 <article><span>Próximo torneo</span><strong>Sin inscripción próxima</strong><Link href="/player/torneos/explorar">Explorar torneos</Link></article>
                 <article><span>Último resultado</span>{recentMatches[0] ? <><strong>{recentMatches[0].result} · {recentMatches[0].score}</strong><p>{recentMatches[0].tournament_name}</p></> : <><strong>Sin partidos todavía</strong><p>Tu actividad aparecerá acá.</p></>}</article>
-                <article><span>Club y pareja</span>{activePartner ? <Link href={`/club/jugadores/${activePartner.user_id}`}><strong>{activePartner.full_name}</strong><p>Pareja activa · {activeClub.name}</p></Link> : <><strong>{activeClub.name}</strong><p>Sin pareja activa</p>{isOwnProfile ? <button className="playerProfileV3__partnerCta" type="button" onClick={openInviteModal}><UserPlus size={14} />Buscar pareja</button> : null}</>}</article>
+                <article className="playerProfileV3__partnerCard"><span>Club y pareja</span>{activePartner ? <Link className="playerProfileV3__activePartner" href={`/club/jugadores/${activePartner.id}`}><span className="playerProfileV3__partnerAvatar">{activePartner.avatar_url ? <Image src={activePartner.avatar_url} alt="" fill sizes="42px" /> : getClubInitials(activePartner.full_name)}</span><span><strong>{activePartner.full_name}</strong><p>Pareja activa · {profileClub.name}</p></span><i>Ver perfil</i></Link> : <><strong>{profileClub.name}</strong><p>Sin pareja activa</p>{isOwnProfile ? <button className="playerProfileV3__partnerCta" type="button" onClick={openInviteModal}><UserPlus size={14} />Buscar pareja</button> : null}</>}</article>
               </section>
 
               <section id="player-profile-tournaments" className="playerProfileV3__list playerProfileV3__wallSection"><h2 className="playerProfileV3__sectionTitle">Torneos</h2>{data.tournament_history.length ? data.tournament_history.map((tournament) => <article key={`${tournament.tournament_id}-${tournament.date ?? ''}`}><strong>{tournament.tournament_name}</strong><span>{formatDate(tournament.date)} · {tournament.partner_name}</span><small>{tournament.result}{tournament.points !== null ? ` · ${tournament.points} pts` : ''}</small></article>) : <div className="playerProfileV3__empty">Todavía no hay torneos para mostrar.</div>}</section>
@@ -687,141 +582,6 @@ export default function ClubJugadorDetailPage() {
               </div>
             ) : null}
 
-            {editOpen && isOwnProfile ? (
-              <div className="player-editOverlay" role="dialog" aria-modal="true">
-                <form
-                  className="player-editModal"
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    void saveOwnProfile()
-                  }}
-                >
-                  <header>
-                    <div>
-                      <span className="club-kicker">Modo propio</span>
-                      <h2>Editar perfil</h2>
-                      <p>Solo podés modificar datos personales y deportivos permitidos. Ranking, categoría y estadísticas quedan bloqueados.</p>
-                    </div>
-                    <button type="button" onClick={() => setEditOpen(false)} aria-label="Cerrar edición"><X size={18} /></button>
-                  </header>
-
-                  {editMessage ? <div className="player-editError">{editMessage}</div> : null}
-
-                  <section className="player-editSection">
-                    <h3><ImageIcon size={16} /> Imagen</h3>
-                    <div className="player-editMediaGrid">
-                      <label>
-                        <span>Foto/avatar</span>
-                        <div className="player-editPreview player-editPreview--avatar">
-                          {avatarPreview || editForm.avatar_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={(avatarPreview ?? editForm.avatar_url) || ''} alt="" />
-                          ) : getClubInitials(player.full_name)}
-                        </div>
-                        <input type="file" accept="image/*" onChange={(event) => selectProfileFile('avatar', event.target.files?.[0])} />
-                      </label>
-                      <label>
-                        <span>Portada</span>
-                        <div className="player-editPreview player-editPreview--cover">
-                          {coverPreview || editForm.cover_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={(coverPreview ?? editForm.cover_url) || ''} alt="" />
-                          ) : <small>Usa la portada SELPA actual como fallback.</small>}
-                        </div>
-                        <input type="file" accept="image/*" onChange={(event) => selectProfileFile('cover', event.target.files?.[0])} />
-                      </label>
-                    </div>
-                  </section>
-
-                  <section className="player-editSection">
-                    <h3><UserPlus size={16} /> Datos personales</h3>
-                    <div className="player-editGrid">
-                      <label>
-                        <span>Nombre público</span>
-                        <input value={editForm.display_name} onChange={(event) => updateEditField('display_name', event.target.value)} maxLength={90} />
-                      </label>
-                      <label>
-                        <span>País</span>
-                        <input value="Argentina" readOnly />
-                      </label>
-                      <label>
-                        <span>Provincia</span>
-                        <input value="La Pampa" readOnly />
-                      </label>
-                      <label>
-                        <span>Ciudad</span>
-                        <input
-                          value={editForm.city}
-                          onChange={(event) => updateEditField('city', event.target.value)}
-                          maxLength={90}
-                          list="player-la-pampa-cities"
-                          placeholder="Elegí o buscá una ciudad"
-                        />
-                        <datalist id="player-la-pampa-cities">
-                          {LA_PAMPA_CITIES.map((city) => <option key={city} value={city} />)}
-                        </datalist>
-                      </label>
-                      <label>
-                        <span>Fecha de nacimiento</span>
-                        <input type="date" value={editForm.birth_date} onChange={(event) => updateEditField('birth_date', event.target.value)} />
-                      </label>
-                      <label className="is-locked">
-                        <span>Email validado</span>
-                        <input value={profile?.email ?? 'Sin email visible'} readOnly />
-                      </label>
-                    </div>
-                  </section>
-
-                  <section className="player-editSection">
-                    <h3><Target size={16} /> Datos deportivos</h3>
-                    <div className="player-editGrid">
-                      <label>
-                        <span>Altura</span>
-                        <input inputMode="numeric" value={editForm.height_cm} onChange={(event) => updateEditField('height_cm', event.target.value.replace(/[^\d]/g, '').slice(0, 3))} placeholder="Ej: 178" />
-                      </label>
-                      <label>
-                        <span>Mano hábil</span>
-                        <select value={editForm.dominant_hand} onChange={(event) => updateEditField('dominant_hand', event.target.value)}>
-                          <option value="">Sin datos</option>
-                          <option value="RIGHT">Derecha</option>
-                          <option value="LEFT">Izquierda</option>
-                          <option value="AMBIDEXTROUS">Ambidiestro</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>Posición preferida</span>
-                        <select value={editForm.preferred_position} onChange={(event) => updateEditField('preferred_position', event.target.value)}>
-                          <option value="">Sin datos</option>
-                          <option value="DRIVE">Drive</option>
-                          <option value="REVES">Revés</option>
-                          <option value="BOTH">Ambos lados</option>
-                        </select>
-                      </label>
-                      <label className="is-locked">
-                        <span>Categoría / rama</span>
-                        <input value={`${formatRankingCategory(player.category)} · ${formatRankingGender(player.gender)}`} readOnly />
-                      </label>
-                      <label className="is-locked">
-                        <span>Ranking / puntos</span>
-                        <input value={`${rankingPositionLabel} · ${rankingPointsLabel}`} readOnly />
-                      </label>
-                      <label className="is-locked">
-                        <span>Estado de membresía</span>
-                        <input value="Activo en club" readOnly />
-                      </label>
-                    </div>
-                  </section>
-
-                  <footer>
-                    <button type="button" onClick={() => setEditOpen(false)}>Cancelar</button>
-                    <button type="submit" disabled={editSaving}>
-                      <Save size={15} />
-                      {editSaving ? 'Guardando...' : 'Guardar cambios'}
-                    </button>
-                  </footer>
-                </form>
-              </div>
-            ) : null}
           </>
         )}
       </div>
@@ -853,6 +613,10 @@ export default function ClubJugadorDetailPage() {
         .playerProfileV3__metrics span + span { border-left: 1px solid #e2e8f0; }
         .playerProfileV3__metrics small, .playerProfileV3__summary > article > span { color: #64748b; font-size: 10px; font-weight: 750; text-transform: uppercase; }
         .playerProfileV3__metrics strong { color: #061b3a; font-size: 15px; font-weight: 800; overflow-wrap: anywhere; }
+        .playerProfileV3__sportsFacts { display:grid; gap:10px; grid-template-columns:repeat(3,minmax(0,1fr)); margin:0 auto 14px; max-width:720px; padding:0 22px; width:100%; }
+        .playerProfileV3__sportsFacts article { background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 8px 20px rgba(15,23,42,.04); display:grid; gap:4px; padding:11px 13px; text-align:center; }
+        .playerProfileV3__sportsFacts span { color:#64748b; font-size:10px; font-weight:750; text-transform:uppercase; }
+        .playerProfileV3__sportsFacts strong { color:#061b3a; font-size:14px; font-weight:800; }
         .playerProfileV3__actions { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-start; margin-top: 15px; }
         .playerProfileV3__actions a, .playerProfileV3__actions button { align-items: center; background: #fff; border: 1px solid #d7e2ed; border-radius: 12px; color: #173457; cursor: pointer; display: inline-flex; font: inherit; font-size: 13px; font-weight: 760; gap: 7px; justify-content: center; min-height: 42px; padding: 0 15px; text-decoration: none; transition: box-shadow .16s ease, transform .16s ease; }
         .playerProfileV3__actions a:hover, .playerProfileV3__actions button:hover { box-shadow: 0 10px 22px rgba(15,23,42,.10); transform: translateY(-1px); }
@@ -871,6 +635,11 @@ export default function ClubJugadorDetailPage() {
         .playerProfileV3__summary a { color: #061b3a; display: grid; gap: 5px; text-decoration: none; }
         .playerProfileV3__summary button { background: transparent; border: 0; color: color-mix(in srgb, var(--profile-accent) 76%, #061b3a); cursor: pointer; font: inherit; font-size: 12px; font-weight: 750; justify-self: start; padding: 0; }
         .playerProfileV3__summary .playerProfileV3__partnerCta { align-items: center; background: linear-gradient(135deg, color-mix(in srgb, var(--profile-accent) 88%, #061b3a), var(--profile-accent)); border: 1px solid color-mix(in srgb, var(--profile-accent) 68%, #061b3a); border-radius: 9px; box-shadow: 0 7px 16px var(--profile-glow); color: #fff; display: inline-flex; gap: 6px; margin-top: 3px; min-height: 32px; padding: 6px 10px; transition: box-shadow .16s ease, transform .16s ease; }
+        .playerProfileV3__partnerCard { border-color:color-mix(in srgb,var(--profile-accent) 38%,#e2e8f0) !important; }
+        .playerProfileV3__activePartner { align-items:center; display:grid !important; gap:9px !important; grid-template-columns:42px minmax(0,1fr) auto; margin-top:2px; }
+        .playerProfileV3__partnerAvatar { align-items:center; background:color-mix(in srgb,var(--profile-accent) 14%,white); border:2px solid #fff; border-radius:999px; box-shadow:0 5px 14px rgba(15,23,42,.12); color:color-mix(in srgb,var(--profile-accent) 70%,#061b3a); display:flex; font-size:10px; font-weight:850; height:42px; justify-content:center; overflow:hidden; position:relative; width:42px; }
+        .playerProfileV3__partnerAvatar img { object-fit:cover; }
+        .playerProfileV3__activePartner i { color:color-mix(in srgb,var(--profile-accent) 78%,#061b3a); font-size:10px; font-style:normal; font-weight:800; white-space:nowrap; }
         .playerProfileV3__summary .playerProfileV3__partnerCta:hover { box-shadow: 0 10px 22px var(--profile-glow); transform: translateY(-1px); }
         .playerProfileV3__stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .playerProfileV3__stats article { align-items: center; display: grid; gap: 4px; min-height: 108px; padding: 14px; text-align: center; }
@@ -894,7 +663,8 @@ export default function ClubJugadorDetailPage() {
           .playerProfileV3__back { left: 10px; top: 8px; }
           .playerProfileV3__back span { display: none; }
           .playerProfileV3__back { height: 32px; justify-content: center; padding: 0; width: 32px; }
-          .playerProfileV3__coverEdit { bottom: 8px; font-size: 11px; min-height: 32px; right: 10px; }
+          .playerProfileV3__coverEdit { bottom:auto; font-size:10px; gap:4px; min-height:28px; padding:0 8px; right:10px; top:8px; }
+          .playerProfileV3__coverEdit svg { height:13px; width:13px; }
           .playerProfileV3__intro { align-items: center; display: flex; flex-direction: column; gap: 8px; margin-top: -76px; padding: 0 12px; text-align: center; }
           .playerProfileV3__avatarWrap, .playerProfileV3__avatar { flex: 0 0 148px; font-size: 38px; height: 148px; width: 148px; }
           .playerProfileV3__avatar { border-width: 6px; }
@@ -905,6 +675,14 @@ export default function ClubJugadorDetailPage() {
           .playerProfileV3__metrics { margin-top: 0; min-width: 0; width: 100%; }
           .playerProfileV3__metrics span { padding: 9px 6px; }
           .playerProfileV3__metrics strong { font-size: 13px; }
+          .playerProfileV3__metrics { background:#fff; border-color:#dbe4ee; box-shadow:0 8px 22px rgba(15,23,42,.06); position:relative; }
+          .playerProfileV3__metrics::before { background:var(--profile-accent); content:""; height:2px; left:14px; opacity:.65; position:absolute; right:14px; top:0; }
+          .playerProfileV3__metrics span { background:#fff; }
+          .playerProfileV3__metrics span small { color:#64748b; }
+          .playerProfileV3__sportsFacts { gap:7px; padding:0 12px; }
+          .playerProfileV3__sportsFacts article { background:#f8fafc; border-color:#dbe4ee; box-shadow:none; padding:10px 6px; position:relative; }
+          .playerProfileV3__sportsFacts article::after { background:#cbd5e1; border-radius:999px; bottom:0; content:""; height:2px; left:28%; opacity:.7; position:absolute; right:28%; }
+          .playerProfileV3__sportsFacts article span { color:#64748b; }
           .playerProfileV3__actions { align-items: center; gap: 6px; justify-content: center; margin: 10px auto 0; padding: 0; width: 100%; }
           .playerProfileV3__actions a, .playerProfileV3__actions button { flex: 1 1 0; font-size: 12px; min-height: 40px; padding: 0 8px; white-space: nowrap; }
           .playerProfileV3__tabs { gap: 0; justify-content: stretch; overflow-x: auto; padding: 0 8px; }
@@ -925,8 +703,6 @@ export default function ClubJugadorDetailPage() {
         .player-backBtn, .player-secondaryBtn { border-radius: 10px; font-size: 13px; font-weight: 850; padding: 9px 12px; text-decoration: none; }
         .player-backBtn { background: #fff1f7; border: 1px solid #fbcfe8; color: #be185d; }
         .player-secondaryBtn { background: #ecfeff; border: 1px solid #a5f3fc; color: #0e7490; }
-        .player-editProfileBtn { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.12); border-radius: 10px; color: #17253f; cursor: pointer; display: inline-flex; font: inherit; font-size: 13px; font-weight: 900; gap: 7px; min-height: 38px; padding: 8px 12px; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
-        .player-editProfileBtn:hover { border-color: rgba(14,165,233,.36); box-shadow: 0 12px 26px rgba(14,165,233,.10); transform: translateY(-1px); }
         .player-message { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 12px; color: #9f1239; font-weight: 800; padding: 10px 12px; }
         .profileHeroV2 { background: #071426; border-radius: 0; height: 420px; margin-left: -18px; margin-right: -18px; overflow: hidden; position: relative; width: calc(100% + 36px); }
         .profileHeroV2__background { background: linear-gradient(135deg, #091729, #173457 48%, #22152c); inset: 0; position: absolute; }
@@ -1113,37 +889,6 @@ export default function ClubJugadorDetailPage() {
         .player-inviteMessage { display: grid; gap: 6px; }
         .player-inviteMessage span { color: #64748b; font-size: 11px; font-weight: 900; text-transform: uppercase; }
         .player-inviteMessage textarea { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; color: #061b3a; font: inherit; font-size: 13px; font-weight: 750; min-height: 76px; outline: none; padding: 10px 12px; resize: vertical; }
-        .player-editOverlay { align-items: center; background: rgba(15,23,42,.44); display: flex; inset: 0; justify-content: center; padding: 18px; position: fixed; z-index: 92; }
-        .player-editModal { background:
-          radial-gradient(circle at 12% 0%, rgba(103,232,249,.18), transparent 30%),
-          radial-gradient(circle at 100% 8%, rgba(244,114,182,.12), transparent 28%),
-          rgba(255,255,255,.97);
-          border: 1px solid rgba(255,255,255,.78); border-radius: 22px; box-shadow: 0 28px 90px rgba(15,23,42,.26); color: #061b3a; display: grid; gap: 13px; max-height: min(820px, calc(100vh - 34px)); max-width: 820px; overflow: auto; padding: 16px; width: min(820px, 100%);
-        }
-        .player-editModal header, .player-editModal footer { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
-        .player-editModal header h2 { color: #061b3a; font-size: 22px; font-weight: 950; margin: 2px 0 4px; }
-        .player-editModal header p { color: #64748b; font-size: 13px; font-weight: 750; line-height: 1.35; margin: 0; max-width: 560px; }
-        .player-editModal header button { align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; color: #334155; cursor: pointer; display: inline-flex; flex: 0 0 auto; height: 38px; justify-content: center; padding: 0; width: 38px; }
-        .player-editError { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 13px; color: #9f1239; font-size: 13px; font-weight: 850; padding: 10px 12px; }
-        .player-editSection { background: rgba(248,250,252,.72); border: 1px solid rgba(226,232,240,.78); border-radius: 17px; display: grid; gap: 11px; padding: 13px; }
-        .player-editSection h3 { align-items: center; color: #061b3a; display: flex; font-size: 14px; font-weight: 950; gap: 7px; margin: 0; }
-        .player-editGrid, .player-editMediaGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .player-editGrid label, .player-editMediaGrid label { display: grid; gap: 6px; min-width: 0; }
-        .player-editGrid span, .player-editMediaGrid span { color: #64748b; font-size: 10px; font-weight: 950; letter-spacing: .03em; text-transform: uppercase; }
-        .player-editGrid input, .player-editGrid select { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; color: #061b3a; font: inherit; font-size: 13px; font-weight: 800; min-height: 40px; outline: none; padding: 9px 11px; width: 100%; }
-        .player-editGrid input:focus, .player-editGrid select:focus { border-color: rgba(14,165,233,.55); box-shadow: 0 0 0 3px rgba(14,165,233,.10); }
-        .player-editGrid .is-locked input { background: #f8fafc; color: #64748b; cursor: not-allowed; }
-        .player-editPreview { align-items: center; background: linear-gradient(135deg, #eff6ff, #ecfeff); border: 1px dashed rgba(14,165,233,.34); color: #0f3b67; display: flex; font-size: 30px; font-weight: 950; justify-content: center; overflow: hidden; position: relative; }
-        .player-editPreview img { height: 100%; object-fit: cover; width: 100%; }
-        .player-editPreview--avatar { border-radius: 999px; height: 112px; width: 112px; }
-        .player-editPreview--cover { border-radius: 14px; min-height: 112px; width: 100%; }
-        .player-editPreview small { color: #64748b; font-size: 12px; font-weight: 750; line-height: 1.35; padding: 12px; text-align: center; }
-        .player-editMediaGrid input { color: #64748b; font: inherit; font-size: 12px; font-weight: 800; max-width: 100%; }
-        .player-editModal footer { border-top: 1px solid rgba(226,232,240,.84); padding-top: 12px; }
-        .player-editModal footer button { align-items: center; border-radius: 999px; cursor: pointer; display: inline-flex; font: inherit; font-size: 13px; font-weight: 950; gap: 7px; justify-content: center; padding: 9px 13px; }
-        .player-editModal footer button:first-child { background: #fff; border: 1px solid #e2e8f0; color: #334155; }
-        .player-editModal footer button:last-child { background: linear-gradient(135deg, #0ea5e9, #06b6d4); border: 0; color: #fff; }
-        .player-editModal footer button:disabled { cursor: wait; opacity: .62; }
         .player-list, .player-timeline, .player-summaryList { display: grid; gap: 8px; }
         .player-list div, .player-timeline div, .player-summaryList div { background: linear-gradient(135deg, #f8fafc, rgba(236,253,255,.34)); border: 1px solid rgba(226,232,240,.92); border-radius: 12px; display: grid; gap: 3px; padding: 10px 11px; }
         .player-list strong, .player-timeline strong, .player-summaryList strong { color: #061b3a; font-size: 13px; font-weight: 900; }
@@ -1162,7 +907,6 @@ export default function ClubJugadorDetailPage() {
           .profileHeroV2__rank { height: auto; max-width: 320px; width: 100%; }
           .player-statGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .player-infoDeck, .player-layout, .player-bottomGrid, .player-lowerGrid { grid-template-columns: 1fr; }
-          .player-editGrid, .player-editMediaGrid { grid-template-columns: 1fr; }
         }
         @media (max-width: 560px) {
           .player-premium.is-own-profile {
@@ -1178,8 +922,7 @@ export default function ClubJugadorDetailPage() {
             gap: 6px;
           }
           .player-premium.is-own-profile .player-backBtn,
-          .player-premium.is-own-profile .player-secondaryBtn,
-          .player-premium.is-own-profile .player-editProfileBtn {
+          .player-premium.is-own-profile .player-secondaryBtn {
             align-items: center;
             display: inline-flex;
             font-size: 11px;

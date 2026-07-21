@@ -2,9 +2,11 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Crown, TrendingUp } from 'lucide-react'
+import { ArrowRight, Crown, Medal, TrendingUp } from 'lucide-react'
 import RankingPlayerAvatar from '@/components/ranking/RankingPlayerAvatar'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
+import PlayerSectionHero from '@/components/player/PlayerSectionHero'
+import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
 import { useSession } from '@/components/session/SessionProvider'
 import {
   formatRankingCategory,
@@ -35,10 +37,6 @@ type RankingResponse = {
   meta?: { generatedAt?: string }
   error?: string
 }
-
-const PAMP_CYAN = '#06b6d4'
-const PAMP_MAGENTA = '#ec4899'
-const PAMP_GLOW = 'rgba(6, 182, 212, 0.18)'
 
 function formatDate(value?: string | null) {
   if (!value) return 'Sin fecha'
@@ -130,25 +128,11 @@ export default function PlayerMyRankingPage() {
   const pointsToLeader = leader && myContextRow ? Math.max(0, leader.ranking_points - myContextRow.ranking_points) : 0
 
   return (
-    <main
-      className="playerRankShell"
-      style={{
-        ['--rank-accent' as string]: PAMP_CYAN,
-        ['--rank-accent-2' as string]: PAMP_MAGENTA,
-        ['--rank-glow' as string]: PAMP_GLOW,
-      }}
-    >
-      <section className="playerRankHero">
-        <div>
-          <span>Ranking personal</span>
-          <h1>Mi ranking</h1>
-          <p>
+    <PlayerSpaceLayout><main className="playerRankShell">
+      <PlayerSectionHero badge="Ranking personal" title="Mi ranking" description={<>
             {session.activeClub?.name ?? 'Club activo'}
             {myRow ? ` · ${formatRankingCategory(myRow.category)} · ${formatRankingGender(myRow.gender)}` : ' · Situación deportiva actual'}
-          </p>
-        </div>
-        <Link href="/player/ranking/club">Ver ranking del club <ArrowRight size={16} /></Link>
-      </section>
+          </>} icon={<Medal />} action={<Link href="/player/ranking/club">Ver ranking del club <ArrowRight size={16} /></Link>} />
 
       {!session.activeClub?.id ? (
         <PlayerStatePanel kind="empty" title="Seleccioná un club activo" message="Elegí el club cuyo ranking querés consultar." action={{ label: 'Seleccionar club', href: '/seleccionar-club' }} compact />
@@ -237,22 +221,18 @@ export default function PlayerMyRankingPage() {
       )}
 
       <style>{`
-        .playerRankShell { background:
-          radial-gradient(circle at 8% 0%, var(--rank-glow), transparent 34%),
-          #f3f7fb;
+        .playerRankShell {
+          --rank-accent:var(--player-accent);--rank-accent-2:var(--player-accent-2);--rank-glow:var(--px-club-glow,rgba(6,182,212,.18));
           color: #061b3a;
           display: grid;
           gap: 16px;
-          margin: 0 auto;
-          max-width: 1080px;
-          padding: 18px;
           width: 100%;
         }
         .playerRankHero, .playerRankCard, .playerRankStats article, .playerRankContext, .playerRankActions {
           background: rgba(255,255,255,.9);
-          border: 1px solid #e2e8f0;
-          border-radius: 22px;
-          box-shadow: 0 18px 48px rgba(15,23,42,.07);
+          border: 1px solid var(--player-card-border);
+          border-radius: var(--player-card-radius);
+          box-shadow: var(--player-card-shadow);
         }
         .playerRankHero { align-items: center; display: flex; gap: 14px; justify-content: space-between; padding: 16px 18px; }
         .playerRankHero span { color: var(--rank-accent); font-size: 12px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
@@ -299,23 +279,43 @@ export default function PlayerMyRankingPage() {
         .playerRankActions { align-items: center; display: flex; gap: 12px; justify-content: space-between; padding: 14px; }
         .playerRankActions span { color: #64748b; font-weight: 800; }
         @media (max-width: 720px) {
-          .playerRankShell { padding: 12px; }
           .playerRankHero, .playerRankCard, .playerRankActions { align-items: stretch; display: grid; grid-template-columns: 1fr; }
-          .playerRankMain { grid-template-columns: 82px minmax(0, 1fr); }
-          .playerRankAvatar { height: 82px; width: 82px; }
-          .playerRankIdentityLine { align-items: flex-start; display: grid; gap: 7px; grid-template-columns: auto minmax(0, 1fr); }
-          .playerRankPoints { border-left: 0; border-top: 1px solid #e2e8f0; justify-items: start; padding-left: 0; padding-top: 14px; text-align: left; }
+          .playerRankCard { gap:14px; padding:16px; }
+          .playerRankCard::before { bottom:14px; border-radius:999px; left:0; top:14px; width:3px; }
+          .playerRankMain { gap:12px; grid-template-columns:64px minmax(0, 1fr); }
+          .playerRankAvatar { border-width:4px; height:64px; width:64px; }
+          .playerRankMain>div>span { font-size:9px; letter-spacing:.07em; }
+          .playerRankIdentityLine { align-items:center; display:grid; gap:9px; grid-template-columns:auto minmax(0,1fr); margin-top:3px; }
+          .playerRankMain strong { font-size:52px; letter-spacing:-.075em; line-height:.82; }
+          .playerRankMain p { font-size:19px; line-height:1.02; }
+          .playerRankIdentityLine small { font-size:11px; margin-top:3px; }
+          .playerRankBadges { margin-top:5px; }
+          .playerRankBadges em,.playerRankBadges i { font-size:9px; padding:4px 7px; }
+          .playerRankPoints { align-items:center; border-left:0; border-top:1px solid #e2e8f0; display:grid; gap:2px 10px; grid-template-columns:minmax(0,1fr) auto; justify-items:start; padding-left:0; padding-top:12px; text-align:left; }
+          .playerRankPoints span { grid-column:1; }
+          .playerRankPoints strong { font-size:34px; grid-column:1; }
+          .playerRankPoints small { align-self:center; grid-column:2; grid-row:1 / span 2; text-align:right; }
           .playerRankStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .playerRankStats article { border-radius:15px; gap:4px; min-height:92px; padding:13px; }
+          .playerRankStats article svg { height:17px; width:17px; }
+          .playerRankStats span { font-size:9px; }
+          .playerRankStats strong { font-size:22px; }
+          .playerRankContext { border-radius:17px; gap:10px; padding:14px 10px; }
           .playerRankContext header { align-items: start; display: grid; }
-          .playerRankContextLabels { grid-template-columns: 32px minmax(0, 1fr) 56px 64px; top: 64px; }
-          .playerRankContextRow { border-radius: 12px; gap: 7px; grid-template-columns: 22px 28px minmax(0, 1fr) minmax(84px, max-content); min-height: 46px; padding: 6px 7px; }
-          .playerRankContextRow .playerRankAvatar { height: 28px; width: 28px; }
+          .playerRankContext h2 { font-size:20px; }
+          .playerRankContextLabels { border-radius:10px; box-shadow:none; gap:7px; grid-template-columns:30px minmax(0,1fr) 68px; padding:7px 8px; position:static; }
+          .playerRankContextLabels span:nth-child(2) { grid-column:2; }
+          .playerRankContextLabels span:nth-child(3) { display:none; }
+          .playerRankContextLabels span:nth-child(4) { grid-column:3; text-align:right; }
+          .playerRankContextRow { border-radius:12px; gap:7px; grid-template-columns:30px 34px minmax(0,1fr) 68px; min-height:58px; padding:7px 8px; }
+          .playerRankContextPlace { font-size:15px; }
+          .playerRankContextRow .playerRankAvatar { height:34px; width:34px; }
           .playerRankContextRow b { overflow: visible; text-overflow: clip; white-space: normal; }
-          .playerRankContextRow span { font-size: 11px; line-height: 1.15; }
+          .playerRankContextRow span { font-size:10px; line-height:1.15; }
           .playerRankContextRow em { display: none; }
-          .playerRankContextRow i { grid-column: 4; grid-row: 1; justify-self: end; min-width: 84px; text-align: right; white-space: nowrap; }
+          .playerRankContextRow i { font-size:12px; grid-column:4; grid-row:1; justify-self:end; min-width:0; text-align:right; white-space:nowrap; }
         }
       `}</style>
-    </main>
+    </main></PlayerSpaceLayout>
   )
 }
