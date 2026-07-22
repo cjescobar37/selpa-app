@@ -11,11 +11,11 @@ export const CLUB_CAPABILITIES = [
   'groups:generate', 'matches:view', 'matches:update', 'matches:schedule', 'playoff:generate',
   'finance:view', 'finance:manage', 'payments:view', 'payments:manage',
   'content:view', 'news:manage', 'sponsors:manage', 'ads:manage',
-  'messages:view', 'messages:reply', 'audit:view', 'security:manage',
+  'messages:view', 'messages:reply', 'reports:operational_view', 'audit:view', 'security:manage',
 ] as const
 
 export type ClubCapability = (typeof CLUB_CAPABILITIES)[number]
-export type CanonicalClubRole = 'OWNER' | 'ADMIN' | 'PLANILLERO' | 'PLAYER'
+export type CanonicalClubRole = 'OWNER' | 'ADMIN' | 'OPERADOR' | 'PLANILLERO' | 'PLAYER'
 
 const OWNER_CAPABILITIES: readonly ClubCapability[] = CLUB_CAPABILITIES
 
@@ -23,12 +23,21 @@ const ADMIN_CAPABILITIES: readonly ClubCapability[] = CLUB_CAPABILITIES.filter(
   (capability) => capability !== 'ownership:transfer',
 )
 
-const PLANILLERO_CAPABILITIES: readonly ClubCapability[] = [
+const OPERADOR_CAPABILITIES: readonly ClubCapability[] = [
   'dashboard:view',
   'club:view',
+  'memberships:view',
+  'memberships:manage',
   'players:view',
+  'players:manage',
+  'players:private_view',
   'ranking:view',
+  'ranking:manage',
   'tournaments:view',
+  'tournaments:create',
+  'tournaments:update',
+  'tournaments:publish',
+  'tournaments:cancel',
   'registrations:view',
   'registrations:manage',
   'groups:generate',
@@ -36,14 +45,27 @@ const PLANILLERO_CAPABILITIES: readonly ClubCapability[] = [
   'matches:update',
   'matches:schedule',
   'playoff:generate',
-  'payments:view',
+  'content:view',
+  'news:manage',
+  'sponsors:manage',
+  'ads:manage',
   'messages:view',
   'messages:reply',
+  'reports:operational_view',
+]
+
+const PLANILLERO_CAPABILITIES: readonly ClubCapability[] = [
+  'dashboard:view',
+  'club:view',
+  'tournaments:view',
+  'matches:view',
+  'matches:update',
 ]
 
 export const CLUB_ROLE_CAPABILITIES = {
   OWNER: OWNER_CAPABILITIES,
   ADMIN: ADMIN_CAPABILITIES,
+  OPERADOR: OPERADOR_CAPABILITIES,
   PLANILLERO: PLANILLERO_CAPABILITIES,
   PLAYER: [],
 } as const satisfies Record<CanonicalClubRole, readonly ClubCapability[]>
@@ -56,11 +78,11 @@ export function isClubCapability(value: unknown): value is ClubCapability {
 
 export function normalizeCanonicalClubRole(role: string | null | undefined): CanonicalClubRole | null {
   const normalized = role?.trim().toUpperCase()
-  if (normalized === 'OWNER' || normalized === 'ADMIN' || normalized === 'PLANILLERO' || normalized === 'PLAYER') {
+  if (normalized === 'OWNER' || normalized === 'ADMIN' || normalized === 'OPERADOR' || normalized === 'PLANILLERO' || normalized === 'PLAYER') {
     return normalized
   }
-  // Transitional compatibility only. OPERATIVO is not an official role.
-  if (normalized === 'OPERATIVO' || normalized === 'OPERADOR') return 'PLANILLERO'
+  // Compatibilidad de lectura hasta aplicar la normalización incremental.
+  if (normalized === 'OPERATIVO') return 'OPERADOR'
   return null
 }
 
@@ -89,7 +111,7 @@ export const CLUB_CAPABILITY_GROUPS = {
   club: ['club:update', 'club:branding'],
 } as const satisfies Record<ClubCapabilityGroup, readonly ClubCapability[]>
 
-export const CLUB_PERMISSION_ROLES = ['OWNER', 'ADMIN', 'PLANILLERO', 'PLAYER'] as const
+export const CLUB_PERMISSION_ROLES = ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO', 'PLAYER'] as const
 export const CLUB_ROLE_PERMISSIONS = CLUB_ROLE_CAPABILITIES
 export const normalizeClubPermissionRole = normalizeCanonicalClubRole
 export const getCanonicalClubPermissionRole = normalizeCanonicalClubRole

@@ -1,4 +1,4 @@
-export type ClubRole = 'OWNER' | 'ADMIN' | 'PLANILLERO' | 'OPERATIVO' | 'PLAYER'
+export type ClubRole = 'OWNER' | 'ADMIN' | 'OPERADOR' | 'PLANILLERO' | 'PLAYER'
 export type MembershipStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'BANNED'
 
 export type MembershipApprovalState = {
@@ -6,8 +6,9 @@ export type MembershipApprovalState = {
   approved_at?: string | null
 }
 
-export const CLUB_STAFF_ROLES: ClubRole[] = ['OWNER', 'ADMIN', 'PLANILLERO']
-export const INTERNAL_CLUB_ROLES: ClubRole[] = ['OWNER', 'ADMIN', 'PLANILLERO', 'OPERATIVO']
+export const CLUB_STAFF_ROLES: ClubRole[] = ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO']
+export const INTERNAL_CLUB_ROLES: ClubRole[] = ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO']
+// Etapa 2 ampliará las RPC antes de exponer OPERADOR como asignable.
 export const MANAGEABLE_INTERNAL_ROLES: ClubRole[] = ['ADMIN', 'PLANILLERO']
 
 export function isApprovedMembership(membership: MembershipApprovalState | null | undefined) {

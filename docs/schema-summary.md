@@ -10,7 +10,7 @@ El modelo de Pamprax se organiza alrededor de clubes, usuarios/perfiles, membres
 
 Enums de negocio detectados en `public`:
 
-- `club_role`: `OWNER`, `ADMIN`, `PLANILLERO`, `PLAYER`.
+- `club_role`: `OWNER`, `ADMIN`, `OPERADOR`, `PLANILLERO`, `PLAYER` tras aplicar la migración incremental de Equipo y Roles.
 - `membership_status`: `PENDING`, `APPROVED`, `REJECTED`, `BANNED`.
 - `tournament_format`: `GROUPS_ELIM`, `DIRECT_ELIM`, `AMERICANO`, `GROUPS_ELIMINATION`.
 - `tournament_gender`: `MALE`, `FEMALE`, `MIXED`.
@@ -21,7 +21,7 @@ Enums de negocio detectados en `public`:
 Funciones `public` relevantes:
 
 - Autenticación/perfiles: `handle_new_auth_user()`, `handle_new_user()`, `profiles_sync_id()`, `profiles_sync_ids()`.
-- Autorización: `is_platform_admin()`, `is_club_admin(uuid)`, `is_club_member_approved(uuid)`.
+- Autorización: `is_platform_admin()`, `is_club_admin(uuid)`, `is_club_member_approved(uuid)`, `has_club_capability(uuid, text)` e `is_club_player(uuid, uuid)`.
 - Clubes/jugadores/torneos: `create_club(text, text, text)`, `ensure_club_player(uuid)`, `register_team_for_tournament(uuid, uuid, uuid)`, `search_club_players(uuid, text, integer)`.
 - Triggers utilitarios: `set_updated_at()`, `tg_set_updated_at()`, `touch_updated_at()`, `set_updated_at_platform_content()`, `tg_sync_tournament_deadlines()`, `tg_tournaments_sync_legacy()`.
 
@@ -82,8 +82,8 @@ Claves:
 
 Relaciones:
 
-- Se usa para resolver permisos de club (`is_club_admin`, `is_club_member_approved`) y visibilidad de clubes/torneos.
-- Se solapa parcialmente con `club_players`, que tambien vincula usuario y club.
+- Resuelve pertenencia y permisos de club. Una membership es canónicamente aprobada solo con `status = APPROVED` y `approved_at` no nulo.
+- `club_players` no duplica la función: representa exclusivamente la condición y estado deportivo.
 
 RLS: habilitado.
 
@@ -103,8 +103,8 @@ Triggers y funciones:
 Observaciones/deuda:
 
 - Dos triggers actualizan `updated_at`.
-- Hay dos conceptos de pertenencia: `club_memberships` y `club_players`. Conviene definir si jugador aprobado deriva de membership o si son agregados distintos.
-- Algunas policies usan `status = APPROVED`; otras usan `approved_at IS NOT NULL`, lo que puede divergir.
+- `club_memberships` es la fuente de pertenencia, aprobación y función administrativa; `club_players` es la fuente deportiva.
+- `is_club_player()` exige ambos registros aprobados para el mismo usuario y club.
 
 ### `club_players`
 
@@ -686,7 +686,7 @@ Observaciones/deuda:
   - `end_date` y `ends_on`.
   - `signup_deadline` y `registration_deadline`.
   - `rules_json` y `rules`.
-- `club_memberships` y `club_players` representan pertenencia usuario-club desde perspectivas distintas; hay que fijar la fuente de verdad para aprobacion, rol y acceso.
+- `club_memberships` representa pertenencia y función; `club_players`, condición deportiva. No se debe inferir que alguien juega únicamente por `role = PLAYER`.
 - `user_roles` y `platform_admins` pueden representar roles globales de manera duplicada.
 
 ### Triggers redundantes

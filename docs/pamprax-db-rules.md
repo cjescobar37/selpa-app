@@ -24,10 +24,11 @@ Este documento resume reglas practicas para trabajar con la base de datos de Pam
 ## Roles y permisos
 
 - `platform_admins` es la fuente principal detectada para permisos globales mediante `is_platform_admin()`.
-- `club_memberships.role` usa `club_role`: `OWNER`, `ADMIN`, `PLANILLERO`, `PLAYER`.
+- `club_memberships.role` usa `club_role`: `OWNER`, `ADMIN`, `OPERADOR`, `PLANILLERO`, `PLAYER`.
+- El rol define permisos administrativos; jugar exige membership aprobada y un `club_players` aprobado del mismo usuario y club.
 - `club_memberships.status` usa `membership_status`: `PENDING`, `APPROVED`, `REJECTED`, `BANNED`.
 - `is_club_admin(club_id)` es la funcion central para permisos administrativos de club.
-- Las policies mezclan criterios de membresia aprobada: algunas usan `status = APPROVED`, otras `approved_at IS NOT NULL`. No introducir nuevas reglas sin decidir un criterio canonico.
+- El criterio canónico de membership aprobada exige conjuntamente `status = APPROVED` y `approved_at IS NOT NULL`.
 - `user_roles` existe, pero su relacion con `platform_admins` no esta clara. No usarlo como fuente nueva de autorizacion sin revisar el flujo completo.
 
 ## Riesgos de RLS
