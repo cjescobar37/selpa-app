@@ -105,6 +105,14 @@ Observaciones/deuda:
 - Dos triggers actualizan `updated_at`.
 - `club_memberships` es la fuente de pertenencia, aprobación y función administrativa; `club_players` es la fuente deportiva.
 - `is_club_player()` exige ambos registros aprobados para el mismo usuario y club.
+- Las invitaciones de equipo se crean, aceptan, rechazan y cancelan mediante las
+  RPC atómicas `*_club_team_invite_atomic`. Solo admiten `ADMIN`, `OPERADOR`,
+  `PLANILLERO` y `PLAYER`; no rehabilitan memberships existentes.
+- La aceptación de una invitación crea únicamente `club_memberships` y preserva
+  íntegramente cualquier `club_players` existente.
+- Compatibilidad transitoria: los endpoints derivan el actor de la sesión y las
+  RPC reciben ese UUID bajo `service_role`; está pendiente migrarlas a
+  `auth.uid()` con cliente Supabase autenticado.
 
 ### `club_players`
 

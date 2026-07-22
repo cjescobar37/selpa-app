@@ -8,8 +8,7 @@ export type MembershipApprovalState = {
 
 export const CLUB_STAFF_ROLES: ClubRole[] = ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO']
 export const INTERNAL_CLUB_ROLES: ClubRole[] = ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO']
-// Etapa 2 ampliará las RPC antes de exponer OPERADOR como asignable.
-export const MANAGEABLE_INTERNAL_ROLES: ClubRole[] = ['ADMIN', 'PLANILLERO']
+export const MANAGEABLE_INTERNAL_ROLES: ClubRole[] = ['ADMIN', 'OPERADOR', 'PLANILLERO', 'PLAYER']
 
 export function isApprovedMembership(membership: MembershipApprovalState | null | undefined) {
   return membership?.status === 'APPROVED' && Boolean(membership.approved_at)

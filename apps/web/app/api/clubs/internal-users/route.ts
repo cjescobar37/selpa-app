@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
+import { clubInviteErrorResponse } from '@/lib/clubTeamInviteErrors'
 import {
   isApprovedMembership,
   isInternalClubRole,
@@ -220,76 +221,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No tenés permisos para invitar usuarios internos.' }, { status: 403 })
   }
 
-  const { data: existingProfile, error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .select('user_id,email')
-    .eq('email', email)
-    .maybeSingle()
-
-  if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 500 })
-  }
-
-  if (existingProfile?.user_id) {
-    const { data: existingMembership, error: membershipError } = await supabaseAdmin
-      .from('club_memberships')
-      .select('id,status,approved_at')
-      .eq('club_id', clubId)
-      .eq('user_id', existingProfile.user_id)
-      .maybeSingle()
-
-    if (membershipError) {
-      return NextResponse.json({ error: membershipError.message }, { status: 500 })
-    }
-
-    if (existingMembership && isApprovedMembership(existingMembership)) {
-      return NextResponse.json({ error: 'Ese usuario ya tiene una membership aprobada en el club.' }, { status: 409 })
-    }
-  }
-
-  const { data: existingInvite, error: inviteCheckError } = await supabaseAdmin
-    .from('club_user_invites')
-    .select('id')
-    .eq('club_id', clubId)
-    .eq('email', email)
-    .eq('status', 'PENDING')
-    .maybeSingle()
-
-  if (inviteCheckError) {
-    return NextResponse.json({ error: inviteCheckError.message }, { status: 500 })
-  }
-
-  if (existingInvite?.id) {
-    return NextResponse.json({ error: 'Ya existe una invitación pendiente para ese email en este club.' }, { status: 409 })
-  }
-
-  const now = new Date().toISOString()
-  const { data: invite, error: insertError } = await supabaseAdmin
-    .from('club_user_invites')
-    .insert({
-      club_id: clubId,
-      email,
-      role,
-      status: 'PENDING',
-      invited_by: user.id,
-      target_user_id: existingProfile?.user_id ?? null,
-      created_at: now,
-      updated_at: now,
-    })
-    .select('id,club_id,email,role,status,invited_by,resolved_by,resolved_at,target_user_id,created_at,updated_at,expires_at')
-    .maybeSingle()
-
-  if (insertError) {
-    if (isMissingInternalUsersSchema(insertError)) return schemaErrorResponse()
-    return NextResponse.json({ error: insertError.message }, { status: 500 })
-  }
-
-  await supabaseAdmin.from('club_team_audit').insert({
-    club_id: clubId, actor_user_id: user.id, action: 'INVITE_CREATED',
-    target_user_id: existingProfile?.user_id ?? null, invite_id: invite?.id ?? null,
-    new_role: role, metadata: { email },
+  const { data: invite, error } = await supabaseAdmin.rpc('create_club_team_invite_atomic', {
+    p_club_id: clubId,
+    p_email: email,
+    p_role: role,
+    p_actor_user_id: user.id,
   })
-
+  if (error) return clubInviteErrorResponse(error)
   return NextResponse.json({ ok: true, invite })
 }
 

@@ -25,13 +25,30 @@ La migración no reconstruye `public.club_role`.
 
 ## Equipo e invitaciones
 
-Las RPC de Equipo deben conservar una sola membership por `(club_id, user_id)`.
-Una intención de crear o reparar `club_players` será una acción pendiente de la
-invitación, nunca una segunda fuente del estado final.
+La Etapa 2A define cuatro operaciones atómicas de invitación:
 
-Quitar una función no debe borrar `club_players`. Si existe el registro
-deportivo, la membership queda aprobada como `PLAYER`; sin registro deportivo,
-la membership puede retirarse mediante el flujo atómico correspondiente.
+- `create_club_team_invite_atomic()`;
+- `accept_club_team_invite_atomic()`;
+- `reject_club_team_invite_atomic()`;
+- `cancel_club_team_invite_atomic()`.
+
+Las invitaciones comunes aceptan `ADMIN`, `OPERADOR`, `PLANILLERO` y `PLAYER`,
+pero nunca `OWNER` ni el legacy `OPERATIVO`. Una membership existente bloquea
+la creación: `APPROVED`, `PENDING`, `REJECTED` y `BANNED` tienen códigos
+funcionales diferentes y ninguna se rehabilita silenciosamente.
+
+Aceptar una invitación crea una membership `APPROVED` con `approved_at`, consume
+la invitación y audita en la misma transacción. No crea ni modifica
+`club_players`; `PLAYER` sigue sin ser prueba de condición deportiva.
+
+Durante esta etapa los endpoints continúan usando `supabaseAdmin`. Los IDs de
+actor y destinatario son derivados exclusivamente de la sesión autenticada y
+validados nuevamente por las RPC. Por eso su ejecución queda concedida solo a
+`service_role`. Esta compatibilidad es transitoria: una etapa futura migrará las
+operaciones a un cliente con JWT y `auth.uid()`.
+
+Cambiar o quitar una función nunca debe borrar `club_players`. La condición
+deportiva depende de `is_club_player()` y no del rol de la membership.
 
 ## Dump
 
