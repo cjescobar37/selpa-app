@@ -47,6 +47,28 @@ validados nuevamente por las RPC. Por eso su ejecución queda concedida solo a
 `service_role`. Esta compatibilidad es transitoria: una etapa futura migrará las
 operaciones a un cliente con JWT y `auth.uid()`.
 
+## Gestión atómica de miembros
+
+La Etapa 2B mantiene las firmas de `change_club_staff_role_atomic()`,
+`remove_club_staff_atomic()` y `transfer_club_ownership_atomic()`. Las tres
+serializan operaciones por club mediante advisory lock, bloquean actor y target
+con `FOR UPDATE`, validan el actor dentro de SQL y registran auditoría en la
+misma transacción.
+
+Los roles administrables son `ADMIN`, `OPERADOR`, `PLANILLERO` y `PLAYER`.
+`OWNER` solo se asigna mediante transferencia. La transferencia admite como
+destino únicamente una membership `ADMIN` u `OPERADOR` aprobada y degrada al
+OWNER anterior a `ADMIN`.
+
+Remover un miembro elimina físicamente `club_memberships`, repara su club activo
+y conserva `club_players`. El historial queda en `club_team_audit`.
+
+Un índice único parcial garantiza como máximo un OWNER aprobado por club. El
+trigger protege al OWNER contra UPDATE/DELETE directo y exige tanto contexto
+interno como ejecución bajo la RPC privilegiada. Las policies de UPDATE y DELETE
+directo para `authenticated` se eliminan; solicitudes PENDING y lecturas no se
+modifican.
+
 Cambiar o quitar una función nunca debe borrar `club_players`. La condición
 deportiva depende de `is_club_player()` y no del rol de la membership.
 

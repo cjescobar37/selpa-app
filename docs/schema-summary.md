@@ -113,6 +113,16 @@ Observaciones/deuda:
 - Compatibilidad transitoria: los endpoints derivan el actor de la sesión y las
   RPC reciben ese UUID bajo `service_role`; está pendiente migrarlas a
   `auth.uid()` con cliente Supabase autenticado.
+- `change_club_staff_role_atomic`, `remove_club_staff_atomic` y
+  `transfer_club_ownership_atomic` son las operaciones canónicas de equipo:
+  usan lock por club, `FOR UPDATE`, auditoría atómica y no modifican
+  `club_players`.
+- La remoción es un DELETE físico de la membership; `club_team_audit` conserva
+  el historial y `user_settings.active_club_id` se repara cuando corresponde.
+- `idx_club_memberships_single_approved_owner` limita a uno los OWNER con
+  membership `APPROVED` y `approved_at` no nulo por club.
+- No existen policies UPDATE/DELETE de `club_memberships` para `authenticated`:
+  las mutaciones administrativas se ejecutan mediante RPC con `service_role`.
 
 ### `club_players`
 

@@ -15,7 +15,7 @@ import {
 } from '@/lib/clubPermissions'
 
 type InviteStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED'
-type ManageableRole = 'ADMIN' | 'PLANILLERO'
+type ManageableRole = 'ADMIN' | 'OPERADOR' | 'PLANILLERO' | 'PLAYER'
 type TeamTab = 'staff' | 'invites' | 'permissions' | 'activity'
 
 type Profile = {
@@ -79,7 +79,9 @@ type AuditEvent = {
 
 const roleOptions: Array<{ value: ManageableRole; label: string; help: string }> = [
   { value: 'ADMIN', label: 'Admin', help: 'Gestión operativa amplia del club.' },
+  { value: 'OPERADOR', label: 'Operador', help: 'Gestión cotidiana deportiva y de contenidos.' },
   { value: 'PLANILLERO', label: 'Planillero', help: 'Carga operativa de partidos/resultados.' },
+  { value: 'PLAYER', label: 'Jugador', help: 'Membresía sin permisos administrativos.' },
 ]
 
 const roleLabels: Record<string, string> = {
@@ -104,7 +106,9 @@ const statusLabels: Record<string, string> = {
 const adminPermissionRoles: ClubPermissionRole[] = [
   'OWNER',
   'ADMIN',
+  'OPERADOR',
   'PLANILLERO',
+  'PLAYER',
 ]
 
 const roleDescriptions: Record<ClubPermissionRole, string> = {
@@ -194,7 +198,7 @@ function hasAnyCapability(role: ClubPermissionRole, capabilities: ClubCapability
 }
 
 export default function ClubUsuariosPage() {
-  const { activeClub, clubRole } = useSession()
+  const { activeClub, clubRole, user } = useSession()
   const [activeTab, setActiveTab] = useState<TeamTab>('staff')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -498,6 +502,8 @@ export default function ClubUsuariosPage() {
             <div className="club-staffCards">
               {staff.map((member) => {
                 const permissionSummary = getStaffPermissionSummary(member.role)
+                const isSelf = member.user_id === user?.id
+                const canReceiveOwnership = member.role === 'ADMIN' || member.role === 'OPERADOR'
                 return (
                   <article key={member.id} className="club-staffCard">
                     <div className="club-staffCardTop">
@@ -534,12 +540,12 @@ export default function ClubUsuariosPage() {
                         </span>
                       )}
                     </div>
-                    {canManageTeam && member.role !== 'OWNER' ? <div className="club-staffInviteFooter">
-                      <select className="px-input" value={member.role === 'PLANILLERO' ? 'PLANILLERO' : 'ADMIN'} disabled={savingId === member.id} onChange={(event) => void updateRole(member, event.target.value as ManageableRole)} aria-label={`Rol de ${member.full_name}`}>
+                    {canManageTeam && member.role !== 'OWNER' && !isSelf ? <div className="club-staffInviteFooter">
+                      <select className="px-input" value={member.role} disabled={savingId === member.id} onChange={(event) => void updateRole(member, event.target.value as ManageableRole)} aria-label={`Rol de ${member.full_name}`}>
                         {roleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                       </select>
                       <button type="button" className="club-secondaryBtn" disabled={savingId === member.id} onClick={() => void removeMember(member)}>Remover</button>
-                      {ownerOnly ? <button type="button" className="club-secondaryBtn" disabled={savingId === member.id} onClick={() => void transferOwnership(member)}>Transferir propiedad</button> : null}
+                      {ownerOnly && canReceiveOwnership ? <button type="button" className="club-secondaryBtn" disabled={savingId === member.id} onClick={() => void transferOwnership(member)}>Transferir propiedad</button> : null}
                     </div> : null}
                   </article>
                 )

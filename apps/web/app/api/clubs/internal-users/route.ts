@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { clubInviteErrorResponse } from '@/lib/clubTeamInviteErrors'
+import { clubTeamMemberErrorResponse } from '@/lib/clubTeamMemberErrors'
 import {
   isApprovedMembership,
-  isInternalClubRole,
   isManageableInternalRole,
   type ClubRole,
 } from '@/lib/clubMembershipRules'
@@ -157,7 +157,7 @@ export async function GET(req: NextRequest) {
 
   const staffMemberships = ((membershipsRes.data ?? []) as MembershipRow[])
     .filter((membership) => isApprovedMembership(membership))
-    .filter((membership) => isInternalClubRole(membership.role))
+    .filter((membership) => membership.role === 'OWNER' || isManageableInternalRole(membership.role))
 
   const invites = (invitesRes.data ?? []) as InviteRow[]
   const audit = (auditRes.data ?? []) as AuditRow[]
@@ -242,29 +242,13 @@ export async function PATCH(req: NextRequest) {
   if (!clubId || !membershipId || !isManageableInternalRole(role)) {
     return NextResponse.json({ error: 'Datos de rol inválidos.' }, { status: 400 })
   }
-  if (!(await userHasClubCapability(user.id, clubId, 'roles:manage'))) {
-    return NextResponse.json({ error: 'No tenés permisos para modificar roles.' }, { status: 403 })
-  }
-
-  const { data: target, error: targetError } = await supabaseAdmin
-    .from('club_memberships')
-    .select('id,club_id,user_id,role,status,approved_at')
-    .eq('id', membershipId)
-    .eq('club_id', clubId)
-    .maybeSingle()
-  if (targetError) return NextResponse.json({ error: targetError.message }, { status: 500 })
-  if (!target) return NextResponse.json({ error: 'Membresía no encontrada.' }, { status: 404 })
-  if (target.role === 'OWNER') {
-    return NextResponse.json({ error: 'La propiedad requiere el flujo de transferencia.' }, { status: 409 })
-  }
-
   const { data: membership, error } = await supabaseAdmin.rpc('change_club_staff_role_atomic', {
     p_club_id: clubId,
     p_membership_id: membershipId,
     p_new_role: role,
     p_actor_user_id: user.id,
   })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return clubTeamMemberErrorResponse(error)
   return NextResponse.json({ ok: true, membership })
 }
 
@@ -276,27 +260,11 @@ export async function DELETE(req: NextRequest) {
   const clubId = String(body?.clubId ?? '').trim()
   const membershipId = String(body?.membershipId ?? '').trim()
   if (!clubId || !membershipId) return NextResponse.json({ error: 'Faltan clubId o membershipId.' }, { status: 400 })
-  if (!(await userHasClubCapability(user.id, clubId, 'roles:manage'))) {
-    return NextResponse.json({ error: 'No tenés permisos para remover usuarios internos.' }, { status: 403 })
-  }
-
-  const { data: target, error: targetError } = await supabaseAdmin
-    .from('club_memberships')
-    .select('id,club_id,user_id,role')
-    .eq('id', membershipId)
-    .eq('club_id', clubId)
-    .maybeSingle()
-  if (targetError) return NextResponse.json({ error: targetError.message }, { status: 500 })
-  if (!target) return NextResponse.json({ error: 'Membresía no encontrada.' }, { status: 404 })
-  if (target.role === 'OWNER') {
-    return NextResponse.json({ error: 'No se puede remover un OWNER sin transferencia de propiedad.' }, { status: 409 })
-  }
-
   const { error } = await supabaseAdmin.rpc('remove_club_staff_atomic', {
     p_club_id: clubId,
     p_membership_id: membershipId,
     p_actor_user_id: user.id,
   })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return clubTeamMemberErrorResponse(error)
   return NextResponse.json({ ok: true })
 }
