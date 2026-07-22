@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { normalizeScheduleConfig, normalizeTournamentCourts } from '@/lib/tournamentSchedule'
 import { normalizeGroupTiebreakerConfig } from '@/lib/tournamentTiebreakers'
 
@@ -235,7 +235,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     }
 
     const { clubId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'tournaments:view')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para ver torneos del club.' }, { status: 403 })
     }
@@ -306,7 +306,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
     }
 
     const { clubId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'tournaments:create')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para crear torneos en este club.' }, { status: 403 })
     }

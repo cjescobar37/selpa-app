@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type OperationalStage =
@@ -200,7 +200,7 @@ export async function GET(
     }
 
     const { clubId, tournamentId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'tournaments:view')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para ver el torneo.' }, { status: 403 })
     }

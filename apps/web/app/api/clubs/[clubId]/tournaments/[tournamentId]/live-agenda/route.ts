@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { buildTournamentLiveAgenda } from '@/lib/tournamentLiveAgenda'
 import { listMatchesByTournament } from '@/lib/tournamentMatches'
@@ -83,7 +83,7 @@ export async function GET(
     }
 
     const { clubId, tournamentId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'matches:view')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para ver la agenda del torneo.' }, { status: 403 })
     }

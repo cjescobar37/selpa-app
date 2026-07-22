@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ invite
   const { inviteId } = await context.params
   const { data: invite, error: inviteError } = await supabaseAdmin
     .from('club_user_invites')
-    .select('id,email,status,target_user_id')
+    .select('id,club_id,email,status,target_user_id')
     .eq('id', inviteId)
     .maybeSingle()
 
@@ -71,6 +71,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ invite
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
+
+  await supabaseAdmin.from('club_team_audit').insert({ club_id: invite.club_id, actor_user_id: user.id, action: 'INVITE_DECLINED', target_user_id: user.id, invite_id: invite.id })
 
   return NextResponse.json({ ok: true, invite: updatedInvite })
 }

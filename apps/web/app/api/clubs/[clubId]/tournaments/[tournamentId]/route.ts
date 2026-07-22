@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
+import type { ClubCapability } from '@/lib/clubPermissions'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { normalizeScheduleConfig, normalizeTournamentCourts } from '@/lib/tournamentSchedule'
 import { normalizeGroupTiebreakerConfig } from '@/lib/tournamentTiebreakers'
@@ -288,11 +289,6 @@ export async function PATCH(
     }
 
     const { clubId, tournamentId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
-    if (!canManage) {
-      return NextResponse.json({ error: 'No autorizado para gestionar este torneo.', code: 'UNAUTHORIZED' }, { status: 403 })
-    }
-
     const body = (await req.json().catch(() => ({}))) as UpdateDraftInput
     const action = String(body.action ?? '').trim()
     if (
@@ -303,6 +299,18 @@ export async function PATCH(
       action !== 'cancel_tournament'
     ) {
       return NextResponse.json({ error: 'Acción inválida.', code: 'INVALID_ACTION' }, { status: 400 })
+    }
+
+    const capabilityByAction: Record<string, ClubCapability> = {
+      publish: 'tournaments:publish',
+      update_tournament_courts: 'tournaments:update',
+      update_draft: 'tournaments:update',
+      delete_tournament: 'tournaments:delete',
+      cancel_tournament: 'tournaments:cancel',
+    }
+    const canManage = await userHasClubCapability(user.id, clubId, capabilityByAction[action])
+    if (!canManage) {
+      return NextResponse.json({ error: 'No autorizado para gestionar este torneo.', code: 'UNAUTHORIZED' }, { status: 403 })
     }
 
     const { data: tournament, error: tournamentError } = await supabaseAdmin

@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
       type: 'jugador',
       title,
       subtitle: playerClubs.get(player.club_id)?.name || 'Jugador',
-      href: `/club/jugadores/${player.id}`,
+      href: context === 'club' ? `/club/jugadores/${player.id}` : `/jugadores/${player.id}`,
     })
   })
 

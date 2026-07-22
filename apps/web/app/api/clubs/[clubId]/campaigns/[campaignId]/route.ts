@@ -19,7 +19,7 @@ export async function PATCH(
 ) {
   try {
     const { clubId, campaignId } = await context.params
-    const auth = await assertClubCommercialManager(req, clubId)
+    const auth = await assertClubCommercialManager(req, clubId, 'ads:manage')
     if (auth.error) return auth.error
 
     const body = await req.json().catch(() => ({}))

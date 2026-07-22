@@ -1,6 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isApprovedMembership, isClubStaffRole, type ClubRole } from '@/lib/clubMembershipRules'
-import { getClubPermissions, hasClubPermission, type ClubCapability } from '@/lib/clubPermissions'
+import { isApprovedMembership, type ClubRole } from '@/lib/clubMembershipRules'
+import { getClubCapabilities, hasClubCapability, type ClubCapability } from '@/lib/clubPermissions'
+import { NextRequest, NextResponse } from 'next/server'
+import { getTokenUser } from '@/lib/platformApiAuth'
 
 type MembershipRow = {
   id: string
@@ -24,9 +26,10 @@ export async function getApprovedMembership(userId: string, clubId: string) {
   return isApprovedMembership(membership) ? membership : null
 }
 
+/** @deprecated Authorization must use userHasClubCapability/requireClubCapability. */
 export async function isClubAdmin(userId: string, clubId: string) {
   const membership = await getApprovedMembership(userId, clubId)
-  return Boolean(membership && isClubStaffRole(membership.role))
+  return Boolean(membership && (membership.role === 'OWNER' || membership.role === 'ADMIN'))
 }
 
 export async function isClubOwner(userId: string, clubId: string) {
@@ -34,18 +37,32 @@ export async function isClubOwner(userId: string, clubId: string) {
   return Boolean(membership && membership.role === 'OWNER')
 }
 
-export async function userHasClubPermission(
+export async function userHasClubCapability(
   userId: string,
   clubId: string,
   capability: ClubCapability,
 ) {
   const membership = await getApprovedMembership(userId, clubId)
-  return Boolean(membership && hasClubPermission(membership.role, capability))
+  return Boolean(membership && hasClubCapability(membership.role, capability))
+}
+
+/** @deprecated Use userHasClubCapability. */
+export const userHasClubPermission = userHasClubCapability
+
+export async function requireClubCapability(req: NextRequest, clubId: string, capability: ClubCapability) {
+  if (!clubId) return { user: null, membership: null, error: NextResponse.json({ error: 'Falta clubId.' }, { status: 400 }) }
+  const user = await getTokenUser(req)
+  if (!user) return { user: null, membership: null, error: NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 }) }
+  const membership = await getApprovedMembership(user.id, clubId)
+  if (!membership || !hasClubCapability(membership.role, capability)) {
+    return { user: null, membership: null, error: NextResponse.json({ error: 'No autorizado para esta operación.' }, { status: 403 }) }
+  }
+  return { user, membership, error: null }
 }
 
 export async function getClubPermissionsForUser(userId: string, clubId: string) {
   const membership = await getApprovedMembership(userId, clubId)
-  return membership ? getClubPermissions(membership.role) : []
+  return membership ? getClubCapabilities(membership.role) : []
 }
 
 export async function ensureClubPlayerForMembership(input: {

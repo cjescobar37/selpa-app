@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { createOperationalNotification, getClubAdminUserIds, notifyClubAdmins } from '@/lib/operationalNotifications'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, context: Context) {
   if (threadError) return NextResponse.json({ error: threadError.message }, { status: 500 })
   if (!thread) return NextResponse.json({ error: 'Conversación no encontrada.' }, { status: 404 })
 
-  const canRead = thread.player_user_id === user.id || (await isClubAdmin(user.id, clubId)) || (await isPlatformAdmin(user.id))
+  const canRead = thread.player_user_id === user.id || (await userHasClubCapability(user.id, clubId, 'messages:view')) || (await isPlatformAdmin(user.id))
   if (!canRead) return NextResponse.json({ error: 'No autorizado para ver esta conversación.' }, { status: 403 })
 
   const { data: messages, error: messagesError } = await supabaseAdmin
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest, context: Context) {
   if (threadError) return NextResponse.json({ error: threadError.message }, { status: 500 })
   if (!thread) return NextResponse.json({ error: 'Conversación no encontrada.' }, { status: 404 })
 
-  const userIsAdmin = (await isClubAdmin(user.id, clubId)) || (await isPlatformAdmin(user.id))
+  const userIsAdmin = (await userHasClubCapability(user.id, clubId, 'messages:reply')) || (await isPlatformAdmin(user.id))
   const userIsPlayer = thread.player_user_id === user.id
   if (!userIsAdmin && !userIsPlayer) {
     return NextResponse.json({ error: 'No autorizado para responder esta conversación.' }, { status: 403 })

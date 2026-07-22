@@ -15,7 +15,7 @@ import {
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ clubId: string }> }) {
   const { clubId } = await params
-  const auth = await assertCanManageClubNews(req, clubId, 'content:edit')
+  const auth = await assertCanManageClubNews(req, clubId, 'news:manage')
   if (auth.error) return auth.error
 
   const { data, error } = await supabaseAdmin
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ club
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ clubId: string }> }) {
   const { clubId } = await params
-  const auth = await assertCanManageClubNews(req, clubId, 'content:edit')
+  const auth = await assertCanManageClubNews(req, clubId, 'news:manage')
   if (auth.error) return auth.error
 
   try {
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ clu
 
     if (!title) return NextResponse.json({ error: 'Falta título.' }, { status: 400 })
     if (status === 'PUBLISHED') {
-      const publishAuth = await assertCanManageClubNews(req, clubId, 'content:publish')
+      const publishAuth = await assertCanManageClubNews(req, clubId, 'news:manage')
       if (publishAuth.error) return publishAuth.error
     }
 

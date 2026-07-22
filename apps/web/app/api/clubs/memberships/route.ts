@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   ensureValidActiveClubForUser,
-  isClubAdmin,
+  userHasClubCapability,
 } from '@/lib/clubMembershipServer'
 
 async function getUserFromRequest(req: NextRequest) {
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
     }
 
-    const allowed = await isClubAdmin(user.id, clubId)
+    const allowed = await userHasClubCapability(user.id, clubId, 'memberships:view')
     if (!allowed) {
       return NextResponse.json({ error: 'No tenés permisos para ver estas solicitudes.' }, { status: 403 })
     }
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Solicitud no encontrada.' }, { status: 404 })
     }
 
-    const allowed = await isClubAdmin(user.id, membership.club_id)
+    const allowed = await userHasClubCapability(user.id, membership.club_id, 'memberships:manage')
     if (!allowed) {
       return NextResponse.json({ error: 'No tenés permisos para gestionar esta solicitud.' }, { status: 403 })
     }

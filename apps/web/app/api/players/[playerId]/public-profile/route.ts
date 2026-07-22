@@ -24,8 +24,12 @@ function publicName(profile: { display_name?: string | null; first_name?: string
 }
 
 export async function GET(req: NextRequest, context: { params: Promise<{ playerId: string }> }) {
-  const viewer = await getTokenUser(req)
-  if (!viewer) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
+  // El DTO es deliberadamente público y solo selecciona campos aprobados para exposición.
+  // Si llega un token se valida, pero la lectura pública no depende de una sesión.
+  const auth = req.headers.get('authorization') ?? ''
+  if (auth.startsWith('Bearer ') && !(await getTokenUser(req))) {
+    return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
+  }
 
   const { playerId } = await context.params
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(playerId)) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type ManualPlayerInput = {
@@ -172,7 +172,7 @@ export async function GET(
     }
 
     const { clubId, tournamentId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'registrations:manage')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para buscar jugadores.', code: 'UNAUTHORIZED' }, { status: 403 })
     }
@@ -447,7 +447,7 @@ export async function POST(
     }
 
     const { clubId, tournamentId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'registrations:manage')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para crear inscripciones manuales.', code: 'UNAUTHORIZED' }, { status: 403 })
     }

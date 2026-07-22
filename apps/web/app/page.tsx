@@ -1,6 +1,8 @@
 import PublicHomeExperience from '@/components/public/PublicHomeExperience'
 import { getPublicHomeData } from '@/lib/publicHomeData'
 
+export const dynamic = 'force-dynamic'
+
 export default async function PublicHomePage() {
   const data = await getPublicHomeData()
 

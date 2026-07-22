@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { MatchResultUpdateError, updateMatchResult, type MatchScore } from '@/lib/tournamentMatches'
 import { validateStructuredMatchScore } from '@/lib/tournamentScore'
@@ -29,7 +29,7 @@ export async function PATCH(
     }
 
     const { clubId, tournamentId, id } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'matches:update')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para cargar resultados.' }, { status: 403 })
     }

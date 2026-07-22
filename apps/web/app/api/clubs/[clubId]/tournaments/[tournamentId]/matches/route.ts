@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { createMatch, listMatchesByTournament, type MatchPhase } from '@/lib/tournamentMatches'
 import { readMatchScheduleAssignments } from '@/lib/tournamentSchedule'
 
@@ -98,7 +98,7 @@ export async function GET(
     }
 
     const { clubId, tournamentId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'matches:view')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para ver partidos.' }, { status: 403 })
     }
@@ -218,7 +218,7 @@ export async function POST(
     }
 
     const { clubId, tournamentId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'matches:update')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para crear partidos.' }, { status: 403 })
     }

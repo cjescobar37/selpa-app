@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   generateTournamentGroupsFromSeedSnapshot,
@@ -31,7 +31,7 @@ export async function POST(
     }
 
     const { clubId, tournamentId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'groups:generate')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para generar grupos.', code: 'UNAUTHORIZED' }, { status: 403 })
     }

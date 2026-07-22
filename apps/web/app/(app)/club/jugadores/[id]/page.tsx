@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import {
   Activity,
   ArrowLeft,
@@ -186,6 +186,7 @@ function validateProfileImage(file: File, kind: 'avatar' | 'cover') {
 
 export default function ClubJugadorDetailPage() {
   const params = useParams<{ id: string }>()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const playerId = params?.id
   const { activeClub, user } = useSession()
@@ -225,7 +226,7 @@ export default function ClubJugadorDetailPage() {
     setMessage('')
 
     const token = await getToken()
-    if (!token) {
+    if (ownRequest && !token) {
       setMessage('Sesión inválida.')
       setLoading(false)
       return
@@ -235,7 +236,7 @@ export default function ClubJugadorDetailPage() {
       ? `/api/clubs/${activeClub!.id}/players/${playerId}/profile`
       : `/api/players/${playerId}/public-profile`
     const res = await fetch(profileEndpoint, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       cache: 'no-store',
     })
     const json = (await res.json().catch(() => ({}))) as PlayerProfileResponse
@@ -455,7 +456,7 @@ export default function ClubJugadorDetailPage() {
                   <Image className="playerProfileV3__coverBackdrop" src={heroCover} alt="" fill sizes="1200px" priority />
                   <Image className="playerProfileV3__coverImage" src={heroCover} alt="" fill sizes="1200px" priority />
                 </> : null}
-                <Link className="playerProfileV3__back" href={isOwnProfile ? '/player' : '/club/jugadores'} aria-label="Volver"><ArrowLeft size={17} /><span>Volver</span></Link>
+                <Link className="playerProfileV3__back" href={isOwnProfile ? '/player' : pathname.startsWith('/club/') ? '/club/jugadores' : '/ranking'} aria-label="Volver"><ArrowLeft size={17} /><span>Volver</span></Link>
                 {isOwnProfile ? <>
                   <label className="playerProfileV3__coverEdit" htmlFor="player-profile-cover-file"><ImageIcon size={15} />Editar portada</label>
                   <input id="player-profile-cover-file" className="playerProfileV3__quickFile" type="file" accept="image/*" disabled={editSaving} onChange={(event) => { void handleQuickProfileImage('cover', event.target.files?.[0]); event.currentTarget.value = '' }} />
@@ -477,7 +478,7 @@ export default function ClubJugadorDetailPage() {
                   <Link href={`/clubs/${profileClub.id}`} className="playerProfileV3__club">{profileClub.name}</Link>
                   <div className="playerProfileV3__actions">
                     {isOwnProfile ? <Link href="/mis-datos"><Pencil size={15} />Editar perfil</Link> : null}
-                    <Link className="is-primary" href={isOwnProfile ? '/player/ranking' : '/club/ranking'}>Ver ranking</Link>
+                    <Link className="is-primary" href={isOwnProfile ? '/player/ranking' : pathname.startsWith('/club/') ? '/club/ranking' : '/ranking'}>Ver ranking</Link>
                   </div>
                 </div>
                 <div className="playerProfileV3__metrics" aria-label="Resumen competitivo">
@@ -505,7 +506,7 @@ export default function ClubJugadorDetailPage() {
                 <article><span>Trayectoria</span><strong>{stats?.tournaments_played ?? 0} torneos</strong><p>{matchesPlayed} partidos · {stats?.wins ?? 0} ganados</p></article>
                 <article><span>Próximo torneo</span><strong>Sin inscripción próxima</strong><Link href="/player/torneos/explorar">Explorar torneos</Link></article>
                 <article><span>Último resultado</span>{recentMatches[0] ? <><strong>{recentMatches[0].result} · {recentMatches[0].score}</strong><p>{recentMatches[0].tournament_name}</p></> : <><strong>Sin partidos todavía</strong><p>Tu actividad aparecerá acá.</p></>}</article>
-                <article className="playerProfileV3__partnerCard"><span>Club y pareja</span>{activePartner ? <Link className="playerProfileV3__activePartner" href={`/club/jugadores/${activePartner.id}`}><span className="playerProfileV3__partnerAvatar">{activePartner.avatar_url ? <Image src={activePartner.avatar_url} alt="" fill sizes="42px" /> : getClubInitials(activePartner.full_name)}</span><span><strong>{activePartner.full_name}</strong><p>Pareja activa · {profileClub.name}</p></span><i>Ver perfil</i></Link> : <><strong>{profileClub.name}</strong><p>Sin pareja activa</p>{isOwnProfile ? <button className="playerProfileV3__partnerCta" type="button" onClick={openInviteModal}><UserPlus size={14} />Buscar pareja</button> : null}</>}</article>
+                <article className="playerProfileV3__partnerCard"><span>Club y pareja</span>{activePartner ? <Link className="playerProfileV3__activePartner" href={`${pathname.startsWith('/club/') ? '/club/jugadores' : '/jugadores'}/${activePartner.id}`}><span className="playerProfileV3__partnerAvatar">{activePartner.avatar_url ? <Image src={activePartner.avatar_url} alt="" fill sizes="42px" /> : getClubInitials(activePartner.full_name)}</span><span><strong>{activePartner.full_name}</strong><p>Pareja activa · {profileClub.name}</p></span><i>Ver perfil</i></Link> : <><strong>{profileClub.name}</strong><p>Sin pareja activa</p>{isOwnProfile ? <button className="playerProfileV3__partnerCta" type="button" onClick={openInviteModal}><UserPlus size={14} />Buscar pareja</button> : null}</>}</article>
               </section>
 
               <section id="player-profile-tournaments" className="playerProfileV3__list playerProfileV3__wallSection"><h2 className="playerProfileV3__sectionTitle">Torneos</h2>{data.tournament_history.length ? data.tournament_history.map((tournament) => <article key={`${tournament.tournament_id}-${tournament.date ?? ''}`}><strong>{tournament.tournament_name}</strong><span>{formatDate(tournament.date)} · {tournament.partner_name}</span><small>{tournament.result}{tournament.points !== null ? ` · ${tournament.points} pts` : ''}</small></article>) : <div className="playerProfileV3__empty">Todavía no hay torneos para mostrar.</div>}</section>

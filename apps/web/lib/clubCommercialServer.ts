@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { userHasClubPermission } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { getTokenUser } from '@/lib/platformApiAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import type { ClubCapability } from '@/lib/clubPermissions'
 
 export const CLUB_AD_SLOT_IDS = [
   'CLUB_HOME_HERO',
@@ -60,23 +61,26 @@ export function normalizeDate(value: unknown) {
   return date.toISOString()
 }
 
-export async function assertClubCommercialManager(req: NextRequest, clubId: string) {
+export async function assertClubCommercialManager(
+  req: NextRequest,
+  clubId: string,
+  capability: Extract<ClubCapability, 'sponsors:manage' | 'ads:manage'>,
+) {
   const user = await getTokenUser(req)
   if (!user) {
     return { error: NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 }), user: null }
   }
 
-  const [{ data: platformAdmin, error: platformError }, canEditContent, canConfigureClub] = await Promise.all([
+  const [{ data: platformAdmin, error: platformError }, canManage] = await Promise.all([
     supabaseAdmin.from('platform_admins').select('user_id').eq('user_id', user.id).maybeSingle(),
-    userHasClubPermission(user.id, clubId, 'content:edit'),
-    userHasClubPermission(user.id, clubId, 'club:configure'),
+    userHasClubCapability(user.id, clubId, capability),
   ])
 
   if (platformError) {
     return { error: NextResponse.json({ error: platformError.message }, { status: 500 }), user: null }
   }
 
-  if (!platformAdmin?.user_id && !canEditContent && !canConfigureClub) {
+  if (!platformAdmin?.user_id && !canManage) {
     return { error: NextResponse.json({ error: 'No autorizado para gestionar publicidad del club.' }, { status: 403 }), user: null }
   }
 

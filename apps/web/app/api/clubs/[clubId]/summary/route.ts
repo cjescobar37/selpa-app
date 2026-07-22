@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 
 type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
 
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     }
 
     const { clubId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'dashboard:view')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para ver el resumen del club.' }, { status: 403 })
     }

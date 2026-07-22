@@ -1,4 +1,4 @@
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createMatch } from '@/lib/tournamentMatches'
 import {
@@ -529,7 +529,7 @@ export async function regenerateOpenPlayoffWithGeneralEngine(input: {
 }) {
   assertServiceRole()
 
-  const canManage = await isClubAdmin(input.userId, input.clubId)
+  const canManage = await userHasClubCapability(input.userId, input.clubId, 'playoff:generate')
   if (!canManage) {
     throw new OpenPlayoffGenerationError('UNAUTHORIZED', 'No autorizado para regenerar playoff OPEN.', 403)
   }
@@ -667,7 +667,7 @@ export async function generateOpenFirstRoundPlayoff(input: {
 }) {
   assertServiceRole()
 
-  const canManage = await isClubAdmin(input.userId, input.clubId)
+  const canManage = await userHasClubCapability(input.userId, input.clubId, 'playoff:generate')
   if (!canManage) {
     throw new OpenPlayoffGenerationError('UNAUTHORIZED', 'No autorizado para generar playoff OPEN.', 403)
   }

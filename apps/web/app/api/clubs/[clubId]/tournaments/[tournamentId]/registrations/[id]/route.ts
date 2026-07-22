@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 
 type RegistrationStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED'
 type AdmissionAction = 'validate_payment' | 'approve_pay_at_venue' | 'grant_exception' | 'block'
@@ -70,7 +70,7 @@ export async function PATCH(
     }
 
     const { clubId, tournamentId, id } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
+    const canManage = await userHasClubCapability(user.id, clubId, 'registrations:manage')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para gestionar inscripciones.' }, { status: 403 })
     }

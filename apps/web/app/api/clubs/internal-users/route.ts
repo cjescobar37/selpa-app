@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubOwner } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import {
   isApprovedMembership,
   isInternalClubRole,
@@ -40,6 +40,18 @@ type InviteRow = {
   target_user_id: string | null
   created_at: string
   updated_at: string
+  expires_at: string | null
+}
+
+type AuditRow = {
+  id: string
+  actor_user_id: string
+  target_user_id: string | null
+  action: string
+  old_role: ClubRole | null
+  new_role: ClubRole | null
+  metadata: Record<string, unknown>
+  created_at: string
 }
 
 async function getTokenUser(req: NextRequest) {
@@ -109,12 +121,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Falta clubId.' }, { status: 400 })
   }
 
-  const isOwner = await isClubOwner(user.id, clubId)
-  if (!isOwner) {
-    return NextResponse.json({ error: 'Solo el OWNER puede gestionar usuarios internos.' }, { status: 403 })
+  const canViewRoles = await userHasClubCapability(user.id, clubId, 'roles:view')
+  if (!canViewRoles) {
+    return NextResponse.json({ error: 'No tenés permisos para ver usuarios internos.' }, { status: 403 })
   }
 
-  const [membershipsRes, invitesRes] = await Promise.all([
+  const [membershipsRes, invitesRes, auditRes] = await Promise.all([
     supabaseAdmin
       .from('club_memberships')
       .select('id,club_id,user_id,role,status,approved_at,created_at,updated_at')
@@ -122,9 +134,15 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: true }),
     supabaseAdmin
       .from('club_user_invites')
-      .select('id,club_id,email,role,status,invited_by,resolved_by,resolved_at,target_user_id,created_at,updated_at')
+      .select('id,club_id,email,role,status,invited_by,resolved_by,resolved_at,target_user_id,created_at,updated_at,expires_at')
       .eq('club_id', clubId)
       .order('created_at', { ascending: false }),
+    supabaseAdmin
+      .from('club_team_audit')
+      .select('id,actor_user_id,target_user_id,action,old_role,new_role,metadata,created_at')
+      .eq('club_id', clubId)
+      .order('created_at', { ascending: false })
+      .limit(50),
   ])
 
   if (membershipsRes.error) {
@@ -141,12 +159,15 @@ export async function GET(req: NextRequest) {
     .filter((membership) => isInternalClubRole(membership.role))
 
   const invites = (invitesRes.data ?? []) as InviteRow[]
+  const audit = (auditRes.data ?? []) as AuditRow[]
   const profileIds = Array.from(
     new Set([
       ...staffMemberships.map((membership) => membership.user_id),
       ...invites.map((invite) => invite.invited_by),
       ...invites.map((invite) => invite.resolved_by).filter(Boolean) as string[],
       ...invites.map((invite) => invite.target_user_id).filter(Boolean) as string[],
+      ...audit.map((event) => event.actor_user_id),
+      ...audit.map((event) => event.target_user_id).filter(Boolean) as string[],
     ])
   )
 
@@ -166,6 +187,11 @@ export async function GET(req: NextRequest) {
       invited_by_profile: profilesMap.get(invite.invited_by) ?? null,
       resolved_by_profile: invite.resolved_by ? (profilesMap.get(invite.resolved_by) ?? null) : null,
       target_user_profile: invite.target_user_id ? (profilesMap.get(invite.target_user_id) ?? null) : null,
+    })),
+    audit: audit.map((event) => ({
+      ...event,
+      actor_profile: profilesMap.get(event.actor_user_id) ?? null,
+      target_profile: event.target_user_id ? (profilesMap.get(event.target_user_id) ?? null) : null,
     })),
   })
 }
@@ -189,9 +215,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Rol interno inválido para esta fase.' }, { status: 400 })
   }
 
-  const isOwner = await isClubOwner(user.id, clubId)
-  if (!isOwner) {
-    return NextResponse.json({ error: 'Solo el OWNER puede invitar usuarios internos.' }, { status: 403 })
+  const canManageRoles = await userHasClubCapability(user.id, clubId, 'roles:manage')
+  if (!canManageRoles) {
+    return NextResponse.json({ error: 'No tenés permisos para invitar usuarios internos.' }, { status: 403 })
   }
 
   const { data: existingProfile, error: profileError } = await supabaseAdmin
@@ -250,7 +276,7 @@ export async function POST(req: NextRequest) {
       created_at: now,
       updated_at: now,
     })
-    .select('id,club_id,email,role,status,invited_by,resolved_by,resolved_at,target_user_id,created_at,updated_at')
+    .select('id,club_id,email,role,status,invited_by,resolved_by,resolved_at,target_user_id,created_at,updated_at,expires_at')
     .maybeSingle()
 
   if (insertError) {
@@ -258,5 +284,81 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
 
+  await supabaseAdmin.from('club_team_audit').insert({
+    club_id: clubId, actor_user_id: user.id, action: 'INVITE_CREATED',
+    target_user_id: existingProfile?.user_id ?? null, invite_id: invite?.id ?? null,
+    new_role: role, metadata: { email },
+  })
+
   return NextResponse.json({ ok: true, invite })
+}
+
+export async function PATCH(req: NextRequest) {
+  const user = await getTokenUser(req)
+  if (!user) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
+
+  const body = await req.json().catch(() => ({}))
+  const clubId = String(body?.clubId ?? '').trim()
+  const membershipId = String(body?.membershipId ?? '').trim()
+  const role = String(body?.role ?? '').trim() as ClubRole
+  if (!clubId || !membershipId || !isManageableInternalRole(role)) {
+    return NextResponse.json({ error: 'Datos de rol inválidos.' }, { status: 400 })
+  }
+  if (!(await userHasClubCapability(user.id, clubId, 'roles:manage'))) {
+    return NextResponse.json({ error: 'No tenés permisos para modificar roles.' }, { status: 403 })
+  }
+
+  const { data: target, error: targetError } = await supabaseAdmin
+    .from('club_memberships')
+    .select('id,club_id,user_id,role,status,approved_at')
+    .eq('id', membershipId)
+    .eq('club_id', clubId)
+    .maybeSingle()
+  if (targetError) return NextResponse.json({ error: targetError.message }, { status: 500 })
+  if (!target) return NextResponse.json({ error: 'Membresía no encontrada.' }, { status: 404 })
+  if (target.role === 'OWNER') {
+    return NextResponse.json({ error: 'La propiedad requiere el flujo de transferencia.' }, { status: 409 })
+  }
+
+  const { data: membership, error } = await supabaseAdmin.rpc('change_club_staff_role_atomic', {
+    p_club_id: clubId,
+    p_membership_id: membershipId,
+    p_new_role: role,
+    p_actor_user_id: user.id,
+  })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true, membership })
+}
+
+export async function DELETE(req: NextRequest) {
+  const user = await getTokenUser(req)
+  if (!user) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
+
+  const body = await req.json().catch(() => ({}))
+  const clubId = String(body?.clubId ?? '').trim()
+  const membershipId = String(body?.membershipId ?? '').trim()
+  if (!clubId || !membershipId) return NextResponse.json({ error: 'Faltan clubId o membershipId.' }, { status: 400 })
+  if (!(await userHasClubCapability(user.id, clubId, 'roles:manage'))) {
+    return NextResponse.json({ error: 'No tenés permisos para remover usuarios internos.' }, { status: 403 })
+  }
+
+  const { data: target, error: targetError } = await supabaseAdmin
+    .from('club_memberships')
+    .select('id,club_id,user_id,role')
+    .eq('id', membershipId)
+    .eq('club_id', clubId)
+    .maybeSingle()
+  if (targetError) return NextResponse.json({ error: targetError.message }, { status: 500 })
+  if (!target) return NextResponse.json({ error: 'Membresía no encontrada.' }, { status: 404 })
+  if (target.role === 'OWNER') {
+    return NextResponse.json({ error: 'No se puede remover un OWNER sin transferencia de propiedad.' }, { status: 409 })
+  }
+
+  const { error } = await supabaseAdmin.rpc('remove_club_staff_atomic', {
+    p_club_id: clubId,
+    p_membership_id: membershipId,
+    p_actor_user_id: user.id,
+  })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
 }

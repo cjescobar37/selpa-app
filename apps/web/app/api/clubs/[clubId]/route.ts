@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getApprovedMembership, isClubAdmin } from '@/lib/clubMembershipServer'
-import { isClubStaffRole } from '@/lib/clubMembershipRules'
+import { getApprovedMembership, userHasClubCapability } from '@/lib/clubMembershipServer'
 import { CLUB_THEMES, getClubTheme } from '@/lib/clubThemes'
 
 type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
@@ -37,7 +36,7 @@ async function getAccessScope(userId: string, clubId: string) {
 
   return {
     canRead: true,
-    canManage: isClubStaffRole(membership.role),
+    canManage: membership.role === 'OWNER' || membership.role === 'ADMIN',
   }
 }
 
@@ -134,7 +133,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ clubI
   }
 
   const { clubId } = await context.params
-  const canManage = await isClubAdmin(user.id, clubId)
+  const canManage = await userHasClubCapability(user.id, clubId, 'club:update')
   if (!canManage) {
     return NextResponse.json({ error: 'No autorizado para editar este club.' }, { status: 403 })
   }

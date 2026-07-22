@@ -12,7 +12,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function GET(req: NextRequest, context: { params: Promise<{ clubId: string }> }) {
   const { clubId } = await context.params
-  const auth = await assertClubCommercialManager(req, clubId)
+  const auth = await assertClubCommercialManager(req, clubId, 'sponsors:manage')
   if (auth.error) return auth.error
 
   const { data, error } = await supabaseAdmin
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
 export async function POST(req: NextRequest, context: { params: Promise<{ clubId: string }> }) {
   try {
     const { clubId } = await context.params
-    const auth = await assertClubCommercialManager(req, clubId)
+    const auth = await assertClubCommercialManager(req, clubId, 'sponsors:manage')
     if (auth.error) return auth.error
 
     const body = await req.json().catch(() => ({}))

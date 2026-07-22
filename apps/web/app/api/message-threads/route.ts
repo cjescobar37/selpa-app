@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin, ensureValidActiveClubForUser, getApprovedMembership } from '@/lib/clubMembershipServer'
+import { userHasClubCapability, ensureValidActiveClubForUser, getApprovedMembership } from '@/lib/clubMembershipServer'
 import { createOperationalNotification, getClubAdminUserIds, notifyClubAdmins } from '@/lib/operationalNotifications'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -62,7 +62,7 @@ async function getClubsMap(clubIds: string[]) {
 async function resolveClubScope(userId: string) {
   const activeClubId = await ensureValidActiveClubForUser(userId, null)
   if (!activeClubId) return { clubId: null, error: 'No hay club activo.' }
-  if (!(await isClubAdmin(userId, activeClubId))) return { clubId: null, error: 'No autorizado para ver mensajes del club.' }
+  if (!(await userHasClubCapability(userId, activeClubId, 'messages:view'))) return { clubId: null, error: 'No autorizado para ver mensajes del club.' }
   return { clubId: activeClubId, error: null }
 }
 
@@ -259,7 +259,7 @@ export async function POST(req: NextRequest) {
   } else if (scope === 'club') {
     clubId = clubId || (await resolveClubScope(user.id)).clubId
     if (!clubId) return NextResponse.json({ error: 'No hay club activo.' }, { status: 400 })
-    if (!(await isClubAdmin(user.id, clubId))) {
+    if (!(await userHasClubCapability(user.id, clubId, 'messages:reply'))) {
       return NextResponse.json({ error: 'No autorizado para crear mensajes del club.' }, { status: 403 })
     }
     if (!playerUserId) return NextResponse.json({ error: 'Seleccioná un jugador.' }, { status: 400 })

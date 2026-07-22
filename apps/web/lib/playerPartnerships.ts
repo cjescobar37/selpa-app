@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export type ClubPlayerRow = {
@@ -79,7 +79,7 @@ export async function getAuthContext(req: NextRequest, clubId: string): Promise<
   if (!user) return null
 
   const [admin, currentClubPlayer] = await Promise.all([
-    isClubAdmin(user.id, clubId),
+    userHasClubCapability(user.id, clubId, 'players:manage'),
     getCurrentClubPlayer(user.id, clubId),
   ])
 

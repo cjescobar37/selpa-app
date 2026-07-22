@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { createOperationalNotification } from '@/lib/operationalNotifications'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -58,7 +58,7 @@ export async function PATCH(req: NextRequest, context: Context) {
   if (!user) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
 
   const { clubId, requestId } = await context.params
-  const canManage = (await isClubAdmin(user.id, clubId)) || (await isPlatformAdmin(user.id))
+  const canManage = (await userHasClubCapability(user.id, clubId, 'registrations:manage')) || (await isPlatformAdmin(user.id))
   if (!canManage) return NextResponse.json({ error: 'No autorizado para gestionar bajas.' }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))

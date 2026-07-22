@@ -16,7 +16,7 @@ import {
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ clubId: string; newsId: string }> }) {
   const { clubId, newsId } = await params
-  const auth = await assertCanManageClubNews(req, clubId, 'content:edit')
+  const auth = await assertCanManageClubNews(req, clubId, 'news:manage')
   if (auth.error) return auth.error
 
   try {
@@ -39,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ cl
 
     if (!title) return NextResponse.json({ error: 'Falta título.' }, { status: 400 })
     if (status === 'PUBLISHED') {
-      const publishAuth = await assertCanManageClubNews(req, clubId, 'content:publish')
+      const publishAuth = await assertCanManageClubNews(req, clubId, 'news:manage')
       if (publishAuth.error) return publishAuth.error
     }
 
@@ -118,7 +118,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ cl
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ clubId: string; newsId: string }> }) {
   const { clubId, newsId } = await params
-  const auth = await assertCanManageClubNews(req, clubId, 'content:edit')
+  const auth = await assertCanManageClubNews(req, clubId, 'news:manage')
   if (auth.error) return auth.error
 
   const { error } = await supabaseAdmin

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getTokenUser } from '@/lib/platformApiAuth'
 import { slugify, uploadPlatformAsset } from '@/lib/platformContent'
-import { userHasClubPermission } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 
 export type ClubNewsStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
 export type ClubNewsMetadata = {
@@ -46,11 +46,11 @@ export async function isPlatformAdmin(userId: string) {
   return Boolean(data?.user_id)
 }
 
-export async function assertCanManageClubNews(req: NextRequest, clubId: string, capability: 'content:edit' | 'content:publish' = 'content:edit') {
+export async function assertCanManageClubNews(req: NextRequest, clubId: string, capability: 'news:manage' = 'news:manage') {
   const user = await getTokenUser(req)
   if (!user) return { error: NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 }), user: null }
 
-  const canManage = (await userHasClubPermission(user.id, clubId, capability)) || (await isPlatformAdmin(user.id))
+  const canManage = (await userHasClubCapability(user.id, clubId, capability)) || (await isPlatformAdmin(user.id))
   if (!canManage) return { error: NextResponse.json({ error: 'No autorizado para gestionar noticias de este club.' }, { status: 403 }), user: null }
 
   return { error: null, user }

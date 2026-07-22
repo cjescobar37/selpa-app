@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubOwner } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
@@ -33,9 +33,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ invite
     return NextResponse.json({ error: 'Invitación no encontrada.' }, { status: 404 })
   }
 
-  const isOwner = await isClubOwner(user.id, invite.club_id)
-  if (!isOwner) {
-    return NextResponse.json({ error: 'Solo el OWNER puede cancelar invitaciones.' }, { status: 403 })
+  const canManageRoles = await userHasClubCapability(user.id, invite.club_id, 'roles:manage')
+  if (!canManageRoles) {
+    return NextResponse.json({ error: 'No tenés permisos para cancelar invitaciones.' }, { status: 403 })
   }
 
   if (invite.status !== 'PENDING') {
@@ -59,6 +59,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ invite
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
+
+  await supabaseAdmin.from('club_team_audit').insert({ club_id: invite.club_id, actor_user_id: user.id, action: 'INVITE_CANCELLED', invite_id: invite.id })
 
   return NextResponse.json({ ok: true, invite: updated })
 }

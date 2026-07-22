@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { getApprovedMembership, userHasClubCapability } from '@/lib/clubMembershipServer'
 
 type ProfileRow = {
   user_id: string
@@ -54,14 +54,14 @@ function getFullName(profile?: ProfileRow | null, fallback?: string | null) {
   )
 }
 
-async function getProfilesMap(userIds: string[]) {
+async function getProfilesMap(userIds: string[], includePrivateContact: boolean) {
   const ids = Array.from(new Set(userIds.filter(Boolean)))
   if (!ids.length) return new Map<string, ProfileRow>()
 
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('user_id,email,first_name,last_name,display_name,avatar_url')
-    .in('user_id', ids)
+  const query = supabaseAdmin.from('profiles')
+  const { data, error } = includePrivateContact
+    ? await query.select('user_id,email,first_name,last_name,display_name,avatar_url').in('user_id', ids)
+    : await query.select('user_id,first_name,last_name,display_name,avatar_url').in('user_id', ids)
 
   if (error) throw error
   return new Map(((data ?? []) as ProfileRow[]).map((profile) => [profile.user_id, profile]))
@@ -79,8 +79,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     }
 
     const { clubId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
-    if (!canManage) {
+    const [membership, canViewPlayers] = await Promise.all([
+      getApprovedMembership(user.id, clubId),
+      userHasClubCapability(user.id, clubId, 'players:view'),
+    ])
+    if (!membership || !canViewPlayers) {
       return NextResponse.json({ error: 'No autorizado para ver jugadores del club.' }, { status: 403 })
     }
 
@@ -104,10 +107,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
 
     const players = (playersRes.data ?? []) as PlayerRow[]
     const memberships = (membershipsRes.data ?? []) as MembershipRow[]
+    const isPlanillero = membership.role === 'PLANILLERO'
     const profiles = await getProfilesMap([
       ...players.map((player) => player.user_id),
       ...memberships.map((membership) => membership.user_id),
-    ])
+    ], !isPlanillero)
 
     return NextResponse.json({
       players: players.map((player) => {
@@ -118,7 +122,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
           full_name: getFullName(profile, player.display_name),
         }
       }),
-      requests: memberships
+      requests: isPlanillero ? [] : memberships
         .filter((membership) => membership.status === 'PENDING')
         .map((membership) => {
           const profile = profiles.get(membership.user_id) ?? null

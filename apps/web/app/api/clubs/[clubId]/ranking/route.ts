@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 
 type PlayerRow = {
   id: string
@@ -182,7 +182,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
 
     const { clubId } = await context.params
     const [canManage, canReadAsPlatform, canReadAsPlayer] = await Promise.all([
-      isClubAdmin(user.id, clubId),
+      userHasClubCapability(user.id, clubId, 'ranking:view'),
       isPlatformAdmin(user.id),
       isApprovedClubPlayer(user.id, clubId),
     ])

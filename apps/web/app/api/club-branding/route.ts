@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 
 async function getUserFromRequest(req: NextRequest) {
   const authHeader = req.headers.get('authorization') || ''
@@ -23,7 +23,7 @@ async function canManageClub(userId: string, clubId: string) {
 
   if (platformAdmin?.user_id) return true
 
-  return isClubAdmin(userId, clubId)
+  return userHasClubCapability(userId, clubId, 'club:branding')
 }
 
 function sanitizeFileName(value: string) {
@@ -35,6 +35,11 @@ function sanitizeFileName(value: string) {
     .replace(/(^-|-$)/g, '')
     .toLowerCase()
 }
+
+const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp'])
+const LOGO_MAX_BYTES = 3 * 1024 * 1024
+const RULES_MAX_BYTES = 10 * 1024 * 1024
 
 export async function POST(req: NextRequest) {
   try {
@@ -65,6 +70,13 @@ export async function POST(req: NextRequest) {
       bucket = 'club-logos'
       folder = 'logos'
       targetColumn = 'logo_url'
+      const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
+      if (!IMAGE_MIME_TYPES.has(file.type.toLowerCase()) || !IMAGE_EXTENSIONS.has(extension)) {
+        return NextResponse.json({ error: 'El logo debe ser JPG, PNG o WEBP.' }, { status: 400 })
+      }
+      if (file.size > LOGO_MAX_BYTES) {
+        return NextResponse.json({ error: 'El logo no puede superar 3 MB.' }, { status: 400 })
+      }
     } else if (assetType === 'rules' || assetType === 'rules_pdf') {
       bucket = 'club-rules'
       folder = 'rules'
@@ -72,8 +84,11 @@ export async function POST(req: NextRequest) {
 
       const fileName = file.name.toLowerCase()
       const fileType = (file.type || '').toLowerCase()
-      if (fileType !== 'application/pdf' && !fileName.endsWith('.pdf')) {
+      if (fileType !== 'application/pdf' || !fileName.endsWith('.pdf')) {
         return NextResponse.json({ error: 'El reglamento debe ser PDF.' }, { status: 400 })
+      }
+      if (file.size > RULES_MAX_BYTES) {
+        return NextResponse.json({ error: 'El reglamento no puede superar 10 MB.' }, { status: 400 })
       }
     } else {
       return NextResponse.json({ error: 'Tipo de archivo inválido.' }, { status: 400 })
@@ -106,6 +121,7 @@ export async function POST(req: NextRequest) {
       .eq('id', clubId)
 
     if (updateError) {
+      await supabaseAdmin.storage.from(bucket).remove([objectPath])
       return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 

@@ -105,7 +105,7 @@ export default function PublicRankingExperience({
         points: player.points,
         position: player.position,
         isTied: player.isTied,
-        href: `/club/jugadores/${player.id}`,
+        href: `/jugadores/${player.id}`,
         subtitle: player.clubName,
       } satisfies RankingBoardRow)),
     }))

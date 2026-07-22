@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { getClubAdminUserIds, notifyClubAdmins } from '@/lib/operationalNotifications'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -35,7 +35,7 @@ async function isPlatformAdmin(userId: string) {
 }
 
 async function canUserStartClubThread(userId: string, clubId: string, tournamentId: string | null) {
-  if ((await isClubAdmin(userId, clubId)) || (await isPlatformAdmin(userId))) return true
+  if ((await userHasClubCapability(userId, clubId, 'messages:view')) || (await isPlatformAdmin(userId))) return true
 
   const { data: clubPlayer } = await supabaseAdmin
     .from('club_players')
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest, context: Context) {
   if (!user) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
 
   const { clubId } = await context.params
-  const canManage = (await isClubAdmin(user.id, clubId)) || (await isPlatformAdmin(user.id))
+  const canManage = (await userHasClubCapability(user.id, clubId, 'messages:view')) || (await isPlatformAdmin(user.id))
   if (!canManage) return NextResponse.json({ error: 'No autorizado para ver mensajes del club.' }, { status: 403 })
 
   const { data, error } = await supabaseAdmin

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Activity, Clock3, MapPin, Pencil, ShieldCheck } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
@@ -51,7 +52,7 @@ export default function PerfilPage() {
 
   useEffect(() => {
     if (!loadingMemberships && preferredPlayer?.player_id) {
-      router.replace(`/club/jugadores/${preferredPlayer.player_id}?own=1`)
+      router.replace(`/jugadores/${preferredPlayer.player_id}?own=1`)
     }
   }, [loadingMemberships, preferredPlayer?.player_id, router])
 
@@ -72,7 +73,7 @@ export default function PerfilPage() {
       <span>Perfil público</span>
     </section>
     <section className="publicPlayerProfile__identity">
-      <div className="publicPlayerProfile__avatar">{profile?.avatar_url ? <img src={profile.avatar_url} alt={`Foto de ${playerName}`} /> : initials}</div>
+      <div className="publicPlayerProfile__avatar">{profile?.avatar_url ? <Image src={profile.avatar_url} alt={`Foto de ${playerName}`} width={132} height={132} /> : initials}</div>
       <div><h1>{playerName}</h1><p><MapPin />{location}</p><strong>{clubName}</strong></div>
       <Link href="/mis-datos"><Pencil />Mis datos</Link>
     </section>

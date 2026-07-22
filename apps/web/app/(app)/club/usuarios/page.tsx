@@ -1,22 +1,21 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import Image from 'next/image'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import type { ClubRole } from '@/lib/clubMembershipRules'
 import {
-  CLUB_CAPABILITY_GROUPS,
   getCanonicalClubPermissionRole,
   getClubPermissions,
   type ClubCapability,
-  type ClubCapabilityGroup,
   type ClubPermissionRole,
 } from '@/lib/clubPermissions'
 
 type InviteStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED'
-type ManageableRole = Exclude<ClubRole, 'OWNER' | 'PLAYER'>
+type ManageableRole = 'ADMIN' | 'PLANILLERO'
 type TeamTab = 'staff' | 'invites' | 'permissions' | 'activity'
 
 type Profile = {
@@ -50,6 +49,7 @@ type ClubInvite = {
   target_user_id: string | null
   created_at: string
   updated_at: string
+  expires_at: string | null
   invited_by_profile: Profile | null
   resolved_by_profile: Profile | null
   target_user_profile: Profile | null
@@ -67,10 +67,19 @@ type ActivityEvent = {
   tone: ActivityTone
 }
 
+type AuditEvent = {
+  id: string
+  action: string
+  old_role: ClubRole | null
+  new_role: ClubRole | null
+  created_at: string
+  actor_profile: Profile | null
+  target_profile: Profile | null
+}
+
 const roleOptions: Array<{ value: ManageableRole; label: string; help: string }> = [
   { value: 'ADMIN', label: 'Admin', help: 'Gestión operativa amplia del club.' },
   { value: 'PLANILLERO', label: 'Planillero', help: 'Carga operativa de partidos/resultados.' },
-  { value: 'OPERATIVO', label: 'Operativo', help: 'Soporte diario sin permisos sensibles.' },
 ]
 
 const roleLabels: Record<string, string> = {
@@ -92,23 +101,10 @@ const statusLabels: Record<string, string> = {
   APPROVED: 'Aprobado',
 }
 
-const permissionRoles: ClubPermissionRole[] = [
-  'OWNER',
-  'ADMIN',
-  'PLANILLERO',
-  'OPERADOR',
-  'PRENSA',
-  'TESORERIA',
-  'PLAYER',
-]
-
 const adminPermissionRoles: ClubPermissionRole[] = [
   'OWNER',
   'ADMIN',
-  'OPERADOR',
   'PLANILLERO',
-  'PRENSA',
-  'TESORERIA',
 ]
 
 const roleDescriptions: Record<ClubPermissionRole, string> = {
@@ -120,38 +116,6 @@ const roleDescriptions: Record<ClubPermissionRole, string> = {
   PRENSA: 'Gestión de contenido, noticias y comunicación pública del club.',
   TESORERIA: 'Visualización y administración de finanzas del club.',
   PLAYER: 'Rol externo de jugador, sin acceso administrativo al Club Admin.',
-}
-
-const capabilityLabels: Record<ClubCapability, string> = {
-  'tournament:create': 'Crear torneo',
-  'tournament:update': 'Editar torneo',
-  'tournament:delete': 'Eliminar torneo',
-  'groups:generate': 'Generar grupos',
-  'playoff:generate': 'Generar playoff',
-  'matches:update': 'Cargar resultados',
-  'matches:swap_schedule': 'Cambiar horarios',
-  'registrations:approve': 'Aprobar inscripciones',
-  'registrations:manage': 'Gestionar inscripciones',
-  'users:manage': 'Gestionar equipo',
-  'roles:manage': 'Gestionar roles',
-  'finance:view': 'Ver finanzas',
-  'finance:manage': 'Administrar finanzas',
-  'content:publish': 'Publicar contenido',
-  'content:edit': 'Editar contenido',
-  'club:configure': 'Configurar club',
-  'club:branding': 'Branding del club',
-}
-
-const groupLabels: Record<ClubCapabilityGroup, string> = {
-  tournament: 'Torneos',
-  groups: 'Grupos',
-  playoff: 'Playoff',
-  matches: 'Partidos',
-  registrations: 'Inscripciones',
-  users: 'Equipo',
-  finance: 'Finanzas',
-  content: 'Contenido',
-  club: 'Club',
 }
 
 function formatDate(value?: string | null) {
@@ -179,10 +143,6 @@ function statusLabel(status: string) {
   return statusLabels[status] ?? status
 }
 
-function hasCapability(role: ClubPermissionRole, capability: ClubCapability) {
-  return getClubPermissions(role).includes(capability)
-}
-
 function canonicalRoleLabel(role: string | null | undefined) {
   const canonical = getCanonicalClubPermissionRole(role)
   return canonical ? roleLabel(canonical) : 'Sin rol'
@@ -191,26 +151,26 @@ function canonicalRoleLabel(role: string | null | undefined) {
 const staffPermissionSummaries = [
   {
     label: 'Torneos',
-    capabilities: ['tournament:create', 'tournament:update', 'groups:generate', 'playoff:generate'],
+    capabilities: ['tournaments:create', 'tournaments:update', 'groups:generate', 'playoff:generate'],
   },
   { label: 'Resultados', capabilities: ['matches:update'] },
-  { label: 'Horarios', capabilities: ['matches:swap_schedule'] },
-  { label: 'Usuarios', capabilities: ['users:manage', 'roles:manage'] },
+  { label: 'Horarios', capabilities: ['matches:schedule'] },
+  { label: 'Usuarios', capabilities: ['memberships:manage', 'roles:manage'] },
   { label: 'Finanzas', capabilities: ['finance:view', 'finance:manage'] },
-  { label: 'Contenido', capabilities: ['content:edit', 'content:publish'] },
-  { label: 'Club', capabilities: ['club:configure', 'club:branding'] },
+  { label: 'Contenido', capabilities: ['news:manage', 'ads:manage'] },
+  { label: 'Club', capabilities: ['club:update', 'club:branding'] },
 ] satisfies Array<{ label: string; capabilities: ClubCapability[] }>
 
 const compactPermissionRows = [
-  { label: 'Crear torneos', capabilities: ['tournament:create'] },
+  { label: 'Crear torneos', capabilities: ['tournaments:create'] },
   { label: 'Generar grupos/playoff', capabilities: ['groups:generate', 'playoff:generate'] },
   { label: 'Cargar resultados', capabilities: ['matches:update'] },
-  { label: 'Cambiar horarios/canchas', capabilities: ['matches:swap_schedule'] },
-  { label: 'Aprobar inscripciones', capabilities: ['registrations:approve'] },
-  { label: 'Gestionar usuarios', capabilities: ['users:manage', 'roles:manage'] },
+  { label: 'Cambiar horarios/canchas', capabilities: ['matches:schedule'] },
+  { label: 'Aprobar inscripciones', capabilities: ['registrations:manage'] },
+  { label: 'Gestionar usuarios', capabilities: ['memberships:manage', 'roles:manage'] },
   { label: 'Ver finanzas', capabilities: ['finance:view'] },
-  { label: 'Publicar contenido', capabilities: ['content:publish'] },
-  { label: 'Configurar club', capabilities: ['club:configure', 'club:branding'] },
+  { label: 'Publicar contenido', capabilities: ['news:manage'] },
+  { label: 'Configurar club', capabilities: ['club:update', 'club:branding'] },
 ] satisfies Array<{ label: string; capabilities: ClubCapability[] }>
 
 function roleBadgeClass(role: string | null | undefined) {
@@ -245,16 +205,12 @@ export default function ClubUsuariosPage() {
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [invites, setInvites] = useState<ClubInvite[]>([])
+  const [audit, setAudit] = useState<AuditEvent[]>([])
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<ManageableRole>('ADMIN')
 
   const pendingInvites = useMemo(
     () => invites.filter((invite) => invite.status === 'PENDING'),
-    [invites]
-  )
-
-  const resolvedInvites = useMemo(
-    () => invites.filter((invite) => invite.status !== 'PENDING').slice(0, 8),
     [invites]
   )
 
@@ -296,11 +252,20 @@ export default function ClubUsuariosPage() {
       tone: 'success',
     }))
 
-    return [...inviteEvents, ...staffEvents]
+    const auditEvents = audit.map<ActivityEvent>((event) => ({
+      id: `audit-${event.id}`,
+      date: event.created_at,
+      title: event.action === 'ROLE_CHANGED' ? 'Rol actualizado' : event.action === 'MEMBER_REMOVED' ? 'Miembro removido' : event.action === 'OWNERSHIP_TRANSFERRED' ? 'Propiedad transferida' : event.action.replaceAll('_', ' ').toLowerCase(),
+      detail: event.action === 'ROLE_CHANGED' ? `${roleLabel(event.old_role ?? '')} → ${roleLabel(event.new_role ?? '')}` : event.target_profile?.display_name ?? 'Cambio de equipo',
+      actor: event.actor_profile?.display_name ?? event.actor_profile?.email ?? undefined,
+      status: 'Registrado',
+      tone: 'info',
+    }))
+    return [...auditEvents, ...inviteEvents, ...staffEvents]
       .filter((event) => Boolean(event.date))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 18)
-  }, [invites, staff])
+  }, [audit, invites, staff])
 
   const rolesCovered = useMemo(() => {
     const roles = new Set(
@@ -312,6 +277,7 @@ export default function ClubUsuariosPage() {
   }, [staff])
 
   const ownerOnly = clubRole === 'OWNER'
+  const canManageTeam = clubRole === 'OWNER' || clubRole === 'ADMIN'
   const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
   const themeStyle = useMemo(
     () =>
@@ -353,6 +319,7 @@ export default function ClubUsuariosPage() {
 
     setStaff((json?.staff ?? []) as StaffMember[])
     setInvites((json?.invites ?? []) as ClubInvite[])
+    setAudit((json?.audit ?? []) as AuditEvent[])
   }
 
   async function loadClubCore() {
@@ -394,7 +361,7 @@ export default function ClubUsuariosPage() {
 
   async function createInvite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!activeClub?.id || !ownerOnly) return
+    if (!activeClub?.id || !canManageTeam) return
 
     setSaving(true)
     setMessage('')
@@ -466,11 +433,44 @@ export default function ClubUsuariosPage() {
     await loadClubCore()
   }
 
+  async function updateRole(member: StaffMember, nextRole: ManageableRole) {
+    if (!activeClub?.id || member.role === 'OWNER') return
+    setSavingId(member.id)
+    const token = await getToken()
+    const res = await fetch('/api/clubs/internal-users', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ clubId: activeClub.id, membershipId: member.id, role: nextRole }) })
+    const json = await res.json().catch(() => ({}))
+    setSavingId(null)
+    setMessage(res.ok ? 'Rol actualizado.' : json?.error ?? 'No pude actualizar el rol.')
+    if (res.ok && token) await loadInternalUsers(token)
+  }
+
+  async function removeMember(member: StaffMember) {
+    if (!activeClub?.id || member.role === 'OWNER' || !window.confirm(`¿Remover a ${member.full_name} del equipo interno?`)) return
+    setSavingId(member.id)
+    const token = await getToken()
+    const res = await fetch('/api/clubs/internal-users', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ clubId: activeClub.id, membershipId: member.id }) })
+    const json = await res.json().catch(() => ({}))
+    setSavingId(null)
+    setMessage(res.ok ? 'Miembro removido.' : json?.error ?? 'No pude remover al miembro.')
+    if (res.ok && token) await loadInternalUsers(token)
+  }
+
+  async function transferOwnership(member: StaffMember) {
+    if (!activeClub?.id || !ownerOnly || member.role === 'OWNER' || !window.confirm(`Vas a transferir la propiedad a ${member.full_name}. Tu rol pasará a ADMIN. ¿Continuar?`)) return
+    setSavingId(member.id)
+    const token = await getToken()
+    const res = await fetch('/api/clubs/internal-users/transfer-ownership', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ clubId: activeClub.id, membershipId: member.id }) })
+    const json = await res.json().catch(() => ({}))
+    setSavingId(null)
+    setMessage(res.ok ? 'Propiedad transferida correctamente.' : json?.error ?? 'No pude transferir la propiedad.')
+    if (res.ok) window.location.reload()
+  }
+
   function renderPerson(profile: Profile | null, name: string, fallbackEmail?: string | null, compact = false) {
     return (
       <div className={`club-person ${compact ? 'club-person--compact' : ''}`}>
         <span className={`club-avatar ${compact ? 'club-avatar--sm' : ''}`}>
-          {profile?.avatar_url ? <img src={profile.avatar_url} alt="" /> : getClubInitials(name)}
+          {profile?.avatar_url ? <Image src={profile.avatar_url} alt="" width={44} height={44} /> : getClubInitials(name)}
         </span>
         <div className="club-personMain">
           <strong>{name}</strong>
@@ -534,6 +534,13 @@ export default function ClubUsuariosPage() {
                         </span>
                       )}
                     </div>
+                    {canManageTeam && member.role !== 'OWNER' ? <div className="club-staffInviteFooter">
+                      <select className="px-input" value={member.role === 'PLANILLERO' ? 'PLANILLERO' : 'ADMIN'} disabled={savingId === member.id} onChange={(event) => void updateRole(member, event.target.value as ManageableRole)} aria-label={`Rol de ${member.full_name}`}>
+                        {roleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                      <button type="button" className="club-secondaryBtn" disabled={savingId === member.id} onClick={() => void removeMember(member)}>Remover</button>
+                      {ownerOnly ? <button type="button" className="club-secondaryBtn" disabled={savingId === member.id} onClick={() => void transferOwnership(member)}>Transferir propiedad</button> : null}
+                    </div> : null}
                   </article>
                 )
               })}
@@ -555,8 +562,8 @@ export default function ClubUsuariosPage() {
             </div>
           </div>
 
-          {!ownerOnly ? (
-            <div className="club-note">Solo el OWNER puede crear invitaciones de staff en esta versión.</div>
+          {!canManageTeam ? (
+            <div className="club-note">No tenés permisos para crear invitaciones de staff.</div>
           ) : (
             <form className="club-inviteForm" onSubmit={createInvite}>
               <label>
@@ -628,6 +635,10 @@ export default function ClubUsuariosPage() {
                         <small>Rol propuesto</small>
                         <strong>{canonicalRoleLabel(invite.role)}</strong>
                       </span>
+                      <span>
+                        <small>Vence</small>
+                        <strong>{formatDate(invite.expires_at)}</strong>
+                      </span>
                     </div>
 
                     <div className="club-staffInviteFooter">
@@ -638,7 +649,7 @@ export default function ClubUsuariosPage() {
                           </span>
                         ))}
                       </div>
-                      {ownerOnly ? (
+                      {canManageTeam ? (
                         <button
                           type="button"
                           className="club-secondaryBtn"
@@ -743,7 +754,7 @@ export default function ClubUsuariosPage() {
         </div>
 
         <div className="club-activityNote">
-          Esta vista muestra actividad disponible. La auditoría completa llegará en una etapa futura.
+          Los cambios sensibles de equipo quedan registrados con actor, fecha y detalle.
         </div>
 
         {activityEvents.length === 0 ? (

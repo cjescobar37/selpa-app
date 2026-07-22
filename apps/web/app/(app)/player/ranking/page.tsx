@@ -188,7 +188,7 @@ export default function PlayerMyRankingPage() {
                 const isMe = player.user_id === session.user?.id
                 return (
                   <Link
-                    href={`/club/jugadores/${player.player_id}`}
+                    href={`/jugadores/${player.player_id}`}
                     className={`playerRankContextRow${isMe ? ' is-me' : ''}`}
                     key={player.player_id}
                   >

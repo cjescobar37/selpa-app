@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isClubAdmin } from '@/lib/clubMembershipServer'
+import { getApprovedMembership, userHasClubCapability } from '@/lib/clubMembershipServer'
 
 type RegistrationRow = {
   id: string
@@ -212,10 +212,14 @@ export async function GET(
     }
 
     const { clubId, tournamentId } = await context.params
-    const canManage = await isClubAdmin(user.id, clubId)
-    if (!canManage) {
+    const [membership, canManage] = await Promise.all([
+      getApprovedMembership(user.id, clubId),
+      userHasClubCapability(user.id, clubId, 'registrations:view'),
+    ])
+    if (!membership || !canManage) {
       return NextResponse.json({ error: 'No autorizado para ver inscripciones.' }, { status: 403 })
     }
+    const isPlanillero = membership.role === 'PLANILLERO'
 
     const tournament = await ensureTournamentBelongsToClub(clubId, tournamentId)
     if (!tournament) {
@@ -261,10 +265,10 @@ export async function GET(
 
     let profiles = new Map<string, ProfileRow>()
     if (userIds.length > 0) {
-      const { data: profileRows, error: profilesError } = await supabaseAdmin
-        .from('profiles')
-        .select('user_id,email,first_name,last_name,display_name,avatar_url')
-        .in('user_id', userIds)
+      const query = supabaseAdmin.from('profiles')
+      const { data: profileRows, error: profilesError } = isPlanillero
+        ? await query.select('user_id,first_name,last_name,display_name,avatar_url').in('user_id', userIds)
+        : await query.select('user_id,email,first_name,last_name,display_name,avatar_url').in('user_id', userIds)
 
       if (profilesError) {
         return NextResponse.json({ error: profilesError.message }, { status: 500 })
@@ -504,17 +508,19 @@ export async function GET(
           admission_at: registration.admission_at,
           eligibility_blocked_reason: registration.eligibility_blocked_reason,
           payment_status: paymentStatus,
-          payment_method: tournamentPaymentRows[0]?.method ?? null,
+          payment_method: isPlanillero ? null : tournamentPaymentRows[0]?.method ?? null,
           operational_payment: tournamentPaymentRows[0]
             ? {
                 id: tournamentPaymentRows[0].id,
-                method: tournamentPaymentRows[0].method,
                 status: tournamentPaymentRows[0].status,
-                amount: tournamentPaymentRows[0].amount,
-                requested_at: tournamentPaymentRows[0].requested_at,
-                approved_at: tournamentPaymentRows[0].approved_at,
-                paid_at: tournamentPaymentRows[0].paid_at,
-                created_at: tournamentPaymentRows[0].created_at,
+                ...(isPlanillero ? {} : {
+                  method: tournamentPaymentRows[0].method,
+                  amount: tournamentPaymentRows[0].amount,
+                  requested_at: tournamentPaymentRows[0].requested_at,
+                  approved_at: tournamentPaymentRows[0].approved_at,
+                  paid_at: tournamentPaymentRows[0].paid_at,
+                  created_at: tournamentPaymentRows[0].created_at,
+                }),
               }
             : null,
           registration_change_request: changeRequest
@@ -540,7 +546,7 @@ export async function GET(
                 snapshot_at: seedSnapshot.snapshot_at,
               }
             : null,
-          payment: paymentRows[0]
+          payment: paymentRows[0] && !isPlanillero
             ? {
                 id: paymentRows[0].id,
                 status: paymentRows[0].status,
