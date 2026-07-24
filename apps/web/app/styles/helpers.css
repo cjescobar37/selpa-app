@@ -1611,6 +1611,15 @@ button.px-playerClubCta:disabled{
   font-weight: 400 !important;
 }
 
+@media (max-width: 768px){
+  .px-auth.px-loginAuth input.px-input,
+  .px-auth.px-loginAuth input.px-input:-webkit-autofill,
+  .px-auth.px-loginAuth input.px-input:-webkit-autofill:hover,
+  .px-auth.px-loginAuth input.px-input:-webkit-autofill:focus{
+    font-size: 16px !important;
+  }
+}
+
 .px-loginAuth .px-btn,
 .px-loginAuth .px-btnGoogle,
 .px-loginAuth .px-loginLinkBlock strong{

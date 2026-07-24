@@ -315,7 +315,7 @@ function ReviewBlock({ title, step, onEdit, children }: { title: string; step: n
 
 export default function ClubNuevoTorneoPage() {
   const router = useRouter()
-  const { activeClub } = useSession()
+  const { activeClub, user } = useSession()
   const [form, setForm] = useState<FormState>(initialForm)
   const [courtDraft, setCourtDraft] = useState<CourtDraftState>(initialCourtDraft)
   const [complexOptions, setComplexOptions] = useState<ClubComplexOption[]>([])
@@ -327,11 +327,52 @@ export default function ClubNuevoTorneoPage() {
   const [message, setMessage] = useState('')
   const [mobileStep, setMobileStep] = useState(1)
   const [flyerEditorOpen, setFlyerEditorOpen] = useState(false)
+  const [editingStep, setEditingStep] = useState<number | null>(null)
+  const [editSnapshot, setEditSnapshot] = useState<{ form: FormState; flyer: FlyerConfig } | null>(null)
+  const [flyerSnapshot, setFlyerSnapshot] = useState<FlyerConfig | null>(null)
+  const [draftOffer, setDraftOffer] = useState<{ form: FormState; flyer: FlyerConfig; step: number; updatedAt: string } | null>(null)
+  const [draftReady, setDraftReady] = useState(false)
+  const draftKey = user?.id && activeClub?.id ? `selpa:tournament-draft:${user.id}:${activeClub.id}` : null
 
   useEffect(() => {
     document.body.classList.add('club-tournament-wizard-active')
     return () => document.body.classList.remove('club-tournament-wizard-active')
   }, [])
+
+  useEffect(() => {
+    if (!draftKey) return
+    let nextDraft: { form: FormState; flyer: FlyerConfig; step: number; updatedAt: string } | null = null
+    try {
+      const raw = localStorage.getItem(draftKey)
+      const parsed = raw ? JSON.parse(raw) as { form?: FormState; flyer?: FlyerConfig; step?: number; updatedAt?: string } : null
+      if (parsed?.form && parsed?.flyer && parsed.updatedAt) {
+        nextDraft = { form: parsed.form, flyer: parsed.flyer, step: parsed.step ?? 1, updatedAt: parsed.updatedAt }
+      }
+    } catch {
+      localStorage.removeItem(draftKey)
+    }
+    queueMicrotask(() => {
+      if (nextDraft) setDraftOffer(nextDraft)
+      setDraftReady(true)
+    })
+  }, [draftKey])
+
+  useEffect(() => {
+    if (!draftKey || !draftReady || draftOffer) return
+    const timer = window.setTimeout(() => {
+      const persistableFlyer = {
+        ...flyerConfig,
+        manualFlyer: flyerConfig.manualFlyer?.publicUrl ? flyerConfig.manualFlyer : null,
+      }
+      localStorage.setItem(draftKey, JSON.stringify({
+        form,
+        flyer: persistableFlyer,
+        step: mobileStep,
+        updatedAt: new Date().toISOString(),
+      }))
+    }, 700)
+    return () => window.clearTimeout(timer)
+  }, [draftKey, draftOffer, draftReady, flyerConfig, form, mobileStep])
 
   const errors = useMemo(() => {
     const next: string[] = []
@@ -540,6 +581,51 @@ export default function ClubNuevoTorneoPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  function beginContextualEdit(step: number) {
+    setEditSnapshot({ form: structuredClone(form), flyer: structuredClone(flyerConfig) })
+    setEditingStep(step)
+    goToMobileStep(step)
+  }
+
+  function cancelContextualEdit() {
+    if (editSnapshot) {
+      setForm(editSnapshot.form)
+      setFlyerConfig(editSnapshot.flyer)
+    }
+    setEditSnapshot(null)
+    setEditingStep(null)
+    goToMobileStep(7)
+  }
+
+  function saveContextualEdit() {
+    if (editingStep) {
+      const stepError = getStepError(editingStep)
+      if (stepError) {
+        setMessage(stepError)
+        return
+      }
+    }
+    setEditSnapshot(null)
+    setEditingStep(null)
+    goToMobileStep(7)
+  }
+
+  function continueDraft() {
+    if (!draftOffer) return
+    setForm(draftOffer.form)
+    setFlyerConfig(draftOffer.flyer)
+    setMobileStep(Math.min(7, Math.max(1, draftOffer.step)))
+    setDraftOffer(null)
+  }
+
+  function discardDraft() {
+    if (draftKey) localStorage.removeItem(draftKey)
+    setDraftOffer(null)
+    setForm(initialForm)
+    setFlyerConfig(defaultFlyerConfig)
+    setMobileStep(1)
+  }
+
   function goToNextMobileStep() {
     const stepError = getStepError(mobileStep)
     if (stepError) {
@@ -628,6 +714,7 @@ export default function ClubNuevoTorneoPage() {
       return
     }
 
+    if (draftKey) localStorage.removeItem(draftKey)
     router.replace('/club/torneos')
   }
 
@@ -659,6 +746,12 @@ export default function ClubNuevoTorneoPage() {
           <Link href="/club/torneos" className="club-secondaryBtn">Volver</Link>
         </div>
 
+        {draftOffer ? (
+          <div className="club-draftResume">
+            <div><strong>Tenés un torneo sin terminar</strong><span>{draftOffer.form.name || 'Sin nombre'} · {new Date(draftOffer.updatedAt).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</span></div>
+            <div><button type="button" onClick={continueDraft}>Continuar</button><button type="button" onClick={discardDraft}>Descartar</button></div>
+          </div>
+        ) : null}
         {message ? <div className="club-message">{message}</div> : null}
 
         <form className="club-formCard" onSubmit={submit}>
@@ -1091,6 +1184,7 @@ export default function ClubNuevoTorneoPage() {
               <p>Elegí el flyer y confirmá los datos antes de crear el borrador.</p>
             </div>
             <div className="club-mobileFlyerOverview">
+              <div className="club-mobileFlyerPrimaryPreview">
               {flyerConfig.mode === 'NONE' ? (
                 <div className="club-mobileFlyerEmptyPreview">
                   <span>Flyer del torneo</span>
@@ -1104,6 +1198,7 @@ export default function ClubNuevoTorneoPage() {
                   variant="editor"
                 />
               )}
+              </div>
               <div className="club-mobileFlyerModes" aria-label="Modo de flyer">
                 <button
                   type="button"
@@ -1130,6 +1225,7 @@ export default function ClubNuevoTorneoPage() {
                   className={flyerEditorOpen ? 'is-active' : ''}
                   aria-expanded={flyerEditorOpen}
                   onClick={() => {
+                    setFlyerSnapshot(structuredClone(flyerConfig))
                     setFlyerConfig((current) => ({ ...current, mode: 'AUTO' }))
                     setFlyerEditorOpen(true)
                   }}
@@ -1140,11 +1236,9 @@ export default function ClubNuevoTorneoPage() {
               {flyerEditorOpen ? (
                 <div className="club-mobileFlyerEditor">
                   <div className="club-mobileFlyerEditorHead">
-                    <div>
-                      <strong>Personalizar flyer</strong>
-                      <span>Los cambios se aplican al preview.</span>
-                    </div>
-                    <button type="button" onClick={() => setFlyerEditorOpen(false)}>Guardar y cerrar</button>
+                    <button type="button" onClick={() => { if (flyerSnapshot) setFlyerConfig(flyerSnapshot); setFlyerEditorOpen(false); setFlyerSnapshot(null) }}>← Cancelar</button>
+                    <strong>Personalizar flyer</strong>
+                    <button type="button" onClick={() => { setFlyerEditorOpen(false); setFlyerSnapshot(null) }}>Guardar</button>
                   </div>
                   <TournamentFlyerConfigurator
                     value={flyerConfig}
@@ -1169,27 +1263,27 @@ export default function ClubNuevoTorneoPage() {
             </details>
 
             <div className="club-review">
-              <ReviewBlock title="Identidad" step={1} onEdit={goToMobileStep}>
+              <ReviewBlock title="Identidad" step={1} onEdit={beginContextualEdit}>
                 <strong>{form.name || 'Sin nombre'}</strong>
                 <span>{form.publicDescription || 'Sin descripción pública'}</span>
               </ReviewBlock>
-              <ReviewBlock title="Competencia" step={2} onEdit={goToMobileStep}>
+              <ReviewBlock title="Competencia" step={2} onEdit={beginContextualEdit}>
                 <strong>Categoría {form.categoryId} · {genderOptions.find((option) => option.value === form.gender)?.label}</strong>
                 <span>{competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label}</span>
               </ReviewBlock>
-              <ReviewBlock title="Fechas e inscripción" step={3} onEdit={goToMobileStep}>
+              <ReviewBlock title="Fechas e inscripción" step={3} onEdit={beginContextualEdit}>
                 <strong>{form.startDate || 'Sin inicio'}{form.endDate ? ` → ${form.endDate}` : ''}</strong>
                 <span>{form.maxPairs ? `${form.minPairs}–${form.maxPairs} parejas` : `Desde ${form.minPairs} parejas`} · {form.pricePerPlayer === '0' ? 'Sin costo' : `$ ${form.pricePerPlayer}`}</span>
               </ReviewBlock>
-              <ReviewBlock title="Sede" step={4} onEdit={goToMobileStep}>
+              <ReviewBlock title="Sede" step={4} onEdit={beginContextualEdit}>
                 <strong>{form.venueName || 'Sede por definir'}</strong>
                 <span>{form.tournamentCourts.length ? `${form.tournamentCourts.length} cancha${form.tournamentCourts.length === 1 ? '' : 's'}` : 'Canchas por configurar'}</span>
               </ReviewBlock>
-              <ReviewBlock title="Formato y puntaje" step={5} onEdit={goToMobileStep}>
+              <ReviewBlock title="Formato y puntaje" step={5} onEdit={beginContextualEdit}>
                 <strong>{scheduleModeOptions.find((option) => option.value === form.scheduleMode)?.label} · {form.matchDurationMinutes} min</strong>
                 <span>{competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label}</span>
               </ReviewBlock>
-              <ReviewBlock title="Puntaje" step={6} onEdit={goToMobileStep}>
+              <ReviewBlock title="Puntaje" step={6} onEdit={beginContextualEdit}>
                 <strong>{form.pointsEnabled ? `${form.pointsWinner} puntos al ganador` : 'Sin puntaje'}</strong>
                 <span>{form.pointsEnabled ? `${form.pointsFinalist} al finalista · ${form.pointsParticipation} por participación` : 'No asigna puntos'}</span>
               </ReviewBlock>
@@ -1204,11 +1298,20 @@ export default function ClubNuevoTorneoPage() {
           </div>
 
           <div className="club-mobileActions" data-first-step={mobileStep === 1}>
+            {editingStep ? (
+              <>
+                <button type="button" className="club-secondaryBtn" onClick={cancelContextualEdit}>Cancelar</button>
+                <button type="button" className="club-primaryBtn" onClick={saveContextualEdit}>Guardar cambios</button>
+              </>
+            ) : (
+              <>
             {mobileStep > 1 ? <button type="button" className="club-secondaryBtn" onClick={() => goToMobileStep(mobileStep - 1)}>Atrás</button> : <span />}
             {mobileStep < 7 ? (
               <button type="button" className="club-primaryBtn" onClick={(event) => { event.preventDefault(); goToNextMobileStep() }}>Siguiente →</button>
             ) : (
               <button type="submit" className="club-primaryBtn" disabled={saving}>{saving ? 'Creando...' : 'Crear torneo'}</button>
+            )}
+              </>
             )}
           </div>
         </form>
@@ -1236,6 +1339,13 @@ export default function ClubNuevoTorneoPage() {
         }
         .club-newHead { align-items: flex-start; background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-admin-soft)); border: 1px solid rgba(15,23,42,.07); border-radius: 20px; display: flex; gap: 14px; justify-content: space-between; padding: 18px; }
         .club-message { background: #fff7df; border: 1px solid rgba(217,119,6,.24); border-radius: 12px; color: #854d0e; font-weight: 800; margin-top: 12px; padding: 10px 12px; }
+        .club-draftResume { align-items:center; background:#fff; border:1px solid color-mix(in srgb,var(--club-admin-accent) 30%,transparent); border-radius:14px; display:flex; gap:12px; justify-content:space-between; margin:12px 0 0; padding:10px 12px; }
+        .club-draftResume > div:first-child { display:grid; gap:2px; }
+        .club-draftResume strong { color:#071a35; font-size:14px; }
+        .club-draftResume span { color:#64748b; font-size:12px; }
+        .club-draftResume > div:last-child { display:flex; gap:6px; }
+        .club-draftResume button { background:#fff; border:1px solid rgba(15,23,42,.12); border-radius:9px; color:#17314f; font:inherit; font-size:12px; font-weight:900; min-height:40px; padding:0 10px; }
+        .club-draftResume button:first-child { background:#061b3a; color:#fff; }
         .club-formCard { background: rgba(248,250,252,.72); border: 1px solid rgba(15,23,42,.07); border-radius: 20px; display: grid; gap: 12px; margin-top: 14px; min-width: 0; padding: 12px; }
         .club-formSection { background: rgba(255,255,255,.96); border: 1px solid rgba(15,23,42,.08); border-radius: 18px; box-shadow: 0 14px 34px rgba(15,23,42,.045); display: grid; gap: 12px; padding: 16px; }
         .club-formSection--soft { background: linear-gradient(135deg, #fff, color-mix(in srgb, var(--club-admin-accent) 5%, white)); border-color: color-mix(in srgb, var(--club-admin-accent) 16%, transparent); }
@@ -1513,6 +1623,13 @@ export default function ClubNuevoTorneoPage() {
           .club-mobileFlyerEditorHead button { background:#fff; border:1px solid var(--club-admin-accent); border-radius:10px; color:#17314f; font:inherit; font-size:11px; font-weight:900; min-height:44px; padding:0 9px; }
           .club-mobileFlyerEditor .flyerCard { background:transparent; border:0; box-shadow:none; padding:0; }
           .club-mobileFlyerEditor .flyerBlockHead { display:none; }
+          .club-reviewStep[data-flyer-editor-open="true"] .club-mobileFlyerPrimaryPreview { display:none; }
+          .club-mobileFlyerEditor .flyerLayout { display:flex; flex-direction:column; }
+          .club-mobileFlyerEditor .flyerPreviewShell { order:-1; position:sticky; top:112px; z-index:6; }
+          .club-mobileFlyerEditor .flyerPreview { height:200px; min-height:200px; padding:10px; }
+          .club-mobileFlyerEditor .flyerPreviewBody { gap:5px; margin-top:8px; }
+          .club-mobileFlyerEditor .flyerPreviewMain h3 { font-size:24px; }
+          .club-mobileFlyerEditor .flyerPreviewMeta { display:none; }
           .club-reviewStep[data-flyer-editor-open="true"] .club-review { display:none; }
           .club-review { gap:5px; }
           .club-review article { min-height:68px; padding:8px 66px 8px 10px; position:relative; }
@@ -1533,6 +1650,10 @@ export default function ClubNuevoTorneoPage() {
           .club-mobileDatesGrid > * { grid-column:1 / -1; }
           .club-mobileDatesGrid > .club-mobileDateHalf,
           .club-mobileDatesGrid > .club-field--span2 { grid-column:auto; }
+          .club-pointsGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+          .club-pointsGrid .club-field { min-width:0; }
+          .club-draftResume { align-items:stretch; flex-direction:column; }
+          .club-draftResume > div:last-child { display:grid; grid-template-columns:1fr 1fr; }
         }
         @media (max-width: 340px) {
           .club-formCard { padding-left: 12px; padding-right: 12px; }

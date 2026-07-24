@@ -4,7 +4,7 @@ import Link from 'next/link'
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Repeat2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MoreVertical, Repeat2 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
@@ -940,6 +940,7 @@ export default function ClubTournamentDetailPage() {
   const [cancellingTournament, setCancellingTournament] = useState(false)
   const [pointsModalOpen, setPointsModalOpen] = useState(false)
   const [flyerModalOpen, setFlyerModalOpen] = useState(false)
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
   const [tournamentDisplayConfig, setTournamentDisplayConfig] = useState<TournamentDisplayConfig>(() => readTournamentDisplayConfig(null))
   const [tournamentRules, setTournamentRules] = useState<Record<string, unknown> | null>(null)
   const [registrationDetailModal, setRegistrationDetailModal] = useState<RegistrationDetailModal>(null)
@@ -3875,16 +3876,23 @@ export default function ClubTournamentDetailPage() {
     <div className="px-wrap">
       <div className="club-panel club-tournamentDetail" style={themeStyle}>
         <div className="club-detailTopbar">
-          <Link href="/club/torneos" className="club-backBtn">Volver a torneos</Link>
+          <Link href="/club/torneos" className="club-backBtn"><span className="club-backDesktop">Volver a torneos</span><span className="club-backMobile">← Torneos</span></Link>
           <div className="club-topbarActions">
-            {isDraft ? (
-              <Link href={`/club/torneos/${tournamentId}/editar`} className="club-editBtn">
-                Editar torneo
-              </Link>
-            ) : null}
-            <button className="club-editBtn" type="button" onClick={refreshTournamentExperience} disabled={loading || publishing || deletingTournament || cancellingTournament}>
-              {loading ? 'Actualizando...' : 'Actualizar'}
-            </button>
+            <div className="club-mobileActionMenu">
+              <button type="button" className="club-mobileMenuTrigger" aria-label="Más acciones" aria-expanded={mobileActionsOpen} onClick={() => setMobileActionsOpen((open) => !open)}>
+                <MoreVertical aria-hidden="true" />
+              </button>
+              {mobileActionsOpen ? (
+                <div className="club-mobileMenuPopover">
+                  {isDraft ? <Link href={`/club/torneos/${tournamentId}/editar`}>Editar torneo</Link> : null}
+                  <button type="button" onClick={() => { setMobileActionsOpen(false); void refreshTournamentExperience() }} disabled={loading || publishing || deletingTournament || cancellingTournament}>
+                    {loading ? 'Actualizando...' : 'Actualizar'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            {isDraft ? <Link href={`/club/torneos/${tournamentId}/editar`} className="club-editBtn club-desktopAction">Editar torneo</Link> : null}
+            <button className="club-editBtn club-desktopAction" type="button" onClick={refreshTournamentExperience} disabled={loading || publishing || deletingTournament || cancellingTournament}>{loading ? 'Actualizando...' : 'Actualizar'}</button>
             {isDraft ? (
               <button
                 className="club-primaryBtn club-publishBtn"
@@ -5686,6 +5694,7 @@ export default function ClubTournamentDetailPage() {
           top: 0;
         }
         .club-detailTopbar { align-items: center; display: flex; gap: 10px; justify-content: space-between; margin-bottom: 12px; }
+        .club-backMobile, .club-mobileActionMenu { display:none; }
         .club-topbarActions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
         .club-backBtn { align-items: center; appearance: none; background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 28%, transparent); border-radius: 999px; color: #061b3a; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; line-height: 1.15; min-height: 38px; padding: 8px 13px; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
         .club-backBtn:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 46%, transparent); box-shadow: 0 10px 24px var(--club-admin-glow); transform: translateY(-1px); }
@@ -5693,6 +5702,11 @@ export default function ClubTournamentDetailPage() {
         .club-editBtn:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 50%, transparent); box-shadow: 0 10px 24px var(--club-admin-glow); transform: translateY(-1px); }
         .club-editBtn:disabled { cursor: not-allowed; opacity: .58; }
         .club-editBtn:disabled:hover { box-shadow: none; transform: none; }
+        .club-mobileActionMenu { position:relative; }
+        .club-mobileMenuTrigger { align-items:center; background:#fff; border:1px solid rgba(15,23,42,.12); border-radius:999px; color:#061b3a; display:flex; height:42px; justify-content:center; padding:0; width:42px; }
+        .club-mobileMenuTrigger svg { height:20px; width:20px; }
+        .club-mobileMenuPopover { background:#fff; border:1px solid rgba(15,23,42,.10); border-radius:12px; box-shadow:0 16px 36px rgba(15,23,42,.16); display:grid; min-width:170px; padding:5px; position:absolute; right:0; top:48px; z-index:30; }
+        .club-mobileMenuPopover a, .club-mobileMenuPopover button { background:transparent; border:0; border-radius:8px; color:#17253f; font:inherit; font-size:14px; font-weight:850; min-height:42px; padding:9px 10px; text-align:left; text-decoration:none; }
         .club-detailTopbar .club-backBtn,
         .club-topbarActions .club-editBtn {
           background: #fff;
@@ -6364,8 +6378,12 @@ export default function ClubTournamentDetailPage() {
           .club-title { font-size: 24px; }
           .club-stepper, .club-metrics--detail { grid-template-columns: 1fr; }
           .club-planningSummary { grid-template-columns: 1fr; }
-          .club-detailTopbar { align-items: flex-start; flex-direction: column; }
-          .club-topbarActions { justify-content: flex-start; }
+          .club-detailTopbar { align-items:center; flex-direction:row; margin-bottom:8px; }
+          .club-backDesktop, .club-desktopAction { display:none !important; }
+          .club-backMobile, .club-mobileActionMenu { display:flex; }
+          .club-detailTopbar .club-backBtn { background:transparent; border:0; min-height:42px; padding:0 4px; }
+          .club-topbarActions { align-items:center; flex-wrap:nowrap; justify-content:flex-end; }
+          .club-topbarActions .club-publishBtn { min-height:42px; padding:8px 14px; }
           .club-matchTableHead { display: none; }
           .club-matchTableRow { align-items: start; gap: 6px; grid-template-columns: 1fr; padding: 7px; }
           .club-matchInfoCell { background: #f8fafc; border-radius: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 7px; }

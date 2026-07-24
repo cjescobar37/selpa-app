@@ -709,9 +709,44 @@ export default function ClubTorneosPage() {
           .club-metric span { font-size:10px; }
           .club-metric strong { font-size:20px; }
           .club-loadingCards { grid-template-columns:1fr; }
-          .club-tournamentList { grid-template-columns: 1fr; }
-          .club-titleLine { align-items: flex-start; flex-direction: column; }
-          .club-tournamentDetails { grid-template-columns: 1fr; }
+          .club-tournamentList { gap:8px; grid-template-columns: 1fr; }
+          .club-tournamentRow,
+          .club-tournamentRow--compact {
+            align-content:center;
+            gap:5px 8px;
+            grid-template-columns:84px minmax(0,1fr) 18px;
+            grid-template-rows:auto auto;
+            min-height:132px;
+            padding:10px 10px 10px 102px;
+          }
+          .club-tournamentRow::after { bottom:10px; height:auto; left:0; right:auto; top:10px; width:3px; }
+          .club-tournamentBackdrop {
+            border-radius:10px;
+            bottom:10px;
+            height:auto;
+            left:10px;
+            right:auto;
+            top:10px;
+            width:82px;
+          }
+          .club-tournamentRow::before { background:rgba(255,255,255,.94); }
+          .club-tournamentRow--active::before,
+          .club-tournamentRow--manualFlyer::before { background:rgba(255,255,255,.90); }
+          .club-tournamentMain { gap:5px; grid-column:2; grid-row:1; }
+          .club-titleLine { align-items:center; flex-direction:row; }
+          .club-titleLine strong { font-size:14px; -webkit-line-clamp:1; }
+          .club-statusBadge { font-size:9px; padding:4px 6px; }
+          .club-metaLine { gap:3px; }
+          .club-metaLine span { background:transparent; border:0; font-size:10px; padding:0; }
+          .club-metaLine span:not(:last-child)::after { content:' ·'; }
+          .club-tournamentDetails { display:flex; gap:8px; grid-column:2; grid-row:2; }
+          .club-tournamentDetails span { background:transparent; border:0; display:flex; gap:3px; padding:0; }
+          .club-tournamentDetails small { font-size:9px; text-transform:none; }
+          .club-tournamentDetails strong { font-size:10px; }
+          .club-tournamentDetails span:first-child { display:none; }
+          .club-rowActions { align-items:center; grid-column:3; grid-row:1 / 3; }
+          .club-rowActions::after { color:var(--club-admin-accent); content:'›'; font-size:24px; font-weight:800; }
+          .club-rowActions .club-secondaryBtn { display:none; }
         }
         @media (prefers-reduced-motion: reduce) { .club-loadingCards span { animation:none } }
       `}</style>
