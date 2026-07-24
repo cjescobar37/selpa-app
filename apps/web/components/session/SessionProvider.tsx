@@ -108,7 +108,7 @@ function getPostLoginDestination(ctx: Pick<SessionCtx, 'role' | 'user' | 'global
   if (ctx.role === 'platform') return '/platform'
   if (ctx.role === 'player') return '/player'
   if (!ctx.activeClub || !ctx.isApprovedMember) return '/seleccionar-club'
-  if (ctx.role === 'club') return `/clubs/${ctx.activeClub.id}`
+  if (ctx.role === 'club') return '/club'
   return '/player'
 }
 
@@ -170,6 +170,9 @@ async function resolveContext() {
   })) satisfies MembershipRow[]
 
   const approvedMemberships = membershipRows.filter(isApprovedMembership)
+  const approvedAdministrativeMemberships = approvedMemberships.filter((membership) =>
+    isClubStaffRole(membership.role)
+  )
 
   const approvedClubIds = approvedMemberships.map((m) => m.club_id)
 
@@ -230,11 +233,19 @@ async function resolveContext() {
       approvedMemberships.some((m) => m.club_id === configuredActiveClubId)
   )
 
-  let effectiveActiveClubId = hasValidConfiguredClub ? configuredActiveClubId : null
+  const soleAdministrativeClubId =
+    approvedAdministrativeMemberships.length === 1
+      ? approvedAdministrativeMemberships[0].club_id
+      : null
+
+  let effectiveActiveClubId =
+    soleAdministrativeClubId ?? (hasValidConfiguredClub ? configuredActiveClubId : null)
 
   if (!effectiveActiveClubId && clubs.length > 0) {
     effectiveActiveClubId = clubs[0].id
+  }
 
+  if (effectiveActiveClubId && configuredActiveClubId !== effectiveActiveClubId) {
     await supabase
       .from('user_settings')
       .upsert(

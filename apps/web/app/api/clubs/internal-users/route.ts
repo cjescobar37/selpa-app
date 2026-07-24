@@ -4,7 +4,11 @@ import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { clubInviteErrorResponse } from '@/lib/clubTeamInviteErrors'
 import { clubTeamMemberErrorResponse } from '@/lib/clubTeamMemberErrors'
 import {
+  INVITABLE_STAFF_ROLES,
+  STAFF_ROLES,
   isApprovedMembership,
+  isClubStaffRole,
+  isInvitableStaffRole,
   isManageableInternalRole,
   type ClubRole,
 } from '@/lib/clubMembershipRules'
@@ -132,11 +136,15 @@ export async function GET(req: NextRequest) {
       .from('club_memberships')
       .select('id,club_id,user_id,role,status,approved_at,created_at,updated_at')
       .eq('club_id', clubId)
+      .eq('status', 'APPROVED')
+      .not('approved_at', 'is', null)
+      .in('role', [...STAFF_ROLES])
       .order('created_at', { ascending: true }),
     supabaseAdmin
       .from('club_user_invites')
       .select('id,club_id,email,role,status,invited_by,resolved_by,resolved_at,target_user_id,created_at,updated_at,expires_at')
       .eq('club_id', clubId)
+      .in('role', [...INVITABLE_STAFF_ROLES])
       .order('created_at', { ascending: false }),
     supabaseAdmin
       .from('club_team_audit')
@@ -157,7 +165,12 @@ export async function GET(req: NextRequest) {
 
   const staffMemberships = ((membershipsRes.data ?? []) as MembershipRow[])
     .filter((membership) => isApprovedMembership(membership))
-    .filter((membership) => membership.role === 'OWNER' || isManageableInternalRole(membership.role))
+    .filter((membership) => isClubStaffRole(membership.role))
+
+  const staffMetrics = {
+    active: staffMemberships.length,
+    rolesCovered: new Set(staffMemberships.map((membership) => membership.role)).size,
+  }
 
   const invites = (invitesRes.data ?? []) as InviteRow[]
   const audit = (auditRes.data ?? []) as AuditRow[]
@@ -183,6 +196,7 @@ export async function GET(req: NextRequest) {
         full_name: getFullName(profile),
       }
     }),
+    metrics: staffMetrics,
     invites: invites.map((invite) => ({
       ...invite,
       invited_by_profile: profilesMap.get(invite.invited_by) ?? null,
@@ -212,7 +226,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Faltan clubId, email o role.' }, { status: 400 })
   }
 
-  if (!isManageableInternalRole(role)) {
+  if (!isInvitableStaffRole(role)) {
     return NextResponse.json({ error: 'Rol interno inválido para esta fase.' }, { status: 400 })
   }
 
@@ -228,7 +242,11 @@ export async function POST(req: NextRequest) {
     p_actor_user_id: user.id,
   })
   if (error) return clubInviteErrorResponse(error)
-  return NextResponse.json({ ok: true, invite })
+  return NextResponse.json({
+    ok: true,
+    operation: invite?.operation === 'PROMOTED' ? 'PROMOTED' : 'INVITED',
+    invite,
+  })
 }
 
 export async function PATCH(req: NextRequest) {

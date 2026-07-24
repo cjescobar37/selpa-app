@@ -104,10 +104,18 @@ Observaciones/deuda:
 
 - Dos triggers actualizan `updated_at`.
 - `club_memberships` es la fuente de pertenencia, aprobación y función administrativa; `club_players` es la fuente deportiva.
+- El staff operativo se limita a memberships aprobadas con rol `OWNER`, `ADMIN`,
+  `OPERADOR` o `PLANILLERO`. `PLAYER` conserva su membership, pero no se lista ni
+  se cuenta como staff.
+- La promoción desde el padrón usa `search_club_staff_candidates` y
+  `promote_club_player_to_staff_atomic`: busca candidatos elegibles sin exponer
+  el padrón completo, revalida actor/estado en base y reutiliza la membership.
 - `is_club_player()` exige ambos registros aprobados para el mismo usuario y club.
 - Las invitaciones de equipo se crean, aceptan, rechazan y cancelan mediante las
   RPC atómicas `*_club_team_invite_atomic`. Solo admiten `ADMIN`, `OPERADOR`,
-  `PLANILLERO` y `PLAYER`; no rehabilitan memberships existentes.
+  `PLANILLERO` y `PLAYER`. Al invitar como staff a una membership `PLAYER`
+  aprobada, la RPC actualiza esa misma membership de forma atómica; otros estados
+  existentes no se rehabilitan desde este flujo.
 - La aceptación de una invitación crea únicamente `club_memberships` y preserva
   íntegramente cualquier `club_players` existente.
 - Compatibilidad transitoria: los endpoints derivan el actor de la sesión y las
@@ -756,3 +764,17 @@ Observaciones/deuda:
 - `009_triggers`: triggers de `updated_at`, sync y deadline, idealmente ya deduplicados.
 - `010_seed_data`: datos iniciales/demo (`categories`, clubes, perfiles, torneos, contenido), separados del schema.
 - `011_legacy_cleanup`: migracion especifica para retirar columnas/functions/triggers legacy despues de backfill y validacion.
+
+## Finanzas internas del club
+
+La migración `20260727_club_internal_finance.sql` incorpora un dominio separado para la caja operativa:
+
+- `club_financial_transactions`: libro canónico de ingresos, egresos y ajustes.
+- `club_receivables` y `club_receivable_payments`: cobros y pagos parciales/totales; la RPC de pago crea el ingreso de forma atómica.
+- `club_expenses`: metadatos del gasto asociados uno a uno a un movimiento de egreso.
+- `club_financial_closures`: fotografía mensual, cierre y reapertura controlada por OWNER.
+- `club_financial_audit_log`: creación, pago, anulación, ajuste, cierre y reapertura.
+
+Todas las entidades exigen `club_id`, montos `numeric(14,2)` y `currency_code`. La lectura requiere `finance:view`; las escrituras directas no se conceden a `authenticated` y pasan por RPC con `finance:manage`.
+
+Este dominio no reemplaza ni mezcla `payments`, `commissions`, `settlements` o `settlement_items`, que corresponden al circuito comercial entre SELPA y los clubes.

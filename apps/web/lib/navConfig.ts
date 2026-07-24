@@ -93,7 +93,7 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
         href: '/club/torneos',
         requiredAnyCapabilities: ['tournaments:create', 'tournaments:update', 'registrations:manage', 'groups:generate', 'playoff:generate'],
         children: [
-          { label: 'Calendario', href: '/club/torneos', requiredAnyCapabilities: ['tournaments:view'] },
+          { label: 'Calendario', href: '/club/torneos/calendario', requiredAnyCapabilities: ['tournaments:view'] },
           { label: 'Crear torneo', href: '/club/torneos/nuevo', requiredAnyCapabilities: ['tournaments:create'] },
           { label: 'Reglamento', href: '/club/reglamento', requiredAnyCapabilities: ['news:manage', 'club:update'] },
         ],
@@ -116,6 +116,7 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
           { label: 'Equipo y roles', href: '/club/usuarios', requiredAnyCapabilities: ['roles:view', 'roles:manage'] },
           { label: 'Configuración', href: '/club/configuracion', requiredAnyCapabilities: ['club:update', 'club:branding'] },
           { label: 'Finanzas', href: '/club/contabilidad', requiredAnyCapabilities: ['finance:view', 'finance:manage'] },
+          { label: 'Estadísticas', href: '/club/estadisticas', requiredAnyCapabilities: ['reports:operational_view'] },
           { label: 'Reportes', href: '/club/reportes', requiredAnyCapabilities: ['finance:view', 'memberships:view'] },
         ],
       },

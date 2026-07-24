@@ -8,6 +8,7 @@ import { CLUB_THEMES, getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
 import { BrandingCard } from './_components/BrandingCard'
 import { SportsSettingsCard } from './_components/SportsSettingsCard'
 import { ThemeSelectorCard } from './_components/ThemeSelectorCard'
+import { AdminCollapsibleSection } from '@/components/admin/AdminCollapsibleSection'
 
 type ClubForm = {
   name: string
@@ -203,6 +204,7 @@ export default function ClubConfiguracionPage() {
   const [v, setV] = useState<ClubForm>(empty)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [activeMobileSection, setActiveMobileSection] = useState<string | null>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingRules, setUploadingRules] = useState(false)
   const [banner, setBanner] = useState<BannerState>(null)
@@ -312,7 +314,8 @@ export default function ClubConfiguracionPage() {
   useEffect(() => {
     if (!activeClub?.id || typeof window === 'undefined') return
     const stored = window.localStorage.getItem(`club-theme-request:${activeClub.id}`)
-    setPendingThemeKey(stored ? getClubTheme(stored).key : null)
+    const pendingKey = stored ? getClubTheme(stored).key : null
+    queueMicrotask(() => setPendingThemeKey(pendingKey))
   }, [activeClub?.id])
 
   const onChange = (k: keyof ClubForm, value: string) =>
@@ -501,7 +504,8 @@ export default function ClubConfiguracionPage() {
           </div>
         ) : (
           <div className="club-configStack">
-            <BrandingCard
+            <AdminCollapsibleSection title="Identidad y datos del club" summary={v.name || activeClub?.name || 'Datos principales'} open={activeMobileSection === 'identity'} onToggle={() => setActiveMobileSection((value) => value === 'identity' ? null : 'identity')}>
+              <BrandingCard
               value={v}
               activeClubName={activeClub?.name}
               displayLogo={displayLogo}
@@ -512,9 +516,11 @@ export default function ClubConfiguracionPage() {
               onChange={onChange}
               onLogoFileChange={onLogoFileChange}
               onRulesFileChange={onRulesFileChange}
-            />
+              />
+            </AdminCollapsibleSection>
 
-            <section className="px-card px-card--flat club-hoursCard">
+            <AdminCollapsibleSection title="Horarios" summary="Días hábiles, sábados y domingos" open={activeMobileSection === 'hours'} onToggle={() => setActiveMobileSection((value) => value === 'hours' ? null : 'hours')}>
+              <section className="px-card px-card--flat club-hoursCard">
               <div style={{ alignItems: 'baseline', display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between' }}>
                 <div className="px-sectionTitle">Horarios operativos</div>
                 <span className="px-help" style={{ fontSize: 12 }}>Se guardan en el campo actual del club.</span>
@@ -533,18 +539,23 @@ export default function ClubConfiguracionPage() {
                   </label>
                 ))}
               </div>
-            </section>
+              </section>
+            </AdminCollapsibleSection>
 
-            <ThemeSelectorCard
+            <AdminCollapsibleSection title="Identidad visual" summary={`Tema ${selectedTheme.key}`} open={activeMobileSection === 'theme'} onToggle={() => setActiveMobileSection((value) => value === 'theme' ? null : 'theme')}>
+              <ThemeSelectorCard
               themes={THEME_OPTIONS}
               selectedTheme={selectedTheme}
               themeLocked={v.theme_locked}
               canChooseTheme={canChooseTheme}
               pendingThemeKey={pendingThemeKey}
               onSubmitThemeRequest={submitThemeRequest}
-            />
+              />
+            </AdminCollapsibleSection>
 
-            <SportsSettingsCard courtsCount={v.courts_count} onActivate={showMissingSportsModel} />
+            <AdminCollapsibleSection title="Configuración deportiva" summary={`${v.courts_count || 0} canchas configuradas`} open={activeMobileSection === 'sports'} onToggle={() => setActiveMobileSection((value) => value === 'sports' ? null : 'sports')}>
+              <SportsSettingsCard courtsCount={v.courts_count} onActivate={showMissingSportsModel} />
+            </AdminCollapsibleSection>
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button
@@ -620,6 +631,8 @@ export default function ClubConfiguracionPage() {
           font-weight: 950;
         }
         .club-configStack { display: grid; gap: 12px; margin-top: 14px; min-width: 0; }
+        .adminCollapsibleSection__toggle { display:none; }
+        .adminCollapsibleSection__content { min-width:0; }
         .club-config .px-card {
           background: rgba(255,255,255,.96);
           border: 1px solid rgba(15,23,42,.08);
@@ -670,12 +683,25 @@ export default function ClubConfiguracionPage() {
           .club-themePaletteGrid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
         }
         @media (max-width: 760px) {
-          .club-config { padding: 16px; }
-          .club-configHead { display: grid; }
+          .club-config { padding: 14px; }
+          .club-configHead { border-radius:14px; display: grid; padding:14px; }
+          .club-configHead .club-title { font-size:24px; }
+          .club-configHead .club-sub { display:none; }
           .club-configOps { grid-template-columns: 1fr; min-width: 0; }
           .club-hoursGrid { grid-template-columns: 1fr; }
           .club-configBrandGrid, .club-configBrandFields, .club-configTwoGrid { grid-template-columns: 1fr !important; }
           .club-themePaletteGrid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .adminCollapsibleSection { background:#fff; border:1px solid rgba(15,23,42,.09); border-radius:14px; overflow:hidden; }
+          .adminCollapsibleSection__toggle { align-items:center; background:#fff; border:0; color:#061b3a; display:flex; justify-content:space-between; min-height:68px; padding:12px 14px; text-align:left; width:100%; }
+          .adminCollapsibleSection__toggle > span:first-child { display:grid; gap:3px; }
+          .adminCollapsibleSection__toggle strong { font-size:15px; }
+          .adminCollapsibleSection__toggle small { color:#64748b; font-size:12px; font-weight:700; }
+          .adminCollapsibleSection__action { align-items:center; color:var(--club-admin-accent); display:flex; font-size:12px; font-weight:900; gap:4px; }
+          .adminCollapsibleSection__action svg { transition:transform .18s ease; }
+          .adminCollapsibleSection__content { display:none; padding:0 10px 10px; }
+          .adminCollapsibleSection.is-open .adminCollapsibleSection__content { display:block; }
+          .adminCollapsibleSection.is-open .adminCollapsibleSection__action svg { transform:rotate(180deg); }
+          .adminCollapsibleSection .px-card { border-radius:12px; box-shadow:none; }
         }
       `}</style>
     </div>

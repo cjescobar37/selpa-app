@@ -309,10 +309,6 @@ export default function ClubRankingPage() {
               <RankingBoard columns={rankingBoardColumns} />
             )}
 
-            <footer className="club-rankingFootnote">
-              El perfil completo del jugador queda para la siguiente capa. Esta vista ya deja identificados los `user_id`
-              para abrir perfiles sin cambiar el modelo actual.
-            </footer>
           </>
         )}
       </div>

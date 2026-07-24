@@ -6,8 +6,10 @@ export type MembershipApprovalState = {
   approved_at?: string | null
 }
 
-export const CLUB_STAFF_ROLES: ClubRole[] = ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO']
-export const INTERNAL_CLUB_ROLES: ClubRole[] = ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO']
+export const STAFF_ROLES = ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO'] as const satisfies readonly ClubRole[]
+export const INVITABLE_STAFF_ROLES = ['ADMIN', 'OPERADOR', 'PLANILLERO'] as const satisfies readonly ClubRole[]
+export const CLUB_STAFF_ROLES: readonly ClubRole[] = STAFF_ROLES
+export const INTERNAL_CLUB_ROLES: readonly ClubRole[] = STAFF_ROLES
 export const MANAGEABLE_INTERNAL_ROLES: ClubRole[] = ['ADMIN', 'OPERADOR', 'PLANILLERO', 'PLAYER']
 
 export function isApprovedMembership(membership: MembershipApprovalState | null | undefined) {
@@ -16,11 +18,15 @@ export function isApprovedMembership(membership: MembershipApprovalState | null 
 
 /** @deprecated Do not use role grouping for authorization; require a ClubCapability. */
 export function isClubStaffRole(role: string | null | undefined) {
-  return CLUB_STAFF_ROLES.includes(role as ClubRole)
+  return STAFF_ROLES.includes(role as (typeof STAFF_ROLES)[number])
 }
 
 export function isInternalClubRole(role: string | null | undefined) {
-  return INTERNAL_CLUB_ROLES.includes(role as ClubRole)
+  return STAFF_ROLES.includes(role as (typeof STAFF_ROLES)[number])
+}
+
+export function isInvitableStaffRole(role: string | null | undefined) {
+  return INVITABLE_STAFF_ROLES.includes(role as (typeof INVITABLE_STAFF_ROLES)[number])
 }
 
 export function isManageableInternalRole(role: string | null | undefined) {

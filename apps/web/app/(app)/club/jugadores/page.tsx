@@ -83,7 +83,6 @@ export default function ClubJugadoresPage() {
   const [pageSize, setPageSize] = useState(25)
 
   const activeTab = searchParams.get('tab') === 'solicitudes' ? 'requests' : 'players'
-  const urlPlayerSearch = searchParams.get('buscar') ?? ''
   const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
   const themeStyle = useMemo(
     () => ({
@@ -191,14 +190,6 @@ export default function ClubJugadoresPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClub?.id])
 
-  useEffect(() => {
-    setPage(1)
-  }, [accountFilter, categoryFilter, pageSize, playerSearch, statusFilter])
-
-  useEffect(() => {
-    setPlayerSearch(urlPlayerSearch)
-  }, [urlPlayerSearch])
-
   async function applyAction(request: PlayerRequest, action: 'approve' | 'reject') {
     setSavingId(request.id)
     setMessage('')
@@ -258,7 +249,9 @@ export default function ClubJugadoresPage() {
         {!activeClub?.id ? (
           <div className="px-empty">Primero seleccioná un club activo.</div>
         ) : loading ? (
-          <div className="px-empty">Cargando jugadores...</div>
+          <div className="club-playerSkeletons" aria-busy="true" aria-label="Cargando jugadores">
+            {[0, 1, 2].map((item) => <span key={item} />)}
+          </div>
         ) : (
           <>
             <div className="club-playerTabs">
@@ -343,11 +336,11 @@ export default function ClubJugadoresPage() {
               <div className="club-playerFilters">
                 <label className="club-playerSearch">
                   <span>Buscar</span>
-                  <input className="px-input" value={playerSearch} onChange={(event) => setPlayerSearch(event.target.value)} placeholder="Nombre o email" />
+                  <input className="px-input" value={playerSearch} onChange={(event) => { setPlayerSearch(event.target.value); setPage(1) }} placeholder="Nombre o email" />
                 </label>
                 <label>
                   <span>Categoría</span>
-                  <select className="px-input" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                  <select className="px-input" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1) }}>
                     <option value="all">Todas</option>
                     {categories.map((category) => (
                       <option key={category} value={String(category)}>{category}ta</option>
@@ -356,7 +349,7 @@ export default function ClubJugadoresPage() {
                 </label>
                 <label>
                   <span>Estado</span>
-                  <select className="px-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <select className="px-input" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1) }}>
                     <option value="all">Todos</option>
                     <option value="approved">Aprobados</option>
                     <option value="pending">Pendientes</option>
@@ -364,7 +357,7 @@ export default function ClubJugadoresPage() {
                 </label>
                 <label>
                   <span>Tipo</span>
-                  <select className="px-input" value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
+                  <select className="px-input" value={accountFilter} onChange={(event) => { setAccountFilter(event.target.value); setPage(1) }}>
                     <option value="all">Todos</option>
                     <option value="account">Con cuenta</option>
                     <option value="manual">Manual / sin cuenta</option>
@@ -382,7 +375,7 @@ export default function ClubJugadoresPage() {
                     <span>Mostrando {pageStart}-{pageEnd} de {filteredPlayers.length}</span>
                     <label>
                       <span>Filas</span>
-                      <select className="px-input" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+                      <select className="px-input" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }}>
                         <option value={25}>25</option>
                         <option value={50}>50</option>
                         <option value={100}>100</option>
@@ -528,6 +521,9 @@ export default function ClubJugadoresPage() {
         .club-playersStats b { color: #17253f; }
         .club-message { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 24%, transparent); border-radius: 14px; color: #061b3a; font-weight: 850; margin-top: 12px; padding: 10px 12px; }
         .club-playerTabs { align-items: center; background: #f8fafc; border: 1px solid rgba(15,23,42,.08); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 14px; padding: 4px; }
+        .club-playerSkeletons { display:grid; gap:8px; margin-top:14px }
+        .club-playerSkeletons span { animation:clubPlayerPulse 1.2s ease-in-out infinite alternate; background:#e8edf2; border-radius:14px; min-height:70px }
+        @keyframes clubPlayerPulse { to { opacity:.48 } }
         .club-playerTab { align-items: center; background: transparent; border: 1px solid transparent; border-radius: 9px; color: #64748b; display: inline-flex; font-size: 12px; font-weight: 950; gap: 7px; min-height: 34px; padding: 7px 10px; text-decoration: none; }
         .club-playerTab span { background: rgba(100,116,139,.10); border-radius: 999px; font-size: 11px; min-width: 22px; padding: 2px 6px; text-align: center; }
         .club-playerTab:hover { background: #fff; border-color: color-mix(in srgb, var(--club-admin-accent) 24%, transparent); color: #061b3a; }
@@ -592,10 +588,14 @@ export default function ClubJugadoresPage() {
           .club-rowActions { justify-content: flex-end; }
         }
         @media (max-width: 760px) {
-          .club-playersHead { display: grid; }
-          .club-playersStats { justify-content: flex-start; }
-          .club-playerTabs { align-items: stretch; flex-direction: column; }
-          .club-playerTab { justify-content: space-between; width: 100%; }
+          .club-players { padding:12px; }
+          .club-playersHead { display: grid; gap:10px; padding:13px; }
+          .club-playersHead .club-sub { display:none; }
+          .club-playersStats { display:grid; gap:5px; grid-template-columns:repeat(4,minmax(0,1fr)); justify-content:stretch; }
+          .club-playersStats span { border-radius:10px; display:grid; font-size:10px; gap:1px; padding:6px; text-align:center; white-space:normal; }
+          .club-playersStats b { font-size:15px; }
+          .club-playerTabs { align-items:stretch; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:10px; }
+          .club-playerTab { font-size:11px; justify-content:center; padding:6px; text-align:center; width:100%; }
           .club-playerFilters { grid-template-columns: 1fr; }
           .club-playerListToolbar, .club-playerPagination { align-items: stretch; display: grid; justify-content: stretch; }
           .club-playerTableHead { display: none; }
@@ -604,6 +604,7 @@ export default function ClubJugadoresPage() {
           .club-playerTableRow > span::before { color: #64748b; content: attr(data-label); font-size: 10px; font-weight: 950; text-transform: uppercase; }
           .club-playerIdentity { align-items: flex-start; display: grid; }
         }
+        @media (prefers-reduced-motion: reduce) { .club-playerSkeletons span { animation:none } }
       `}</style>
     </div>
   )

@@ -214,17 +214,6 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(date).replace('.', '')
 }
 
-function dateParts(value?: string | null) {
-  if (!value) return { day: '--', month: 'Fecha', year: 'A definir' }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return { day: '--', month: 'Fecha', year: 'A definir' }
-  return {
-    day: new Intl.DateTimeFormat('es-AR', { day: '2-digit' }).format(date),
-    month: new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(date).replace('.', ''),
-    year: new Intl.DateTimeFormat('es-AR', { year: 'numeric' }).format(date),
-  }
-}
-
 function CampaignSlot({
   campaign,
   title,
@@ -244,14 +233,16 @@ function CampaignSlot({
   if (!campaign) return null
   if (campaign && config.enabled) {
     return (
-      <ConfigurableAdBanner
-        className={`clubPublicAd clubPublicAd--composed ${hero ? 'is-hero' : ''}`}
-        config={config}
-        description={campaign.description}
-        href={config.buttonUrl || targetUrl}
-        imageUrl={image}
-        title={campaign.title}
-      />
+      <TrackedCampaign campaignId={campaign.id} placementKey={campaign.slotId}>
+        <ConfigurableAdBanner
+          className={`clubPublicAd clubPublicAd--composed ${hero ? 'is-hero' : ''}`}
+          config={config}
+          description={campaign.description}
+          href={config.buttonUrl || targetUrl}
+          imageUrl={image}
+          title={campaign.title}
+        />
+      </TrackedCampaign>
     )
   }
   const body = (
@@ -276,6 +267,48 @@ function CampaignSlot({
   }
 
   return <div className={className}>{body}</div>
+}
+
+function TrackedCampaign({
+  campaignId,
+  placementKey,
+  children,
+}: {
+  campaignId: string
+  placementKey: string
+  children: ReactNode
+}) {
+  const sessionKeyRef = useRef('')
+  useEffect(() => {
+    let key = window.sessionStorage.getItem('selpa-ad-session')
+    if (!key) {
+      key = `${crypto.randomUUID()}-${Date.now()}`
+      window.sessionStorage.setItem('selpa-ad-session', key)
+    }
+    sessionKeyRef.current = key
+    void fetch('/api/ads/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaignId, placementKey, eventType: 'impression', sessionKey: key }),
+      keepalive: true,
+    })
+  }, [campaignId, placementKey])
+
+  return (
+    <div
+      onClick={() => {
+        if (!sessionKeyRef.current) return
+        void fetch('/api/ads/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaignId, placementKey, eventType: 'click', sessionKey: sessionKeyRef.current }),
+          keepalive: true,
+        })
+      }}
+    >
+      {children}
+    </div>
+  )
 }
 
 function SectionTitle({ kicker, title, action }: { kicker: string; title: string; action?: ReactNode }) {

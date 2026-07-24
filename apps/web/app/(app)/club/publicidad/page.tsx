@@ -1,1625 +1,332 @@
 'use client'
 
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { Calendar, ExternalLink, ImageIcon, Megaphone, MoreVertical, Plus, Upload, UsersRound, X } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
-import AdVisualEditor from '@/components/ads/AdVisualEditor'
-import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
-import { BRAND } from '@/lib/branding'
-import {
-  defaultPlatformAdRenderConfig,
-  normalizePlatformAdRenderConfig,
-  type PlatformAdRenderConfig,
-} from '@/lib/platformAdConfig'
-import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import ConfigurableAdBanner from '@/components/ads/ConfigurableAdBanner'
+import { defaultPlatformAdRenderConfig } from '@/lib/platformAdConfig'
+import styles from './publicidad.module.css'
 
-type CommercialSlotStatus = 'Disponible' | 'Reservado' | 'Activo'
-
-type CommercialSlot = {
-  id: string
-  name: string
-  detailName: string
-  status: CommercialSlotStatus
-  visibility: string
-  visibilityScore: number
-  location: string
-  format: string
-  recommendedSize: string
-  description: string
-  previewClass: string
+type Section = 'sponsors' | 'campaigns'
+type Sponsor = {
+  id: string; name: string; logo_url: string | null; logo_path: string | null; description: string | null
+  category: string; website_url: string | null; contact_name: string | null; contact_email: string | null
+  contact_phone: string | null; starts_on: string | null; ends_on: string | null; contribution_amount: number | null
+  currency_code: string; internal_notes: string | null; visual_priority: number; status: 'active' | 'inactive'
 }
-
-type ClubSponsor = {
-  id: string
-  name: string
-  logo_url: string | null
-  website_url: string | null
-  contact_name: string | null
-  contact_email: string | null
-  status: 'active' | 'inactive'
+type Campaign = {
+  id: string; sponsor_id: string | null; internal_name: string | null; title: string; description: string | null
+  image_url: string | null; image_path: string | null; target_url: string | null; cta_label: string | null
+  internal_notes: string | null; template_key: string; status: 'draft' | 'scheduled' | 'active' | 'paused' | 'ended'
+  sort_order: number; starts_at: string | null; ends_at: string | null; render_config: unknown
+  sponsor?: Pick<Sponsor, 'id' | 'name' | 'status' | 'ends_on'> | null
+  placements?: Array<{ placement_key: string }>
 }
+type Metric = { impressions: number; clicks: number; firstAt: string | null; lastAt: string | null }
 
-type ClubCampaign = {
-  id: string
-  club_id: string
-  sponsor_id: string | null
-  slot_id: string
-  title: string
-  description: string | null
-  image_url: string | null
-  target_url: string | null
-  status: 'draft' | 'active' | 'paused' | 'ended'
-  sort_order?: number | null
-  render_config?: unknown
-  starts_at: string | null
-  ends_at: string | null
-  sponsor?: Pick<ClubSponsor, 'id' | 'name' | 'logo_url' | 'website_url' | 'status'> | null
-}
-
-type CampaignFormState = {
-  title: string
-  description: string
-  imageUrl: string
-  targetUrl: string
-  status: ClubCampaign['status']
-  sortOrder: string
-  renderConfig: PlatformAdRenderConfig
-  sponsorId: string
-  newSponsorName: string
-  startsAt: string
-  endsAt: string
-}
-
-const commercialSlots: CommercialSlot[] = [
-  {
-    id: 'CLUB_HOME_HERO',
-    name: 'Hero del club',
-    detailName: 'Banner Principal Home',
-    status: 'Activo',
-    visibility: 'Alta visibilidad',
-    visibilityScore: 5,
-    location: 'Home pública',
-    format: 'Horizontal bajo',
-    recommendedSize: '1200x360',
-    description: 'Ideal para sponsors principales.',
-    previewClass: 'is-hero',
-  },
-  {
-    id: 'CLUB_HOME_AFTER_TOURNAMENTS',
-    name: 'Después de torneos',
-    detailName: 'Banner Después de Torneos',
-    status: 'Disponible',
-    visibility: 'Alta visibilidad',
-    visibilityScore: 4,
-    location: 'Home pública · Agenda',
-    format: 'Horizontal bajo',
-    recommendedSize: '1200x300',
-    description: 'Ideal para marcas vinculadas a torneos, paletas, indumentaria o servicios.',
-    previewClass: 'is-calendar',
-  },
-  {
-    id: 'CLUB_HOME_AFTER_NEWS',
-    name: 'Después de noticias',
-    detailName: 'Banner Después de Noticias',
-    status: 'Reservado',
-    visibility: 'Media visibilidad',
-    visibilityScore: 3,
-    location: 'Home pública · Noticias',
-    format: 'Horizontal bajo',
-    recommendedSize: '1200x300',
-    description: 'Ideal para refuerzo de marca junto a novedades del club.',
-    previewClass: 'is-news-right',
-  },
+const placements = [
+  { key: 'CLUB_HOME_HERO', label: 'Hero de la home', hint: 'Banner horizontal 1200 × 360' },
+  { key: 'CLUB_HOME_AFTER_TOURNAMENTS', label: 'Después de torneos', hint: 'Banner horizontal 1200 × 300' },
+  { key: 'CLUB_HOME_AFTER_NEWS', label: 'Después de noticias', hint: 'Banner horizontal 1200 × 300' },
 ]
-
-const statusTone: Record<CommercialSlotStatus, string> = {
-  Disponible: 'is-available',
-  Reservado: 'is-reserved',
-  Activo: 'is-active',
+const categories: Record<string, string> = {
+  MAIN: 'Principal', GOLD: 'Oro', SILVER: 'Plata', BRONZE: 'Bronce',
+  INSTITUTIONAL: 'Institucional', SUPPLIER: 'Proveedor', OTHER: 'Otro',
+}
+const campaignLabels: Record<Campaign['status'], string> = {
+  draft: 'Borrador', scheduled: 'Programada', active: 'Activa', paused: 'Pausada', ended: 'Finalizada',
+}
+const blankSponsor = {
+  name: '', description: '', category: 'OTHER', websiteUrl: '', contactName: '', contactEmail: '',
+  contactPhone: '', startsOn: '', endsOn: '', contributionAmount: '', currencyCode: 'ARS',
+  internalNotes: '', visualPriority: '100', status: 'active', logoUrl: '', logoPath: '',
+}
+const blankCampaign = {
+  internalName: '', sponsorId: '', title: '', description: '', imageUrl: '', imagePath: '',
+  targetUrl: '', ctaLabel: 'Conocer más', internalNotes: '', templateKey: 'BANNER_HORIZONTAL',
+  status: 'draft', sortOrder: '100', startsAt: '', endsAt: '', placements: ['CLUB_HOME_HERO'],
 }
 
-const emptyCampaignForm: CampaignFormState = {
-  title: '',
-  description: '',
-  imageUrl: '',
-  targetUrl: '',
-  status: 'draft',
-  sortOrder: '100',
-  renderConfig: {
-    ...defaultPlatformAdRenderConfig,
-    enabled: true,
-    themeMode: 'AUTO',
-    subtitle: 'Sponsor del club',
-    buttonEnabled: true,
-  },
-  sponsorId: '',
-  newSponsorName: '',
-  startsAt: '',
-  endsAt: '',
+function isoFromLocal(value: string) {
+  return value ? new Date(value).toISOString() : null
 }
-
-const campaignStatusLabel: Record<ClubCampaign['status'], string> = {
-  draft: 'Borrador',
-  active: 'Activo',
-  paused: 'Pausado',
-  ended: 'Finalizado',
-}
-
-function pickSlotCampaign(slotId: string, campaigns: ClubCampaign[]) {
-  const rows = campaigns.filter((campaign) => campaign.slot_id === slotId)
-  return rows.find((campaign) => campaign.status === 'active') ??
-    rows.find((campaign) => campaign.status === 'draft') ??
-    null
-}
-
-function toLocalDateInput(value: string | null) {
+function localFromIso(value: string | null) {
   if (!value) return ''
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const offset = date.getTimezoneOffset()
-  const local = new Date(date.getTime() - offset * 60_000)
-  return local.toISOString().slice(0, 16)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+function sponsorState(row?: Sponsor | null) {
+  if (!row) return blankSponsor
+  return {
+    name: row.name, description: row.description ?? '', category: row.category, websiteUrl: row.website_url ?? '',
+    contactName: row.contact_name ?? '', contactEmail: row.contact_email ?? '', contactPhone: row.contact_phone ?? '',
+    startsOn: row.starts_on ?? '', endsOn: row.ends_on ?? '', contributionAmount: row.contribution_amount?.toString() ?? '',
+    currencyCode: row.currency_code, internalNotes: row.internal_notes ?? '', visualPriority: String(row.visual_priority),
+    status: row.status, logoUrl: row.logo_url ?? '', logoPath: row.logo_path ?? '',
+  }
+}
+function campaignState(row?: Campaign | null) {
+  if (!row) return blankCampaign
+  return {
+    internalName: row.internal_name ?? row.title, sponsorId: row.sponsor_id ?? '', title: row.title,
+    description: row.description ?? '', imageUrl: row.image_url ?? '', imagePath: row.image_path ?? '',
+    targetUrl: row.target_url ?? '', ctaLabel: row.cta_label ?? '', internalNotes: row.internal_notes ?? '',
+    templateKey: row.template_key, status: row.status, sortOrder: String(row.sort_order ?? 100),
+    startsAt: localFromIso(row.starts_at), endsAt: localFromIso(row.ends_at),
+    placements: row.placements?.map((item) => item.placement_key) ?? [row.placements?.[0]?.placement_key ?? 'CLUB_HOME_HERO'],
+  }
+}
+function effectiveSponsorStatus(sponsor: Sponsor) {
+  const today = new Date().toISOString().slice(0, 10)
+  if (sponsor.status === 'inactive') return 'Inactivo'
+  if (sponsor.ends_on && sponsor.ends_on < today) return 'Vencido'
+  if (sponsor.ends_on) {
+    const days = Math.ceil((new Date(`${sponsor.ends_on}T00:00:00`).getTime() - Date.now()) / 86400000)
+    if (days <= 30) return 'Próximo a vencer'
+  }
+  return 'Activo'
 }
 
-function fromLocalDateInput(value: string) {
-  if (!value) return null
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date.toISOString()
-}
-
-export default function ClubPublicidadPage() {
+export default function ClubAdvertisingPage() {
   const { activeClub } = useSession()
-  const clubName = activeClub?.name ?? 'tu club'
-  const [selectedSlotId, setSelectedSlotId] = useState(commercialSlots[0].id)
-  const [sponsors, setSponsors] = useState<ClubSponsor[]>([])
-  const [campaigns, setCampaigns] = useState<ClubCampaign[]>([])
-  const [loading, setLoading] = useState(false)
+  const [section, setSection] = useState<Section>('sponsors')
+  const [sponsors, setSponsors] = useState<Sponsor[]>([])
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [metrics, setMetrics] = useState<Record<string, Metric>>({})
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [alert, setAlert] = useState<string | null>(null)
-  const [modalMode, setModalMode] = useState<'create' | 'image' | null>(null)
-  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null)
-  const [campaignForm, setCampaignForm] = useState<CampaignFormState>(emptyCampaignForm)
-  const [themeKey, setThemeKey] = useState<string | null>(null)
-  const selectedSlot = commercialSlots.find((slot) => slot.id === selectedSlotId) ?? commercialSlots[0]
-  const selectedCampaign = pickSlotCampaign(selectedSlot.id, campaigns)
-  const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
-  const themeStyle = useMemo(
-    () => ({
-      '--club-commercial-accent': theme.vars.accent,
-      '--club-commercial-accent-2': theme.vars.accent2,
-      '--club-commercial-soft': theme.vars.soft,
-      '--club-commercial-glow': theme.vars.glow,
-    }) as CSSProperties,
-    [theme],
-  )
-  const campaignsBySlot = useMemo(() => {
-    return new Map(commercialSlots.map((slot) => [slot.id, pickSlotCampaign(slot.id, campaigns)]))
+  const [message, setMessage] = useState('')
+  const [modal, setModal] = useState<'sponsor' | 'campaign' | 'preview' | null>(null)
+  const [editingSponsor, setEditingSponsor] = useState<Sponsor | null>(null)
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
+  const [sponsorForm, setSponsorForm] = useState(blankSponsor)
+  const [campaignForm, setCampaignForm] = useState(blankCampaign)
+  const clubId = activeClub?.id
+
+  const token = useCallback(async () => (await supabase.auth.getSession()).data.session?.access_token ?? '', [])
+  const load = useCallback(async () => {
+    if (!clubId) return
+    try {
+      const accessToken = await token()
+      setLoading(true)
+      const headers = { Authorization: `Bearer ${accessToken}` }
+      const [sponsorRes, campaignRes, metricRes] = await Promise.all([
+        fetch(`/api/clubs/${clubId}/sponsors`, { headers, cache: 'no-store' }),
+        fetch(`/api/clubs/${clubId}/campaigns`, { headers, cache: 'no-store' }),
+        fetch(`/api/clubs/${clubId}/campaigns/metrics`, { headers, cache: 'no-store' }),
+      ])
+      const [sponsorJson, campaignJson, metricJson] = await Promise.all([sponsorRes.json(), campaignRes.json(), metricRes.json()])
+      if (!sponsorRes.ok) throw new Error(sponsorJson.error)
+      if (!campaignRes.ok) throw new Error(campaignJson.error)
+      setSponsors(sponsorJson.sponsors ?? [])
+      setCampaigns(campaignJson.campaigns ?? [])
+      setMetrics(metricJson.metrics ?? {})
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pudimos cargar el módulo.')
+    } finally { setLoading(false) }
+  }, [clubId, token])
+  useEffect(() => {
+    const request = window.setTimeout(() => { void load() }, 0)
+    return () => window.clearTimeout(request)
+  }, [load])
+
+  const activeCampaigns = useMemo(() => campaigns.filter((item) => item.status === 'active' || item.status === 'scheduled').length, [campaigns])
+  const campaignCount = useMemo(() => {
+    const map = new Map<string, number>()
+    campaigns.filter((item) => item.status === 'active' || item.status === 'scheduled').forEach((item) => {
+      if (item.sponsor_id) map.set(item.sponsor_id, (map.get(item.sponsor_id) ?? 0) + 1)
+    })
+    return map
   }, [campaigns])
 
-  const statusSummary = commercialSlots.reduce<Record<CommercialSlotStatus, number>>(
-    (acc, slot) => {
-      acc[slot.status] += 1
-      return acc
-    },
-    { Disponible: 0, Reservado: 0, Activo: 0 },
-  )
-
-  const loadCommercialData = useCallback(async () => {
-    if (!activeClub?.id) return
-    setLoading(true)
-    setAlert(null)
-    try {
-      const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      if (!token) throw new Error('Sesión inválida.')
-
-      const [sponsorsRes, campaignsRes] = await Promise.all([
-        fetch(`/api/clubs/${activeClub.id}/sponsors`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        }),
-        fetch(`/api/clubs/${activeClub.id}/campaigns`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        }),
-      ])
-
-      const sponsorsJson = await sponsorsRes.json().catch(() => ({}))
-      const campaignsJson = await campaignsRes.json().catch(() => ({}))
-      if (!sponsorsRes.ok) throw new Error(sponsorsJson?.error || 'No pude cargar sponsors.')
-      if (!campaignsRes.ok) throw new Error(campaignsJson?.error || 'No pude cargar campañas.')
-
-      setSponsors((sponsorsJson.sponsors ?? []) as ClubSponsor[])
-      setCampaigns((campaignsJson.campaigns ?? []) as ClubCampaign[])
-    } catch (error) {
-      setAlert(error instanceof Error ? error.message : 'No pude cargar el inventario comercial.')
-    } finally {
-      setLoading(false)
-    }
-  }, [activeClub?.id])
-
-  useEffect(() => {
-    loadCommercialData()
-  }, [loadCommercialData])
-
-  useEffect(() => {
-    let alive = true
-
-    async function loadTheme() {
-      if (!activeClub?.id) {
-        setThemeKey(null)
-        return
-      }
-
-      const { data } = await supabase
-        .from('clubs')
-        .select('theme_key')
-        .eq('id', activeClub.id)
-        .maybeSingle()
-
-      if (alive) setThemeKey((data?.theme_key as string | null) ?? null)
-    }
-
-    void loadTheme()
-    return () => {
-      alive = false
-    }
-  }, [activeClub?.id])
-
-  function openCampaignModal(mode: 'create' | 'image') {
-    const current = selectedCampaign
-    setModalMode(mode)
-    setEditingCampaignId(current?.id ?? null)
-    setCampaignForm({
-      title: current?.title ?? (mode === 'image' ? `Imagen ${selectedSlot.name}` : ''),
-      description: current?.description ?? '',
-      imageUrl: current?.image_url ?? '',
-      targetUrl: current?.target_url ?? '',
-      status: current?.status ?? 'active',
-      sortOrder: String(current?.sort_order ?? 100),
-      renderConfig: current?.render_config
-        ? normalizePlatformAdRenderConfig(current.render_config)
-        : { ...emptyCampaignForm.renderConfig },
-      sponsorId: current?.sponsor_id ?? '',
-      newSponsorName: '',
-      startsAt: toLocalDateInput(current?.starts_at ?? null),
-      endsAt: toLocalDateInput(current?.ends_at ?? null),
+  async function uploadAsset(file: File, kind: 'sponsors' | 'campaigns') {
+    if (!activeClub?.id) return null
+    const form = new FormData()
+    form.set('kind', kind)
+    form.set('file', file)
+    const res = await fetch(`/api/clubs/${activeClub.id}/commercial-assets`, {
+      method: 'POST', headers: { Authorization: `Bearer ${await token()}` }, body: form,
     })
-    setAlert(null)
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error)
+    return json as { path: string; publicUrl: string }
   }
-
-  async function saveCampaign(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!activeClub?.id || !modalMode) return
+  function openSponsor(row?: Sponsor) {
+    setEditingSponsor(row ?? null); setSponsorForm(sponsorState(row)); setModal('sponsor'); setMessage('')
+  }
+  function openCampaign(row?: Campaign) {
+    setEditingCampaign(row ?? null); setCampaignForm(campaignState(row)); setModal('campaign'); setMessage('')
+  }
+  async function saveSponsor(event: FormEvent) {
+    event.preventDefault(); if (!activeClub?.id) return
     setSaving(true)
-    setAlert(null)
     try {
-      const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      if (!token) throw new Error('Sesión inválida.')
-
-      let sponsorId = campaignForm.sponsorId || null
-      if (!sponsorId && campaignForm.newSponsorName.trim()) {
-        const sponsorRes = await fetch(`/api/clubs/${activeClub.id}/sponsors`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            name: campaignForm.newSponsorName,
-            status: 'active',
-          }),
-        })
-        const sponsorJson = await sponsorRes.json().catch(() => ({}))
-        if (!sponsorRes.ok) throw new Error(sponsorJson?.error || 'No pude crear el sponsor.')
-        sponsorId = sponsorJson?.sponsor?.id ?? null
-      }
-
-      const payload = {
-        sponsorId,
-        slotId: selectedSlot.id,
-        title: campaignForm.title,
-        description: campaignForm.description,
-        imageUrl: campaignForm.imageUrl,
-        targetUrl: campaignForm.targetUrl,
-        status: campaignForm.status,
-        sortOrder: campaignForm.sortOrder,
-        renderConfig: campaignForm.renderConfig,
-        startsAt: fromLocalDateInput(campaignForm.startsAt),
-        endsAt: fromLocalDateInput(campaignForm.endsAt),
-      }
-
-      const url = editingCampaignId
-        ? `/api/clubs/${activeClub.id}/campaigns/${editingCampaignId}`
-        : `/api/clubs/${activeClub.id}/campaigns`
+      const url = editingSponsor ? `/api/clubs/${activeClub.id}/sponsors/${editingSponsor.id}` : `/api/clubs/${activeClub.id}/sponsors`
       const res = await fetch(url, {
-        method: editingCampaignId ? 'PATCH' : 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        method: editingSponsor ? 'PATCH' : 'POST',
+        headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(sponsorForm),
       })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || 'No pude guardar la campaña.')
-
-      setModalMode(null)
-      setEditingCampaignId(null)
-      await loadCommercialData()
-    } catch (error) {
-      setAlert(error instanceof Error ? error.message : 'No pude guardar la campaña.')
-    } finally {
-      setSaving(false)
-    }
+      const json = await res.json(); if (!res.ok) throw new Error(json.error)
+      setModal(null); setMessage(editingSponsor ? 'Sponsor actualizado.' : 'Sponsor creado.'); await load()
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'No pudimos guardar el sponsor.') }
+    finally { setSaving(false) }
+  }
+  async function saveCampaign(event: FormEvent) {
+    event.preventDefault(); if (!activeClub?.id) return
+    setSaving(true)
+    try {
+      const url = editingCampaign ? `/api/clubs/${activeClub.id}/campaigns/${editingCampaign.id}` : `/api/clubs/${activeClub.id}/campaigns`
+      const res = await fetch(url, {
+        method: editingCampaign ? 'PATCH' : 'POST',
+        headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...campaignForm, startsAt: isoFromLocal(campaignForm.startsAt), endsAt: isoFromLocal(campaignForm.endsAt) }),
+      })
+      const json = await res.json(); if (!res.ok) throw new Error(json.error)
+      setModal(null); setMessage(editingCampaign ? 'Campaña actualizada.' : 'Campaña creada.'); await load()
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'No pudimos guardar la campaña.') }
+    finally { setSaving(false) }
+  }
+  async function remove(kind: 'sponsors' | 'campaigns', id: string) {
+    if (!activeClub?.id || !window.confirm('Esta acción no se puede deshacer. ¿Continuar?')) return
+    const res = await fetch(`/api/clubs/${activeClub.id}/${kind}/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${await token()}` } })
+    const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage('Elemento eliminado.'); await load() }
+  }
+  async function quickCampaignStatus(campaign: Campaign, status: Campaign['status']) {
+    setCampaignForm(campaignState(campaign))
+    const payload = { ...campaignState(campaign), status, startsAt: campaign.starts_at, endsAt: campaign.ends_at }
+    const res = await fetch(`/api/clubs/${activeClub!.id}/campaigns/${campaign.id}`, {
+      method: 'PATCH', headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    })
+    const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage(`Campaña ${campaignLabels[status].toLowerCase()}.`); await load() }
+  }
+  async function quickSponsorStatus(sponsor: Sponsor) {
+    if (!activeClub?.id) return
+    const payload = { ...sponsorState(sponsor), status: sponsor.status === 'active' ? 'inactive' : 'active' }
+    const res = await fetch(`/api/clubs/${activeClub.id}/sponsors/${sponsor.id}`, {
+      method: 'PATCH', headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    })
+    const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage(payload.status === 'active' ? 'Sponsor activado.' : 'Sponsor desactivado.'); await load() }
+  }
+  async function duplicateCampaign(campaign: Campaign) {
+    if (!activeClub?.id) return
+    const payload = { ...campaignState(campaign), internalName: `${campaign.internal_name ?? campaign.title} (copia)`, status: 'draft', startsAt: campaign.starts_at, endsAt: campaign.ends_at }
+    const res = await fetch(`/api/clubs/${activeClub.id}/campaigns`, {
+      method: 'POST', headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    })
+    const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage('Campaña duplicada como borrador.'); await load() }
   }
 
   return (
-    <div className="club-shell">
-      <div className="club-panel club-commercial-page" style={themeStyle}>
-        <header className="club-commercial-hero">
-          <div>
-            <span className="club-commercial-kicker">Contenido del club</span>
-            <h1 className="club-title">Inventario Comercial</h1>
-            <p className="club-sub">
-              Espacios publicitarios disponibles para la Home de {clubName}. Gestioná campañas, sponsors e imágenes
-              desde un inventario visual claro.
-            </p>
+    <main className={styles.page}>
+      <section className={styles.hero}>
+        <div><span>CONTENIDO DEL CLUB</span><h1>Sponsors y publicidad</h1><p>Administrá alianzas y piezas visibles en la home pública de {activeClub?.name ?? 'tu club'}.</p></div>
+        <div className={styles.heroStats}><b>{sponsors.filter((s) => effectiveSponsorStatus(s) === 'Activo').length}<small>Sponsors activos</small></b><b>{activeCampaigns}<small>Campañas visibles</small></b></div>
+      </section>
+
+      <section className={styles.workspace}>
+        <div className={styles.toolbar}>
+          <div className={styles.segmented} role="tablist" aria-label="Secciones">
+            <button role="tab" aria-selected={section === 'sponsors'} onClick={() => setSection('sponsors')}><UsersRound size={16} /> Sponsors</button>
+            <button role="tab" aria-selected={section === 'campaigns'} onClick={() => setSection('campaigns')}><Megaphone size={16} /> Campañas</button>
           </div>
-
-          <div className="club-commercial-summary" aria-label="Resumen del inventario">
-            <div>
-              <strong>{commercialSlots.length}</strong>
-              <span>Slots</span>
-            </div>
-            <div>
-              <strong>{statusSummary.Disponible}</strong>
-              <span>Disponibles</span>
-            </div>
-            <div>
-              <strong>{statusSummary.Activo}</strong>
-              <span>Activos</span>
-            </div>
-          </div>
-        </header>
-
-        {alert ? <div className="club-commercial-alert">{alert}</div> : null}
-
-        <section className="club-commercial-layout" aria-label="Inventario visual de publicidad">
-          <article className="club-commercial-previewCard">
-            <div className="club-commercial-sectionTitle">
-              <span />
-              <div>
-                <p>Miniatura visual</p>
-                <h2>Home del Club</h2>
+          <button className={styles.primary} onClick={() => section === 'sponsors' ? openSponsor() : openCampaign()}><Plus size={17} /> {section === 'sponsors' ? 'Nuevo sponsor' : 'Nueva campaña'}</button>
+        </div>
+        {message ? <div className={styles.message} role="status">{message}<button onClick={() => setMessage('')} aria-label="Cerrar"><X size={15} /></button></div> : null}
+        {loading ? <div className={styles.loading}>Cargando contenido…</div> : section === 'sponsors' ? (
+          sponsors.length ? <div className={styles.list}>
+            {sponsors.map((sponsor) => {
+              const status = effectiveSponsorStatus(sponsor)
+              return <article className={styles.sponsorCard} key={sponsor.id}>
+                <div className={styles.logo}>{sponsor.logo_url ? <img src={sponsor.logo_url} alt={`Logo de ${sponsor.name}`} /> : <span>{sponsor.name.slice(0, 2).toUpperCase()}</span>}</div>
+                <div className={styles.cardMain}><div className={styles.cardTitle}><h2>{sponsor.name}</h2><span data-tone={status}>{status}</span></div>
+                  <p>{categories[sponsor.category] ?? 'Otro'}{sponsor.ends_on ? ` · hasta ${new Date(`${sponsor.ends_on}T00:00:00`).toLocaleDateString('es-AR')}` : ' · sin vencimiento'}</p>
+                  <small>{campaignCount.get(sponsor.id) ?? 0} campañas activas</small>
+                </div>
+                <details className={styles.menu}><summary aria-label={`Acciones de ${sponsor.name}`}><MoreVertical size={18} /></summary><div>
+                  <button onClick={() => openSponsor(sponsor)}>Editar</button>
+                  <button onClick={() => { setSection('campaigns'); openCampaign(); setCampaignForm((old) => ({ ...old, sponsorId: sponsor.id })) }}>Crear campaña</button>
+                  <button onClick={() => quickSponsorStatus(sponsor)}>{sponsor.status === 'active' ? 'Desactivar' : 'Activar'}</button>
+                  <button onClick={() => remove('sponsors', sponsor.id)}>Eliminar</button>
+                </div></details>
+              </article>
+            })}
+          </div> : <Empty title="Aún no agregaste sponsors." action="Crear primer sponsor" onAction={() => openSponsor()} />
+        ) : campaigns.length ? <div className={styles.list}>
+          {campaigns.map((campaign) => {
+            const metric = metrics[campaign.id] ?? { impressions: 0, clicks: 0 }
+            const ctr = metric.impressions ? ((metric.clicks / metric.impressions) * 100).toFixed(1) : '0,0'
+            return <article className={styles.campaignCard} key={campaign.id}>
+              <div className={styles.campaignThumb}>{campaign.image_url ? <img src={campaign.image_url} alt="" /> : <ImageIcon size={22} />}</div>
+              <div className={styles.cardMain}><div className={styles.cardTitle}><h2>{campaign.internal_name ?? campaign.title}</h2><span data-tone={campaign.status}>{campaignLabels[campaign.status]}</span></div>
+                <p>{campaign.sponsor?.name ?? 'Institucional'} · {campaign.placements?.length ?? 1} ubicaciones</p>
+                <div className={styles.metrics}><span><b>{metric.impressions}</b> impresiones</span><span><b>{metric.clicks}</b> clics</span><span><b>{ctr}%</b> CTR</span></div>
               </div>
-            </div>
-
-            <div className="club-home-miniature" aria-label="Miniatura mockeada de la home del club">
-              <div className="mini-hero">
-                <span className="mini-logo">{clubName.slice(0, 2).toUpperCase()}</span>
-                <div>
-                  <strong>{clubName}</strong>
-                  <small>Home pública del club</small>
-                </div>
-                <button
-                  className={`mini-slot is-hero ${selectedSlotId === 'CLUB_HOME_HERO' ? 'is-selected' : ''}`}
-                  onClick={() => setSelectedSlotId('CLUB_HOME_HERO')}
-                  type="button"
-                >
-                  {campaignsBySlot.get('CLUB_HOME_HERO')?.image_url ? (
-                    <img src={campaignsBySlot.get('CLUB_HOME_HERO')?.image_url ?? ''} alt="" />
-                  ) : null}
-                  <span>{campaignsBySlot.get('CLUB_HOME_HERO')?.title ?? 'CLUB_HOME_HERO'}</span>
-                </button>
-              </div>
-
-              <div className="mini-news">
-                <button
-                  className={`mini-slot is-news-left ${selectedSlotId === 'CLUB_HOME_AFTER_TOURNAMENTS' ? 'is-selected' : ''}`}
-                  onClick={() => setSelectedSlotId('CLUB_HOME_AFTER_TOURNAMENTS')}
-                  type="button"
-                >
-                  {campaignsBySlot.get('CLUB_HOME_AFTER_TOURNAMENTS')?.image_url ? (
-                    <img src={campaignsBySlot.get('CLUB_HOME_AFTER_TOURNAMENTS')?.image_url ?? ''} alt="" />
-                  ) : null}
-                  <span>{campaignsBySlot.get('CLUB_HOME_AFTER_TOURNAMENTS')?.title ?? 'CLUB_HOME_AFTER_TOURNAMENTS'}</span>
-                </button>
-                <button
-                  className={`mini-slot is-news-right ${selectedSlotId === 'CLUB_HOME_AFTER_NEWS' ? 'is-selected' : ''}`}
-                  onClick={() => setSelectedSlotId('CLUB_HOME_AFTER_NEWS')}
-                  type="button"
-                >
-                  {campaignsBySlot.get('CLUB_HOME_AFTER_NEWS')?.image_url ? (
-                    <img src={campaignsBySlot.get('CLUB_HOME_AFTER_NEWS')?.image_url ?? ''} alt="" />
-                  ) : null}
-                  <span>{campaignsBySlot.get('CLUB_HOME_AFTER_NEWS')?.title ?? 'CLUB_HOME_AFTER_NEWS'}</span>
-                </button>
-              </div>
-
-              <div className="mini-cards">
-                <span />
-                <span />
-                <span />
-              </div>
-            </div>
-          </article>
-
-          <aside className="club-commercial-detailColumn">
-            <article className="club-commercial-detail" aria-live="polite">
-              <div className="club-commercial-sectionTitle">
-                <span />
-                <div>
-                  <p>Detalle del slot</p>
-                  <h2>{selectedSlot.detailName}</h2>
-                </div>
-              </div>
-
-              <div className={`club-commercial-placeholder ${selectedCampaign?.image_url ? 'has-campaign' : ''}`}>
-                {selectedCampaign?.image_url ? <img src={selectedCampaign.image_url} alt={selectedCampaign.title} /> : null}
-                <span>{selectedCampaign?.title ?? 'Este espacio puede ser tuyo'}</span>
-                <p>{selectedCampaign?.description ?? `Publicitá con ${BRAND.name} y llegá a jugadores y clubes.`}</p>
-                <em>
-                  {selectedCampaign
-                    ? `${campaignStatusLabel[selectedCampaign.status]} · ${selectedCampaign.sponsor?.name ?? 'Sin sponsor'}`
-                    : `Slot publicitario ${selectedSlot.format}`}
-                </em>
-              </div>
-
-              <dl className="club-commercial-detailGrid">
-                <div>
-                  <dt>Visibilidad</dt>
-                  <dd aria-label={`${selectedSlot.visibility}: ${selectedSlot.visibilityScore} de 5`}>
-                    <span>{'★'.repeat(selectedSlot.visibilityScore)}{'☆'.repeat(5 - selectedSlot.visibilityScore)}</span>
-                    <small>{selectedSlot.visibility}</small>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Ubicación</dt>
-                  <dd>{selectedSlot.location}</dd>
-                </div>
-                <div>
-                  <dt>Formato</dt>
-                  <dd>{selectedSlot.format}</dd>
-                </div>
-                <div>
-                  <dt>Tamaño recomendado</dt>
-                  <dd>{selectedSlot.recommendedSize}</dd>
-                </div>
-                <div>
-                  <dt>Estado</dt>
-                  <dd><span className={`club-commercial-status ${statusTone[selectedSlot.status]}`}>{selectedSlot.status}</span></dd>
-                </div>
-                <div>
-                  <dt>Descripción</dt>
-                  <dd>{selectedSlot.description}</dd>
-                </div>
-              </dl>
-
-              <div className="club-commercial-detailActions" aria-label="Acciones futuras">
-                <button type="button" onClick={() => openCampaignModal('create')}>Crear anuncio</button>
-                <button type="button" onClick={() => openCampaignModal('image')}>Subir imagen</button>
-              </div>
+              <details className={styles.menu}><summary aria-label={`Acciones de ${campaign.title}`}><MoreVertical size={18} /></summary><div>
+                <button onClick={() => openCampaign(campaign)}>Editar</button><button onClick={() => { setEditingCampaign(campaign); setCampaignForm(campaignState(campaign)); setModal('preview') }}>Preview</button>
+                <button onClick={() => duplicateCampaign(campaign)}>Duplicar</button>
+                {campaign.status !== 'active' ? <button onClick={() => quickCampaignStatus(campaign, 'active')}>Publicar</button> : <button onClick={() => quickCampaignStatus(campaign, 'paused')}>Pausar</button>}
+                <button onClick={() => quickCampaignStatus(campaign, 'ended')}>Finalizar</button><button onClick={() => remove('campaigns', campaign.id)}>Eliminar</button>
+              </div></details>
             </article>
+          })}
+        </div> : <Empty title="Aún no creaste campañas publicitarias." action="Crear primera campaña" onAction={() => openCampaign()} />}
+      </section>
 
-            <section className="club-commercial-slots" aria-label="Slots publicitarios disponibles">
-              {commercialSlots.map((slot) => (
-                <button
-                  className={`club-commercial-slot ${selectedSlotId === slot.id ? 'is-selected' : ''}`}
-                  key={slot.id}
-                  onClick={() => setSelectedSlotId(slot.id)}
-                  type="button"
-                >
-                  <span className="club-commercial-accent" aria-hidden="true" />
-                  <div className="club-commercial-slotPreview">
-                    <span className={`slot-shape ${slot.previewClass}`} />
-                  </div>
-                  <div className="club-commercial-slotBody">
-                    <div className="club-commercial-slotHead">
-                      <div>
-                        <small>{slot.id}</small>
-                        <h2>{slot.name}</h2>
-                      </div>
-                      <span className={`club-commercial-status ${statusTone[slot.status]}`}>{slot.status}</span>
-                    </div>
-                    <p>{slot.description}</p>
-                    <div className="club-commercial-tags">
-                      <span>{slot.visibility}</span>
-                      <span>{slot.format}</span>
-                      {campaignsBySlot.get(slot.id) ? (
-                        <span>{campaignStatusLabel[campaignsBySlot.get(slot.id)!.status]}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </section>
-          </aside>
-        </section>
+      {modal === 'sponsor' ? <Modal title={editingSponsor ? 'Editar sponsor' : 'Nuevo sponsor'} onClose={() => setModal(null)}>
+        <form onSubmit={saveSponsor} className={styles.form}>
+          <FormGroup title="Identidad"><label>Nombre<input required maxLength={180} value={sponsorForm.name} onChange={(e) => setSponsorForm({ ...sponsorForm, name: e.target.value })} /></label>
+            <label>Categoría<select value={sponsorForm.category} onChange={(e) => setSponsorForm({ ...sponsorForm, category: e.target.value })}>{Object.entries(categories).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
+            <label className={styles.full}>Descripción<textarea maxLength={500} value={sponsorForm.description} onChange={(e) => setSponsorForm({ ...sponsorForm, description: e.target.value })} /></label>
+            <AssetField label="Logo" value={sponsorForm.logoUrl} onUpload={async (file) => { const asset = await uploadAsset(file, 'sponsors'); if (asset) setSponsorForm({ ...sponsorForm, logoUrl: asset.publicUrl, logoPath: asset.path }) }} />
+          </FormGroup>
+          <FormGroup title="Vigencia"><label>Desde<input type="date" value={sponsorForm.startsOn} onChange={(e) => setSponsorForm({ ...sponsorForm, startsOn: e.target.value })} /></label><label>Hasta<input type="date" value={sponsorForm.endsOn} onChange={(e) => setSponsorForm({ ...sponsorForm, endsOn: e.target.value })} /></label><label>Estado<select value={sponsorForm.status} onChange={(e) => setSponsorForm({ ...sponsorForm, status: e.target.value })}><option value="active">Activo</option><option value="inactive">Inactivo</option></select></label></FormGroup>
+          <details className={styles.more}><summary>Más detalles</summary><div>
+            <label>Aporte<input type="number" min="0" step="0.01" value={sponsorForm.contributionAmount} onChange={(e) => setSponsorForm({ ...sponsorForm, contributionAmount: e.target.value })} /></label><label>Moneda<input maxLength={3} value={sponsorForm.currencyCode} onChange={(e) => setSponsorForm({ ...sponsorForm, currencyCode: e.target.value.toUpperCase() })} /></label>
+            <label>Prioridad visual<input type="number" min="0" max="9999" value={sponsorForm.visualPriority} onChange={(e) => setSponsorForm({ ...sponsorForm, visualPriority: e.target.value })} /></label>
+            <label className={styles.full}>Sitio web<input type="url" value={sponsorForm.websiteUrl} onChange={(e) => setSponsorForm({ ...sponsorForm, websiteUrl: e.target.value })} /></label>
+            <label>Contacto<input value={sponsorForm.contactName} onChange={(e) => setSponsorForm({ ...sponsorForm, contactName: e.target.value })} /></label><label>Email<input type="email" value={sponsorForm.contactEmail} onChange={(e) => setSponsorForm({ ...sponsorForm, contactEmail: e.target.value })} /></label><label>Teléfono<input value={sponsorForm.contactPhone} onChange={(e) => setSponsorForm({ ...sponsorForm, contactPhone: e.target.value })} /></label>
+            <label className={styles.full}>Observaciones internas<textarea value={sponsorForm.internalNotes} onChange={(e) => setSponsorForm({ ...sponsorForm, internalNotes: e.target.value })} /></label>
+          </div></details>
+          <footer><button type="button" onClick={() => setModal(null)}>Cancelar</button><button className={styles.primary} disabled={saving}>{saving ? 'Guardando…' : 'Guardar sponsor'}</button></footer>
+        </form>
+      </Modal> : null}
 
-        <section className="club-commercial-note">
-          <span aria-hidden="true" />
-          <div>
-            <strong>Inventario comercial preparado</strong>
-            <p>
-              Los slots mantienen formato, ubicación y visibilidad para que cada campaña encaje sin romper la Home pública del club.
-            </p>
+      {modal === 'campaign' ? <Modal title={editingCampaign ? 'Editar campaña' : 'Nueva campaña'} onClose={() => setModal(null)} wide>
+        <form onSubmit={saveCampaign} className={styles.editor}>
+          <div className={styles.form}>
+            <FormGroup title="Contenido"><label>Nombre interno<input required value={campaignForm.internalName} onChange={(e) => setCampaignForm({ ...campaignForm, internalName: e.target.value })} /></label><label>Sponsor<select value={campaignForm.sponsorId} onChange={(e) => setCampaignForm({ ...campaignForm, sponsorId: e.target.value })}><option value="">Institucional del club</option>{sponsors.filter((s) => effectiveSponsorStatus(s) === 'Activo').map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
+              <label className={styles.full}>Título visible<input required maxLength={180} value={campaignForm.title} onChange={(e) => setCampaignForm({ ...campaignForm, title: e.target.value })} /></label><label className={styles.full}>Texto secundario<textarea maxLength={500} value={campaignForm.description} onChange={(e) => setCampaignForm({ ...campaignForm, description: e.target.value })} /></label>
+              <AssetField label="Imagen" value={campaignForm.imageUrl} onUpload={async (file) => { const asset = await uploadAsset(file, 'campaigns'); if (asset) setCampaignForm({ ...campaignForm, imageUrl: asset.publicUrl, imagePath: asset.path }) }} />
+            </FormGroup>
+            <FormGroup title="Botón"><label>Texto<input maxLength={60} value={campaignForm.ctaLabel} onChange={(e) => setCampaignForm({ ...campaignForm, ctaLabel: e.target.value })} /></label><label className={styles.full}>Enlace<input type="url" value={campaignForm.targetUrl} onChange={(e) => setCampaignForm({ ...campaignForm, targetUrl: e.target.value })} /></label></FormGroup>
+            <FormGroup title="Ubicación"><div className={styles.placementList}>{placements.map((placement) => <label key={placement.key}><input type="checkbox" checked={campaignForm.placements.includes(placement.key)} onChange={(e) => setCampaignForm({ ...campaignForm, placements: e.target.checked ? [...campaignForm.placements, placement.key] : campaignForm.placements.filter((key) => key !== placement.key) })} /><span><b>{placement.label}</b><small>{placement.hint}</small></span></label>)}</div></FormGroup>
+            <FormGroup title="Vigencia y publicación"><label>Inicio<input type="datetime-local" value={campaignForm.startsAt} onChange={(e) => setCampaignForm({ ...campaignForm, startsAt: e.target.value })} /></label><label>Final<input type="datetime-local" value={campaignForm.endsAt} onChange={(e) => setCampaignForm({ ...campaignForm, endsAt: e.target.value })} /></label><label>Estado<select value={campaignForm.status} onChange={(e) => setCampaignForm({ ...campaignForm, status: e.target.value as Campaign['status'] })}>{Object.entries(campaignLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><label>Prioridad<input type="number" min="0" max="9999" value={campaignForm.sortOrder} onChange={(e) => setCampaignForm({ ...campaignForm, sortOrder: e.target.value })} /></label></FormGroup>
+            <details className={styles.more}><summary>Opciones avanzadas</summary><div><label className={styles.full}>Observaciones internas<textarea maxLength={2000} value={campaignForm.internalNotes} onChange={(e) => setCampaignForm({ ...campaignForm, internalNotes: e.target.value })} /></label></div></details>
+            <footer><button type="button" onClick={() => setModal(null)}>Cancelar</button><button className={styles.primary} disabled={saving || !campaignForm.placements.length}>{saving ? 'Guardando…' : campaignForm.status === 'draft' ? 'Guardar borrador' : 'Guardar campaña'}</button></footer>
           </div>
-        </section>
-
-        {loading ? <div className="club-commercial-loading">Cargando inventario comercial...</div> : null}
-
-        {modalMode ? (
-          <div className="club-commercial-modal" role="dialog" aria-modal="true">
-            <form className="club-commercial-modalCard" onSubmit={saveCampaign}>
-              <header>
-                <div>
-                  <span className="club-commercial-kicker">{selectedSlot.id}</span>
-                  <h2>{editingCampaignId ? 'Editar publicidad' : 'Crear publicidad'}</h2>
-                  <p>Editor visual compartido para banners del club. El preview se actualiza en tiempo real.</p>
-                </div>
-                <button type="button" onClick={() => setModalMode(null)}>Cerrar</button>
-              </header>
-
-              <AdVisualEditor
-                title={campaignForm.title}
-                description={campaignForm.description}
-                linkUrl={campaignForm.targetUrl}
-                imageUrl={campaignForm.imageUrl || null}
-                renderConfig={campaignForm.renderConfig}
-                slotLabel={selectedSlot.detailName}
-                onTitleChange={(title) => setCampaignForm((current) => ({ ...current, title }))}
-                onDescriptionChange={(description) => setCampaignForm((current) => ({ ...current, description }))}
-                onRenderConfigChange={(renderConfig) => setCampaignForm((current) => ({ ...current, renderConfig: normalizePlatformAdRenderConfig(renderConfig) }))}
-                onCancel={() => setModalMode(null)}
-                saving={saving}
-                saveLabel="Guardar anuncio"
-                submitMode
-                generalFields={(
-                  <>
-                    <div className="adGeneralRow is-two">
-                      <label>
-                        <span>Título</span>
-                        <input
-                          required
-                          value={campaignForm.title}
-                          onChange={(event) => setCampaignForm((current) => ({ ...current, title: event.target.value }))}
-                          placeholder="Banco de La Pampa"
-                        />
-                      </label>
-                      <label>
-                        <span>URL destino</span>
-                        <input
-                          value={campaignForm.targetUrl}
-                          onChange={(event) => setCampaignForm((current) => ({ ...current, targetUrl: event.target.value }))}
-                          placeholder="https://marca.com"
-                        />
-                      </label>
-                    </div>
-                    <div className="adGeneralRow is-three">
-                      <label>
-                        <span>Posición</span>
-                        <input value={selectedSlot.detailName} readOnly />
-                      </label>
-                      <label>
-                        <span>Estado</span>
-                        <select
-                          value={campaignForm.status}
-                          onChange={(event) => setCampaignForm((current) => ({ ...current, status: event.target.value as ClubCampaign['status'] }))}
-                        >
-                          <option value="active">Activa</option>
-                          <option value="paused">Oculta</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>Orden</span>
-                        <input
-                          value={campaignForm.sortOrder}
-                          onChange={(event) => setCampaignForm((current) => ({ ...current, sortOrder: event.target.value }))}
-                        />
-                      </label>
-                    </div>
-                    <div className="adGeneralRow is-three">
-                      {normalizePlatformAdRenderConfig(campaignForm.renderConfig).enabled ? (
-                        <label>
-                          <span>Tema visual</span>
-                          <select
-                            value={normalizePlatformAdRenderConfig(campaignForm.renderConfig).themeMode}
-                            onChange={(event) => setCampaignForm((current) => ({
-                              ...current,
-                              renderConfig: normalizePlatformAdRenderConfig({
-                                ...current.renderConfig,
-                                themeMode: event.target.value as PlatformAdRenderConfig['themeMode'],
-                              }),
-                            }))}
-                          >
-                            <option value="AUTO">Automático</option>
-                            <option value="MANUAL">Manual</option>
-                          </select>
-                        </label>
-                      ) : null}
-                      <label>
-                        <span>Modo visual</span>
-                        <select
-                          value={normalizePlatformAdRenderConfig(campaignForm.renderConfig).enabled ? 'selpa' : 'legacy'}
-                          onChange={(event) => setCampaignForm((current) => ({
-                            ...current,
-                            renderConfig: normalizePlatformAdRenderConfig({
-                              ...current.renderConfig,
-                              enabled: event.target.value === 'selpa',
-                            }),
-                          }))}
-                        >
-                          <option value="selpa">Banner SELPA</option>
-                          <option value="legacy">Imagen legacy</option>
-                        </select>
-                      </label>
-                      {normalizePlatformAdRenderConfig(campaignForm.renderConfig).enabled ? (
-                        <label>
-                          <span>Layout</span>
-                          <select
-                            value={normalizePlatformAdRenderConfig(campaignForm.renderConfig).layout}
-                            onChange={(event) => setCampaignForm((current) => ({
-                              ...current,
-                              renderConfig: normalizePlatformAdRenderConfig({
-                                ...current.renderConfig,
-                                layout: event.target.value as PlatformAdRenderConfig['layout'],
-                              }),
-                            }))}
-                          >
-                            <option value="image-right">Imagen derecha</option>
-                            <option value="image-left">Imagen izquierda</option>
-                            <option value="image-only">Solo imagen</option>
-                            <option value="text-only">Solo texto</option>
-                          </select>
-                        </label>
-                      ) : null}
-                    </div>
-                    <div className="adGeneralRow is-full">
-                      <label>
-                        <span>Imagen base</span>
-                        <input
-                          value={campaignForm.imageUrl}
-                          onChange={(event) => setCampaignForm((current) => ({ ...current, imageUrl: event.target.value }))}
-                          placeholder="https://..."
-                        />
-                      </label>
-                    </div>
-                    <div className="adGeneralRow is-two">
-                      <label>
-                        <span>Sponsor asociado</span>
-                        <select
-                          value={campaignForm.sponsorId}
-                          onChange={(event) => setCampaignForm((current) => ({ ...current, sponsorId: event.target.value, newSponsorName: '' }))}
-                        >
-                          <option value="">Sin sponsor</option>
-                          {sponsors.map((sponsor) => (
-                            <option key={sponsor.id} value={sponsor.id}>{sponsor.name}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        <span>Crear sponsor rápido</span>
-                        <input
-                          disabled={Boolean(campaignForm.sponsorId)}
-                          value={campaignForm.newSponsorName}
-                          onChange={(event) => setCampaignForm((current) => ({ ...current, newSponsorName: event.target.value }))}
-                          placeholder="Nombre del sponsor"
-                        />
-                      </label>
-                    </div>
-                    <div className="adGeneralRow is-two">
-                      <label>
-                        <span>Inicio</span>
-                        <input
-                          type="datetime-local"
-                          value={campaignForm.startsAt}
-                          onChange={(event) => setCampaignForm((current) => ({ ...current, startsAt: event.target.value }))}
-                        />
-                      </label>
-                      <label>
-                        <span>Fin</span>
-                        <input
-                          type="datetime-local"
-                          value={campaignForm.endsAt}
-                          onChange={(event) => setCampaignForm((current) => ({ ...current, endsAt: event.target.value }))}
-                        />
-                      </label>
-                    </div>
-                  </>
-                )}
-                imageField={(
-                  <label>
-                    <span>URL de imagen</span>
-                    <input
-                      value={campaignForm.imageUrl}
-                      onChange={(event) => setCampaignForm((current) => ({ ...current, imageUrl: event.target.value }))}
-                      placeholder="https://..."
-                    />
-                  </label>
-                )}
-              />
-            </form>
-          </div>
-        ) : null}
-      </div>
-
-      <style>{`
-        .club-commercial-page {
-          background: #fff;
-          border: 1px solid rgba(15,23,42,.08);
-          border-radius: 24px;
-          box-shadow: 0 24px 64px rgba(15,23,42,.09);
-          display: grid;
-          gap: 18px;
-          min-width: 0;
-          overflow: hidden;
-          padding: 22px;
-          position: relative;
-        }
-
-        .club-commercial-page::before {
-          background: linear-gradient(90deg, var(--club-commercial-accent), var(--club-commercial-accent-2));
-          content: "";
-          height: 4px;
-          left: 0;
-          position: absolute;
-          right: 0;
-          top: 0;
-        }
-
-        .club-commercial-hero {
-          align-items: flex-start;
-          background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-commercial-soft));
-          border: 1px solid rgba(15,23,42,.07);
-          border-radius: 20px;
-          display: grid;
-          gap: 18px;
-          grid-template-columns: minmax(0, 1fr) auto;
-          padding: 18px;
-        }
-
-        .club-commercial-kicker,
-        .club-commercial-sectionTitle p,
-        .club-commercial-slotHead small {
-          color: var(--club-commercial-accent);
-          display: inline-block;
-          font-size: 0.72rem;
-          font-weight: 900;
-          letter-spacing: 0.05em;
-          margin: 0;
-          text-transform: uppercase;
-        }
-
-        .club-commercial-summary {
-          background: linear-gradient(135deg, #020617, #061b3a);
-          border: 1px solid color-mix(in srgb, var(--club-commercial-accent) 28%, transparent);
-          border-radius: 18px;
-          box-shadow: 0 18px 42px var(--club-commercial-glow);
-          color: #ffffff;
-          display: grid;
-          gap: 8px;
-          grid-template-columns: repeat(3, minmax(74px, 1fr));
-          padding: 12px;
-        }
-
-        .club-commercial-summary div {
-          background: rgba(255, 255, 255, 0.07);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 14px;
-          display: grid;
-          gap: 3px;
-          padding: 10px;
-          text-align: center;
-        }
-
-        .club-commercial-summary strong {
-          color: color-mix(in srgb, var(--club-commercial-accent) 68%, #ffffff);
-          font-size: 1.45rem;
-          font-weight: 950;
-          line-height: 1;
-        }
-
-        .club-commercial-summary span {
-          color: rgba(255, 255, 255, 0.72);
-          font-size: 0.72rem;
-          font-weight: 850;
-        }
-
-        .club-commercial-alert,
-        .club-commercial-loading {
-          background: #fff7ed;
-          border: 1px solid #fed7aa;
-          border-radius: 14px;
-          color: #9a3412;
-          font-size: 0.86rem;
-          font-weight: 800;
-          padding: 12px 14px;
-        }
-
-        .club-commercial-loading {
-          background: var(--club-commercial-soft);
-          border-color: color-mix(in srgb, var(--club-commercial-accent) 24%, transparent);
-          color: #061b3a;
-        }
-
-        .club-commercial-layout {
-          display: grid;
-          gap: 16px;
-          grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1.35fr);
-        }
-
-        .club-commercial-previewCard,
-        .club-commercial-slot,
-        .club-commercial-note {
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 18px;
-          box-shadow: 0 16px 42px rgba(15, 23, 42, 0.065);
-        }
-
-        .club-commercial-previewCard {
-          display: grid;
-          gap: 14px;
-          min-width: 0;
-          padding: 16px;
-        }
-
-        .club-commercial-sectionTitle {
-          align-items: center;
-          display: flex;
-          gap: 10px;
-        }
-
-        .club-commercial-sectionTitle > span,
-        .club-commercial-accent,
-        .club-commercial-note > span {
-          background: linear-gradient(180deg, var(--club-commercial-accent), var(--club-commercial-accent-2));
-          border-radius: 999px;
-          box-shadow: 0 0 18px var(--club-commercial-glow);
-          flex: 0 0 auto;
-          width: 5px;
-        }
-
-        .club-commercial-sectionTitle > span {
-          height: 38px;
-        }
-
-        .club-commercial-sectionTitle h2 {
-          color: #061b3a;
-          font-size: 1.22rem;
-          font-weight: 950;
-          letter-spacing: -0.03em;
-          line-height: 1.05;
-          margin: 2px 0 0;
-        }
-
-        .club-home-miniature {
-          background:
-            radial-gradient(circle at 10% 8%, color-mix(in srgb, var(--club-commercial-accent) 22%, transparent), transparent 28%),
-            radial-gradient(circle at 90% 14%, color-mix(in srgb, var(--club-commercial-accent-2) 18%, transparent), transparent 28%),
-            linear-gradient(180deg, #f8fbff, #eef7fb);
-          border: 1px solid color-mix(in srgb, var(--club-commercial-accent) 24%, transparent);
-          border-radius: 18px;
-          display: grid;
-          gap: 10px;
-          overflow: hidden;
-          padding: 12px;
-        }
-
-        .mini-hero {
-          align-items: center;
-          background: linear-gradient(135deg, #020617, #061b3a);
-          border-radius: 16px;
-          color: #ffffff;
-          display: grid;
-          gap: 9px;
-          grid-template-columns: 42px minmax(0, 1fr) minmax(105px, 0.42fr);
-          min-height: 92px;
-          padding: 12px;
-        }
-
-        .mini-logo {
-          align-items: center;
-          background: color-mix(in srgb, var(--club-commercial-accent) 16%, transparent);
-          border: 1px solid color-mix(in srgb, var(--club-commercial-accent) 24%, transparent);
-          border-radius: 14px;
-          display: flex;
-          font-size: 0.82rem;
-          font-weight: 950;
-          height: 42px;
-          justify-content: center;
-          width: 42px;
-        }
-
-        .mini-hero strong,
-        .mini-hero small {
-          display: block;
-          min-width: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .mini-hero strong {
-          font-size: 0.95rem;
-          font-weight: 950;
-        }
-
-        .mini-hero small {
-          color: rgba(255, 255, 255, 0.68);
-          font-size: 0.72rem;
-          font-weight: 800;
-        }
-
-        .mini-news {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 1.25fr 0.75fr;
-        }
-
-        .mini-cards {
-          display: grid;
-          gap: 8px;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-
-        .mini-cards span {
-          background: rgba(255, 255, 255, 0.9);
-          border: 1px solid #dbeafe;
-          border-radius: 12px;
-          height: 48px;
-        }
-
-        .mini-slot {
-          align-items: center;
-          background: rgba(255, 255, 255, 0.86);
-          border: 1px dashed color-mix(in srgb, var(--club-commercial-accent) 48%, transparent);
-          border-left: 4px solid var(--club-commercial-accent);
-          border-radius: 12px;
-          box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--club-commercial-accent-2) 10%, transparent);
-          color: #061b3a;
-          cursor: pointer;
-          display: flex;
-          font-size: 0.58rem;
-          font-style: normal;
-          font-weight: 950;
-          font-family: inherit;
-          justify-content: center;
-          letter-spacing: 0.02em;
-          min-height: 58px;
-          padding: 8px;
-          position: relative;
-          text-align: center;
-          transition: border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease, transform 0.18s ease;
-        }
-
-        .mini-slot img {
-          height: 100%;
-          inset: 0;
-          object-fit: cover;
-          opacity: 0.76;
-          position: absolute;
-          transition: opacity 0.18s ease, transform 0.22s ease;
-          width: 100%;
-        }
-
-        .mini-slot::before {
-          background: linear-gradient(180deg, var(--club-commercial-accent), var(--club-commercial-accent-2));
-          border-radius: 999px;
-          content: "";
-          inset: 8px auto 8px 8px;
-          opacity: 0;
-          position: absolute;
-          transition: opacity 0.18s ease, box-shadow 0.18s ease;
-          width: 4px;
-        }
-
-        .mini-slot span {
-          position: relative;
-          z-index: 1;
-        }
-
-        .mini-slot:hover,
-        .mini-slot.is-selected {
-          background: linear-gradient(135deg, var(--club-commercial-soft), rgba(255, 255, 255, 0.9));
-          border-color: color-mix(in srgb, var(--club-commercial-accent-2) 42%, transparent);
-          box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12), 0 0 0 4px var(--club-commercial-glow);
-          color: #061b3a;
-          transform: translateY(-1px);
-        }
-
-        .mini-slot:hover img,
-        .mini-slot.is-selected img {
-          opacity: 0.9;
-          transform: scale(1.025);
-        }
-
-        .mini-slot:hover::before,
-        .mini-slot.is-selected::before {
-          box-shadow: 0 0 18px var(--club-commercial-glow);
-          opacity: 1;
-        }
-
-        .mini-slot.is-hero {
-          min-height: 68px;
-        }
-
-        .mini-slot.is-footer {
-          min-height: 38px;
-        }
-
-        .mini-slot.is-calendar {
-          min-height: 46px;
-        }
-
-        .club-commercial-detailColumn {
-          display: grid;
-          gap: 12px;
-          min-width: 0;
-        }
-
-        .club-commercial-detail {
-          background:
-            radial-gradient(circle at 0 0, color-mix(in srgb, var(--club-commercial-accent) 12%, transparent), transparent 34%),
-            #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 18px;
-          box-shadow: 0 16px 42px rgba(15, 23, 42, 0.065);
-          display: grid;
-          gap: 14px;
-          min-width: 0;
-          padding: 16px;
-        }
-
-        .club-commercial-placeholder {
-          background:
-            radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--club-commercial-accent) 24%, transparent), transparent 34%),
-            radial-gradient(circle at 92% 12%, color-mix(in srgb, var(--club-commercial-accent-2) 18%, transparent), transparent 32%),
-            linear-gradient(135deg, var(--club-commercial-soft), #f8fbff 62%, #ffffff);
-          border: 1px dashed color-mix(in srgb, var(--club-commercial-accent) 42%, transparent);
-          border-radius: 18px;
-          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.78);
-          display: grid;
-          gap: 7px;
-          min-height: 138px;
-          padding: 18px;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .club-commercial-placeholder.has-campaign {
-          color: #ffffff;
-          min-height: 160px;
-        }
-
-        .club-commercial-placeholder::before {
-          background: linear-gradient(180deg, var(--club-commercial-accent), var(--club-commercial-accent-2));
-          border-radius: 999px;
-          content: "";
-          inset: 16px auto 16px 14px;
-          position: absolute;
-          width: 5px;
-          z-index: 2;
-        }
-
-        .club-commercial-placeholder.has-campaign::after {
-          background: linear-gradient(180deg, rgba(2, 6, 23, 0.2), rgba(2, 6, 23, 0.86));
-          content: "";
-          inset: 0;
-          position: absolute;
-          z-index: 1;
-        }
-
-        .club-commercial-placeholder img {
-          height: 100%;
-          inset: 0;
-          object-fit: cover;
-          position: absolute;
-          width: 100%;
-          z-index: 0;
-        }
-
-        .club-commercial-placeholder span {
-          color: #061b3a;
-          font-size: clamp(1.25rem, 2.4vw, 1.75rem);
-          font-weight: 950;
-          letter-spacing: -0.04em;
-          line-height: 1;
-          padding-left: 16px;
-          position: relative;
-          z-index: 2;
-        }
-
-        .club-commercial-placeholder p {
-          color: #475569;
-          font-size: 0.9rem;
-          font-weight: 720;
-          line-height: 1.38;
-          margin: 0;
-          max-width: 520px;
-          padding-left: 16px;
-          position: relative;
-          z-index: 2;
-        }
-
-        .club-commercial-placeholder em {
-          align-self: end;
-          background: linear-gradient(135deg, #020617, #061b3a);
-          border: 1px solid color-mix(in srgb, var(--club-commercial-accent) 38%, transparent);
-          border-radius: 999px;
-          color: #ffffff;
-          font-size: 0.72rem;
-          font-style: normal;
-          font-weight: 950;
-          justify-self: start;
-          margin-left: 16px;
-          padding: 7px 10px;
-          text-transform: uppercase;
-          position: relative;
-          z-index: 2;
-        }
-
-        .club-commercial-placeholder.has-campaign span {
-          color: #ffffff;
-          text-shadow: 0 12px 26px rgba(2, 6, 23, 0.3);
-        }
-
-        .club-commercial-placeholder.has-campaign p {
-          color: rgba(255, 255, 255, 0.82);
-        }
-
-        .club-commercial-detailGrid {
-          display: grid;
-          gap: 9px;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          margin: 0;
-        }
-
-        .club-commercial-detailGrid div {
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 14px;
-          display: grid;
-          gap: 4px;
-          padding: 11px;
-        }
-
-        .club-commercial-detailGrid dt {
-          color: #64748b;
-          font-size: 0.68rem;
-          font-weight: 950;
-          letter-spacing: 0.04em;
-          text-transform: uppercase;
-        }
-
-        .club-commercial-detailGrid dd {
-          color: #061b3a;
-          font-size: 0.86rem;
-          font-weight: 850;
-          line-height: 1.28;
-          margin: 0;
-        }
-
-        .club-commercial-detailGrid dd span:not(.club-commercial-status) {
-          color: #f59e0b;
-          display: block;
-          font-size: 0.92rem;
-          letter-spacing: 0.06em;
-          line-height: 1;
-        }
-
-        .club-commercial-detailGrid dd small {
-          color: var(--club-commercial-accent);
-          display: block;
-          font-size: 0.72rem;
-          font-weight: 900;
-          margin-top: 4px;
-        }
-
-        .club-commercial-detailActions {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-
-        .club-commercial-detailActions button {
-          background: linear-gradient(135deg, #020617, #061b3a);
-          border: 1px solid color-mix(in srgb, var(--club-commercial-accent) 38%, transparent);
-          border-radius: 999px;
-          box-shadow: 0 14px 26px var(--club-commercial-glow);
-          color: #ffffff;
-          cursor: pointer;
-          font: inherit;
-          font-size: 0.8rem;
-          font-weight: 950;
-          padding: 10px 13px;
-          transition: box-shadow 0.18s ease, transform 0.18s ease;
-        }
-
-        .club-commercial-detailActions button + button {
-          background: #ffffff;
-          border-color: color-mix(in srgb, var(--club-commercial-accent) 34%, transparent);
-          box-shadow: inset 0 0 0 1px var(--club-commercial-glow);
-          color: #061b3a;
-        }
-
-        .club-commercial-detailActions button:hover {
-          box-shadow: 0 20px 40px var(--club-commercial-glow);
-          transform: translateY(-1px);
-        }
-
-        .club-commercial-slots {
-          display: grid;
-          gap: 12px;
-          min-width: 0;
-        }
-
-        .club-commercial-slot {
-          align-items: stretch;
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 18px;
-          box-shadow: 0 16px 42px rgba(15, 23, 42, 0.065);
-          color: inherit;
-          cursor: pointer;
-          display: grid;
-          font: inherit;
-          gap: 12px;
-          grid-template-columns: 5px 112px minmax(0, 1fr);
-          min-width: 0;
-          padding: 12px;
-          text-align: left;
-          transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-        }
-
-        .club-commercial-slot:hover,
-        .club-commercial-slot.is-selected {
-          border-color: color-mix(in srgb, var(--club-commercial-accent) 36%, transparent);
-          box-shadow: 0 22px 52px rgba(15, 23, 42, 0.1), 0 0 0 4px var(--club-commercial-glow);
-          transform: translateY(-2px);
-        }
-
-        .club-commercial-slot.is-selected {
-          background: linear-gradient(135deg, var(--club-commercial-soft), #ffffff);
-        }
-
-        .club-commercial-slot:hover .club-commercial-accent,
-        .club-commercial-slot.is-selected .club-commercial-accent {
-          box-shadow: 0 0 20px var(--club-commercial-glow);
-          transform: scaleY(1.08);
-        }
-
-        .club-commercial-accent {
-          height: 100%;
-          transition: box-shadow 0.18s ease, transform 0.18s ease;
-        }
-
-        .club-commercial-slotPreview {
-          align-items: center;
-          background:
-            radial-gradient(circle at 20% 10%, color-mix(in srgb, var(--club-commercial-accent) 13%, transparent), transparent 36%),
-            #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 15px;
-          display: flex;
-          justify-content: center;
-          min-height: 86px;
-          padding: 10px;
-        }
-
-        .slot-shape {
-          background: linear-gradient(135deg, color-mix(in srgb, var(--club-commercial-accent) 20%, transparent), color-mix(in srgb, var(--club-commercial-accent-2) 16%, transparent));
-          border: 1px dashed color-mix(in srgb, var(--club-commercial-accent) 52%, transparent);
-          border-radius: 10px;
-          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.75);
-          display: block;
-          height: 48px;
-          width: 78px;
-        }
-
-        .slot-shape.is-hero {
-          height: 54px;
-          width: 86px;
-        }
-
-        .slot-shape.is-news-left {
-          height: 58px;
-          width: 84px;
-        }
-
-        .slot-shape.is-news-right {
-          height: 58px;
-          width: 58px;
-        }
-
-        .slot-shape.is-calendar {
-          height: 34px;
-          width: 92px;
-        }
-
-        .slot-shape.is-footer {
-          height: 24px;
-          width: 96px;
-        }
-
-        .club-commercial-slotBody {
-          display: grid;
-          gap: 9px;
-          min-width: 0;
-        }
-
-        .club-commercial-slotHead {
-          align-items: flex-start;
-          display: flex;
-          gap: 10px;
-          justify-content: space-between;
-          min-width: 0;
-        }
-
-        .club-commercial-slotHead h2 {
-          color: #061b3a;
-          font-size: 1rem;
-          font-weight: 950;
-          letter-spacing: -0.02em;
-          line-height: 1.08;
-          margin: 2px 0 0;
-        }
-
-        .club-commercial-slotBody p {
-          color: #52657d;
-          font-size: 0.84rem;
-          font-weight: 650;
-          line-height: 1.38;
-          margin: 0;
-        }
-
-        .club-commercial-status,
-        .club-commercial-tags span {
-          border-radius: 999px;
-          display: inline-flex;
-          font-size: 0.68rem;
-          font-weight: 950;
-          line-height: 1;
-          padding: 7px 8px;
-          white-space: nowrap;
-        }
-
-        .club-commercial-status.is-available {
-          background: color-mix(in srgb, var(--club-commercial-accent) 12%, white);
-          border: 1px solid color-mix(in srgb, var(--club-commercial-accent) 26%, transparent);
-          color: #061b3a;
-        }
-
-        .club-commercial-status.is-reserved {
-          background: rgba(245, 158, 11, 0.13);
-          border: 1px solid rgba(245, 158, 11, 0.24);
-          color: #92400e;
-        }
-
-        .club-commercial-status.is-active {
-          background: rgba(16, 185, 129, 0.13);
-          border: 1px solid rgba(16, 185, 129, 0.26);
-          color: #047857;
-        }
-
-        .club-commercial-tags {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-        }
-
-        .club-commercial-tags span {
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          color: #475569;
-        }
-
-        .club-commercial-note {
-          align-items: flex-start;
-          display: flex;
-          gap: 12px;
-          padding: 15px;
-        }
-
-        .club-commercial-note > span {
-          height: 42px;
-        }
-
-        .club-commercial-note strong {
-          color: #061b3a;
-          display: block;
-          font-size: 0.95rem;
-          font-weight: 950;
-          margin-bottom: 4px;
-        }
-
-        .club-commercial-note p {
-          color: #52657d;
-          font-size: 0.86rem;
-          font-weight: 650;
-          line-height: 1.42;
-          margin: 0;
-        }
-
-        .club-commercial-modal {
-          align-items: center;
-          background: rgba(15, 23, 42, 0.62);
-          display: flex;
-          inset: 0;
-          justify-content: center;
-          overflow: auto;
-          padding: 18px;
-          position: fixed;
-          z-index: 90;
-        }
-
-        .club-commercial-modalCard {
-          background: #ffffff;
-          border: 1px solid color-mix(in srgb, var(--club-commercial-accent) 18%, transparent);
-          border-radius: 18px;
-          box-shadow: 0 28px 80px rgba(2, 6, 23, 0.28);
-          display: grid;
-          gap: 12px;
-          max-height: none;
-          overflow: visible;
-          padding: 14px;
-          width: min(1160px, 100%);
-        }
-
-        .club-commercial-modalCard header,
-        .club-commercial-modalCard footer {
-          align-items: flex-start;
-          display: flex;
-          gap: 12px;
-          justify-content: space-between;
-        }
-
-        .club-commercial-modalCard header h2 {
-          color: #061b3a;
-          font-size: 1.35rem;
-          font-weight: 950;
-          letter-spacing: -0.035em;
-          margin: 2px 0 4px;
-        }
-
-        .club-commercial-modalCard header p {
-          color: #64748b;
-          font-size: 0.86rem;
-          font-weight: 720;
-          line-height: 1.4;
-          margin: 0;
-        }
-
-        .club-commercial-modalCard header button,
-        .club-commercial-modalCard footer button {
-          border-radius: 999px;
-          cursor: pointer;
-          font: inherit;
-          font-size: 0.82rem;
-          font-weight: 950;
-          padding: 10px 13px;
-        }
-
-        .club-commercial-modalCard header button,
-        .club-commercial-modalCard footer button:first-child {
-          background: #ffffff;
-          border: 1px solid #dbe5ef;
-          color: #061b3a;
-        }
-
-        .club-commercial-modalCard footer button:last-child {
-          background: linear-gradient(135deg, #020617, #061b3a);
-          border: 1px solid color-mix(in srgb, var(--club-commercial-accent) 38%, transparent);
-          box-shadow: 0 14px 28px var(--club-commercial-glow);
-          color: #ffffff;
-        }
-
-        .club-commercial-modalCard footer button:disabled {
-          cursor: wait;
-          opacity: 0.72;
-        }
-
-        .club-commercial-formGrid {
-          display: grid;
-          gap: 8px;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-
-        .club-commercial-formGrid label {
-          color: #334155;
-          display: grid;
-          font-size: 0.76rem;
-          font-weight: 900;
-          gap: 6px;
-          min-width: 0;
-        }
-
-        .club-commercial-formGrid label.is-wide {
-          grid-column: 1 / -1;
-        }
-
-        .club-commercial-formGrid input,
-        .club-commercial-formGrid select,
-        .club-commercial-formGrid textarea {
-          background: #ffffff;
-          border: 1px solid rgba(15, 23, 42, 0.14);
-          border-radius: 7px;
-          color: #061b3a;
-          font: inherit;
-          font-size: 0.76rem;
-          font-weight: 720;
-          min-height: 34px;
-          min-width: 0;
-          padding: 7px 9px;
-          outline: none;
-        }
-
-        .club-commercial-formGrid textarea {
-          min-height: 86px;
-          resize: vertical;
-        }
-
-        .club-commercial-formGrid input:focus,
-        .club-commercial-formGrid select:focus,
-        .club-commercial-formGrid textarea:focus {
-          border-color: color-mix(in srgb, var(--club-commercial-accent) 72%, transparent);
-          box-shadow: 0 0 0 4px var(--club-commercial-glow);
-        }
-
-        @media (max-width: 1080px) {
-          .club-commercial-hero,
-          .club-commercial-layout {
-            grid-template-columns: 1fr;
-          }
-
-          .club-commercial-summary {
-            justify-self: stretch;
-          }
-        }
-
-        @media (max-width: 700px) {
-          .club-commercial-summary {
-            grid-template-columns: 1fr;
-          }
-
-          .club-commercial-detailGrid {
-            grid-template-columns: 1fr;
-          }
-
-          .mini-hero,
-          .mini-news,
-          .mini-cards {
-            grid-template-columns: 1fr;
-          }
-
-          .club-commercial-slot {
-            grid-template-columns: 5px minmax(0, 1fr);
-          }
-
-          .club-commercial-slotPreview {
-            grid-column: 2;
-          }
-
-          .club-commercial-slotBody {
-            grid-column: 2;
-          }
-
-          .club-commercial-slotHead {
-            align-items: stretch;
-            flex-direction: column;
-          }
-
-          .club-commercial-formGrid {
-            grid-template-columns: 1fr;
-          }
-
-          .club-commercial-modalCard header,
-          .club-commercial-modalCard footer {
-            align-items: stretch;
-            flex-direction: column;
-          }
-        }
-      `}</style>
-    </div>
+          <CampaignPreview form={campaignForm} />
+        </form>
+      </Modal> : null}
+      {modal === 'preview' ? <Modal title="Preview de campaña" onClose={() => setModal(null)}><CampaignPreview form={campaignForm} /></Modal> : null}
+    </main>
   )
+}
+
+function Empty({ title, action, onAction }: { title: string; action: string; onAction: () => void }) {
+  return <div className={styles.empty}><Megaphone size={24} /><p>{title}</p><button onClick={onAction}>{action}</button></div>
+}
+function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  return <div className={styles.backdrop} role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}><section className={`${styles.modal} ${wide ? styles.wide : ''}`} role="dialog" aria-modal="true" aria-label={title}><header><h2>{title}</h2><button onClick={onClose} aria-label="Cerrar"><X size={20} /></button></header>{children}</section></div>
+}
+function FormGroup({ title, children }: { title: string; children: ReactNode }) {
+  return <fieldset className={styles.group}><legend>{title}</legend><div>{children}</div></fieldset>
+}
+function AssetField({ label, value, onUpload }: { label: string; value: string; onUpload: (file: File) => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  return <label className={styles.full}>{label}<span className={styles.asset}>{value ? <img src={value} alt="" /> : <ImageIcon size={24} />}<span><Upload size={15} />{busy ? 'Subiendo…' : 'Seleccionar imagen'}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setBusy(true); try { await onUpload(file) } finally { setBusy(false) } }} /></span></span></label>
+}
+function CampaignPreview({ form }: { form: typeof blankCampaign }) {
+  return <aside className={styles.preview}><div><span>PREVIEW</span><small><Calendar size={13} /> Vista responsive</small></div><ConfigurableAdBanner title={form.title || 'Título de campaña'} description={form.description} imageUrl={form.imageUrl} href={form.targetUrl} config={{ ...defaultPlatformAdRenderConfig, enabled: true, subtitle: form.description, buttonEnabled: Boolean(form.ctaLabel), buttonText: form.ctaLabel, buttonUrl: form.targetUrl }} /><p><ExternalLink size={14} /> Solo se publicará en las ubicaciones seleccionadas.</p></aside>
 }

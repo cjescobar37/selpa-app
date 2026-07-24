@@ -434,7 +434,9 @@ export default function ClubTorneosPage() {
         {!activeClub?.id ? (
           <div className="px-empty">Primero seleccioná un club activo.</div>
         ) : loading ? (
-          <div className="px-empty">Cargando torneos...</div>
+          <div className="club-loadingCards" aria-busy="true" aria-label="Cargando torneos">
+            {[0, 1, 2].map((item) => <span key={item} />)}
+          </div>
         ) : (
           <>
             <section className="club-metrics">
@@ -608,6 +610,9 @@ export default function ClubTorneosPage() {
         .club-calendarFilters span { color: #64748b; font-size: 10px; font-weight: 950; text-transform: uppercase; }
         .club-calendarFilters select { appearance: none; background: #fff; border: 1px solid rgba(15,23,42,.10); border-radius: 9px; color: #17253f; font: inherit; font-size: 12px; font-weight: 850; min-height: 34px; min-width: 0; padding: 7px 28px 7px 9px; }
         .club-calendarGroups { display: grid; gap: 16px; }
+        .club-loadingCards { display:grid; gap:10px; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:14px }
+        .club-loadingCards span { animation:clubLoadingPulse 1.2s ease-in-out infinite alternate; background:#e8edf2; border-radius:14px; min-height:92px }
+        @keyframes clubLoadingPulse { to { opacity:.48 } }
         .club-calendarMonth { display: grid; gap: 9px; min-width: 0; }
         .club-calendarMonthHead { align-items: center; border-bottom: 1px solid rgba(15,23,42,.08); display: flex; gap: 10px; justify-content: space-between; padding-bottom: 7px; }
         .club-calendarMonthHead h3 { color: #17253f; font-size: 14px; font-weight: 950; line-height: 1.1; margin: 0; }
@@ -690,17 +695,25 @@ export default function ClubTorneosPage() {
           50% { opacity: 1; transform: scale(1.18); }
         }
         @media (max-width: 720px) {
-          .club-tournamentsHead { display: grid; }
-          .club-headActions { justify-content: flex-start; }
+          .club-tournaments { padding: 12px; }
+          .club-tournamentsHead { display: grid; gap: 10px; padding: 13px; }
+          .club-tournamentsHead .club-sub { display:none; }
+          .club-headActions { justify-content: stretch; }
+          .club-headActions .club-primaryBtn { width:100%; }
           .club-cardHead--tabs { align-items: flex-start; flex-direction: column; }
           .club-calendarFilters { grid-template-columns: 1fr; }
           .club-tabs { align-items: stretch; flex-direction: column; width: 100%; }
           .club-tab { justify-content: space-between; width: 100%; }
-          .club-metrics { grid-template-columns: 1fr; }
+          .club-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
+          .club-metric { border-radius:12px; padding:9px; }
+          .club-metric span { font-size:10px; }
+          .club-metric strong { font-size:20px; }
+          .club-loadingCards { grid-template-columns:1fr; }
           .club-tournamentList { grid-template-columns: 1fr; }
           .club-titleLine { align-items: flex-start; flex-direction: column; }
           .club-tournamentDetails { grid-template-columns: 1fr; }
         }
+        @media (prefers-reduced-motion: reduce) { .club-loadingCards span { animation:none } }
       `}</style>
     </div>
   )

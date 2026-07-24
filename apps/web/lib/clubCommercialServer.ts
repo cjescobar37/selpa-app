@@ -11,7 +11,9 @@ export const CLUB_AD_SLOT_IDS = [
 ] as const
 
 export const CLUB_SPONSOR_STATUSES = ['active', 'inactive'] as const
-export const CLUB_CAMPAIGN_STATUSES = ['draft', 'active', 'paused', 'ended'] as const
+export const CLUB_CAMPAIGN_STATUSES = ['draft', 'scheduled', 'active', 'paused', 'ended'] as const
+export const CLUB_SPONSOR_CATEGORIES = ['MAIN', 'GOLD', 'SILVER', 'BRONZE', 'INSTITUTIONAL', 'SUPPLIER', 'OTHER'] as const
+export const CLUB_CAMPAIGN_TEMPLATES = ['BANNER_HORIZONTAL', 'AD_CARD', 'EDITORIAL_BACKGROUND'] as const
 
 export type ClubAdSlotId = (typeof CLUB_AD_SLOT_IDS)[number]
 export type ClubSponsorStatus = (typeof CLUB_SPONSOR_STATUSES)[number]
@@ -42,8 +44,9 @@ export function normalizeRequiredText(value: unknown, field: string, maxLength =
 }
 
 export function normalizeStatus<T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]) {
-  const normalized = String(value || fallback).trim().toLowerCase()
-  return (allowed as readonly string[]).includes(normalized) ? normalized as T[number] : fallback
+  const input = String(value || fallback).trim()
+  const normalized = (allowed as readonly string[]).find((item) => item.toLowerCase() === input.toLowerCase())
+  return (normalized ?? fallback) as T[number]
 }
 
 export function normalizeSlotId(value: unknown) {
@@ -59,6 +62,30 @@ export function normalizeDate(value: unknown) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) throw new Error('La fecha no es válida.')
   return date.toISOString()
+}
+
+export function normalizeDateOnly(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const normalized = value.trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized) || Number.isNaN(new Date(`${normalized}T00:00:00Z`).getTime())) {
+    throw new Error('La fecha no es válida.')
+  }
+  return normalized
+}
+
+export function normalizeHttpUrl(value: unknown, field = 'enlace') {
+  const text = normalizeNullableText(value, 1400)
+  if (!text) return null
+  const url = new URL(text)
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`El ${field} debe usar http o https.`)
+  return url.toString()
+}
+
+export function normalizePlacements(value: unknown, fallback?: unknown) {
+  const source = Array.isArray(value) ? value : fallback ? [fallback] : []
+  const placements = [...new Set(source.map((item) => normalizeSlotId(item)))]
+  if (!placements.length) throw new Error('Seleccioná al menos una ubicación.')
+  return placements
 }
 
 export async function assertClubCommercialManager(
@@ -85,4 +112,19 @@ export async function assertClubCommercialManager(
   }
 
   return { error: null, user }
+}
+
+export async function recordClubCommercialAudit(
+  clubId: string,
+  actorUserId: string,
+  action: string,
+  metadata: Record<string, unknown>,
+) {
+  const { error } = await supabaseAdmin.from('club_team_audit').insert({
+    club_id: clubId,
+    actor_user_id: actorUserId,
+    action,
+    metadata,
+  })
+  if (error) console.error('[club-commercial-audit]', error.message)
 }

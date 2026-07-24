@@ -6,7 +6,7 @@ import PublicClubHomeExperience, {
   type PublicClubTournament,
 } from '@/components/public/PublicClubHomeExperience'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
+import { TOURNAMENT_SELECT, toTournamentView, type TournamentView } from '@/lib/tournamentHelpers'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
 
@@ -43,6 +43,7 @@ type CampaignRow = {
   status: string
   starts_at: string | null
   ends_at: string | null
+  placements?: Array<{ placement_key?: string | null }> | null
   sponsor?: { name?: string | null } | Array<{ name?: string | null }> | null
 }
 
@@ -78,7 +79,7 @@ function playerName(player: ClubPlayerRow) {
 }
 
 function isVisibleCampaign(row: CampaignRow, now: number) {
-  if (String(row.status ?? '').toLowerCase() !== 'active') return false
+  if (!['active', 'scheduled'].includes(String(row.status ?? '').toLowerCase())) return false
   const starts = row.starts_at ? new Date(row.starts_at).getTime() : null
   const ends = row.ends_at ? new Date(row.ends_at).getTime() : null
   if (starts && Number.isFinite(starts) && starts > now) return false
@@ -95,11 +96,11 @@ function tournamentSortDate(tournament: { startDate?: string | null; registratio
   return new Date(tournament.startDate ?? tournament.registrationDeadline ?? '2999-12-31').getTime()
 }
 
-function toPublicCampaign(row: CampaignRow): PublicClubCampaign {
+function toPublicCampaign(row: CampaignRow, slotId = row.slot_id): PublicClubCampaign {
   const sponsor = Array.isArray(row.sponsor) ? row.sponsor[0] : row.sponsor
   return {
     id: row.id,
-    slotId: row.slot_id,
+    slotId,
     title: row.title,
     description: row.description,
     imageUrl: row.image_url,
@@ -172,8 +173,10 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
   ])
 
   const players = ((playerRows ?? []) as ClubPlayerRow[])
-  const tournamentViews = (tournamentRows ?? []).map((row: any) => toTournamentView(row)).filter(Boolean)
-  const tournamentIds = tournamentViews.map((item: any) => item.id).filter(Boolean)
+  const tournamentViews = (tournamentRows ?? [])
+    .map((row) => toTournamentView(row))
+    .filter((item): item is TournamentView => Boolean(item))
+  const tournamentIds = tournamentViews.map((item) => item.id).filter(Boolean)
   const { data: registrationRows } = tournamentIds.length
     ? await supabaseAdmin
       .from('tournament_registrations')
@@ -186,12 +189,12 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
     registrationsByTournamentId.set(row.tournament_id, (registrationsByTournamentId.get(row.tournament_id) ?? 0) + 1)
   }
   const tournaments: PublicClubTournament[] = tournamentViews
-    .filter((item: any) => {
+    .filter((item) => {
       if (isFinished(item.status)) return false
       const status = getTournamentDisplayStatus(item).key
       return status === 'live' || status === 'registration_open' || status === 'upcoming'
     })
-    .sort((a: any, b: any) => {
+    .sort((a, b) => {
       const statusA = getTournamentDisplayStatus(a)
       const statusB = getTournamentDisplayStatus(b)
       const byStatus = statusA.priority - statusB.priority
@@ -199,7 +202,7 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
       return tournamentSortDate(a) - tournamentSortDate(b)
     })
     .slice(0, 4)
-    .map((item: any) => ({
+    .map((item) => ({
       id: item.id,
       name: item.name,
       status: item.status,
@@ -221,7 +224,7 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
   const [{ data: campaignsData, error: campaignsError }, { data: newsData, error: newsError }] = await Promise.all([
     supabaseAdmin
       .from('club_ad_campaigns')
-      .select('id,slot_id,title,description,image_url,target_url,render_config,status,starts_at,ends_at,sponsor:club_sponsors(name)')
+      .select('id,slot_id,title,description,image_url,target_url,render_config,status,starts_at,ends_at,sponsor:club_sponsors(name),placements:club_ad_campaign_placements(placement_key)')
       .eq('club_id', clubId)
       .in('slot_id', publicSponsorSlots)
       .order('sort_order', { ascending: true })
@@ -257,10 +260,15 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
       }))
   }
 
+  // Server render time is intentionally captured once to evaluate campaign vigency.
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now()
   const campaignsBySlot = publicSponsorSlots.reduce<Record<string, PublicClubCampaign | null>>((acc, slot) => {
-    const row = campaignRows.find((item) => String(item.slot_id ?? '').toUpperCase() === slot && isVisibleCampaign(item, now))
-    acc[slot] = row ? toPublicCampaign(row) : null
+    const row = campaignRows.find((item) => {
+      const slots = item.placements?.map((placement) => String(placement.placement_key ?? '').toUpperCase()) ?? []
+      return (slots.includes(slot) || String(item.slot_id ?? '').toUpperCase() === slot) && isVisibleCampaign(item, now)
+    })
+    acc[slot] = row ? toPublicCampaign(row, slot) : null
     return acc
   }, {})
 

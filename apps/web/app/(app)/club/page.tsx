@@ -256,7 +256,31 @@ export default function ClubPage() {
     }
   }, [activeClub?.id, role])
 
-  if (loading) return <div className="px-wrap"><div className="px-help">Cargando club...</div></div>
+  if (loading) {
+    return (
+      <div className="px-wrap">
+        <div className="club-panel club-dashboard" aria-busy="true" aria-label="Cargando resumen del club">
+          <div className="club-dashboardHead">
+            <div>
+              <span className="club-kicker">Resumen operativo</span>
+              <h1 className="club-title">Dashboard del club</h1>
+              <p className="club-sub">{activeClub?.name ?? 'Club activo'}</p>
+            </div>
+          </div>
+          <section className="club-metricsGrid club-skeletonGrid" aria-hidden="true">
+            {[0, 1, 2, 3].map((item) => <span className="club-skeletonCard" key={item} />)}
+          </section>
+          <style jsx>{`
+            .club-skeletonGrid { display:grid; gap:10px; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px }
+            .club-skeletonCard { animation:clubSkeleton 1.2s ease-in-out infinite alternate; background:#e8edf2; border-radius:16px; min-height:76px }
+            @keyframes clubSkeleton { to { opacity:.48 } }
+            @media (min-width:760px) { .club-skeletonGrid { grid-template-columns:repeat(4,minmax(0,1fr)) } }
+            @media (prefers-reduced-motion:reduce) { .club-skeletonCard { animation:none } }
+          `}</style>
+        </div>
+      </div>
+    )
+  }
   if (error) return <div className="px-wrap"><div className="px-help">{error}</div></div>
 
   if (role === 'player') {
@@ -286,7 +310,7 @@ export default function ClubPage() {
   }
 
   if (!summary?.club) {
-    return <div className="px-wrap"><div className="px-help">No hay club activo seleccionado.</div></div>
+    return <div className="px-wrap"><div className="px-help">No pudimos cargar la información del club. Actualizá la página para volver a intentar.</div></div>
   }
 
   const club = summary.club

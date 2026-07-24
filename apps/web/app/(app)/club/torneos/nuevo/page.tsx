@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
@@ -16,7 +16,13 @@ import {
   type GroupTiebreakerCriterion,
   type GroupTiebreakerFinal,
 } from '@/lib/tournamentTiebreakers'
-import { TournamentFlyerConfigurator, defaultFlyerConfig, resolveAutoFlyerConfig, type FlyerConfig } from '../_components/TournamentFlyerConfigurator'
+import {
+  TournamentFlyerConfigurator,
+  TournamentFlyerPreviewCard,
+  defaultFlyerConfig,
+  resolveAutoFlyerConfig,
+  type FlyerConfig,
+} from '../_components/TournamentFlyerConfigurator'
 
 type TournamentType = 'OPEN' | 'CHALLENGER' | 'MASTER' | 'MASTER_FINAL'
 type TournamentGender = 'MALE' | 'FEMALE' | 'MIXED'
@@ -177,6 +183,16 @@ const scheduleModeOptions: Array<{ value: ScheduleMode; label: string }> = [
   { value: 'MANUAL', label: 'Manual' },
 ]
 
+const mobileSteps = [
+  'Identidad',
+  'Competencia',
+  'Fechas e inscripción',
+  'Sede y cupos',
+  'Formato deportivo',
+  'Puntaje',
+  'Identidad visual y revisión',
+] as const
+
 function buildFlyerPayload(config: FlyerConfig, tournamentTypeLabel: string) {
   const resolvedConfig = resolveAutoFlyerConfig(config, tournamentTypeLabel)
   const manualUrl = resolvedConfig.manualFlyer?.publicUrl ?? null
@@ -285,6 +301,18 @@ function toInteger(value: string, fallback: number) {
   return Number.isFinite(parsed) ? Math.trunc(parsed) : NaN
 }
 
+function ReviewBlock({ title, step, onEdit, children }: { title: string; step: number; onEdit: (step: number) => void; children: ReactNode }) {
+  return (
+    <article>
+      <div>
+        <span>{title}</span>
+        <button type="button" onClick={() => onEdit(step)}>Editar</button>
+      </div>
+      {children}
+    </article>
+  )
+}
+
 export default function ClubNuevoTorneoPage() {
   const router = useRouter()
   const { activeClub } = useSession()
@@ -297,6 +325,12 @@ export default function ClubNuevoTorneoPage() {
   const [courtsExpanded, setCourtsExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [mobileStep, setMobileStep] = useState(1)
+
+  useEffect(() => {
+    document.body.classList.add('club-tournament-wizard-active')
+    return () => document.body.classList.remove('club-tournament-wizard-active')
+  }, [])
 
   const errors = useMemo(() => {
     const next: string[] = []
@@ -348,6 +382,23 @@ export default function ClubNuevoTorneoPage() {
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function updateStartDate(value: string) {
+    setForm((current) => ({
+      ...current,
+      startDate: value,
+      groupsDate: current.groupsDate || value,
+      playoffDate: current.playoffDate || current.endDate || value,
+    }))
+  }
+
+  function updateEndDate(value: string) {
+    setForm((current) => ({
+      ...current,
+      endDate: value,
+      playoffDate: current.playoffDate || value || current.startDate,
+    }))
   }
 
   function updateGroupTiebreakerCriterion(index: number, value: GroupTiebreakerCriterion) {
@@ -451,23 +502,56 @@ export default function ClubNuevoTorneoPage() {
     }))
   }
 
-  useEffect(() => {
-    void loadComplexOptions()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClub?.id])
+  function getStepError(step: number) {
+    const categoryId = toInteger(form.categoryId, 0)
+    const minPairs = toInteger(form.minPairs, 6)
+    const maxPairs = form.maxPairs.trim() ? toInteger(form.maxPairs, NaN) : null
+    const price = toNumber(form.pricePerPlayer, 0)
+    const matchDuration = toInteger(form.matchDurationMinutes, 90)
+
+    if (step === 1 && !form.name.trim()) return 'Ingresá el nombre del torneo para continuar.'
+    if (step === 2 && (!Number.isInteger(categoryId) || categoryId < 1 || categoryId > 7)) return 'Seleccioná una categoría válida.'
+    if (step === 3) {
+      if (!form.startDate) return 'Ingresá la fecha de inicio para continuar.'
+      if (form.endDate && form.endDate < form.startDate) return 'La fecha fin no puede ser anterior al inicio.'
+      if (form.registrationDeadline && form.registrationDeadline.slice(0, 10) > form.startDate) return 'El cierre de inscripción no puede ser posterior al inicio.'
+      if (!Number.isFinite(price) || price < 0) return 'El precio debe ser mayor o igual a 0.'
+      if (!Number.isInteger(minPairs) || minPairs < 2) return 'El mínimo de parejas debe ser al menos 2.'
+      if (maxPairs !== null && (!Number.isInteger(maxPairs) || maxPairs < minPairs)) return 'El máximo debe ser mayor o igual al mínimo.'
+    }
+    if (step === 5) {
+      if (!Number.isInteger(matchDuration) || matchDuration < 30) return 'La duración estimada debe ser de al menos 30 minutos.'
+      if (form.competitionSystem !== 'SINGLE_ELIMINATION') {
+        if (form.groupsDate && form.startDate && form.groupsDate < form.startDate) return 'El día de grupos no puede ser anterior al inicio.'
+        if (form.groupsStartTime && form.groupsEndTime && form.groupsStartTime >= form.groupsEndTime) return 'El horario de grupos debe cerrar después de la hora de inicio.'
+      }
+      if (form.competitionSystem !== 'ROUND_ROBIN') {
+        if (form.playoffDate && form.endDate && form.playoffDate > form.endDate) return 'El día de playoff no puede ser posterior al fin.'
+        if (form.playoffStartTime && form.playoffEndTime && form.playoffStartTime >= form.playoffEndTime) return 'El horario de playoff debe cerrar después de la hora de inicio.'
+      }
+    }
+    return null
+  }
+
+  function goToMobileStep(step: number) {
+    setMessage('')
+    setMobileStep(Math.min(7, Math.max(1, step)))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function goToNextMobileStep() {
+    const stepError = getStepError(mobileStep)
+    if (stepError) {
+      setMessage(stepError)
+      return
+    }
+    goToMobileStep(mobileStep + 1)
+  }
 
   useEffect(() => {
-    setForm((current) => {
-      const nextGroupsDate = current.groupsDate || current.startDate
-      const nextPlayoffDate = current.playoffDate || current.endDate || current.startDate
-      if (nextGroupsDate === current.groupsDate && nextPlayoffDate === current.playoffDate) return current
-      return {
-        ...current,
-        groupsDate: nextGroupsDate,
-        playoffDate: nextPlayoffDate,
-      }
-    })
-  }, [form.startDate, form.endDate])
+    void Promise.resolve().then(() => loadComplexOptions())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClub?.id])
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -546,6 +630,22 @@ export default function ClubNuevoTorneoPage() {
     router.replace('/club/torneos')
   }
 
+  const flyerPreviewData = {
+    clubName: activeClub?.name ?? '',
+    name: form.name,
+    type: typeOptions.find((option) => option.value === form.type)?.label ?? form.type,
+    gender: genderOptions.find((option) => option.value === form.gender)?.label ?? form.gender,
+    categoryLabel: `Categoria ${form.categoryId || '7'}`,
+    publicDescription: form.publicDescription,
+    segmentLabel: segmentOptions.find((option) => option.value === form.segmentType)?.label ?? form.segmentType,
+    competitionSystemLabel: competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label ?? form.competitionSystem,
+    venueName: form.venueName || activeClub?.name || '',
+    startDate: form.startDate,
+    endDate: form.endDate,
+    registrationDeadline: form.registrationDeadline,
+    pricePerPlayer: form.pricePerPlayer,
+  }
+
   return (
     <div className="px-wrap">
       <div className="club-panel club-newTournament" style={themeStyle}>
@@ -561,9 +661,18 @@ export default function ClubNuevoTorneoPage() {
         {message ? <div className="club-message">{message}</div> : null}
 
         <form className="club-formCard" onSubmit={submit}>
-          <section className="club-formSection">
+          <header className="club-mobileWizardHead">
+            <Link href="/club/torneos">← Crear torneo</Link>
+            <div>
+              <span>Paso {mobileStep} de 7</span>
+              <strong>{mobileSteps[mobileStep - 1]}</strong>
+            </div>
+            <i aria-hidden="true"><span style={{ width: `${(mobileStep / 7) * 100}%` }} /></i>
+          </header>
+
+          <section className="club-formSection club-mobileStep" data-active={mobileStep === 1}>
             <div className="club-formSectionHead">
-              <span className="club-kicker">1. Identidad del torneo</span>
+              <span className="club-kicker">Identidad del torneo</span>
               <p>Nombre y descripción pública breve para presentar el torneo.</p>
             </div>
             <div className="club-formSectionGrid">
@@ -592,9 +701,9 @@ export default function ClubNuevoTorneoPage() {
             </div>
           </section>
 
-          <section className="club-formSection club-formSection--soft">
+          <section className="club-formSection club-formSection--soft club-mobileStep" data-active={mobileStep === 2}>
             <div className="club-formSectionHead">
-              <span className="club-kicker">2. Categoría y formato</span>
+              <span className="club-kicker">Categoría y formato</span>
               <p>Segmento deportivo, rama y sistema competitivo del torneo.</p>
             </div>
             <div className="club-formSectionGrid">
@@ -635,20 +744,20 @@ export default function ClubNuevoTorneoPage() {
             </div>
           </section>
 
-          <section className="club-formSection">
+          <section className="club-formSection club-mobileStep" data-active={mobileStep === 3}>
             <div className="club-formSectionHead">
-              <span className="club-kicker">3. Fechas e inscripción</span>
+              <span className="club-kicker">Fechas e inscripción</span>
               <p>Calendario, cierre, cupos y costo de inscripción.</p>
             </div>
             <div className="club-formSectionGrid">
               <label className="club-field club-field--span3 club-field--compact">
                 <span>Inicio</span>
-                <input className="px-input" type="date" value={form.startDate} onChange={(event) => updateField('startDate', event.target.value)} />
+                <input className="px-input" type="date" value={form.startDate} onChange={(event) => updateStartDate(event.target.value)} />
               </label>
 
               <label className="club-field club-field--span3 club-field--compact">
                 <span>Fin</span>
-                <input className="px-input" type="date" value={form.endDate} onChange={(event) => updateField('endDate', event.target.value)} />
+                <input className="px-input" type="date" value={form.endDate} onChange={(event) => updateEndDate(event.target.value)} />
               </label>
 
               <label className="club-field club-field--span3 club-field--compact">
@@ -673,9 +782,9 @@ export default function ClubNuevoTorneoPage() {
             </div>
           </section>
 
-          <section className="club-formSection club-formSection--highlight">
+          <section className="club-formSection club-formSection--highlight club-mobileStep" data-active={mobileStep === 4}>
             <div className="club-formSectionHead">
-              <span className="club-kicker">4. Sede, canchas y cupos</span>
+              <span className="club-kicker">Sede y canchas</span>
               <p>Elegí el complejo principal y, si querés, dejá canchas preconfiguradas.</p>
             </div>
             <div className="club-formSectionGrid club-venueRow">
@@ -702,6 +811,10 @@ export default function ClubNuevoTorneoPage() {
                   <small>{form.tournamentCourts.length ? `${form.tournamentCourts.length} cancha${form.tournamentCourts.length === 1 ? '' : 's'}` : 'Opcional'}</small>
                 </button>
               </div>
+
+              <p className="club-mobileVenueHint">
+                Podés configurar las canchas ahora o hacerlo después desde el torneo.
+              </p>
 
               {courtsExpanded ? (
                 <div className="club-courtsPanel club-field--wide">
@@ -773,10 +886,10 @@ export default function ClubNuevoTorneoPage() {
             </div>
           </section>
 
-          <section className="club-formSection">
+          <section className="club-formSection club-mobileStep" data-active={mobileStep === 5}>
             <div className="club-formSectionHead">
-              <span className="club-kicker">5. Reglas / puntos / premios</span>
-              <p>Definí la ventana operativa para automatizar cruces de grupos con horarios y canchas.</p>
+              <span className="club-kicker">Formato deportivo</span>
+              <p>Definí la planificación, duración y ventanas de juego.</p>
             </div>
             <div className="club-formSectionGrid">
               <label className="club-field club-field--span3 club-field--compact">
@@ -804,7 +917,9 @@ export default function ClubNuevoTorneoPage() {
               </div>
 
               <div className="club-scheduleWindows club-field--wide">
-                <div className="club-scheduleWindow">
+                <details className="club-scheduleWindow club-mobileConditional" data-mobile-hidden={form.competitionSystem === 'SINGLE_ELIMINATION'}>
+                  <summary>Grupos <small>{form.groupsDate || 'Configurar'}</small></summary>
+                  <div className="club-scheduleFields">
                   <strong>GRUPOS</strong>
                   <label className="club-field club-field--compact">
                     <span>Día</span>
@@ -818,9 +933,12 @@ export default function ClubNuevoTorneoPage() {
                     <span>Hasta</span>
                     <input className="px-input" type="time" value={form.groupsEndTime} onChange={(event) => updateField('groupsEndTime', event.target.value)} />
                   </label>
-                </div>
+                  </div>
+                </details>
 
-                <div className="club-scheduleWindow">
+                <details className="club-scheduleWindow club-mobileConditional" data-mobile-hidden={form.competitionSystem === 'ROUND_ROBIN'}>
+                  <summary>Playoff <small>{form.playoffDate || 'Configurar'}</small></summary>
+                  <div className="club-scheduleFields">
                   <strong>PLAYOFF</strong>
                   <label className="club-field club-field--compact">
                     <span>Día</span>
@@ -834,16 +952,20 @@ export default function ClubNuevoTorneoPage() {
                     <span>Hasta</span>
                     <input className="px-input" type="time" value={form.playoffEndTime} onChange={(event) => updateField('playoffEndTime', event.target.value)} />
                   </label>
-                </div>
+                  </div>
+                </details>
               </div>
             </div>
           </section>
 
-          <section className="club-formSection club-formSection--soft">
+          <section className="club-formSection club-formSection--soft club-mobileStep club-mobileConditional" data-active={mobileStep === 5} data-mobile-hidden={form.competitionSystem === 'SINGLE_ELIMINATION'}>
             <div className="club-formSectionHead">
               <span className="club-kicker">Definición por desempate</span>
               <p>Orden aplicado a las tablas de grupos. Si todo sigue igualado, el desempate final queda separado.</p>
             </div>
+            <details className="club-mobileSecondary">
+              <summary>Configurar desempates <small>Opcional</small></summary>
+              <div className="club-mobileSecondaryContent">
             <div className="club-tiebreakerGrid">
               {form.groupTiebreakerOrder.map((criterion, index) => (
                 <label className="club-field club-field--compact" key={`tiebreaker-${index}`}>
@@ -879,9 +1001,11 @@ export default function ClubNuevoTorneoPage() {
                 Si el empate llega a sorteo/manual, el sistema no elige automáticamente al azar.
               </div>
             ) : null}
+              </div>
+            </details>
           </section>
 
-          <section className="club-formSection">
+          <section className="club-formSection club-mobileStep" data-active={mobileStep === 6}>
             <div className="club-formSectionHead">
               <span className="club-kicker">Puntaje</span>
               <p>La escala arranca con defaults seguros y la podés editar solo cuando haga falta.</p>
@@ -950,35 +1074,97 @@ export default function ClubNuevoTorneoPage() {
             </div>
           </section>
 
-          <div className="club-field club-field--wide">
-            <TournamentFlyerConfigurator
+          <section className="club-formSection club-mobileStep club-reviewStep" data-active={mobileStep === 7}>
+            <div className="club-formSectionHead">
+              <span className="club-kicker">Identidad visual y revisión</span>
+              <p>Elegí el flyer y confirmá los datos antes de crear el borrador.</p>
+            </div>
+            <div className="club-mobileFlyerOverview">
+              {flyerConfig.mode === 'NONE' ? (
+                <div className="club-mobileFlyerEmptyPreview">
+                  <span>Flyer del torneo</span>
+                  <strong>Sin flyer por ahora</strong>
+                  <p>Podés usar el diseño automático o personalizarlo antes de crear.</p>
+                </div>
+              ) : (
+                <TournamentFlyerPreviewCard
+                  value={resolveAutoFlyerConfig(flyerConfig, `${flyerPreviewData.type} ${flyerPreviewData.gender}`)}
+                  previewData={flyerPreviewData}
+                  variant="editor"
+                />
+              )}
+              <div className="club-mobileFlyerModes" aria-label="Modo de flyer">
+                <button
+                  type="button"
+                  className={flyerConfig.mode === 'AUTO' ? 'is-active' : ''}
+                  onClick={() => setFlyerConfig((current) => ({ ...current, mode: 'AUTO' }))}
+                >
+                  Automático
+                </button>
+                <button
+                  type="button"
+                  className={flyerConfig.mode === 'NONE' ? 'is-active' : ''}
+                  onClick={() => setFlyerConfig((current) => ({ ...current, mode: 'NONE' }))}
+                >
+                  Sin flyer
+                </button>
+              </div>
+            </div>
+            <details className="club-mobileFlyerDisclosure">
+              <summary>Personalizar flyer <small>{flyerConfig.mode === 'NONE' ? 'Sin flyer' : flyerConfig.mode === 'MANUAL' ? 'Manual' : 'Automático'}</small></summary>
+              <div className="club-flyerContent">
+              <TournamentFlyerConfigurator
               value={flyerConfig}
               onChange={setFlyerConfig}
               advancedControls
-              previewData={{
-                clubName: activeClub?.name ?? '',
-                name: form.name,
-                type: typeOptions.find((option) => option.value === form.type)?.label ?? form.type,
-                gender: genderOptions.find((option) => option.value === form.gender)?.label ?? form.gender,
-                categoryLabel: `Categoria ${form.categoryId || '7'}`,
-                publicDescription: form.publicDescription,
-                segmentLabel: segmentOptions.find((option) => option.value === form.segmentType)?.label ?? form.segmentType,
-                competitionSystemLabel: competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label ?? form.competitionSystem,
-                venueName: form.venueName || activeClub?.name || '',
-                startDate: form.startDate,
-                endDate: form.endDate,
-                registrationDeadline: form.registrationDeadline,
-                pricePerPlayer: form.pricePerPlayer,
-              }}
+              previewData={flyerPreviewData}
               helperText="La configuracion visual se guarda dentro de rules_json para que despues puedas retomarla y seguir afinando el flyer."
             />
-          </div>
+              </div>
+            </details>
+
+            <div className="club-review">
+              <ReviewBlock title="Identidad" step={1} onEdit={goToMobileStep}>
+                <strong>{form.name || 'Sin nombre'}</strong>
+                <span>{form.publicDescription || 'Sin descripción pública'}</span>
+              </ReviewBlock>
+              <ReviewBlock title="Competencia" step={2} onEdit={goToMobileStep}>
+                <strong>Categoría {form.categoryId} · {genderOptions.find((option) => option.value === form.gender)?.label}</strong>
+                <span>{competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label}</span>
+              </ReviewBlock>
+              <ReviewBlock title="Fechas e inscripción" step={3} onEdit={goToMobileStep}>
+                <strong>{form.startDate || 'Sin inicio'}{form.endDate ? ` → ${form.endDate}` : ''}</strong>
+                <span>{form.maxPairs ? `${form.minPairs}–${form.maxPairs} parejas` : `Desde ${form.minPairs} parejas`} · {form.pricePerPlayer === '0' ? 'Sin costo' : `$ ${form.pricePerPlayer}`}</span>
+              </ReviewBlock>
+              <ReviewBlock title="Sede" step={4} onEdit={goToMobileStep}>
+                <strong>{form.venueName || 'Sede por definir'}</strong>
+                <span>{form.tournamentCourts.length ? `${form.tournamentCourts.length} cancha${form.tournamentCourts.length === 1 ? '' : 's'}` : 'Canchas por configurar'}</span>
+              </ReviewBlock>
+              <ReviewBlock title="Formato y puntaje" step={5} onEdit={goToMobileStep}>
+                <strong>{scheduleModeOptions.find((option) => option.value === form.scheduleMode)?.label} · {form.matchDurationMinutes} min</strong>
+                <span>{competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label}</span>
+              </ReviewBlock>
+              <ReviewBlock title="Puntaje" step={6} onEdit={goToMobileStep}>
+                <strong>{form.pointsEnabled ? `${form.pointsWinner} puntos al ganador` : 'Sin puntaje'}</strong>
+                <span>{form.pointsEnabled ? `${form.pointsFinalist} al finalista · ${form.pointsParticipation} por participación` : 'No asigna puntos'}</span>
+              </ReviewBlock>
+            </div>
+          </section>
 
           <div className="club-formActions">
             <button type="submit" className="club-primaryBtn" disabled={saving}>
               {saving ? 'Creando...' : 'Crear torneo'}
             </button>
             <Link href="/club/torneos" className="club-secondaryBtn">Cancelar</Link>
+          </div>
+
+          <div className="club-mobileActions" data-first-step={mobileStep === 1}>
+            {mobileStep > 1 ? <button type="button" className="club-secondaryBtn" onClick={() => goToMobileStep(mobileStep - 1)}>Atrás</button> : <span />}
+            {mobileStep < 7 ? (
+              <button type="button" className="club-primaryBtn" onClick={(event) => { event.preventDefault(); goToNextMobileStep() }}>Siguiente →</button>
+            ) : (
+              <button type="submit" className="club-primaryBtn" disabled={saving}>{saving ? 'Creando...' : 'Crear torneo'}</button>
+            )}
           </div>
         </form>
       </div>
@@ -1065,7 +1251,10 @@ export default function ClubNuevoTorneoPage() {
         .club-scheduleCapacity small { color: #64748b; font-size: 12px; font-weight: 800; }
         .club-scheduleWindows { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .club-scheduleWindow { align-items: end; background: rgba(248,250,252,.64); border: 1px solid rgba(15,23,42,.06); border-radius: 12px; display: grid; gap: 8px; grid-template-columns: auto minmax(132px, 1fr) minmax(84px, .55fr) minmax(84px, .55fr); padding: 8px; }
-        .club-scheduleWindow > strong { align-self: center; color: var(--club-admin-accent); font-size: 11px; font-weight: 950; }
+        .club-scheduleWindow > summary { display:none; }
+        .club-scheduleWindow:not([open]) > .club-scheduleFields { display:contents; }
+        .club-scheduleFields { display:contents; }
+        .club-scheduleFields > strong { align-self: center; color: var(--club-admin-accent); font-size: 11px; font-weight: 950; }
         .club-courtList { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
         .club-courtChip { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 12px; display: grid; gap: 4px; grid-template-columns: minmax(0, 1fr) auto; padding: 10px 12px; }
         .club-courtChip strong { color: #17253f; display: block; font-size: 13px; }
@@ -1074,6 +1263,17 @@ export default function ClubNuevoTorneoPage() {
         .club-chipRemove { background: none; border: none; color: #c2410c; cursor: pointer; font-size: 12px; font-weight: 900; justify-self: end; padding: 0; }
         .club-emptyInline { background: rgba(248,250,252,.9); border: 1px dashed rgba(148,163,184,.36); border-radius: 12px; color: #64748b; font-size: 13px; font-weight: 800; padding: 12px; }
         .club-formActions { display: flex; flex-wrap: wrap; gap: 8px; grid-column: 1 / -1; justify-content: flex-end; padding-top: 4px; }
+        .club-mobileWizardHead, .club-mobileActions, .club-mobileFlyerOverview, .club-mobileVenueHint { display: none; }
+        .club-mobileFlyerDisclosure > summary, .club-mobileSecondary > summary { display: none; }
+        .club-mobileFlyerDisclosure:not([open]) > .club-flyerContent,
+        .club-mobileSecondary:not([open]) > .club-mobileSecondaryContent { display: block; }
+        .club-review { display: grid; gap: 8px; }
+        .club-review article { background: #f8fafc; border: 1px solid rgba(15,23,42,.08); border-radius: 12px; display: grid; gap: 3px; padding: 10px; }
+        .club-review article > div { align-items: center; display: flex; justify-content: space-between; }
+        .club-review article > div > span { color: #64748b; font-size: 11px; font-weight: 950; text-transform: uppercase; }
+        .club-review article button { background: none; border: 0; color: var(--club-admin-accent); cursor: pointer; font-size: 12px; font-weight: 900; }
+        .club-review article > strong { color: #17253f; font-size: 13px; }
+        .club-review article > span { color: #64748b; font-size: 12px; }
         .club-primaryBtn, .club-secondaryBtn { align-items: center; border-radius: 999px; cursor: pointer; display: inline-flex; font-weight: 950; justify-content: center; min-height: 38px; padding: 8px 14px; text-decoration: none; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; white-space: nowrap; }
         .club-primaryBtn { background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 38%, transparent); box-shadow: 0 12px 28px var(--club-admin-glow); color: #fff; }
         .club-secondaryBtn { background: #fff; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 34%, transparent); color: #061b3a; }
@@ -1184,23 +1384,108 @@ export default function ClubNuevoTorneoPage() {
           .flyerPersonalizationHead { display: grid; }
           .flyerPersonalizationHead .flyerControlHint { max-width: none; text-align: left; }
         }
-        @media (max-width: 720px) {
-          .club-newHead { display: grid; }
+        @media (max-width: 767px) {
+          .club-newTournament { border: 0; border-radius: 0; box-shadow: none; min-height: calc(100dvh - 56px); overflow: visible; padding: 0 0 calc(72px + env(safe-area-inset-bottom)); }
+          .club-newTournament::before, .club-newHead { display: none; }
+          .club-formCard { background: transparent; border: 0; border-radius: 0; gap: 12px; margin: 0; padding: 8px 16px 12px; }
+          .club-mobileWizardHead { background: #fff; display: grid; gap: 5px; padding: 0 0 4px; position: sticky; top: 54px; z-index: 12; }
+          .club-mobileWizardHead > a { color: #52657a; font-size: 12px; font-weight: 850; line-height: 1.2; padding: 3px 0; text-decoration: none; width: fit-content; }
+          .club-mobileWizardHead > div { align-items: end; display: flex; gap: 8px; justify-content: space-between; }
+          .club-mobileWizardHead > div span { color: #64748b; font-size: 11px; font-weight: 850; }
+          .club-mobileWizardHead > div strong { color: #071a35; font-size: 13px; line-height: 1.15; text-align: right; }
+          .club-mobileWizardHead > i { background: #e8edf2; border-radius: 999px; display: block; height: 3px; overflow: hidden; }
+          .club-mobileWizardHead > i span { background: linear-gradient(90deg,var(--club-admin-accent),var(--club-admin-accent-2)); border-radius: inherit; display: block; height: 100%; transition: width .2s ease; }
+          .club-mobileStep { display: none; }
+          .club-mobileStep[data-active="true"] { display: grid; }
+          .club-mobileConditional[data-mobile-hidden="true"] { display: none !important; }
+          .club-formSection { background: transparent; border: 0; border-radius: 0; box-shadow: none; gap: 12px; padding: 0; }
           .club-formSectionHead { display: grid; }
+          .club-formSectionHead .club-kicker { color: #071a35; font-size: 27px; letter-spacing: -.04em; line-height: 1.02; text-transform: none; }
+          .club-formSectionHead p { font-size: 14px; line-height: 1.3; margin-top: 3px; }
           .club-formSectionGrid, .club-tiebreakerGrid, .club-pointsGrid, .club-formCard, .club-scheduleWindows, .club-scheduleWindow { grid-template-columns: 1fr; }
+          .club-formSectionGrid { gap: 14px; }
           .club-field--span2, .club-field--span3, .club-field--span4, .club-field--span6, .club-field--span8 { grid-column: auto; }
+          .club-field { font-size: 12px; gap: 6px; }
+          .club-field .px-input, .club-field--compact .px-input { font-size: 16px; min-height: 48px; padding-block: 9px; }
+          .club-textarea--compact { font-size: 16px; min-height: 84px; padding-block: 10px; }
           .club-disclosure--button { align-self: stretch; }
-          .club-formActions { justify-content: stretch; }
-          .club-formActions > * { width: 100%; }
+          .club-formActions { display: none; }
+          .club-mobileActions { background: rgba(255,255,255,.96); border-top: 1px solid rgba(15,23,42,.10); bottom: 0; display: grid; gap: 8px; grid-template-columns: minmax(0,.72fr) minmax(0,1.28fr); left: 0; padding: 7px 16px calc(7px + env(safe-area-inset-bottom)); position: fixed; right: 0; z-index: 70; }
+          .club-mobileActions > span:only-child { display:none; }
+          .club-mobileActions .club-primaryBtn, .club-mobileActions .club-secondaryBtn { min-height: 44px; width: 100%; }
+          .club-mobileActions > span:first-child + .club-primaryBtn { grid-column: 2; }
+          .club-mobileActions[data-first-step="true"] { grid-template-columns: 1fr; }
+          .club-mobileActions[data-first-step="true"] .club-primaryBtn { grid-column: 1; }
+          .club-mobileVenueHint { background:#f8fafc; border-left:3px solid var(--club-admin-accent); border-radius:0 9px 9px 0; color:#52657a; display:block; font-size:12px; font-weight:750; grid-column:1 / -1; line-height:1.35; margin:0; padding:8px 10px; }
           .club-formSectionGrid--nested > label:nth-of-type(1),
           .club-formSectionGrid--nested > label:nth-of-type(2),
           .club-formSectionGrid--nested > .club-courtComposer { grid-column: auto; }
           .club-courtComposer { min-height: 0; }
+          .club-courtsToggleButton { min-height:44px; }
+          .club-courtsPanel { border-radius: 12px; padding: 8px; }
+          .club-scheduleCapacity { order: 3; }
+          .club-scheduleWindows { gap: 7px; }
+          .club-scheduleWindow { display:block; padding:0 10px; }
+          .club-scheduleWindow > summary { align-items:center; color:#17253f; cursor:pointer; display:flex; font-size:13px; font-weight:950; justify-content:space-between; list-style:none; min-height:44px; text-transform:none; }
+          .club-scheduleWindow > summary::-webkit-details-marker { display:none; }
+          .club-scheduleWindow > summary small { color:#64748b; font-size:11px; }
+          .club-scheduleWindow:not([open]) > .club-scheduleFields { display:none; }
+          .club-scheduleFields { display:grid; gap:7px; grid-template-columns:1fr; padding:0 0 9px; }
+          .club-scheduleFields > strong { display:none; }
+          .club-pointsSummary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+          .club-pointsSummary span { border-radius:10px; font-size:11px; padding:7px; }
+          .club-pointsToolbar { gap:8px; }
+          .club-pointsToolbar .club-secondaryBtn { min-height:44px; width:100%; }
+          .club-mobileFlyerDisclosure, .club-mobileSecondary { background:#f8fafc; border:1px solid rgba(15,23,42,.08); border-radius:12px; padding:0 10px; }
+          .club-mobileFlyerDisclosure > summary, .club-mobileSecondary > summary { align-items:center; color:#17253f; cursor:pointer; display:flex; font-size:13px; font-weight:950; justify-content:space-between; list-style:none; min-height:44px; }
+          .club-mobileFlyerDisclosure > summary::-webkit-details-marker, .club-mobileSecondary > summary::-webkit-details-marker { display:none; }
+          .club-mobileFlyerDisclosure > summary small, .club-mobileSecondary > summary small { color:#64748b; font-size:11px; }
+          .club-mobileFlyerDisclosure:not([open]) > .club-flyerContent,
+          .club-mobileSecondary:not([open]) > .club-mobileSecondaryContent { display:none; }
+          .club-flyerContent, .club-mobileSecondaryContent { padding:0 0 10px; }
+          .club-mobileFlyerOverview { display:grid; gap:8px; }
+          .club-mobileFlyerEmptyPreview { align-content:center; background:#f4f7fa; border:1px dashed rgba(15,23,42,.18); border-radius:16px; display:grid; gap:5px; height:220px; justify-items:center; padding:18px; text-align:center; }
+          .club-mobileFlyerEmptyPreview span { color:var(--club-admin-accent); font-size:11px; font-weight:950; letter-spacing:.05em; text-transform:uppercase; }
+          .club-mobileFlyerEmptyPreview strong { color:#071a35; font-size:20px; }
+          .club-mobileFlyerEmptyPreview p { color:#64748b; font-size:13px; line-height:1.4; margin:0; max-width:260px; }
+          .club-mobileFlyerOverview .flyerPreviewLabel { display:none; }
+          .club-mobileFlyerOverview .flyerPreview { border-radius:16px; box-shadow:0 14px 30px rgba(15,23,42,.14); height:300px; min-height:0; overflow:hidden; padding:12px; }
+          .club-mobileFlyerOverview .flyerPreviewBody { gap:8px; margin-top:16px; }
+          .club-mobileFlyerOverview .flyerPreviewMain h3 { font-size:28px; }
+          .club-mobileFlyerOverview .flyerPreviewDate { gap:5px; padding:8px 10px; }
+          .club-mobileFlyerOverview .flyerPreviewMeta { gap:6px; margin-top:10px; }
+          .club-mobileFlyerOverview .flyerPreviewMetaItem { padding:7px 9px; }
+          .club-mobileFlyerModes { display:grid; gap:7px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+          .club-mobileFlyerModes button { background:#fff; border:1px solid rgba(15,23,42,.14); border-radius:10px; color:#30455f; font:inherit; font-size:12px; font-weight:900; min-height:44px; padding:0 10px; }
+          .club-mobileFlyerModes button.is-active { background:var(--club-admin-soft); border-color:var(--club-admin-accent); color:#071a35; }
+          .club-mobileFlyerDisclosure[open] .flyerBlockHead,
+          .club-mobileFlyerDisclosure[open] .flyerPreviewShell { display:none; }
+          .club-mobileFlyerDisclosure[open] .flyerCard { background:transparent; border:0; box-shadow:none; padding:8px 0 0; }
+          .club-review { gap:5px; }
+          .club-review article { padding:7px 9px; }
+          .club-review article > div { margin-bottom:3px; }
+          .club-review article button { min-height:44px; min-width:44px; }
+          .club-review article strong { font-size:12px; }
+          .club-review article > span { font-size:11px; }
+          .club-reviewStep { padding-bottom:6px; }
           .flyerBlockHead, .flyerLayout, .flyerControlRow, .flyerControlRow--colors, .flyerControlRow--selects, .flyerPreviewMeta { grid-template-columns: 1fr; }
           .flyerVisibleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .flyerBlockHead { display: grid; }
-          .flyerPreview { min-height: 420px; }
+          .flyerPreview { min-height: 360px; }
           .flyerPreviewMetaItem--deadline { grid-column: auto; }
+        }
+        @media (min-width: 375px) and (max-width: 767px) {
+          .club-mobileStep[data-active="true"] .club-field--span2 { grid-column:auto; }
+          .club-mobileStep[data-active="true"] .club-formSectionGrid:has(> .club-field--span2) { grid-template-columns:repeat(2,minmax(0,1fr)); }
+          .club-mobileStep[data-active="true"] .club-formSectionGrid:has(> .club-field--span2) > :not(.club-field--span2) { grid-column:1 / -1; }
+        }
+        @media (max-width: 340px) {
+          .club-formCard { padding-left: 12px; padding-right: 12px; }
+          .club-mobileActions { padding-left: 12px; padding-right: 12px; }
+          .club-formSectionHead .club-kicker { font-size: 23px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .club-mobileWizardHead > i span { transition: none; }
         }
       `}</style>
     </div>

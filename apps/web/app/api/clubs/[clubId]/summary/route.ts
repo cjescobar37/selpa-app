@@ -98,25 +98,13 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       return NextResponse.json({ error: 'Club no encontrado.' }, { status: 404 })
     }
 
-    let operativeRoleSupported = true
-    let staffRes = await supabaseAdmin
+    const staffRes = await supabaseAdmin
       .from('club_memberships')
       .select('id', { count: 'exact', head: true })
       .eq('club_id', clubId)
       .eq('status', 'APPROVED')
       .not('approved_at', 'is', null)
-      .in('role', ['OWNER', 'ADMIN', 'PLANILLERO', 'OPERATIVO'])
-
-    if (staffRes.error && /OPERATIVO|club_role|invalid input value/i.test(staffRes.error.message)) {
-      operativeRoleSupported = false
-      staffRes = await supabaseAdmin
-        .from('club_memberships')
-        .select('id', { count: 'exact', head: true })
-        .eq('club_id', clubId)
-        .eq('status', 'APPROVED')
-        .not('approved_at', 'is', null)
-        .in('role', ['OWNER', 'ADMIN', 'PLANILLERO'])
-    }
+      .in('role', ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO'])
 
     if (staffRes.error) return NextResponse.json({ error: staffRes.error.message }, { status: 500 })
 
@@ -150,9 +138,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         pending_player_requests: pendingMembershipsRes.count ?? 0,
         internal_staff: staffRes.count ?? 0,
         active_or_upcoming_tournaments: activeOrUpcomingTournaments.length,
-      },
-      schema: {
-        operative_role_supported: operativeRoleSupported,
       },
       tournaments: activeOrUpcomingTournaments.map((row) => ({
         id: row.id,

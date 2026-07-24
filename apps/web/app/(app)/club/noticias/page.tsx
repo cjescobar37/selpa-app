@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Edit3, Eye, FileText, ImageIcon, Plus, Send, Trash2, X } from 'lucide-react'
+import { CalendarDays, Edit3, Eye, FileText, ImageIcon, MoreVertical, Plus, Send, Trash2, X } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubTheme } from '@/lib/clubThemes'
@@ -35,6 +35,10 @@ type NewsFormState = {
   inline_image_2: string
   featured_rank: '' | '1' | '2' | '3'
   status: NewsStatus
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback
 }
 
 const emptyForm: NewsFormState = {
@@ -104,17 +108,18 @@ export default function ClubNoticiasPage() {
     ]
   }, [rows])
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
+  const visiblePage = Math.min(currentPage, totalPages)
   const paginatedRows = useMemo(() => {
-    const start = (currentPage - 1) * pageSize
+    const start = (visiblePage - 1) * pageSize
     return rows.slice(start, start + pageSize)
-  }, [currentPage, pageSize, rows])
+  }, [pageSize, rows, visiblePage])
 
   const previewCover = useMemo(() => {
     if (coverFile) return URL.createObjectURL(coverFile)
     if (form.cover_url) return form.cover_url
     if (editing?.cover_url && keepCover) return editing.cover_url
     return null
-  }, [coverFile, editing?.cover_url, form.cover_url, keepCover])
+  }, [coverFile, editing, form.cover_url, keepCover])
 
   useEffect(() => {
     return () => {
@@ -146,8 +151,8 @@ export default function ClubNoticiasPage() {
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(payload?.error || 'No pude cargar las noticias.')
       setRows(Array.isArray(payload.rows) ? payload.rows : [])
-    } catch (err: any) {
-      setError(err?.message ?? 'No pude cargar las noticias.')
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'No pude cargar las noticias.'))
       setRows([])
     } finally {
       setLoading(false)
@@ -155,7 +160,7 @@ export default function ClubNoticiasPage() {
   }, [clubId])
 
   useEffect(() => {
-    loadRows()
+    void Promise.resolve().then(loadRows)
   }, [loadRows])
 
   useEffect(() => {
@@ -253,8 +258,8 @@ export default function ClubNoticiasPage() {
       setModalOpen(false)
       setFeedback(forcedStatus === 'PUBLISHED' || form.status === 'PUBLISHED' ? 'Noticia publicada.' : 'Noticia guardada.')
       await loadRows()
-    } catch (err: any) {
-      setError(err?.message ?? 'No pude guardar la noticia.')
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'No pude guardar la noticia.'))
     } finally {
       setSaving(false)
     }
@@ -287,8 +292,8 @@ export default function ClubNoticiasPage() {
       if (!res.ok) throw new Error(payload?.error || 'No pude actualizar el estado.')
       setFeedback(status === 'PUBLISHED' ? 'Noticia publicada.' : 'Noticia despublicada.')
       await loadRows()
-    } catch (err: any) {
-      setError(err?.message ?? 'No pude actualizar el estado.')
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'No pude actualizar el estado.'))
     } finally {
       setSaving(false)
     }
@@ -312,16 +317,12 @@ export default function ClubNoticiasPage() {
       if (!res.ok) throw new Error(payload?.error || 'No pude eliminar la noticia.')
       setFeedback('Noticia eliminada.')
       await loadRows()
-    } catch (err: any) {
-      setError(err?.message ?? 'No pude eliminar la noticia.')
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'No pude eliminar la noticia.'))
     } finally {
       setSaving(false)
     }
   }
-
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages)
-  }, [currentPage, totalPages])
 
   const style = {
     '--club-accent': theme.vars.accent,
@@ -381,10 +382,8 @@ export default function ClubNoticiasPage() {
         </div>
 
         {loading ? (
-          <div className="clubNewsEmpty">
-            <FileText size={24} />
-            <strong>Cargando noticias</strong>
-            <p>Estamos consultando el contenido editorial del club.</p>
+          <div className="clubNewsSkeletons" aria-busy="true" aria-label="Cargando noticias">
+            {[0, 1, 2].map((item) => <span key={item} />)}
           </div>
         ) : rows.length ? (
           <div className="clubNewsList">
@@ -404,7 +403,9 @@ export default function ClubNoticiasPage() {
                     {row.status === 'PUBLISHED' ? `Publicada: ${formatDate(row.published_at)}` : `Última edición: ${formatDate(row.updated_at)}`}
                   </small>
                 </div>
-                <div className="clubNewsActions">
+                <details className="clubNewsActions">
+                  <summary aria-label={`Acciones para ${row.title}`}><MoreVertical size={18} /></summary>
+                  <div>
                   <button type="button" onClick={() => openEdit(row)}>
                     <Edit3 size={15} />
                     Editar
@@ -424,7 +425,8 @@ export default function ClubNoticiasPage() {
                     <Trash2 size={15} />
                     Eliminar
                   </button>
-                </div>
+                  </div>
+                </details>
               </article>
             ))}
             {rows.length ? (
@@ -432,7 +434,7 @@ export default function ClubNoticiasPage() {
                 <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1}>
                   Anterior
                 </button>
-                <span>Página {currentPage} de {totalPages}</span>
+                <span>Página {visiblePage} de {totalPages}</span>
                 <button type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages}>
                   Siguiente
                 </button>
@@ -622,6 +624,9 @@ export default function ClubNoticiasPage() {
         .clubNewsBoardTools label { align-items: center; display: inline-flex; gap: 7px; }
         .clubNewsBoardTools select { background: #fff; border: 1px solid rgba(15,23,42,.12); border-radius: 999px; color: #061b3a; font: inherit; font-size: 12px; font-weight: 900; padding: 3px 7px; }
         .clubNewsList { display: grid; gap: 10px; }
+        .clubNewsSkeletons { display:grid; gap:8px }
+        .clubNewsSkeletons span { animation:clubNewsPulse 1.2s ease-in-out infinite alternate; background:#e8edf2; border-radius:12px; min-height:72px }
+        @keyframes clubNewsPulse { to { opacity:.48 } }
         .clubNewsPagination {
           align-items: center;
           display: flex;
@@ -694,7 +699,10 @@ export default function ClubNoticiasPage() {
         .clubNewsBadge.is-published { background: rgba(16,185,129,.14); color: #047857; }
         .clubNewsBadge.is-draft { background: rgba(245,158,11,.16); color: #b45309; }
         .clubNewsBadge.is-archived { background: rgba(100,116,139,.14); color: #475569; }
-        .clubNewsActions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+        .clubNewsActions { justify-self: end; position: relative; }
+        .clubNewsActions summary { align-items:center; background:#fff; border:1px solid rgba(15,23,42,.12); border-radius:10px; cursor:pointer; display:flex; height:40px; justify-content:center; list-style:none; width:40px; }
+        .clubNewsActions summary::-webkit-details-marker { display:none; }
+        .clubNewsActions > div { background:#fff; border:1px solid rgba(15,23,42,.1); border-radius:12px; box-shadow:0 16px 38px rgba(15,23,42,.14); display:grid; gap:4px; padding:6px; position:absolute; right:0; top:44px; width:170px; z-index:4; }
         .clubNewsActions button { min-height: 34px; padding: 0 11px; }
         .clubNewsActions button.is-danger { border-color: rgba(225,29,72,.22); color: #be123c; }
         .clubNewsActions button:disabled, .clubNewsPrimary:disabled, .clubNewsSecondary:disabled { cursor: not-allowed; opacity: .62; transform: none; }
@@ -774,23 +782,33 @@ export default function ClubNoticiasPage() {
           .clubNewsHero, .clubNewsBoardHead, .clubNewsModalHead, .clubNewsModalActions { align-items: stretch; flex-direction: column; }
           .clubNewsStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .clubNewsRow { grid-template-columns: 72px minmax(0, 1fr); }
-          .clubNewsActions { grid-column: 1 / -1; justify-content: flex-start; }
+          .clubNewsActions { grid-column: auto; grid-row: 1; }
           .clubNewsEditorGrid { grid-template-columns: 1fr; }
           .clubNewsPrimary, .clubNewsSecondary { width: 100%; }
         }
         @media (max-width: 560px) {
           .clubNewsHero, .clubNewsBoard, .clubNewsModalCard { border-radius: 16px; }
-          .clubNewsHero, .clubNewsBoard { padding: 16px; }
-          .clubNewsStats { grid-template-columns: 1fr; }
-          .clubNewsRow { grid-template-columns: 1fr; }
-          .clubNewsThumb { width: 100%; }
-          .clubNewsInfo > div { align-items: flex-start; flex-direction: column; }
-          .clubNewsInfo h3, .clubNewsInfo p { white-space: normal; }
-          .clubNewsActions button { width: 100%; }
+          .clubNewsShell { gap:10px; }
+          .clubNewsHero, .clubNewsBoard { padding: 12px; }
+          .clubNewsHero { gap:10px; }
+          .clubNewsHero p { display:none; }
+          .clubNewsHero h1 { font-size: 24px; }
+          .clubNewsPrimary { min-height:38px; }
+          .clubNewsStats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+          .clubNewsStat { gap:2px; padding:8px; }
+          .clubNewsStat strong { font-size:20px; }
+          .clubNewsStat small { display:none; }
+          .clubNewsRow { align-items: start; grid-template-columns: 64px minmax(0, 1fr) 40px; }
+          .clubNewsThumb { aspect-ratio: 1; width: 64px; }
+          .clubNewsInfo > div { align-items: flex-start; flex-direction: column; gap: 4px; }
+          .clubNewsInfo h3 { white-space: normal; }
+          .clubNewsInfo p { display: -webkit-box; overflow: hidden; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+          .clubNewsActions button { justify-content: flex-start; width: 100%; }
           .clubNewsPagination { align-items: stretch; flex-direction: column; }
           .clubNewsPagination button { width: 100%; }
           .clubNewsModal { inset: 64px 0 0; padding: 10px; }
         }
+        @media (prefers-reduced-motion: reduce) { .clubNewsSkeletons span { animation:none } }
       `}</style>
     </div>
   )

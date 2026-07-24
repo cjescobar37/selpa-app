@@ -37,7 +37,11 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
   const session = useSession()
   const publicGuestRoute = isPublicGuestRoute(pathname)
   const isClubAdminRoute = pathname === '/club' || pathname.startsWith('/club/')
-  const hasAdministrativeClubRole = session.clubRole === 'OWNER' || session.clubRole === 'ADMIN' || session.clubRole === 'PLANILLERO'
+  const hasAdministrativeClubRole =
+    session.clubRole === 'OWNER' ||
+    session.clubRole === 'ADMIN' ||
+    session.clubRole === 'OPERADOR' ||
+    session.clubRole === 'PLANILLERO'
   const requiresPlayerProfile = session.role === 'player'
   const currentPath = useMemo(() => {
     if (typeof window === 'undefined') return pathname
