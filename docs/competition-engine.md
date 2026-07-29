@@ -174,6 +174,32 @@ En modo `competition`, la pertenencia, temporada, rama y categoría provienen ex
 
 Repository, service y mapper aíslan respectivamente acceso a Supabase, orden/empates y compatibilidad con el contrato anterior. El orden mantiene puntos, títulos, victorias y nombre, agregando `player_id` como desempate determinístico final.
 
+## Ledger de puntos (Etapa 4)
+
+La auditoría histórica confirmó que `club_players.ranking_points` es un saldo legacy sin movimientos que permitan atribuirlo de manera confiable a torneos concretos. Los resultados históricos se conservan como evidencia deportiva, pero no se convierten retroactivamente en puntos. Cada entrada individual elegible puede recibir como máximo un `OPENING_BALANCE` que captura el saldo legacy sin afirmar una trazabilidad inexistente.
+
+`competition_point_transactions` es un ledger inmutable por club, temporada, división, entrada y `club_player`. Cada movimiento tiene tipo, origen, concepto, clave de idempotencia, fecha efectiva, snapshot de regla y metadatos auxiliares. Los puntos nunca son cero. Un movimiento normal no se actualiza ni se borra: una corrección se expresa con otro movimiento y una reversión crea un movimiento opuesto enlazado al original.
+
+El saldo inicial usa como `effective_at` el momento real de ejecución del backfill. No usa el inicio de temporada porque eso afirmaría incorrectamente que el total ya existía entonces. Su snapshot declara `source_column = club_players.ranking_points`, `reconstructed = false` y versión del proceso.
+
+Las RPC canónicas son:
+
+- `create_competition_opening_balance(entry_id)`: lee el saldo legacy en base, omite cero y es idempotente;
+- `backfill_competition_opening_balances(club_id, season_id, dry_run)`: inventaría o crea exclusivamente saldos faltantes;
+- `get_competition_points_totals(club_id, season_id, division_id)`: agrega en una consulta e incluye entradas sin movimientos con cero;
+- `reverse_competition_point_transaction(transaction_id, reason, actor_id)`: crea una compensación única, conserva el original y exige motivo y actor.
+
+Las escrituras directas están revocadas y triggers impiden INSERT fuera de operaciones autorizadas, además de todo UPDATE o DELETE. Las funciones vuelven a validar capability, relaciones de club, temporada, división, entrada y jugador. El índice parcial de `OPENING_BALANCE` y `idempotency_key` protegen la repetición incluso bajo concurrencia.
+
+Durante la transición coexisten dos fuentes privadas:
+
+- `COMPETITION_POINTS_SOURCE=legacy` (predeterminada o variable ausente): usa `club_players.ranking_points`;
+- `COMPETITION_POINTS_SOURCE=ledger`: usa la suma del ledger para las entradas competitivas.
+
+Espacios y mayúsculas se normalizan. Un valor vacío o inválido falla explícitamente y un error del ledger nunca activa fallback legacy. El flag solo afecta puntos individuales del Competition Engine; parejas y el contrato JSON continúan legacy.
+
+La acreditación automática de resultados de torneo queda fuera de Etapa 4. Antes requiere un cierre canónico de torneo, snapshots inmutables de reglas y reglas definidas para edición, reapertura y cancelación.
+
 ## Próximas etapas
 
 1. Validar y aplicar el modelo base.

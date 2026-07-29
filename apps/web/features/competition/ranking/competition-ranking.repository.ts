@@ -1,10 +1,11 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getCompetitionPointsSource, getLedgerPointsByEntry } from '@/features/competition/points/competition-points.service'
 import type { CompetitionRankingBasePlayer, CompetitionRankingResult } from './competition-ranking.types'
 
 type DivisionRow = { id: string; branch_id: string; category_id: string | null }
 type BranchRow = { id: string; slug: string }
 type CategoryRow = { id: string; legacy_category_id: number | null; name: string }
-type EntryRow = { club_player_id: string; division_id: string }
+type EntryRow = { id: string; club_player_id: string; division_id: string }
 type PlayerRow = { id: string; user_id: string; display_name: string | null; ranking_points: number | null; approved_at: string | null }
 type ProfileRow = { user_id: string; display_name: string | null; first_name: string | null; last_name: string | null; avatar_url: string | null }
 
@@ -33,7 +34,7 @@ export async function readCompetitionRanking(clubId: string): Promise<Competitio
   const [{ data: branchesData, error: branchesError }, { data: categoriesData, error: categoriesError }, { data: entriesData, error: entriesError }] = await Promise.all([
     supabaseAdmin.from('competition_branches').select('id,slug').eq('club_id', clubId).in('id', branchIds),
     supabaseAdmin.from('competition_categories').select('id,legacy_category_id,name').eq('club_id', clubId).in('id', categoryIds),
-    supabaseAdmin.from('competition_player_entries').select('club_player_id,division_id').eq('club_id', clubId).eq('status', 'ACTIVE').is('valid_until', null).in('division_id', divisionIds),
+    supabaseAdmin.from('competition_player_entries').select('id,club_player_id,division_id').eq('club_id', clubId).eq('status', 'ACTIVE').is('valid_until', null).in('division_id', divisionIds),
   ])
   if (branchesError) throw new Error('No pude leer las ramas competitivas.')
   if (categoriesError) throw new Error('No pude leer las categorías competitivas.')
@@ -59,6 +60,8 @@ export async function readCompetitionRanking(clubId: string): Promise<Competitio
   if (profilesError) throw new Error('No pude leer los perfiles competitivos.')
   const profiles = new Map(((profilesData ?? []) as ProfileRow[]).map((row) => [row.user_id, row]))
   const playersById = new Map(players.map((row) => [row.id, row]))
+  const pointsSource = getCompetitionPointsSource()
+  const ledgerPoints = pointsSource === 'ledger' ? await getLedgerPointsByEntry(clubId, seasonId) : null
   const seen = new Set<string>()
   const result: CompetitionRankingBasePlayer[] = []
 
@@ -70,11 +73,15 @@ export async function readCompetitionRanking(clubId: string): Promise<Competitio
     const category = division?.category_id ? categories.get(division.category_id) : undefined
     const gender = branch?.slug === 'caballeros' ? 'M' : branch?.slug === 'damas' ? 'F' : null
     if (!division || !player || !gender || !category?.legacy_category_id || category.legacy_category_id < 1 || category.legacy_category_id > 7) continue
+    const legacyPoints = Number.isFinite(player.ranking_points ?? NaN) ? Number(player.ranking_points) : 0
+    const points = pointsSource === 'ledger' ? ledgerPoints?.get(entry.id) : legacyPoints
+    if (points === undefined) throw new Error(`El ledger no devolvió la entrada competitiva ${entry.id}.`)
     seen.add(entry.club_player_id)
     result.push({
+      playerEntryId: entry.id,
       playerId: player.id, userId: player.user_id, fullName: fullName(profiles.get(player.user_id), player.display_name),
       avatarUrl: profiles.get(player.user_id)?.avatar_url ?? null, category: category.legacy_category_id,
-      categoryName: category.name, gender, points: Number.isFinite(player.ranking_points ?? NaN) ? Number(player.ranking_points) : 0,
+      categoryName: category.name, gender, points,
       approvedAt: player.approved_at, divisionId: division.id,
     })
   }

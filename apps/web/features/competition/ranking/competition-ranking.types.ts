@@ -1,6 +1,7 @@
 export type RankingEngineSource = 'legacy' | 'competition'
 
 export type CompetitionRankingBasePlayer = {
+  playerEntryId: string
   playerId: string
   userId: string
   fullName: string
