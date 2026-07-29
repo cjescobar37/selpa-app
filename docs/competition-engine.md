@@ -200,6 +200,21 @@ Espacios y mayúsculas se normalizan. Un valor vacío o inválido falla explíci
 
 La acreditación automática de resultados de torneo queda fuera de Etapa 4. Antes requiere un cierre canónico de torneo, snapshots inmutables de reglas y reglas definidas para edición, reapertura y cancelación.
 
+## Catálogos configurables (Etapa 5A.1)
+
+`competition_age_categories` define categorías etarias propias de cada club sin enums ni nombres rígidos. Nombre visible y código interno son independientes; `min_age` y `max_age` admiten límites abiertos. `age_reference_rule` conserva una regla algorítmica explícita (`EVENT_START_DATE`, `SERIES_START_DATE`, `SEASON_START_DATE`, `SEASON_END_DATE`, `CALENDAR_YEAR_END` o `FIXED_DATE`). Las reglas algorítmicas sin parámetros requieren un objeto vacío; `FIXED_DATE` exige exactamente una fecha calendario válida en `age_reference_config.date`. La plantilla inicial interpreta “Sub 12” como menos de 12 años al 31 de diciembre: `max_age = 11` y `CALENDAR_YEAR_END`.
+
+`competition_event_tiers` modela jerarquías editables como Challenger, Open, Master y Master Final. Puede referenciar un `points_schemes` global o del mismo club y guardar un multiplicador positivo, pero esta etapa no altera el cálculo ni el ledger de puntos. Tampoco conecta todavía estos catálogos con torneos, circuitos, calendario o settlement.
+
+`initialize_competition_catalogs_stage5a1(club_id)` agrega las plantillas mínimas de forma idempotente con `ON CONFLICT DO NOTHING`: nunca renombra, reactiva ni sobrescribe personalizaciones existentes. OWNER y ADMIN pueden crear, editar y desactivar; no existe borrado autenticado. La lectura exige acceso al ranking del club y todo acceso está aislado por `club_id`.
+
+Endpoints administrativos:
+
+- `GET|POST|PATCH /api/clubs/{clubId}/competition/age-categories`;
+- `GET|POST|PATCH /api/clubs/{clubId}/competition/event-tiers`.
+
+Rollback previo a cualquier uso real, en orden: eliminar `initialize_competition_catalogs_stage5a1(uuid)`; eliminar `competition_event_tiers` y `competition_age_categories` (sus triggers desaparecen con las tablas); y recién entonces eliminar `validate_competition_event_tier_scope()`, `normalize_competition_catalog_row()` e `is_valid_competition_age_reference_config(text,jsonb)`. Después de que otros objetos referencien estos catálogos no debe ejecutarse un rollback destructivo: se requiere una migración compensatoria que preserve el historial.
+
 ## Próximas etapas
 
 1. Validar y aplicar el modelo base.
