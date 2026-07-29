@@ -1,7 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { UserRound, UsersRound } from 'lucide-react'
 import RankingBoard, { type RankingBoardRow } from '@/components/ranking/RankingBoard'
+import RankingGenderTabs from '@/components/ranking/RankingGenderTabs'
+import PairRankingBoard, { type PairRankingRow } from '@/components/ranking/PairRankingBoard'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
@@ -30,8 +33,8 @@ type IndividualRankingRow = {
   finals: number
 }
 
-type PairRankingRow = {
-  position: number
+type PairRankingApiRow = {
+  partnership_id: string
   pair_key: string
   player1_user_id: string
   player2_user_id: string
@@ -39,16 +42,14 @@ type PairRankingRow = {
   player2_name: string
   player1_avatar_url: string | null
   player2_avatar_url: string | null
+  player1_points: number
+  player2_points: number
   category: number | null
   gender: string | null
   combined_points: number
-  tournaments_together: number
-  matches_played: number
-  wins: number
-  losses: number
-  best_result: string
-  latest_tournament_at: string | null
 }
+
+type ClubRankingCategory = { id: number; name: string }
 
 type RankingResponse = {
   meta?: {
@@ -59,33 +60,15 @@ type RankingResponse = {
     warnings: string[]
   }
   individual?: IndividualRankingRow[]
-  pairs?: PairRankingRow[]
+  pairs?: PairRankingApiRow[]
+  categories?: ClubRankingCategory[]
   error?: string
 }
-
-const categoryOptions = [
-  { value: 'all', label: 'Todas' },
-  { value: '1', label: '1ra' },
-  { value: '2', label: '2da' },
-  { value: '3', label: '3ra' },
-  { value: '4', label: '4ta' },
-  { value: '5', label: '5ta' },
-  { value: '6', label: '6ta' },
-  { value: '7', label: '7ma' },
-]
-
-const genderOptions = [
-  { value: 'all', label: 'Todos' },
-  { value: 'M', label: 'Caballeros' },
-  { value: 'F', label: 'Damas' },
-  { value: 'MIXED', label: 'Mixto' },
-]
 
 const PAMP_CYAN = '#06b6d4'
 const PAMP_MAGENTA = '#ec4899'
 const PAMP_SOFT = 'rgba(6, 182, 212, 0.12)'
 const PAMP_GLOW = 'rgba(6, 182, 212, 0.18)'
-
 function formatUpdatedAt(value?: string | null) {
   if (!value) return 'Sin fecha'
   return new Intl.DateTimeFormat('es-AR', {
@@ -94,14 +77,23 @@ function formatUpdatedAt(value?: string | null) {
   }).format(new Date(value))
 }
 
+function applyPairPositions(rows: PairRankingApiRow[]): PairRankingRow[] {
+  return rows.map((pair) => ({
+    ...pair,
+    position: rows.findIndex((candidate) => candidate.combined_points === pair.combined_points) + 1,
+  }))
+}
+
 export default function ClubRankingPage() {
   const { activeClub } = useSession()
-  const [category, setCategory] = useState('all')
-  const [gender, setGender] = useState('all')
+  const [view, setView] = useState<'pairs' | 'individual'>('pairs')
+  const [category, setCategory] = useState('')
+  const [gender, setGender] = useState<'M' | 'F'>('M')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [data, setData] = useState<RankingResponse | null>(null)
+  const categoryScrollerRef = useRef<HTMLDivElement>(null)
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const theme = getClubTheme(themeKey)
 
@@ -168,27 +160,26 @@ export default function ClubRankingPage() {
     }
   }, [activeClub?.id])
 
+  const availableCategories = useMemo(() => {
+    const sourceRows = view === 'pairs' ? (data?.pairs ?? []) : (data?.individual ?? [])
+    const used = new Set(sourceRows
+      .filter((row) => normalizeRankingGender(row.gender) === gender)
+      .map((row) => row.category)
+      .filter((value): value is number => typeof value === 'number'))
+    const configuredById = new Map((data?.categories ?? []).map((item) => [Number(item.id), item]))
+    return Array.from(used)
+      .sort((current, next) => current - next)
+      .map((id) => configuredById.get(id) ?? { id, name: `${id}°` })
+  }, [data?.categories, data?.individual, data?.pairs, gender, view])
+
+  const selectedCategory = availableCategories.some((item) => String(item.id) === category)
+    ? category
+    : String(availableCategories[0]?.id ?? '')
+
   const filteredIndividual = useMemo(() => {
     const rows = data?.individual ?? []
-    return filterRankingRows(rows, { category, gender, query })
-  }, [data?.individual, category, gender, query])
-
-  const summary = useMemo(() => {
-    const individual = data?.individual ?? []
-    const pairs = data?.pairs ?? []
-    return {
-      players: individual.length,
-      pairs: pairs.length,
-      points: individual.reduce((total, row) => total + row.ranking_points, 0),
-      matches: individual.reduce((total, row) => total + row.matches_played, 0),
-    }
-  }, [data])
-
-  const visibleColumns = useMemo(() => {
-    if (gender === 'M') return ['M'] as const
-    if (gender === 'F') return ['F'] as const
-    return ['M', 'F'] as const
-  }, [gender])
+    return filterRankingRows(rows, { category: selectedCategory || 'all', gender: 'all', query })
+  }, [data?.individual, query, selectedCategory])
 
   const rankingsByGender = useMemo(() => {
     return {
@@ -207,9 +198,9 @@ export default function ClubRankingPage() {
   }, [rankingsByGender])
 
   const rankingBoardColumns = useMemo(() => {
-    return visibleColumns.map((columnGender) => ({
-      gender: columnGender,
-      rows: withRankingPositions(sortedRankingsByGender[columnGender], 'genderPosition').map((player) => ({
+    return [{
+      gender,
+      rows: withRankingPositions(sortedRankingsByGender[gender], 'genderPosition').map((player) => ({
         id: player.user_id,
         name: player.full_name,
         avatarUrl: player.avatar_url,
@@ -220,13 +211,26 @@ export default function ClubRankingPage() {
         isTied: player.isTied,
         href: `/club/jugadores/${player.user_id}`,
       } satisfies RankingBoardRow)),
-    }))
-  }, [sortedRankingsByGender, visibleColumns])
+    }]
+  }, [gender, sortedRankingsByGender])
+
+  const pairRows = useMemo<PairRankingRow[]>(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase('es-AR')
+    const rows = (data?.pairs ?? [])
+      .filter((pair) => normalizeRankingGender(pair.gender) === gender)
+      .filter((pair) => !selectedCategory || String(pair.category ?? '') === selectedCategory)
+      .filter((pair) => !normalizedQuery || `${pair.player1_name} ${pair.player2_name}`.toLocaleLowerCase('es-AR').includes(normalizedQuery))
+      .sort((current, next) => next.combined_points - current.combined_points || current.pair_key.localeCompare(next.pair_key))
+
+    return applyPairPositions(rows)
+  }, [data?.pairs, gender, query, selectedCategory])
+
+  const individualCount = sortedRankingsByGender[gender].length
 
   return (
-    <div className="club-shell">
+    <div className="px-wrap">
       <div
-        className="club-panel club-rankingPage"
+        className={`club-panel club-rankingPage ranking-gender-${gender}`}
         style={{
           ['--club-ranking-accent' as string]: PAMP_CYAN,
           ['--club-ranking-accent-2' as string]: PAMP_MAGENTA,
@@ -237,77 +241,78 @@ export default function ClubRankingPage() {
           ['--club-theme-accent-2' as string]: theme.vars.accent2,
           ['--club-theme-soft' as string]: theme.vars.soft,
           ['--club-theme-glow' as string]: theme.vars.glow,
+          ['--club-admin-accent' as string]: theme.vars.accent,
+          ['--club-admin-soft' as string]: theme.vars.soft,
         }}
       >
-        <header className="club-rankingHero">
-          <div>
-            <span className="club-kicker">Ranking derivado</span>
-            <h1 className="club-title">Ranking del club</h1>
-            <p className="club-sub">
-              {activeClub?.name ?? 'Club'} · Actualizado {formatUpdatedAt(data?.meta?.generatedAt)}
-            </p>
-            <p className="club-rankingHeroNote">Ranking derivado de resultados de torneos finalizados.</p>
-          </div>
-          <button type="button" className="club-rankingRefresh" onClick={loadRanking} disabled={loading || !activeClub?.id}>
-            {loading ? 'Actualizando...' : 'Actualizar'}
-          </button>
-        </header>
-
         {!activeClub?.id ? (
           <div className="px-empty">Primero seleccioná un club activo.</div>
         ) : (
           <>
             {message ? <div className="club-rankingAlert club-rankingAlert--danger">{message}</div> : null}
 
-            <section className="club-rankingStats" aria-label="Resumen de ranking">
-              <article>
-                <span>Total jugadores</span>
-                <strong>{summary.players}</strong>
-              </article>
-              <article>
-                <span>Caballeros</span>
-                <strong>{sortedRankingsByGender.M.length}</strong>
-              </article>
-              <article>
-                <span>Damas</span>
-                <strong>{sortedRankingsByGender.F.length}</strong>
-              </article>
-              <article>
-                <span>Puntos totales</span>
-                <strong>{summary.points}</strong>
-              </article>
+            <header className="club-rankingContentHead">
+              <div>
+                <span className="club-rankingContentKicker">Competencia del club</span>
+                <h2>Ranking del club</h2>
+                <p>{activeClub?.name ?? 'Club'} · Actualizado {formatUpdatedAt(data?.meta?.generatedAt)}</p>
+              </div>
+              <button type="button" className="club-rankingRefresh" onClick={loadRanking} disabled={loading || !activeClub?.id}>
+                {loading ? 'Actualizando...' : 'Actualizar'}
+              </button>
+            </header>
+
+            <div className="club-rankingViewTabs" role="tablist" aria-label="Tipo de ranking">
+              <button type="button" role="tab" aria-selected={view === 'pairs'} className={view === 'pairs' ? 'is-active' : ''} onClick={() => setView('pairs')}><UsersRound size={16} aria-hidden="true" />Parejas</button>
+              <button type="button" role="tab" aria-selected={view === 'individual'} className={view === 'individual' ? 'is-active' : ''} onClick={() => setView('individual')}><UserRound size={16} aria-hidden="true" />Individual</button>
+            </div>
+
+            <RankingGenderTabs
+              active={gender}
+              counts={view === 'pairs' ? {
+                M: (data?.pairs ?? []).filter((pair) => normalizeRankingGender(pair.gender) === 'M').length,
+                F: (data?.pairs ?? []).filter((pair) => normalizeRankingGender(pair.gender) === 'F').length,
+              } : { M: sortedRankingsByGender.M.length, F: sortedRankingsByGender.F.length }}
+              onChange={setGender}
+            />
+
+            <section className="club-rankingCategorySection" aria-label="Categorías activas">
+              <span className="club-rankingCategoryLabel">Categoría</span>
+              {availableCategories.length ? (
+                <div className="club-rankingCategoryScroller" id="club-ranking-categories" ref={categoryScrollerRef}>
+                  {availableCategories.map((item) => (
+                    <button key={item.id} type="button" className={selectedCategory === String(item.id) ? 'is-active' : ''} onClick={() => setCategory(String(item.id))}>
+                      {item.id}ª
+                    </button>
+                  ))}
+                </div>
+              ) : <p>No hay categorías disponibles para {gender === 'M' ? 'Caballeros' : 'Damas'}.</p>}
             </section>
 
-            <section className="club-rankingToolbar">
-              <div className="club-rankingFilters">
-                <label>
-                  <span>Categoría</span>
-                  <select value={category} onChange={(event) => setCategory(event.target.value)}>
-                    {categoryOptions.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>Género</span>
-                  <select value={gender} onChange={(event) => setGender(event.target.value)}>
-                    {genderOptions.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="club-rankingSearch">
-                  <span>Búsqueda</span>
-                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Jugador o pareja" />
-                </label>
+            {availableCategories.length ? <section className="club-rankingSearchBar">
+              <input aria-label={view === 'pairs' ? 'Buscar pareja' : 'Buscar jugador'} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={view === 'pairs' ? 'Buscar pareja...' : 'Buscar jugador...'} />
+              <button type="button" aria-controls="club-ranking-categories" onClick={() => {
+                const selected = categoryScrollerRef.current?.querySelector<HTMLButtonElement>('button.is-active')
+                ;(selected ?? categoryScrollerRef.current?.querySelector<HTMLButtonElement>('button'))?.focus()
+              }}>Filtros</button>
+            </section> : null}
+
+            {!loading && availableCategories.length ? (
+              <div className="club-rankingResultHead">
+                <strong>{view === 'pairs' ? `${pairRows.length} parejas` : `${individualCount} jugadores`}</strong>
               </div>
-            </section>
+            ) : null}
 
             {loading ? (
               <div className="px-empty">Cargando ranking...</div>
-            ) : (
-              <RankingBoard columns={rankingBoardColumns} />
-            )}
+            ) : !availableCategories.length ? null : view === 'pairs' ? (
+              pairRows.length ? <>
+                <PairRankingBoard rows={pairRows} />
+                <p className="club-rankingPairNote">Los puntos de la pareja corresponden a la suma de los puntos individuales de ambos jugadores.</p>
+              </> : <div className="px-empty">{query ? 'No encontramos parejas con esa búsqueda.' : 'No hay parejas activas en esta categoría.'}</div>
+            ) : individualCount ? (
+              <RankingBoard columns={rankingBoardColumns} className="clubAdminRankingBoard" mobileGender={gender} showMobileTabs={false} showColumnHeader={false} showMetadata={false} />
+            ) : <div className="px-empty">{query ? 'No encontramos jugadores con esa búsqueda.' : 'No hay jugadores en esta categoría.'}</div>}
 
           </>
         )}
@@ -412,7 +417,7 @@ export default function ClubRankingPage() {
         .club-rankingStats {
           display: grid;
           gap: 10px;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(3, minmax(0, 1fr));
         }
 
         .club-rankingStats article,
@@ -493,7 +498,216 @@ export default function ClubRankingPage() {
         .club-rankingFilters {
           display: grid;
           gap: 9px;
-          grid-template-columns: 130px 130px minmax(180px, 1fr);
+          grid-template-columns: 130px minmax(180px, 1fr);
+        }
+
+        .club-rankingContentHead {
+          align-items: center;
+          background: linear-gradient(135deg, #fff, var(--club-theme-soft));
+          border: 1px solid color-mix(in srgb, var(--club-theme-accent) 18%, #e2e8f0);
+          border-radius: 14px;
+          display: flex;
+          gap: 12px;
+          justify-content: space-between;
+          padding: 11px 12px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .club-rankingContentHead::before {
+          background: var(--club-theme-accent);
+          content: "";
+          inset: 9px auto 9px 0;
+          position: absolute;
+          width: 3px;
+        }
+
+        .club-rankingContentKicker {
+          color: var(--club-theme-accent);
+          display: block;
+          font-size: 9px;
+          font-weight: 950;
+          letter-spacing: .05em;
+          line-height: 1;
+          margin-bottom: 4px;
+          text-transform: uppercase;
+        }
+
+        .club-rankingContentHead h2 {
+          color: #17253f;
+          font-size: 19px;
+          line-height: 1.05;
+          margin: 0;
+        }
+
+        .club-rankingContentHead p {
+          color: #64748b;
+          font-size: 11px;
+          font-weight: 700;
+          margin: 3px 0 0;
+        }
+
+        .club-rankingViewTabs,
+        .club-rankingPage .rankingGenderTabs {
+          background: #f8fafc;
+          border: 1px solid #dbe6f0;
+          border-radius: 999px;
+          box-sizing: border-box;
+          display: flex;
+          gap: 4px;
+          padding: 4px;
+          width: 100%;
+        }
+
+        .club-rankingViewTabs button {
+          align-items: center;
+          background: transparent;
+          border: 0;
+          border-radius: 999px;
+          color: #64748b;
+          cursor: pointer;
+          flex: 1;
+          font: inherit;
+          font-size: 12px;
+          font-weight: 950;
+          min-height: 40px;
+          padding: 7px 10px;
+          display: inline-flex;
+          gap: 6px;
+          justify-content: center;
+        }
+
+        .club-rankingViewTabs button.is-active {
+          background: #061b3a;
+          box-shadow: 0 10px 22px var(--rank-mobile-glow);
+          color: #fff;
+        }
+
+        .club-rankingCategorySection {
+          display: grid;
+          gap: 5px;
+          min-width: 0;
+          width: 100%;
+        }
+
+        .club-rankingCategoryLabel {
+          color: #64748b;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: .04em;
+          line-height: 1;
+          text-transform: uppercase;
+        }
+
+        .club-rankingCategoryScroller {
+          display: flex;
+          gap: 7px;
+          max-width: 100%;
+          overflow-x: auto;
+          overscroll-behavior-inline: contain;
+          padding: 1px 1px 5px;
+          scrollbar-width: none;
+        }
+
+        .club-rankingCategoryScroller::-webkit-scrollbar { display: none; }
+
+        .club-rankingCategoryScroller button {
+          background: #fff;
+          border: 1px solid #dbe5ef;
+          border-radius: 13px;
+          color: #475569;
+          cursor: pointer;
+          flex: 0 0 auto;
+          font: inherit;
+          font-size: 13px;
+          font-weight: 950;
+          min-height: 40px;
+          min-width: 58px;
+          padding-inline: 13px;
+        }
+
+        .club-rankingCategoryScroller button.is-active {
+          background: #f8fafc;
+          color: #061b3a;
+        }
+
+        .ranking-gender-M .club-rankingCategoryScroller button.is-active {
+          border-color: #06b6d4;
+          box-shadow: inset 0 -2px 0 #06b6d4;
+        }
+
+        .ranking-gender-F .club-rankingCategoryScroller button.is-active {
+          border-color: #ec4899;
+          box-shadow: inset 0 -2px 0 #ec4899;
+        }
+
+        .club-rankingCategorySection > p {
+          color: #64748b;
+          font-size: 13px;
+          font-weight: 750;
+          margin: 0;
+          padding: 8px 2px;
+        }
+
+        .club-rankingSearchBar {
+          display: grid;
+          gap: 8px;
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .club-rankingSearchBar input {
+          background: #fff;
+          border: 1px solid #dbe5ef;
+          border-radius: 12px;
+          box-sizing: border-box;
+          color: #061b3a;
+          font: inherit;
+          font-size: 16px;
+          min-height: 44px;
+          padding: 9px 12px;
+          width: 100%;
+        }
+
+        .club-rankingSearchBar button {
+          background: #fff;
+          border: 1px solid color-mix(in srgb, var(--club-theme-accent) 30%, #dbe5ef);
+          border-radius: 12px;
+          color: #061b3a;
+          cursor: pointer;
+          display: none;
+          font: inherit;
+          font-size: 12px;
+          font-weight: 900;
+          min-height: 44px;
+          padding-inline: 12px;
+        }
+
+        .club-rankingResultHead {
+          align-items: center;
+          display: flex;
+          justify-content: flex-end;
+          min-height: 20px;
+        }
+
+        .club-rankingResultHead strong {
+          color: #64748b;
+          font-size: 11px;
+          font-weight: 900;
+          text-transform: uppercase;
+        }
+
+        .club-rankingPairNote {
+          color: #64748b;
+          font-size: 12px;
+          line-height: 1.4;
+          margin: 2px auto 0;
+          max-width: 920px;
+          width: 100%;
+        }
+
+        .club-rankingMobileFilters,
+        .club-rankingFilterBackdrop {
+          display: none;
         }
 
         .club-rankingFilters label {
@@ -1196,8 +1410,329 @@ export default function ClubRankingPage() {
         }
 
         @media (max-width: 560px) {
+          .club-rankingPage {
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+            gap: 7px;
+            grid-template-columns: minmax(0, 1fr);
+            padding: 0;
+          }
+
+          .club-rankingPage::before {
+            display: none;
+          }
+
+          .club-rankingHero {
+            align-items: center;
+            border-radius: 14px;
+            flex-direction: row;
+            gap: 10px;
+            margin-top: 0;
+            padding: 11px 12px;
+          }
+
+          .club-rankingContentHead {
+            min-height: 48px;
+            padding: 6px 9px;
+          }
+
+          .club-rankingContentHead > div {
+            flex: 1 1 auto;
+            min-width: 0;
+          }
+
+          .club-rankingContentHead h2 { font-size: 17px; }
+          .club-rankingContentHead p {
+            max-width: 190px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .club-rankingHero .club-title {
+            font-size: 22px;
+            white-space: nowrap;
+          }
+
+          .club-rankingHero .club-sub,
+          .club-rankingHeroNote {
+            display: none;
+          }
+
+          .club-rankingRefresh {
+            flex: 0 0 auto;
+            font-size: 0.76rem;
+            min-height: 40px;
+            padding: 0 10px;
+          }
+
+          .club-rankingViewTabs {
+            padding: 3px;
+          }
+
+          .club-rankingViewTabs button {
+            min-height: 38px;
+            padding-block: 5px;
+          }
+
+          .club-rankingPage .rankingGenderTabs {
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            gap: 6px;
+            padding: 0;
+          }
+
+          .club-rankingPage .rankingGenderTabs button {
+            background: transparent;
+            border: 1px solid #dbe5ef;
+            border-bottom-width: 2px;
+            box-shadow: none;
+            color: #64748b;
+            min-height: 38px;
+            padding: 5px 9px;
+          }
+
+          .club-rankingPage .rankingGenderTabs button.is-active {
+            background: #fff;
+            color: #061b3a;
+          }
+
+          .club-rankingPage .rankingGenderTabs button:first-child.is-active {
+            border-color: #06b6d4;
+            box-shadow: inset 0 -2px 0 #06b6d4;
+          }
+
+          .club-rankingPage .rankingGenderTabs button:last-child.is-active {
+            border-color: #ec4899;
+            box-shadow: inset 0 -2px 0 #ec4899;
+          }
+
+          .club-rankingPage .rankingGenderTabs button small {
+            background: rgba(255, 255, 255, .72);
+            color: #475569;
+            font-size: 9px;
+            padding: 3px 5px;
+          }
+
+          .club-rankingPage .rankingGenderTabs button:first-child.is-active small {
+            background: rgba(6, 182, 212, .1);
+            color: #0e7490;
+          }
+
+          .club-rankingPage .rankingGenderTabs button:last-child.is-active small {
+            background: rgba(236, 72, 153, .1);
+            color: #be185d;
+          }
+
+          .club-rankingCategoryScroller {
+            gap: 6px;
+            padding-bottom: 2px;
+          }
+
+          .club-rankingCategoryScroller button {
+            flex-basis: auto;
+            min-height: 38px;
+            min-width: 58px;
+          }
+
+          .club-rankingCategorySection > p {
+            font-size: 11px;
+            padding: 3px 2px;
+          }
+
+          .club-rankingSearchBar {
+            grid-template-columns: minmax(0, 1fr) auto;
+          }
+
+          .club-rankingSearchBar button {
+            display: block;
+          }
+
+          .club-rankingResultHead {
+            min-height: 16px;
+          }
+
           .club-rankingStats {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 5px;
+          }
+
+          .club-rankingStats article {
+            border-radius: 12px;
+            gap: 3px;
+            padding: 9px 10px;
+          }
+
+          .club-rankingStats article::before {
+            inset-block: 9px;
+          }
+
+          .club-rankingStats strong {
+            font-size: 1.2rem;
+          }
+
+          .club-rankingStats {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .club-rankingStats span {
+            font-size: .62rem;
+            line-height: 1.05;
+          }
+
+          .club-rankingToolbar {
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            box-sizing: border-box;
+            box-shadow: none;
+            min-width: 0;
+            padding: 0;
+            width: 100%;
+          }
+
+          .club-rankingFilters {
+            display: none;
+          }
+
+          .club-rankingMobileFilters {
+            display: grid;
+            gap: 8px;
+            grid-template-columns: minmax(0, 1fr) auto;
+            min-width: 0;
+            width: 100%;
+          }
+
+          .club-rankingMobileFilters input {
+            background: #fff;
+            border: 1px solid #dbe5ef;
+            border-radius: 12px;
+            box-sizing: border-box;
+            color: #061b3a;
+            font: inherit;
+            font-size: 16px;
+            height: 44px;
+            min-width: 0;
+            padding: 9px 11px;
+            width: 100%;
+          }
+
+          .club-rankingMobileFilters button {
+            align-items: center;
+            background: #fff;
+            border: 1px solid color-mix(in srgb, var(--club-theme-accent) 30%, #dbe5ef);
+            border-radius: 12px;
+            color: #061b3a;
+            display: inline-flex;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 900;
+            gap: 6px;
+            min-height: 44px;
+            padding: 8px 12px;
+          }
+
+          .club-rankingMobileFilters button span {
+            align-items: center;
+            background: var(--club-theme-soft);
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: 10px;
+            height: 20px;
+            justify-content: center;
+            min-width: 20px;
+          }
+
+          .club-rankingFilterBackdrop {
+            align-items: end;
+            background: rgba(2, 8, 23, .42);
+            display: flex;
+            inset: 0;
+            position: fixed;
+            z-index: 80;
+          }
+
+          .club-rankingFilterSheet {
+            background: #fff;
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -20px 50px rgba(2, 8, 23, .18);
+            box-sizing: border-box;
+            display: grid;
+            gap: 14px;
+            padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+            width: 100%;
+          }
+
+          .club-rankingFilterSheetHead {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+          }
+
+          .club-rankingFilterSheetHead h2 {
+            color: #17253f;
+            font-size: 22px;
+            margin: 0;
+          }
+
+          .club-rankingFilterSheetHead button {
+            align-items: center;
+            background: #f1f5f9;
+            border: 0;
+            border-radius: 999px;
+            color: #17253f;
+            display: flex;
+            font-size: 24px;
+            height: 40px;
+            justify-content: center;
+            width: 40px;
+          }
+
+          .club-rankingFilterSheet label {
+            display: grid;
+            gap: 5px;
+          }
+
+          .club-rankingFilterSheet label span {
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+          }
+
+          .club-rankingFilterSheet select {
+            background: #fff;
+            border: 1px solid #dbe5ef;
+            border-radius: 12px;
+            color: #061b3a;
+            font: inherit;
+            font-size: 16px;
+            min-height: 46px;
+            padding: 9px 11px;
+          }
+
+          .club-rankingFilterSheetActions {
+            display: grid;
+            gap: 8px;
+            grid-template-columns: 1fr 1.4fr;
+          }
+
+          .club-rankingFilterSheetActions button {
+            background: #fff;
+            border: 1px solid color-mix(in srgb, var(--club-theme-accent) 34%, #dbe5ef);
+            border-radius: 999px;
+            color: #061b3a;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 900;
+            min-height: 44px;
+          }
+
+          .club-rankingFilterSheetActions button:last-child {
+            background: #061b3a;
+            color: #fff;
           }
 
           .club-rankingTabs {

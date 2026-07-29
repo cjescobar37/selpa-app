@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
+import { withRankingPositions } from '@/lib/ranking'
 
 type PlayerRow = {
   id: string
@@ -52,12 +53,20 @@ type MatchRow = {
   score: unknown
 }
 
-type TournamentRow = {
+type ActivePartnershipRow = {
   id: string
+  player1_club_player_id: string
+  player2_club_player_id: string
+}
+
+type ClubCategoryRow = {
+  category_id: number
+  is_enabled: boolean
+}
+
+type CategoryRow = {
+  id: number
   name: string
-  starts_on: string | null
-  start_date: string | null
-  status: string | null
 }
 
 type PlayerStats = {
@@ -67,19 +76,6 @@ type PlayerStats = {
   losses: number
   finals: number
   titles: number
-}
-
-type PairStats = {
-  pairKey: string
-  player1_user_id: string
-  player2_user_id: string
-  teamIds: Set<string>
-  tournamentsPlayed: Set<string>
-  matchesPlayed: number
-  wins: number
-  losses: number
-  bestResult: string | null
-  latestTournamentAt: string | null
 }
 
 async function getTokenUser(req: NextRequest) {
@@ -115,34 +111,6 @@ function getPairKey(player1UserId: string, player2UserId: string) {
 
 function normalizePhase(value?: string | null) {
   return String(value ?? '').toUpperCase()
-}
-
-function getResultRank(result: string | null) {
-  const ranks: Record<string, number> = {
-    Campeón: 6,
-    Finalista: 5,
-    Semifinalista: 4,
-    'Cuartos de final': 3,
-    Octavos: 2,
-    'Fase de grupos': 1,
-  }
-  return result ? ranks[result] ?? 0 : 0
-}
-
-function getMatchResultForTeam(match: MatchRow, teamId: string) {
-  const phase = normalizePhase(match.phase)
-  const winnerTeamId = match.winner_team_id
-  const isParticipant = match.team1_id === teamId || match.team2_id === teamId
-  if (!isParticipant || String(match.status).toUpperCase() !== 'PLAYED') return null
-
-  if (phase === 'FINAL') {
-    return winnerTeamId === teamId ? 'Campeón' : 'Finalista'
-  }
-  if (phase === 'SEMI') return winnerTeamId === teamId ? null : 'Semifinalista'
-  if (phase === 'QUARTER') return winnerTeamId === teamId ? null : 'Cuartos de final'
-  if (phase === 'ROUND_OF_16' || phase === 'EIGHTHS') return winnerTeamId === teamId ? null : 'Octavos'
-  if (phase === 'GROUP') return 'Fase de grupos'
-  return null
 }
 
 function isMissingSchemaError(message: string) {
@@ -203,6 +171,49 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
 
     const players = (playersData ?? []) as PlayerRow[]
     const userIds = Array.from(new Set(players.map((player) => player.user_id).filter(Boolean)))
+    const playersByClubPlayerId = new Map(players.map((player) => [player.id, player]))
+
+    const activePartnerships: ActivePartnershipRow[] = []
+    const { data: partnershipsData, error: partnershipsError } = await supabaseAdmin
+      .from('player_active_partnerships')
+      .select('id,player1_club_player_id,player2_club_player_id')
+      .eq('club_id', clubId)
+      .eq('status', 'ACTIVE')
+
+    if (partnershipsError) {
+      if (isMissingSchemaError(partnershipsError.message)) {
+        warnings.push('Parejas confirmadas no disponibles: falta player_active_partnerships en el schema activo.')
+      } else {
+        return NextResponse.json({ error: partnershipsError.message }, { status: 500 })
+      }
+    } else {
+      const partnerships = (partnershipsData ?? []) as ActivePartnershipRow[]
+      for (const partnership of partnerships) {
+        const player1 = playersByClubPlayerId.get(partnership.player1_club_player_id)
+        const player2 = playersByClubPlayerId.get(partnership.player2_club_player_id)
+        if (!player1?.user_id || !player2?.user_id) continue
+        activePartnerships.push(partnership)
+      }
+    }
+
+    const { data: clubCategoriesData, error: clubCategoriesError } = await supabaseAdmin
+      .from('club_categories')
+      .select('category_id,is_enabled')
+      .eq('club_id', clubId)
+      .eq('is_enabled', true)
+
+    if (clubCategoriesError) return NextResponse.json({ error: clubCategoriesError.message }, { status: 500 })
+    const configuredCategoryIds = ((clubCategoriesData ?? []) as ClubCategoryRow[]).map((row) => Number(row.category_id))
+    let configuredCategories: CategoryRow[] = []
+    if (configuredCategoryIds.length) {
+      const { data: categoriesData, error: categoriesError } = await supabaseAdmin
+        .from('categories')
+        .select('id,name')
+        .in('id', configuredCategoryIds)
+        .order('id', { ascending: true })
+      if (categoriesError) return NextResponse.json({ error: categoriesError.message }, { status: 500 })
+      configuredCategories = (categoriesData ?? []) as CategoryRow[]
+    }
 
     let profiles = new Map<string, ProfileRow>()
     if (userIds.length > 0) {
@@ -274,26 +285,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       }
     }
 
-    const tournamentIds = Array.from(
-      new Set([
-        ...teams.map((team) => team.tournament_id),
-        ...registrations.map((registration) => registration.tournament_id),
-        ...matches.map((match) => match.tournament_id),
-      ].filter(Boolean))
-    )
-
-    let tournaments = new Map<string, TournamentRow>()
-    if (tournamentIds.length > 0) {
-      const { data: tournamentRows, error: tournamentsError } = await supabaseAdmin
-        .from('tournaments')
-        .select('id,name,starts_on,start_date,status')
-        .eq('club_id', clubId)
-        .in('id', tournamentIds)
-
-      if (tournamentsError) return NextResponse.json({ error: tournamentsError.message }, { status: 500 })
-      tournaments = new Map(((tournamentRows ?? []) as TournamentRow[]).map((tournament) => [tournament.id, tournament]))
-    }
-
     const playerStats = new Map<string, PlayerStats>()
     for (const player of players) {
       playerStats.set(player.user_id, {
@@ -312,39 +303,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       if (!team) continue
       for (const playerId of [team.player1_user_id, team.player2_user_id]) {
         playerStats.get(playerId)?.tournamentsPlayed.add(registration.tournament_id)
-      }
-    }
-
-    const pairStats = new Map<string, PairStats>()
-    for (const team of teams) {
-      const pairKey = getPairKey(team.player1_user_id, team.player2_user_id)
-      const pair = pairStats.get(pairKey) ?? {
-        pairKey,
-        player1_user_id: [team.player1_user_id, team.player2_user_id].sort()[0],
-        player2_user_id: [team.player1_user_id, team.player2_user_id].sort()[1],
-        teamIds: new Set<string>(),
-        tournamentsPlayed: new Set<string>(),
-        matchesPlayed: 0,
-        wins: 0,
-        losses: 0,
-        bestResult: null,
-        latestTournamentAt: null,
-      }
-      pair.teamIds.add(team.id)
-      pairStats.set(pairKey, pair)
-    }
-
-    for (const registration of registrations) {
-      if (String(registration.status).toUpperCase() === 'CANCELLED') continue
-      const team = teamsById.get(registration.team_id)
-      if (!team) continue
-      const pair = pairStats.get(getPairKey(team.player1_user_id, team.player2_user_id))
-      if (!pair) continue
-      pair.tournamentsPlayed.add(registration.tournament_id)
-      const tournament = tournaments.get(registration.tournament_id)
-      const tournamentDate = tournament?.starts_on ?? tournament?.start_date ?? registration.created_at ?? null
-      if (tournamentDate && (!pair.latestTournamentAt || tournamentDate > pair.latestTournamentAt)) {
-        pair.latestTournamentAt = tournamentDate
       }
     }
 
@@ -368,20 +326,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
           }
         }
 
-        const pair = pairStats.get(getPairKey(team.player1_user_id, team.player2_user_id))
-        if (!pair) continue
-        pair.matchesPlayed += 1
-        if (isWinner) pair.wins += 1
-        else pair.losses += 1
-
-        const result = getMatchResultForTeam(match, teamId)
-        if (getResultRank(result) > getResultRank(pair.bestResult)) {
-          pair.bestResult = result
-        }
       }
     }
-
-    const pointsByUserId = new Map(players.map((player) => [player.user_id, normalizePoints(player.ranking_points)]))
 
     const individual = players
       .map((player) => {
@@ -414,43 +360,49 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         if (winsDiff !== 0) return winsDiff
         return a.full_name.localeCompare(b.full_name)
       })
-      .map((player, index) => ({ ...player, position: index + 1 }))
+    const rankedIndividual = withRankingPositions(individual, 'position')
 
-    const pairs = Array.from(pairStats.values())
-      .filter((pair) => pair.tournamentsPlayed.size > 0 || pair.matchesPlayed > 0)
-      .map((pair) => {
-        const player1Profile = profiles.get(pair.player1_user_id) ?? null
-        const player2Profile = profiles.get(pair.player2_user_id) ?? null
-        const player1 = players.find((player) => player.user_id === pair.player1_user_id) ?? null
-        const player2 = players.find((player) => player.user_id === pair.player2_user_id) ?? null
-        const combinedPoints = (pointsByUserId.get(pair.player1_user_id) ?? 0) + (pointsByUserId.get(pair.player2_user_id) ?? 0)
+    const pairs = activePartnerships
+      .map((partnership) => {
+        const player1 = playersByClubPlayerId.get(partnership.player1_club_player_id) ?? null
+        const player2 = playersByClubPlayerId.get(partnership.player2_club_player_id) ?? null
+        if (!player1 || !player2) return null
+        const player1Profile = profiles.get(player1.user_id) ?? null
+        const player2Profile = profiles.get(player2.user_id) ?? null
+        const combinedPoints = normalizePoints(player1.ranking_points) + normalizePoints(player2.ranking_points)
+        const sameCategory = player1.category === player2.category ? player1.category : null
+        const sameGender = String(player1.gender ?? '').toUpperCase() === String(player2.gender ?? '').toUpperCase() ? player1.gender : null
         return {
-          pair_key: pair.pairKey,
-          player1_user_id: pair.player1_user_id,
-          player2_user_id: pair.player2_user_id,
-          player1_name: getFullName(player1Profile, player1?.display_name ?? null),
-          player2_name: getFullName(player2Profile, player2?.display_name ?? null),
+          partnership_id: partnership.id,
+          pair_key: getPairKey(player1.user_id, player2.user_id),
+          player1_user_id: player1.user_id,
+          player2_user_id: player2.user_id,
+          player1_name: getFullName(player1Profile, player1.display_name),
+          player2_name: getFullName(player2Profile, player2.display_name),
           player1_avatar_url: player1Profile?.avatar_url ?? null,
           player2_avatar_url: player2Profile?.avatar_url ?? null,
-          category: player1?.category ?? player2?.category ?? null,
-          gender: player1?.gender ?? player2?.gender ?? null,
+          player1_points: normalizePoints(player1.ranking_points),
+          player2_points: normalizePoints(player2.ranking_points),
+          category: sameCategory,
+          gender: sameGender,
           combined_points: combinedPoints,
-          tournaments_together: pair.tournamentsPlayed.size,
-          matches_played: pair.matchesPlayed,
-          wins: pair.wins,
-          losses: pair.losses,
-          best_result: pair.bestResult ?? 'Sin datos suficientes',
-          latest_tournament_at: pair.latestTournamentAt,
         }
       })
+      .filter((pair): pair is NonNullable<typeof pair> => pair !== null)
       .sort((a, b) => {
         const pointsDiff = b.combined_points - a.combined_points
         if (pointsDiff !== 0) return pointsDiff
-        const winsDiff = b.wins - a.wins
-        if (winsDiff !== 0) return winsDiff
-        return `${a.player1_name} ${a.player2_name}`.localeCompare(`${b.player1_name} ${b.player2_name}`)
+        return a.pair_key.localeCompare(b.pair_key)
       })
-      .map((pair, index) => ({ ...pair, position: index + 1 }))
+
+    let previousPairPoints: number | null = null
+    let previousPairPosition = 0
+    const rankedPairs = pairs.map((pair, index) => {
+      const position = previousPairPoints === pair.combined_points ? previousPairPosition : index + 1
+      previousPairPoints = pair.combined_points
+      previousPairPosition = position
+      return { ...pair, position }
+    })
 
     if (!warnings.some((warning) => warning.includes('supabase_full.sql'))) {
       warnings.push('Deuda detectada: supabase_full.sql/docs no reflejan completamente tournament_matches ni ranking_points, aunque el código actual los usa.')
@@ -460,12 +412,13 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       meta: {
         source: 'derived',
         individualSource: 'club_players.ranking_points',
-        pairSource: 'tournament_teams grouped by ordered players',
+        pairSource: 'player_active_partnerships ACTIVE + club_players.ranking_points',
         generatedAt: new Date().toISOString(),
         warnings,
       },
-      individual,
-      pairs,
+      individual: rankedIndividual,
+      pairs: rankedPairs,
+      categories: configuredCategories,
     })
   } catch (error: unknown) {
     return NextResponse.json({ error: getErrorMessage(error, 'Error derivando ranking del club.') }, { status: 500 })

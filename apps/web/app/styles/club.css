@@ -63,6 +63,19 @@
 
 /* Club Admin mobile rhythm. Scoped to the module to avoid affecting public pages. */
 @media (max-width:760px){
+  .app-shell--club .px-main > .px-wrap{
+    box-sizing:border-box;
+    max-width:none;
+    padding:8px 16px calc(88px + env(safe-area-inset-bottom));
+    width:100%;
+  }
+  .app-shell--club .px-main > .px-wrap > .px-wrap{
+    box-sizing:border-box;
+    margin:0;
+    max-width:none;
+    padding:0;
+    width:100%;
+  }
   body.club-tournament-wizard-active .px-footer{
     display:none;
   }
@@ -83,6 +96,5 @@
 }
 
 @media (max-width:340px){
-  .club-panel{ padding:12px; }
   .club-kpis{ grid-template-columns:1fr 1fr; }
 }

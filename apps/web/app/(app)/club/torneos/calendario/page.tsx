@@ -8,7 +8,9 @@ import { supabase } from '@/lib/supabaseClient'
 import {
   formatTournamentTypeLabel,
 } from '@/lib/tournamentLabels'
+import { getTournamentDisplayStatus, getTournamentOperationalStatus } from '@/lib/tournamentDisplayStatus'
 import styles from './calendario.module.css'
+import badgeStyles from './statusBadges.module.css'
 
 type Tournament = {
   id: string
@@ -30,21 +32,28 @@ const genderLabels: Record<string, string> = {
   MIXED: 'Mixto',
 }
 
-const statusLabels: Record<string, string> = {
-  ACTIVE: 'Activo',
-  CANCELLED: 'Cancelado',
-  CLOSED: 'Cerrado',
-  COMPLETED: 'Finalizado',
-  DRAFT: 'Borrador',
-  FINISHED: 'Finalizado',
-  IN_PROGRESS: 'En juego',
-  OPEN: 'Inscripción abierta',
-  PUBLISHED: 'Publicado',
-  REGISTRATION_OPEN: 'Inscripción abierta',
-  RUNNING: 'En juego',
-}
+type CalendarStatusTone = 'open' | 'live' | 'draft' | 'ready' | 'finished' | 'upcoming'
 
-const finishedStatuses = new Set(['CANCELLED', 'CLOSED', 'COMPLETED', 'FINISHED', 'FINALIZED'])
+function getCalendarStatus(tournament: Tournament): { label: string; tone: CalendarStatusTone; finished: boolean } {
+  const display = getTournamentDisplayStatus(tournament, new Date())
+
+  if (display.key === 'finished' || display.key === 'cancelled') {
+    return { label: display.label, tone: 'finished', finished: true }
+  }
+  if (display.key === 'live') return { label: display.label, tone: 'live', finished: false }
+  if (display.key === 'draft') return { label: display.label, tone: 'draft', finished: false }
+  if (display.key === 'registration_open') return { label: 'Inscripción abierta', tone: 'open', finished: false }
+
+  const operational = getTournamentOperationalStatus({
+    status: tournament.status,
+    registrationDeadline: tournament.registration_deadline,
+  })
+  if (operational.stage === 'LISTO_PARA_INICIAR') {
+    return { label: operational.label, tone: 'ready', finished: false }
+  }
+
+  return { label: display.label, tone: 'upcoming', finished: false }
+}
 
 function dateValue(tournament: Tournament) {
   return tournament.start_date ?? tournament.end_date ?? tournament.registration_deadline
@@ -128,7 +137,7 @@ export default function ClubTournamentCalendarPage() {
   const visibleTournaments = useMemo(() => {
     return [...tournaments]
       .filter((tournament) => {
-        const finished = finishedStatuses.has(tournament.status.toUpperCase())
+        const finished = getCalendarStatus(tournament).finished
         if (status === 'finished') return finished
         if (status === 'upcoming') return !finished
         return true
@@ -202,13 +211,14 @@ export default function ClubTournamentCalendarPage() {
               <div className={styles.list}>
                 {group.rows.map((tournament) => {
                   const schedule = scheduleLabel(tournament)
+                  const calendarStatus = getCalendarStatus(tournament)
                   return (
                     <Link className={styles.card} href={`/club/torneos/${tournament.id}`} key={tournament.id}>
                       <time dateTime={dateValue(tournament) ?? undefined}>{formatDate(dateValue(tournament))}</time>
                       <div className={styles.cardMain}>
                         <div>
                           <h3>{tournament.name}</h3>
-                          <span>{statusLabels[tournament.status.toUpperCase()] ?? tournament.status}</span>
+                          <span className={`${badgeStyles.badge} ${badgeStyles[calendarStatus.tone]}`}>{calendarStatus.label}</span>
                         </div>
                         <p>
                           {[tournament.category_name, tournament.gender ? genderLabels[tournament.gender] ?? tournament.gender : null, formatTournamentTypeLabel(tournament.type)].filter(Boolean).join(' · ')}

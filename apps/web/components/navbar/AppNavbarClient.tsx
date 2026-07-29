@@ -706,7 +706,7 @@ export default function AppNavbarClient() {
     setNavbarOverlay(null)
 
     const destination = item.type === 'club_membership_requested'
-      ? '/club/jugadores?tab=solicitudes'
+      ? '/club/solicitudes'
       : item.href || item.link
     if (destination) {
       router.push(destination)
@@ -827,7 +827,7 @@ export default function AppNavbarClient() {
             <Link className="px-ddItem" href="/seleccionar-club">Seleccionar club</Link>
           </>
         ) : (
-          <Link className="px-ddItem" href="/club/configuracion">Info del club</Link>
+          <Link className="px-ddItem" href="/club/perfil">Perfil del club</Link>
         )}
         {isPlayer && clubs.length > 0 ? <div className="px-ddSep" /> : null}
         {isPlayer ? clubs.map((club) => (
@@ -1275,7 +1275,7 @@ export default function AppNavbarClient() {
             if (!item.children?.length) {
               return <Link key={item.href} className={`px-mobileLink ${active ? 'is-active' : ''}`} href={item.href} onClick={closeAllMenus}>{item.label}</Link>
             }
-            const parentLabel = item.label === 'Torneos' || item.label === 'Jugadores' ? 'Gestión' : null
+            const parentLabel = item.label === 'Torneos' ? 'Gestión' : null
             return (
               <details key={item.href} className="px-mobileNavGroup" open={active}>
                 <summary className={active ? 'is-active' : ''}>
@@ -1295,7 +1295,7 @@ export default function AppNavbarClient() {
         {role !== 'platform' && role !== 'player' ? (
           <>
             <div className="px-ddSep" />
-            <Link className="px-mobileLink px-mobileLink--muted" href="/club/configuracion" onClick={closeAllMenus}>Info del club</Link>
+            <Link className="px-mobileLink px-mobileLink--muted" href="/club/perfil" onClick={closeAllMenus}>Perfil del club</Link>
           </>
         ) : null}
       </div>

@@ -152,7 +152,7 @@ export default function NotificacionesPage() {
     }
 
     const destination = n.type === 'club_membership_requested'
-      ? '/club/jugadores?tab=solicitudes'
+      ? '/club/solicitudes'
       : n.href || n.link
     if (destination) {
       router.push(destination)

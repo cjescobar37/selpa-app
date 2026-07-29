@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
-import { defaultFlyerConfig, getTournamentFlyerSurfaceStyle, readFlyerConfigFromRules } from './_components/TournamentFlyerConfigurator'
 import { buildAssetProxyUrl } from '@/lib/clubAssets'
+import { getTournamentFlyerUrl } from '@/lib/tournamentFlyers'
 import {
   getTournamentOperationalStatus,
   type OperationalStage,
@@ -149,6 +149,8 @@ export default function ClubTorneosPage() {
   const [selectedMonth, setSelectedMonth] = useState('all')
   const [statusFilter, setStatusFilter] = useState<CalendarStatusFilter>('all')
   const [selectedType, setSelectedType] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
   const themeStyle = useMemo(
@@ -203,7 +205,9 @@ export default function ClubTorneosPage() {
       const year = Number.isNaN(date.getTime()) ? null : String(date.getFullYear())
       const month = Number.isNaN(date.getTime()) ? null : String(date.getMonth() + 1)
       const operationalStage = stagesByTournamentId[tournament.id]
+      const normalizedQuery = searchQuery.trim().toLocaleLowerCase('es')
 
+      if (normalizedQuery && !tournament.name.toLocaleLowerCase('es').includes(normalizedQuery)) return false
       if (selectedYear !== 'all' && year !== selectedYear) return false
       if (selectedMonth !== 'all' && month !== selectedMonth) return false
       if (selectedType !== 'all' && tournament.type?.trim() !== selectedType) return false
@@ -213,7 +217,15 @@ export default function ClubTorneosPage() {
 
       return true
     })
-  }, [selectedMonth, selectedType, selectedYear, stagesByTournamentId, statusFilter, tabTournaments])
+  }, [searchQuery, selectedMonth, selectedType, selectedYear, stagesByTournamentId, statusFilter, tabTournaments])
+  const activeFilterCount = [selectedYear !== 'all', selectedMonth !== 'all', statusFilter !== 'all', selectedType !== 'all'].filter(Boolean).length
+
+  function resetFilters() {
+    setSelectedYear('all')
+    setSelectedMonth('all')
+    setStatusFilter('all')
+    setSelectedType('all')
+  }
   const groupedVisibleTournaments = useMemo(() => {
     const groups = new Map<string, { label: string; tournaments: Tournament[] }>()
     visibleTournaments.forEach((tournament) => {
@@ -349,16 +361,16 @@ export default function ClubTorneosPage() {
 
   function renderTournamentRow(tournament: Tournament, compact = false) {
     const isHistorical = isHistoryTournament(tournament, stagesByTournamentId[tournament.id])
-    const flyerConfig = readFlyerConfigFromRules(tournament.rules_json) ?? defaultFlyerConfig
-    const manualFlyerUrl = flyerConfig.mode === 'MANUAL' ? flyerConfig.manualFlyer?.publicUrl ?? flyerConfig.manualFlyer?.previewUrl ?? null : null
-    const backdropStyle = manualFlyerUrl
-      ? { backgroundImage: `url("${buildAssetProxyUrl(manualFlyerUrl) ?? manualFlyerUrl}")` }
-      : getTournamentFlyerSurfaceStyle(flyerConfig)
+    const configuredFlyerUrl = getTournamentFlyerUrl(tournament)
+    const resolvedFlyerUrl = configuredFlyerUrl ? buildAssetProxyUrl(configuredFlyerUrl) ?? configuredFlyerUrl : null
+    const backdropStyle = resolvedFlyerUrl
+      ? { backgroundImage: `url("${resolvedFlyerUrl}")` }
+      : { background: '#061b3a' }
     const statusBadge = getTournamentListBadge(tournament)
     return (
       <article
         key={tournament.id}
-        className={`club-tournamentRow ${isHistorical ? 'club-tournamentRow--history' : 'club-tournamentRow--active'}${compact ? ' club-tournamentRow--compact' : ''}${manualFlyerUrl ? ' club-tournamentRow--manualFlyer' : ''}`}
+        className={`club-tournamentRow ${isHistorical ? 'club-tournamentRow--history' : 'club-tournamentRow--active'}${compact ? ' club-tournamentRow--compact' : ''}${resolvedFlyerUrl ? ' club-tournamentRow--hasFlyer' : ' club-tournamentRow--placeholder'}`}
         onClick={() => router.push(`/club/torneos/${tournament.id}`)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -377,7 +389,7 @@ export default function ClubTorneosPage() {
         <div className="club-tournamentMain">
           <div className="club-titleLine">
             <strong>{tournament.name}</strong>
-            <span className={`club-statusBadge club-statusBadge--${statusBadge.tone}`}>
+            <span className={`club-statusBadge club-statusBadge--${statusBadge.tone}`} data-stage={statusBadge.stage}>
               {statusBadge.label}
             </span>
           </div>
@@ -390,7 +402,7 @@ export default function ClubTorneosPage() {
         </div>
 
         <div className="club-tournamentBackdrop" style={backdropStyle}>
-          <span className="club-tournamentBackdropGlow" />
+          <span className="club-tournamentBackdropGlow">{resolvedFlyerUrl ? null : 'SELPA'}</span>
         </div>
 
         <div className="club-tournamentDetails">
@@ -480,7 +492,7 @@ export default function ClubTorneosPage() {
                     aria-selected={activeTab === 'history'}
                     onClick={() => setActiveTab('history')}
                   >
-                    Historial de torneos
+                    Historial
                     <span>{historicalTournaments.length}</span>
                   </button>
                 </div>
@@ -524,6 +536,42 @@ export default function ClubTorneosPage() {
                   </select>
                 </label>
               </div>
+
+              <div className="club-mobileTournamentTools">
+                <label className="club-tournamentSearch">
+                  <input
+                    type="search"
+                    aria-label="Buscar torneo por nombre"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Buscar torneo..."
+                  />
+                </label>
+                <button type="button" className="club-filterTrigger" onClick={() => setFiltersOpen(true)} aria-haspopup="dialog">
+                  Filtros{activeFilterCount ? <span>{activeFilterCount}</span> : null}
+                </button>
+              </div>
+
+              {filtersOpen ? (
+                <div className="club-filterBackdrop" role="presentation" onMouseDown={() => setFiltersOpen(false)}>
+                  <section className="club-filterSheet" role="dialog" aria-modal="true" aria-labelledby="club-filter-title" onMouseDown={(event) => event.stopPropagation()}>
+                    <div className="club-filterSheetHead">
+                      <div><span className="club-kicker">Vista del listado</span><h2 id="club-filter-title">Filtros</h2></div>
+                      <button type="button" onClick={() => setFiltersOpen(false)} aria-label="Cerrar filtros">×</button>
+                    </div>
+                    <div className="club-filterSheetGrid">
+                      <label><span>Año</span><select value={selectedYear} onChange={(event) => setSelectedYear(event.target.value)}><option value="all">Todos</option>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
+                      <label><span>Mes</span><select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}><option value="all">Todos</option>{monthLabels.map((month, index) => <option key={month} value={String(index + 1)}>{month}</option>)}</select></label>
+                      <label><span>Estado</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CalendarStatusFilter)}><option value="all">Todos</option><option value="active">Activos</option><option value="finished">Finalizados</option><option value="drafts">Borradores</option></select></label>
+                      <label><span>Tipo</span><select value={selectedType} onChange={(event) => setSelectedType(event.target.value)}><option value="all">Todos</option>{typeOptions.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
+                    </div>
+                    <div className="club-filterSheetActions">
+                      <button type="button" className="club-filterReset" onClick={resetFilters}>Limpiar</button>
+                      <button type="button" className="club-primaryBtn" onClick={() => setFiltersOpen(false)}>Ver torneos</button>
+                    </div>
+                  </section>
+                </div>
+              ) : null}
 
               {tournaments.length === 0 ? (
                 <div className="club-emptyAction">
@@ -609,6 +657,7 @@ export default function ClubTorneosPage() {
         .club-calendarFilters label { display: grid; gap: 4px; min-width: 0; }
         .club-calendarFilters span { color: #64748b; font-size: 10px; font-weight: 950; text-transform: uppercase; }
         .club-calendarFilters select { appearance: none; background: #fff; border: 1px solid rgba(15,23,42,.10); border-radius: 9px; color: #17253f; font: inherit; font-size: 12px; font-weight: 850; min-height: 34px; min-width: 0; padding: 7px 28px 7px 9px; }
+        .club-mobileTournamentTools, .club-filterBackdrop { display:none; }
         .club-calendarGroups { display: grid; gap: 16px; }
         .club-loadingCards { display:grid; gap:10px; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:14px }
         .club-loadingCards span { animation:clubLoadingPulse 1.2s ease-in-out infinite alternate; background:#e8edf2; border-radius:14px; min-height:92px }
@@ -625,7 +674,7 @@ export default function ClubTorneosPage() {
         .club-tournamentRow::before { background: linear-gradient(145deg, rgba(255,255,255,.74) 0%, rgba(255,255,255,.62) 48%, rgba(255,255,255,.42) 100%); border-radius: 14px; content: ''; inset: 0; position: absolute; transition: background .16s ease; z-index: 1; }
         .club-tournamentRow::after { background: linear-gradient(90deg, var(--club-admin-accent), var(--club-admin-accent-2)); border-radius: 999px; content: ''; height: 4px; left: 14px; position: absolute; right: 14px; top: 0; transition: background .16s ease, opacity .16s ease; z-index: 2; }
         .club-tournamentRow--active::before { background: linear-gradient(145deg, rgba(255,255,255,.40) 0%, rgba(255,255,255,.24) 45%, rgba(255,255,255,.08) 100%); }
-        .club-tournamentRow--manualFlyer::before { background: linear-gradient(90deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.76) 58%, rgba(255,255,255,.28) 100%); }
+        .club-tournamentRow--hasFlyer::before { background: linear-gradient(90deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.76) 58%, rgba(255,255,255,.28) 100%); }
         .club-tournamentRow--history::before { background: linear-gradient(145deg, rgba(255,255,255,.82) 0%, rgba(248,250,252,.72) 48%, rgba(241,245,249,.58) 100%); }
         .club-tournamentRow--history::after { background: linear-gradient(90deg, rgba(148,163,184,.82), rgba(203,213,225,.28)); }
         .club-tournamentRow:hover { background: #fbfdff; border-color: color-mix(in srgb, var(--club-admin-accent) 34%, transparent); box-shadow: 0 18px 38px var(--club-admin-glow); transform: translateY(-2px); }
@@ -637,11 +686,12 @@ export default function ClubTorneosPage() {
         .club-tournamentOverlayLink { border-radius: 14px; inset: 0; position: absolute; z-index: 1; }
         .club-tournamentOverlayLink:focus-visible { outline: 2px solid var(--club-admin-accent); outline-offset: -3px; }
         .club-tournamentBackdrop { background-color: #17253f; background-position: center top !important; background-repeat: no-repeat !important; background-size: cover !important; border-radius: 14px; filter: saturate(1.46) contrast(1.06); inset: 0; opacity: 1; pointer-events: none; position: absolute; transition: filter .18s ease, transform .22s ease, opacity .18s ease; z-index: 0; }
-        .club-tournamentRow--manualFlyer .club-tournamentBackdrop { background-position: right center !important; filter: saturate(1.05) contrast(1.02); }
+        .club-tournamentRow--hasFlyer .club-tournamentBackdrop { background-position: center !important; filter:none; opacity:1; }
         .club-tournamentRow--history .club-tournamentBackdrop { filter: grayscale(1) saturate(.12) contrast(.92); opacity: .72; }
         .club-tournamentBackdrop::after { background: linear-gradient(145deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 42%, rgba(255,255,255,0) 100%); content: ''; inset: 0; position: absolute; }
         .club-tournamentRow--history .club-tournamentBackdrop::after { background: linear-gradient(145deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.18) 48%, rgba(255,255,255,.06) 100%); }
-        .club-tournamentBackdropGlow { background: radial-gradient(circle at 86% 22%, rgba(255,255,255,.20), transparent 36%); inset: 0; pointer-events: none; position: absolute; transition: opacity .18s ease; }
+        .club-tournamentBackdropGlow { align-items:center; background: radial-gradient(circle at 86% 22%, rgba(255,255,255,.20), transparent 36%); color:#fff; display:flex; font-size:11px; font-weight:950; inset:0; justify-content:center; letter-spacing:.12em; pointer-events:none; position:absolute; transition:opacity .18s ease; }
+        .club-tournamentRow--hasFlyer .club-tournamentBackdropGlow { background:none; color:transparent; }
         .club-tournamentRow:hover .club-tournamentBackdrop { filter: saturate(1.58) contrast(1.08); opacity: 1; transform: scale(1.01); }
         .club-tournamentRow--history:hover .club-tournamentBackdrop { filter: grayscale(1) saturate(.16) contrast(.96); opacity: .82; }
         .club-tournamentRow:hover .club-tournamentBackdropGlow { opacity: .92; }
@@ -695,29 +745,53 @@ export default function ClubTorneosPage() {
           50% { opacity: 1; transform: scale(1.18); }
         }
         @media (max-width: 720px) {
-          .club-tournaments { padding: 12px; }
-          .club-tournamentsHead { display: grid; gap: 10px; padding: 13px; }
+          .club-tournaments { background:transparent; border:0; border-radius:0; box-shadow:none; overflow:visible; padding:0; }
+          .club-tournaments::before { display:none; }
+          .club-tournamentsHead { align-items:center; background:transparent; border:0; border-radius:0; display:flex; gap:10px; padding:4px 0 8px; }
+          .club-tournamentsHead .club-kicker { display:none; }
+          .club-tournamentsHead .club-title { font-size:26px; line-height:1; }
           .club-tournamentsHead .club-sub { display:none; }
-          .club-headActions { justify-content: stretch; }
-          .club-headActions .club-primaryBtn { width:100%; }
-          .club-cardHead--tabs { align-items: flex-start; flex-direction: column; }
-          .club-calendarFilters { grid-template-columns: 1fr; }
-          .club-tabs { align-items: stretch; flex-direction: column; width: 100%; }
-          .club-tab { justify-content: space-between; width: 100%; }
-          .club-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
-          .club-metric { border-radius:12px; padding:9px; }
-          .club-metric span { font-size:10px; }
-          .club-metric strong { font-size:20px; }
+          .club-headActions { margin-left:auto; }
+          .club-headActions .club-primaryBtn { min-height:44px; padding:8px 14px; width:auto; }
+          .club-metrics { background:#fff; border:1px solid rgba(15,23,42,.08); border-radius:14px; gap:0; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:4px; overflow:hidden; }
+          .club-metric { border:0; border-radius:0; box-shadow:none; gap:2px; padding:9px 8px; }
+          .club-metric + .club-metric { border-left:1px solid rgba(15,23,42,.08); }
+          .club-metric span { font-size:9px; line-height:1.12; }
+          .club-metric strong { font-size:18px; }
+          .club-card { background:transparent; border:0; border-radius:0; box-shadow:none; gap:10px; margin-top:10px; padding:0; }
+          .club-cardHead--tabs { align-items:stretch; flex-direction:column; gap:7px; }
+          .club-cardHead--tabs > div:first-child { display:none; }
+          .club-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; }
+          .club-tab { font-size:10px; gap:3px; justify-content:center; min-height:40px; overflow:hidden; padding:6px 4px; text-overflow:ellipsis; }
+          .club-tab span { display:none; }
+          .club-calendarFilters { display:none; }
+          .club-mobileTournamentTools { display:grid; gap:8px; grid-template-columns:minmax(0,1fr) auto; }
+          .club-tournamentSearch input { background:#fff; border:1px solid rgba(15,23,42,.12); border-radius:12px; box-sizing:border-box; color:#17253f; font:inherit; font-size:16px; font-weight:750; height:44px; min-width:0; padding:10px 12px; width:100%; }
+          .club-filterTrigger { align-items:center; background:#fff; border:1px solid color-mix(in srgb,var(--club-admin-accent) 30%, rgba(15,23,42,.12)); border-radius:12px; color:#061b3a; display:inline-flex; font-size:13px; font-weight:900; gap:6px; min-height:44px; padding:8px 12px; }
+          .club-filterTrigger span { align-items:center; background:color-mix(in srgb,var(--club-admin-accent) 14%, white); border-radius:999px; display:inline-flex; font-size:10px; height:20px; justify-content:center; min-width:20px; }
+          .club-filterBackdrop { align-items:end; background:rgba(2,8,23,.42); display:flex; inset:0; padding:0; position:fixed; z-index:80; }
+          .club-filterSheet { background:#fff; border-radius:20px 20px 0 0; box-shadow:0 -20px 50px rgba(2,8,23,.18); box-sizing:border-box; max-height:84dvh; overflow:auto; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); width:100%; }
+          .club-filterSheetHead { align-items:center; display:flex; justify-content:space-between; }
+          .club-filterSheetHead h2 { color:#17253f; font-size:22px; margin:2px 0 0; }
+          .club-filterSheetHead button { align-items:center; background:#f1f5f9; border:0; border-radius:999px; color:#17253f; display:flex; font-size:24px; height:40px; justify-content:center; width:40px; }
+          .club-filterSheetGrid { display:grid; gap:10px; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px; }
+          .club-filterSheetGrid label { display:grid; gap:5px; min-width:0; }
+          .club-filterSheetGrid label > span { color:#64748b; font-size:10px; font-weight:900; text-transform:uppercase; }
+          .club-filterSheetGrid select { background:#fff; border:1px solid rgba(15,23,42,.12); border-radius:11px; color:#17253f; font:inherit; font-size:16px; font-weight:800; height:46px; min-width:0; padding:8px 10px; width:100%; }
+          .club-filterSheetActions { display:grid; gap:8px; grid-template-columns:1fr 1.5fr; margin-top:16px; }
+          .club-filterReset { background:#fff; border:1px solid rgba(15,23,42,.12); border-radius:999px; color:#475569; font-weight:900; min-height:44px; }
           .club-loadingCards { grid-template-columns:1fr; }
+          .club-calendarGroups { gap:12px; }
+          .club-calendarMonth { gap:7px; }
           .club-tournamentList { gap:8px; grid-template-columns: 1fr; }
           .club-tournamentRow,
           .club-tournamentRow--compact {
             align-content:center;
-            gap:5px 8px;
-            grid-template-columns:84px minmax(0,1fr) 18px;
+            gap:5px 10px;
+            grid-template-columns:82px minmax(0,1fr) 14px;
             grid-template-rows:auto auto;
-            min-height:132px;
-            padding:10px 10px 10px 102px;
+            min-height:118px;
+            padding:10px;
           }
           .club-tournamentRow::after { bottom:10px; height:auto; left:0; right:auto; top:10px; width:3px; }
           .club-tournamentBackdrop {
@@ -729,17 +803,26 @@ export default function ClubTorneosPage() {
             top:10px;
             width:82px;
           }
-          .club-tournamentRow::before { background:rgba(255,255,255,.94); }
+          .club-tournamentRow::before { background:rgba(255,255,255,.94); border-radius:0 14px 14px 0; left:102px; }
           .club-tournamentRow--active::before,
-          .club-tournamentRow--manualFlyer::before { background:rgba(255,255,255,.90); }
-          .club-tournamentMain { gap:5px; grid-column:2; grid-row:1; }
-          .club-titleLine { align-items:center; flex-direction:row; }
-          .club-titleLine strong { font-size:14px; -webkit-line-clamp:1; }
-          .club-statusBadge { font-size:9px; padding:4px 6px; }
+          .club-tournamentRow--hasFlyer::before { background:rgba(255,255,255,.94); }
+          .club-tournamentMain { align-self:center; gap:4px; grid-column:2; grid-row:1; }
+          .club-titleLine { align-items:start; display:grid; gap:6px; grid-template-columns:minmax(0,1fr) auto; }
+          .club-titleLine strong { font-size:14px; line-height:1.12; -webkit-line-clamp:2; }
+          .club-statusBadge { animation:none; box-shadow:none; font-size:8px; justify-self:end; line-height:1.08; max-width:92px; padding:4px 6px; text-align:center; white-space:normal; }
+          .club-statusBadge::after { display:none; }
+          .club-statusBadge--draft { background:#fff7df; color:#854d0e; }
+          .club-statusBadge--registration { background:#ecfdf3; color:#166534; }
+          .club-statusBadge--running { background:#e0f2fe; color:#075985; }
+          .club-statusBadge--running[data-stage="GRUPOS"],
+          .club-statusBadge--running[data-stage="PLAYOFF"],
+          .club-statusBadge--live { background:#dbeafe; color:#1d4ed8; }
+          .club-statusBadge--finished,
+          .club-statusBadge--cancelled { background:#f1f5f9; color:#475569; }
           .club-metaLine { gap:3px; }
-          .club-metaLine span { background:transparent; border:0; font-size:10px; padding:0; }
+          .club-metaLine span { background:transparent; border:0; font-size:9px; overflow:visible; padding:0; text-overflow:clip; white-space:normal; }
           .club-metaLine span:not(:last-child)::after { content:' ·'; }
-          .club-tournamentDetails { display:flex; gap:8px; grid-column:2; grid-row:2; }
+          .club-tournamentDetails { display:flex; flex-wrap:wrap; gap:3px 8px; grid-column:2; grid-row:2; }
           .club-tournamentDetails span { background:transparent; border:0; display:flex; gap:3px; padding:0; }
           .club-tournamentDetails small { font-size:9px; text-transform:none; }
           .club-tournamentDetails strong { font-size:10px; }

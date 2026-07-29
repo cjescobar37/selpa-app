@@ -6515,6 +6515,34 @@
   }
 }
 
+/* Club public home agenda: keep the approved lateral flyer while removing
+   the empty vertical track between tournament dates and the primary action. */
+@media (max-width: 640px){
+  .clubPublicTournamentGrid .TournamentPublicCard,
+  .clubPublicTournamentGrid .TournamentPublicCard.is-manual-flyer{
+    height:154px !important;
+    min-height:154px !important;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard__body{
+    align-content:start;
+    grid-template-rows:auto auto auto auto;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard__dates{
+    margin-top:6px;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard__actions{
+    align-self:start;
+    margin-top:7px;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard__actions a{
+    min-height:38px;
+  }
+}
+
 .publicClubsPage{
   color:#061b3a;
   display:grid;

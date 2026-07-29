@@ -109,7 +109,7 @@ export async function POST(req: Request) {
             type: 'club_membership_requested',
             title: 'Nueva solicitud de jugador',
             message: `${requesterName} quiere sumarse a ${club.name}. Revisá la solicitud desde Solicitudes del club.`,
-            link: '/club/jugadores?tab=solicitudes',
+            link: '/club/solicitudes',
             metadata: withNotificationScope(
               {
                 club_id: clubId,
@@ -168,7 +168,7 @@ export async function POST(req: Request) {
           type: 'club_membership_requested',
           title: 'Nueva solicitud de jugador',
           message: `${requesterName} quiere sumarse a ${club.name}. Revisá la solicitud desde Solicitudes del club.`,
-          link: '/club/jugadores?tab=solicitudes',
+          link: '/club/solicitudes',
           metadata: withNotificationScope(
             {
               club_id: clubId,

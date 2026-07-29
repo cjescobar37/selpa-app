@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
+import ClubJugadoresPage from '../jugadores/page'
 
 export default function ClubSolicitudesAliasPage() {
-  redirect('/club/jugadores?tab=solicitudes')
+  return <ClubJugadoresPage />
 }

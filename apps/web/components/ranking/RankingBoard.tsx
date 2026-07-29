@@ -30,6 +30,11 @@ type RankingBoardProps = {
   columns: RankingBoardColumn[]
   className?: string
   stickyTop?: number
+  mobileGender?: RankingBoardGender
+  onMobileGenderChange?: (gender: RankingBoardGender) => void
+  showMobileTabs?: boolean
+  showMetadata?: boolean
+  showColumnHeader?: boolean
 }
 
 const accents = {
@@ -49,9 +54,14 @@ const accents = {
   },
 } satisfies Record<RankingBoardGender, { label: string; playerLabel: string; countLabel: string; color: string; soft: string }>
 
-export default function RankingBoard({ columns, className, stickyTop = 76 }: RankingBoardProps) {
-  const [mobileGender, setMobileGender] = useState<RankingBoardGender>('M')
-  const visibleColumns = columns.length ? columns : [{ gender: 'M' as const, rows: [] }, { gender: 'F' as const, rows: [] }]
+export default function RankingBoard({ columns, className, stickyTop = 76, mobileGender: controlledMobileGender, onMobileGenderChange, showMobileTabs = true, showMetadata = true, showColumnHeader = true }: RankingBoardProps) {
+  const [internalMobileGender, setInternalMobileGender] = useState<RankingBoardGender>('M')
+  const mobileGender = controlledMobileGender ?? internalMobileGender
+  const setMobileGender = onMobileGenderChange ?? setInternalMobileGender
+  const visibleColumns = useMemo(
+    () => columns.length ? columns : [{ gender: 'M' as const, rows: [] }, { gender: 'F' as const, rows: [] }],
+    [columns],
+  )
   const showTabs = visibleColumns.length > 1
   const counts = useMemo(
     () => ({
@@ -67,7 +77,7 @@ export default function RankingBoard({ columns, className, stickyTop = 76 }: Ran
       style={{ ['--ranking-sticky-top' as string]: `${stickyTop}px` }}
       aria-label="Ranking por rama"
     >
-      {showTabs ? <RankingGenderTabs active={mobileGender} counts={counts} onChange={setMobileGender} /> : null}
+      {showTabs && showMobileTabs ? <RankingGenderTabs active={mobileGender} counts={counts} onChange={setMobileGender} /> : null}
 
       <div className="rankingBoardGrid">
         {visibleColumns.map((column) => {
@@ -82,7 +92,7 @@ export default function RankingBoard({ columns, className, stickyTop = 76 }: Ran
                 ['--ranking-soft' as string]: accent.soft,
               }}
             >
-              <div className="rankingBoardSticky">
+              {showColumnHeader ? <div className="rankingBoardSticky">
                 <header className="rankingBoardHeader">
                   <div>
                     <span>Ranking</span>
@@ -95,10 +105,12 @@ export default function RankingBoard({ columns, className, stickyTop = 76 }: Ran
                   <span>{accent.playerLabel}</span>
                   <span>Puntos</span>
                 </div>
-              </div>
+              </div> : null}
 
               <div className="rankingBoardList">
-                {column.rows.length ? column.rows.map((row) => <RankingCard key={row.id} row={row} />) : (
+                {column.rows.length ? column.rows.map((row) => (
+                  <RankingCard key={row.id} row={row} showMetadata={showMetadata} />
+                )) : (
                   <div className="rankingBoardEmpty">🏆 Todavía no hay {column.gender === 'F' ? 'jugadoras' : 'jugadores'} rankeados.</div>
                 )}
               </div>
@@ -273,7 +285,7 @@ export default function RankingBoard({ columns, className, stickyTop = 76 }: Ran
   )
 }
 
-function RankingCard({ row }: { row: RankingBoardRow }) {
+function RankingCard({ row, showMetadata }: { row: RankingBoardRow; showMetadata: boolean }) {
   const isFeatured = row.position <= 10
   const content = (
     <>
@@ -281,7 +293,7 @@ function RankingCard({ row }: { row: RankingBoardRow }) {
       <RankingPlayerAvatar className="rankingCardAvatar" name={row.name} src={row.avatarUrl} sizes={isFeatured ? '74px' : '48px'} />
       <div className="rankingCardBody">
         <b>{row.name}</b>
-        <span>{formatRankingCategory(row.category)} · {formatRankingGender(row.gender)}{row.isTied ? ' · Empate' : ''}</span>
+        {showMetadata ? <span>{formatRankingCategory(row.category)} · {formatRankingGender(row.gender)}{row.isTied ? ' · Empate' : ''}</span> : null}
         {row.subtitle ? <small>{row.subtitle}</small> : null}
       </div>
       <div className="rankingCardPoints">
@@ -291,7 +303,7 @@ function RankingCard({ row }: { row: RankingBoardRow }) {
     </>
   )
 
-  const className = `rankingCard ${isFeatured ? 'is-featured' : 'is-compact'}`
+  const className = `rankingCard ${isFeatured ? 'is-featured' : 'is-compact'} ${row.position <= 3 ? 'is-podium' : ''} ${showMetadata ? '' : 'without-metadata'}`
   return row.href ? (
     <Link className={className} href={row.href}>
       {content}
@@ -520,7 +532,94 @@ function RankingCardStyles() {
         .rankingCardPoints b {
           font-size: 24px;
         }
+
+        .clubAdminRankingBoard .rankingBoardColumn {
+          gap: 7px;
+          padding: 8px;
+        }
+
+        .clubAdminRankingBoard .rankingBoardList {
+          gap: 5px;
+        }
+
+        .clubAdminRankingBoard .rankingCard {
+          gap: 7px;
+          grid-template-columns: 29px 42px minmax(0, 1fr) 58px;
+          min-height: 62px;
+          padding: 7px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-podium {
+          border-left: 3px solid var(--ranking-accent);
+          padding-left: 5px;
+        }
+
+
+        .clubAdminRankingBoard .rankingCard.is-featured .rankingCardPosition {
+          font-size: 22px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-featured .rankingCardAvatar {
+          height: 42px;
+          width: 42px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-featured .rankingCardBody b {
+          font-size: 14px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-featured .rankingCardPoints {
+          background: transparent;
+          border: 0;
+          min-width: 58px;
+          padding: 3px 1px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-featured .rankingCardPoints b {
+          font-size: 25px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-compact {
+          border-radius: 11px;
+          gap: 6px;
+          grid-template-columns: 27px 30px minmax(0, 1fr) 54px;
+          min-height: 46px;
+          padding: 5px 7px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-compact .rankingCardPosition {
+          font-size: 15px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-compact .rankingCardAvatar {
+          height: 30px;
+          width: 30px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-compact .rankingCardBody b {
+          font-size: 13px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-compact .rankingCardBody span {
+          font-size: 9px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-compact .rankingCardPoints {
+          background: transparent;
+          border: 0;
+          min-width: 54px;
+          padding: 2px 0;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-compact .rankingCardPoints b {
+          font-size: 20px;
+        }
+
+        .clubAdminRankingBoard .rankingCard.is-compact .rankingCardPoints span {
+          font-size: 8px;
+        }
       }
+
     `}</style>
   )
 }

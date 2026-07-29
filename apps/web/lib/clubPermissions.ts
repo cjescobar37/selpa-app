@@ -1,6 +1,6 @@
 export const CLUB_CAPABILITIES = [
   'dashboard:view',
-  'club:view', 'club:update', 'club:branding',
+  'club:view', 'club:update', 'club:branding', 'club:profile_manage',
   'memberships:view', 'memberships:manage',
   'roles:view', 'roles:manage', 'ownership:transfer',
   'players:view', 'players:manage', 'players:private_view',
@@ -108,7 +108,7 @@ export const CLUB_CAPABILITY_GROUPS = {
   users: ['memberships:manage', 'roles:manage'],
   finance: ['finance:view', 'finance:manage'],
   content: ['news:manage', 'sponsors:manage', 'ads:manage'],
-  club: ['club:update', 'club:branding'],
+  club: ['club:update', 'club:branding', 'club:profile_manage'],
 } as const satisfies Record<ClubCapabilityGroup, readonly ClubCapability[]>
 
 export const CLUB_PERMISSION_ROLES = ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO', 'PLAYER'] as const

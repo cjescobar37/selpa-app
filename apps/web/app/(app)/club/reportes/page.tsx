@@ -492,18 +492,47 @@ export default function ClubReportesPage() {
         }
         @media (max-width: 640px) {
           .club-reportPage {
-            padding: 16px;
+            border-radius: 16px;
+            gap: 10px;
+            padding: 14px;
           }
-          .club-reportHero,
-          .club-reportCardHead {
-            display: grid;
+          .club-reportHero {
+            align-items: center;
+            border-radius: 14px;
+            padding: 13px;
           }
-          .club-reportStats,
+          .club-reportHero .club-title { font-size: 24px; }
+          .club-reportHero .club-sub { display: none; }
+          .club-reportStats {
+            gap: 8px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .club-reportStats article {
+            border-radius: 14px;
+            gap: 4px;
+            padding: 11px;
+          }
+          .club-reportStats strong { font-size: 21px; }
+          .club-reportGrid { gap: 8px; }
+          .club-reportCard {
+            border-radius: 14px;
+            gap: 10px;
+            padding: 12px;
+          }
+          .club-reportCardHead { display: grid; }
+          .club-reportCardHead h2 { font-size: 18px; }
           .club-reportRows {
-            grid-template-columns: 1fr;
+            gap: 7px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .club-reportRows div { border-radius: 12px; padding: 10px; }
+          .club-reportRows strong { font-size: 15px; overflow-wrap:anywhere; }
+          .club-reportCard--soft {
+            background:#fff;
           }
           .club-reportSecondary {
-            justify-self: start;
+            min-height: 40px;
+            padding: 7px 11px;
           }
         }
       `}</style>

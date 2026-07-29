@@ -132,6 +132,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
             full_name: getFullName(profile),
           }
         }),
+      requestStats: {
+        pending: isPlanillero ? 0 : memberships.filter((item) => item.status === 'PENDING').length,
+        approved: isPlanillero ? 0 : memberships.filter((item) => item.status === 'APPROVED' && item.approved_at).length,
+        rejected: isPlanillero ? 0 : memberships.filter((item) => item.status === 'REJECTED').length,
+      },
     })
   } catch (error: unknown) {
     return NextResponse.json({ error: getErrorMessage(error, 'Error leyendo jugadores del club.') }, { status: 500 })

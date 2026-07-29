@@ -389,6 +389,7 @@ export default function ClubNoticiasPage() {
           <div className="clubNewsList">
             {paginatedRows.map((row) => (
               <article className="clubNewsRow" key={row.id}>
+                <button className="clubNewsRowLink" type="button" onClick={() => openEdit(row)} aria-label={`Editar ${row.title}`} />
                 <div className="clubNewsThumb">
                   {row.cover_url ? <img src={row.cover_url} alt={row.title} /> : <ImageIcon size={20} />}
                 </div>
@@ -669,8 +670,10 @@ export default function ClubNoticiasPage() {
           gap: 12px;
           grid-template-columns: 82px minmax(0, 1fr) auto;
           padding: 10px;
+          position: relative;
           transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
         }
+        .clubNewsRowLink { display: none; }
         .clubNewsRow:hover { border-color: color-mix(in srgb, var(--club-accent) 36%, rgba(15,23,42,.1)); box-shadow: 0 14px 28px rgba(15,23,42,.08); transform: translateY(-1px); }
         .clubNewsThumb {
           align-items: center;
@@ -794,15 +797,31 @@ export default function ClubNoticiasPage() {
           .clubNewsHero p { display:none; }
           .clubNewsHero h1 { font-size: 24px; }
           .clubNewsPrimary { min-height:38px; }
-          .clubNewsStats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-          .clubNewsStat { gap:2px; padding:8px; }
-          .clubNewsStat strong { font-size:20px; }
+          .clubNewsStats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+          .clubNewsStat { border-radius:12px; gap:2px; min-width:0; padding:7px 5px; text-align:center; }
+          .clubNewsStat span { font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+          .clubNewsStat strong { font-size:18px; }
           .clubNewsStat small { display:none; }
-          .clubNewsRow { align-items: start; grid-template-columns: 64px minmax(0, 1fr) 40px; }
-          .clubNewsThumb { aspect-ratio: 1; width: 64px; }
-          .clubNewsInfo > div { align-items: flex-start; flex-direction: column; gap: 4px; }
-          .clubNewsInfo h3 { white-space: normal; }
-          .clubNewsInfo p { display: -webkit-box; overflow: hidden; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+          .clubNewsBoardHead { gap:8px; margin-bottom:10px; }
+          .clubNewsBoardHead .clubNewsKicker { display:none; }
+          .clubNewsBoardHead h2 { font-size:18px; margin:0; }
+          .clubNewsBoardTools { justify-content:space-between; width:100%; }
+          .clubNewsBoardTools > span, .clubNewsBoardTools label { font-size:11px; padding:4px 7px; }
+          .clubNewsBoardTools select { min-height:30px; padding:2px 6px; }
+          .clubNewsList { gap:8px; }
+          .clubNewsRow { align-items: start; gap:8px; grid-template-columns: 80px minmax(0, 1fr) 36px; min-height:100px; padding:9px; }
+          .clubNewsRowLink { background:transparent; border:0; cursor:pointer; display:block; inset:0; padding:0; position:absolute; z-index:1; }
+          .clubNewsRowLink:focus-visible { border-radius:15px; box-shadow:inset 0 0 0 2px var(--club-accent); outline:none; }
+          .clubNewsThumb { aspect-ratio: 1; border-radius:10px; width:80px; }
+          .clubNewsInfo { align-content:start; gap:3px; grid-template-columns:minmax(0,1fr) auto; }
+          .clubNewsInfo > div { display:contents; }
+          .clubNewsInfo h3 { display:-webkit-box; font-size:14px; grid-column:1 / -1; line-height:1.15; overflow:hidden; white-space:normal; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+          .clubNewsBadge { align-self:center; font-size:9px; grid-column:2; grid-row:3; justify-self:end; min-height:18px; padding:3px 6px; }
+          .clubNewsInfo p { display: -webkit-box; font-size:12px; grid-column:1 / -1; line-height:1.25; overflow: hidden; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+          .clubNewsInfo small { font-size:10px; gap:3px; grid-column:1; grid-row:3; line-height:1.2; min-width:0; overflow:hidden; white-space:nowrap; }
+          .clubNewsInfo small svg { height:11px; width:11px; }
+          .clubNewsActions { align-self:start; grid-column:3; grid-row:1; z-index:2; }
+          .clubNewsActions summary { background:transparent; border:0; height:36px; width:36px; }
           .clubNewsActions button { justify-content: flex-start; width: 100%; }
           .clubNewsPagination { align-items: stretch; flex-direction: column; }
           .clubNewsPagination button { width: 100%; }

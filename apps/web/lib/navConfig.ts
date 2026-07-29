@@ -104,16 +104,16 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
         requiredAnyCapabilities: ['players:view', 'ranking:view', 'memberships:view'],
         children: [
           { label: 'Gestión', href: '/club/jugadores', requiredAnyCapabilities: ['players:view'] },
-          { label: 'Solicitudes', href: '/club/jugadores?tab=solicitudes', requiredAnyCapabilities: ['memberships:view'] },
           { label: 'Ranking', href: '/club/ranking', requiredAnyCapabilities: ['ranking:view'] },
         ],
       },
       {
         label: 'Club',
         href: '/club/configuracion',
-        requiredAnyCapabilities: ['roles:view', 'roles:manage', 'club:update', 'club:branding', 'finance:view', 'finance:manage'],
+        requiredAnyCapabilities: ['roles:view', 'roles:manage', 'club:update', 'club:branding', 'club:profile_manage', 'finance:view', 'finance:manage'],
         children: [
           { label: 'Equipo y roles', href: '/club/usuarios', requiredAnyCapabilities: ['roles:view', 'roles:manage'] },
+          { label: 'Perfil del club', href: '/club/perfil', requiredAnyCapabilities: ['club:profile_manage'] },
           { label: 'Configuración', href: '/club/configuracion', requiredAnyCapabilities: ['club:update', 'club:branding'] },
           { label: 'Finanzas', href: '/club/contabilidad', requiredAnyCapabilities: ['finance:view', 'finance:manage'] },
           { label: 'Estadísticas', href: '/club/estadisticas', requiredAnyCapabilities: ['reports:operational_view'] },

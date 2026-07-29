@@ -15,11 +15,12 @@ import { SessionProvider } from '@/components/session/SessionProvider'
 export default function AppShellClient({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isAuthRoute = ['/login', '/register', '/reset-password', '/update-password', '/completar-perfil'].includes(pathname)
+  const isClubAdminRoute = pathname === '/club' || pathname.startsWith('/club/')
 
   return (
     <SessionProvider>
       <ActiveClubThemeProvider>
-        <div className={`app-shell${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}`}>
+        <div className={`app-shell${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}${isClubAdminRoute ? ' app-shell--club' : ''}`}>
           <Suspense fallback={null}>
             <AppNavbarClient />
           </Suspense>
