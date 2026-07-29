@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { withRankingPositions } from '@/lib/ranking'
+import { getCompetitionRanking, getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
+import { mapCompetitionRankingToLegacyContract } from '@/features/competition/ranking/competition-ranking.mapper'
 
 type PlayerRow = {
   id: string
@@ -160,6 +162,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     }
 
     const warnings: string[] = []
+    const rankingEngineSource = getRankingEngineSource()
 
     const { data: playersData, error: playersError } = await supabaseAdmin
       .from('club_players')
@@ -329,7 +332,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       }
     }
 
-    const individual = players
+    const legacyIndividual = players
       .map((player) => {
         const profile = profiles.get(player.user_id) ?? null
         const stats = playerStats.get(player.user_id)
@@ -360,7 +363,20 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         if (winsDiff !== 0) return winsDiff
         return a.full_name.localeCompare(b.full_name)
       })
-    const rankedIndividual = withRankingPositions(individual, 'position')
+    const rankedLegacyIndividual = withRankingPositions(legacyIndividual, 'position')
+    let rankedIndividual = rankedLegacyIndividual
+    if (rankingEngineSource === 'competition') {
+      const competitionStats = new Map(Array.from(playerStats.entries()).map(([userId, stats]) => [userId, {
+        tournamentsPlayed: stats.tournamentsPlayed.size,
+        matchesPlayed: stats.matchesPlayed,
+        wins: stats.wins,
+        losses: stats.losses,
+        titles: stats.titles,
+        finals: stats.finals,
+      }]))
+      const competition = await getCompetitionRanking(clubId, competitionStats)
+      rankedIndividual = competition.rows.map(mapCompetitionRankingToLegacyContract)
+    }
 
     const pairs = activePartnerships
       .map((partnership) => {
@@ -408,7 +424,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       warnings.push('Deuda detectada: supabase_full.sql/docs no reflejan completamente tournament_matches ni ranking_points, aunque el código actual los usa.')
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       meta: {
         source: 'derived',
         individualSource: 'club_players.ranking_points',
@@ -420,6 +436,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       pairs: rankedPairs,
       categories: configuredCategories,
     })
+    response.headers.set('X-Ranking-Engine-Source', rankingEngineSource)
+    return response
   } catch (error: unknown) {
     return NextResponse.json({ error: getErrorMessage(error, 'Error derivando ranking del club.') }, { status: 500 })
   }
