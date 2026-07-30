@@ -1,0 +1,49 @@
+export const SERIES_STATUSES = ['DRAFT', 'SCHEDULED', 'ACTIVE', 'CLOSED', 'CANCELLED'] as const
+export const RULE_STATUSES = ['DRAFT', 'ACTIVE', 'SUPERSEDED'] as const
+export const ACCUMULATION_MODES = ['ALL_RESULTS', 'BEST_N', 'DROP_WORST_N'] as const
+export const INVITED_POINTS_POLICIES = ['NON_SCORING', 'REQUIRE_ENTRY'] as const
+
+export type CompetitionSeriesStatus = (typeof SERIES_STATUSES)[number]
+export type CompetitionSeriesRuleStatus = (typeof RULE_STATUSES)[number]
+export type CompetitionAccumulationMode = (typeof ACCUMULATION_MODES)[number]
+export type InvitedPointsPolicy = (typeof INVITED_POINTS_POLICIES)[number]
+
+export type CompetitionSeries = {
+  id: string; club_id: string; season_id: string; name: string; code: string | null
+  description: string | null; starts_on: string | null; ends_on: string | null
+  status: CompetitionSeriesStatus; planned_events_count: number | null
+  minimum_events_count: number | null; is_public: boolean; revision: number
+  archived_at: string | null; created_at: string; updated_at: string
+}
+
+export type CompetitionSeriesDivision = {
+  id: string; club_id: string; series_id: string; division_id: string; sort_order: number
+  is_active: boolean; division_snapshot: Record<string, unknown> | null; frozen_at: string | null
+  removed_at: string | null; revision: number; created_at: string; updated_at: string
+}
+
+export type CompetitionSeriesRule = {
+  id: string; club_id: string; series_division_id: string; version: number
+  status: CompetitionSeriesRuleStatus; points_scheme_id: string
+  accumulation_mode: CompetitionAccumulationMode; best_results_count: number | null
+  discard_worst_count: number | null; minimum_participations: number
+  master_final_qualification_count: number | null; master_final_multiplier: number
+  tie_breakers: unknown[]; bonus_rules: Record<string, unknown>; penalty_rules: Record<string, unknown>
+  effective_from: string | null; frozen_at: string | null; superseded_at: string | null
+  revision: number; created_at: string; updated_at: string
+}
+
+export type CompetitionSeriesEligibility = {
+  id: string; club_id: string; series_rule_id: string; requires_active_entry: boolean
+  allow_invited_players: boolean; invited_points_policy: InvitedPointsPolicy
+  require_same_division_pair: boolean; age_category_id: string | null
+  additional_rules: Record<string, unknown>; frozen_at: string | null
+  revision: number; created_at: string; updated_at: string
+}
+
+export type CompetitionSeriesDetail = {
+  series: CompetitionSeries
+  divisions: Array<CompetitionSeriesDivision & {
+    rules: Array<CompetitionSeriesRule & { eligibility: CompetitionSeriesEligibility | null }>
+  }>
+}

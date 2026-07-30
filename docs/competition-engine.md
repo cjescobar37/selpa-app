@@ -215,6 +215,20 @@ Endpoints administrativos:
 
 Rollback previo a cualquier uso real, en orden: eliminar `initialize_competition_catalogs_stage5a1(uuid)`; eliminar `competition_event_tiers` y `competition_age_categories` (sus triggers desaparecen con las tablas); y recién entonces eliminar `validate_competition_event_tier_scope()`, `normalize_competition_catalog_row()` e `is_valid_competition_age_reference_config(text,jsonb)`. Después de que otros objetos referencien estos catálogos no debe ejecutarse un rollback destructivo: se requiere una migración compensatoria que preserve el historial.
 
+## Competition Series Foundation (Etapa 5A.2)
+
+`competition_series` representa circuitos configurables dentro de una temporada, sin vincularlos todavía con torneos o eventos. Un borrador requiere únicamente temporada y nombre. Código, fechas, divisiones, reglas y elegibilidad se vuelven obligatorios al programarlo. `ARCHIVED` no es un estado deportivo: `archived_at` conserva si el circuito terminó `CLOSED` o `CANCELLED`.
+
+`competition_series_divisions` asocia divisiones ya existentes sin copiar su configuración. Una asociación retirada se reactiva sobre la misma fila. Al activar el circuito queda congelada y `division_snapshot` conserva IDs y etiquetas visibles de temporada, modalidad, rama, segmento, categoría y división; no contiene reglas, puntos ni elegibilidad.
+
+`competition_series_rules` versiona la configuración deportiva por división. Solo existe una versión `ACTIVE`; una versión activa nunca se edita. Los cambios crean una nueva versión `DRAFT`, opcionalmente clonada junto con su elegibilidad, y reemplazan la activa antes del congelamiento. `points_scheme_id` vive únicamente en esta entidad. `competition_series_eligibility` pertenece uno a uno a una versión de regla y puede referenciar una categoría etaria del mismo club.
+
+La transición `SCHEDULED -> ACTIVE` es una RPC atómica: valida completitud, exige OWNER/ADMIN, bloquea por revisión, genera snapshots y congela divisiones, reglas activas y elegibilidad. OPERADOR administra borradores mediante `competition:manage`; PLANILLERO recibe solo `competition:view`. Las tablas administrativas no conceden escritura directa a `authenticated`.
+
+Esta etapa no implementa eventos, calendario, vínculos con `tournaments`, homologación, settlement, movimientos de ledger, standings, rankings ni DTO público.
+
+Rollback, únicamente antes de que existan dependencias posteriores: revocar `EXECUTE` y eliminar las RPC de Stage 5A.2 usando sus firmas exactas; eliminar primero `competition_series_eligibility`, luego `competition_series_rules`, `competition_series_divisions` y finalmente `competition_series`; eliminar después `require_competition_series_access`, guards y validadores; y restaurar literalmente `has_club_capability(uuid,text)` desde `20260730_club_public_profile_v1.sql`. Los triggers caen con sus tablas, pero las funciones no; por eso se eliminan después. No usar `CASCADE`: podría borrar FK, vistas o funciones de etapas posteriores sin evidenciar la pérdida. Después de crear eventos o settlements se requiere una migración compensatoria, nunca un rollback destructivo.
+
 ## Próximas etapas
 
 1. Validar y aplicar el modelo base.

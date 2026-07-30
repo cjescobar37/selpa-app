@@ -1,0 +1,9 @@
+import { NextRequest,NextResponse } from 'next/server'
+import { authorizeCompetitionSeries } from '@/features/competition/series/competition-series.auth'
+import { readSeriesJson,seriesErrorResponse } from '@/features/competition/series/competition-series.http'
+import { listSeries,rpc } from '@/features/competition/series/competition-series.repository'
+import { isUuid,validateCreateSeries } from '@/features/competition/series/competition-series.validation'
+import type { CompetitionSeries } from '@/features/competition/series/competition-series.types'
+type Context={params:Promise<{clubId:string}>}
+export async function GET(req:NextRequest,context:Context){const {clubId}=await context.params;if(!isUuid(clubId))return NextResponse.json({error:'Club inválido.'},{status:400});const auth=await authorizeCompetitionSeries(req,clubId,'read');if(auth.error||!auth.client)return auth.error;try{const seasonId=req.nextUrl.searchParams.get('seasonId');if(seasonId&&!isUuid(seasonId))return NextResponse.json({error:'Temporada inválida.'},{status:400});return NextResponse.json({series:await listSeries(auth.client,clubId,seasonId)})}catch(error){return seriesErrorResponse(error)}}
+export async function POST(req:NextRequest,context:Context){const {clubId}=await context.params;if(!isUuid(clubId))return NextResponse.json({error:'Club inválido.'},{status:400});const auth=await authorizeCompetitionSeries(req,clubId,'write');if(auth.error||!auth.client)return auth.error;const body=await readSeriesJson(req);if('error'in body)return body.error;const validation=validateCreateSeries(body.value);if('error'in validation)return NextResponse.json({error:validation.error},{status:400});try{const series=await rpc<CompetitionSeries>(auth.client,'create_competition_series',{p_club_id:clubId,p_season_id:validation.value.seasonId,p_name:validation.value.name});return NextResponse.json({ok:true,series},{status:201})}catch(error){return seriesErrorResponse(error)}}
