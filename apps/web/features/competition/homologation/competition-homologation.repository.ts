@@ -1,0 +1,17 @@
+import type{SupabaseClient}from '@supabase/supabase-js'
+import type{HomologationDetail,Homologation}from './competition-homologation.types'
+function failure(operation:string,error:{message:string;code?:string}|null){return Object.assign(new Error(`${operation}: ${error?.message??'error'}`),{code:error?.code})}
+export async function homologationRpc<T>(client:SupabaseClient,name:string,args:Record<string,unknown>){const{data,error}=await client.rpc(name,args);if(error)throw failure(name,error);return data as T}
+export async function listHomologations(client:SupabaseClient,clubId:string,eventDivisionId:string){const{data,error}=await client.from('competition_event_homologations').select('id,club_id,event_id,event_division_id,tournament_id,version,revision,status,source_results_revision,corrected_from_id,notes,submitted_by,submitted_at,approved_by,approved_at,rejected_by,rejected_at,rejection_reason,superseded_by_id,superseded_at,created_by,created_at,updated_at').eq('club_id',clubId).eq('event_division_id',eventDivisionId).order('version',{ascending:false});if(error)throw failure('list homologations',error);return(data??[])as Homologation[]}
+export async function getHomologationDetail(client:SupabaseClient,clubId:string,id:string):Promise<HomologationDetail>{const h=await client.from('competition_event_homologations').select('*').eq('club_id',clubId).eq('id',id).maybeSingle();if(h.error)throw failure('homologation',h.error);if(!h.data)throw Object.assign(new Error('Recurso inexistente.'),{code:'P0002'});const row=h.data as Homologation
+  const[division,tournament,participants,results,issues,evidence,preflight]=await Promise.all([
+    client.from('competition_series_event_divisions').select('id,event_id,series_division_id,series_rule_id,scoring_mode,status,configuration_snapshot').eq('club_id',clubId).eq('id',row.event_division_id).single(),
+    client.from('tournaments').select('id,club_id,name,status,start_date,starts_on,end_date,ends_on,category,gender').eq('club_id',clubId).eq('id',row.tournament_id).single(),
+    client.from('competition_event_homologation_participants').select('*').eq('club_id',clubId).eq('homologation_id',id).order('final_position',{ascending:true,nullsFirst:false}),
+    client.from('competition_event_homologation_results').select('*').eq('club_id',clubId).eq('homologation_id',id).order('final_position',{ascending:true,nullsFirst:false}),
+    client.from('competition_event_homologation_issues').select('*').eq('club_id',clubId).eq('homologation_id',id).order('severity').order('code'),
+    client.from('competition_event_homologation_evidence').select('id,evidence_type,description,external_url,checksum,metadata,uploaded_by,uploaded_at').eq('club_id',clubId).eq('homologation_id',id).order('uploaded_at'),
+    client.rpc('get_competition_event_homologation_preflight',{p_club_id:clubId,p_homologation_id:id})])
+  for(const result of[division,tournament,participants,results,issues,evidence,preflight])if(result.error)throw failure('homologation detail',result.error)
+  return{homologation:row,eventDivision:division.data as Record<string,unknown>,tournament:tournament.data as Record<string,unknown>,participants:(participants.data??[])as Record<string,unknown>[],results:(results.data??[])as Record<string,unknown>[],issues:(issues.data??[])as Record<string,unknown>[],evidence:(evidence.data??[])as Record<string,unknown>[],preflight:preflight.data as HomologationDetail['preflight']}
+}

@@ -1,0 +1,1 @@
+import{NextRequest}from'next/server';import{homologationPreflight}from'@/features/competition/homologation/competition-homologation.handlers';type C={params:Promise<{clubId:string;seriesId:string;eventId:string;eventDivisionId:string;homologationId:string}>};export async function GET(r:NextRequest,c:C){return homologationPreflight(r,await c.params)}

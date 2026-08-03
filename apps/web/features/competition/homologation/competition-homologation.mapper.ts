@@ -1,0 +1,2 @@
+import type{HomologationDetail}from './competition-homologation.types'
+export function toHomologationAdminDto(detail:HomologationDetail){return{homologation:detail.homologation,event_division:detail.eventDivision,tournament:detail.tournament,participants:detail.participants,results:detail.results,issues:detail.issues,blockers:detail.preflight.blockers,warnings:detail.preflight.warnings,evidence:detail.evidence,allowed_actions:detail.preflight.allowed_actions}}

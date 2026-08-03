@@ -271,3 +271,21 @@ Las rutas viven bajo `/api/clubs/{clubId}/competition/series/{seriesId}/events` 
 ### Fuera de alcance
 
 Esta etapa no implementa UI, homologación, settlement, adjudicación de puntos, backfill histórico, calendario visual, jornadas, sedes normalizadas ni cambios estructurales de `tournaments`.
+
+## Stage 5A.4 — Competition Event Homologation Foundation
+
+La homologación convierte los resultados operativos de una `competition_series_event_division` completada en una fuente administrativa versionada e inmutable para el settlement futuro. No escribe puntos, no modifica el torneo, los partidos ni las inscripciones, y no crea entradas competitivas.
+
+El agregado raíz es `competition_event_homologations`. Participantes, resultados, issues y evidencia están normalizados en tablas propias; los JSON se reservan para snapshots cerrados y metadata auxiliar. Cada división tiene versiones correlativas bajo lock, como máximo un trabajo abierto (`DRAFT` o `SUBMITTED`) y una sola `APPROVED` vigente. La revisión pertenece a la homologación y no incrementa la revisión del evento ya completado.
+
+Lifecycle: `DRAFT → SUBMITTED → APPROVED | REJECTED`. Una corrección crea una nueva versión `DRAFT`; al aprobar una corrección de una versión aprobada, la anterior pasa atómicamente a `SUPERSEDED`. Las versiones terminales no se editan. Antes de settlement puede supersederse una aprobación con motivo obligatorio; cuando exista settlement este contrato deberá incorporar su bloqueo explícito antes de habilitar la etapa siguiente.
+
+El extractor usa el vínculo `ACTIVE` con `tournaments`, equipos, inscripciones y partidos, pero nunca escribe en esas tablas. Congela identidad individual, pareja circunstancial, posición, rol de resultado, estadísticas mínimas, entrada competitiva y elegibilidad. `NON_SCORING` admite homologación y marca a todos como no puntuables. `REQUIRE_ENTRY` genera blocker cuando falta una entrada activa. El preflight canónico es compartido por lectura, submit, approve y QA.
+
+Permisos: `competition:view` habilita lectura administrativa; `competition:manage` permite preparar, extraer y enviar. OWNER y ADMIN, además de la capability, son los únicos que aprueban, rechazan o superseden. OPERADOR prepara y envía; PLANILLERO sólo lee; PLAYER y anónimo no acceden. Las tablas tienen RLS de lectura y ninguna escritura directa para `authenticated`; las mutaciones pasan por RPC `SECURITY DEFINER` con `search_path` explícito y tenant scope.
+
+RPC públicas: `create_competition_event_homologation_draft`, `extract_competition_event_homologation_results`, `get_competition_event_homologation_preflight`, `submit_competition_event_homologation`, `approve_competition_event_homologation`, `reject_competition_event_homologation`, `create_competition_event_homologation_correction`, `supersede_competition_event_homologation` y `add_competition_event_homologation_evidence`. Los comandos críticos usan Idempotency-Key y revisión optimista. Las APIs administrativas viven bajo la división del evento y no exponen commands, hashes ni paths de Storage.
+
+La evidencia V1 admite nota, enlace HTTPS o path acotado `homologations/{clubId}/{homologationId}/archivo`; no incorpora upload ni bucket. El DTO público de resultados, settlement, ledger y ranking quedan fuera de Stage 5A.4.
+
+Rollback antes de settlement: revocar RPC públicas, eliminar funciones y triggers propios, y eliminar en orden `commands`, `evidence`, `issues`, `participants`, `results`, `homologations`. No usar `CASCADE`; Stage 5A.3 debe permanecer intacto. Después de introducir settlement, el rollback destructivo queda prohibido y debe reemplazarse por una migración compensatoria.

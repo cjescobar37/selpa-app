@@ -1,0 +1,18 @@
+-- Stage 5A.4 — QA manual de concurrencia (NO ejecutada).
+-- Requiere un fixture DRAFT válido y dos sesiones del SQL Editor.
+-- Reemplace solo los valores de p_club_id, p_homologation_id, p_revision y p_idempotency_key.
+--
+-- Caso 1: creación concurrente. Ambas sesiones llaman create_competition_event_homologation_draft
+-- para la misma event division. El lock de la división debe devolver una única DRAFT/version.
+--
+-- Caso 2: submit/approve concurrente.
+-- SESIÓN A: begin; select public.submit_competition_event_homologation(...); -- no commit todavía
+-- SESIÓN B: begin; select public.submit_competition_event_homologation(...); -- espera A
+-- A commit; B debe resolver por replay (misma key) o PRECONDITION_FAILED (otra key/revisión).
+-- Repetir con approve_competition_event_homologation.
+--
+-- Caso 3: misma Idempotency-Key y payload diferente debe devolver IDEMPOTENCY_CONFLICT.
+-- Caso 4: revisión obsoleta debe devolver PRECONDITION_FAILED.
+-- Caso 5: dos correcciones aprobadas no pueden vulnerar competition_homologations_approved_uidx.
+--
+-- Esta QA no declara PASS automáticamente: registrar evidencia de ambas sesiones antes de cerrar concurrencia.

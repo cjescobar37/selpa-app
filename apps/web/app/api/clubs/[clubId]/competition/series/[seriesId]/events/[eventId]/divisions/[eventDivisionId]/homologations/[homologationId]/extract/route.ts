@@ -1,0 +1,1 @@
+import{NextRequest}from'next/server';import{homologationCommand}from'@/features/competition/homologation/competition-homologation.handlers';type C={params:Promise<{clubId:string;seriesId:string;eventId:string;eventDivisionId:string;homologationId:string}>};export async function POST(r:NextRequest,c:C){return homologationCommand(r,await c.params,'extract')}
