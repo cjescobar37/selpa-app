@@ -1,0 +1,23 @@
+-- Stage 5A.5 — QA manual de concurrencia (NO ejecutar en producción).
+-- Requiere IDs de fixtures controlados y dos sesiones autenticadas.
+--
+-- 1. Ambas sesiones: BEGIN; seleccionar el mismo settlement FOR UPDATE mediante calculate.
+--    Esperado: una revisión +1; la segunda recibe 40001/PRECONDITION_FAILED.
+-- 2. Repetir calculate con misma Idempotency-Key y mismo payload.
+--    Esperado: replay idéntico, revisión +0 y awards sin duplicados.
+-- 3. Misma key con revisión/payload diferente.
+--    Esperado: 23505/IDEMPOTENCY_CONFLICT.
+-- 4. Dos APPROVE simultáneos sobre SUBMITTED.
+--    Esperado: uno APPROVED; otro stale; cero movimientos ledger.
+-- 5. Dos PUBLISH simultáneos sobre APPROVED.
+--    Esperado: uno PUBLISHED; otro stale/replay; exactamente una transacción por award no cero.
+-- 6. Forzar fallo del último award en una transacción de publish.
+--    Esperado: settlement continúa APPROVED y cero movimientos nuevos.
+-- 7. Crear corrección/versiones simultáneas.
+--    Esperado: UNIQUE(event_division_id,version) y una sola editable.
+--
+-- Consultas de cierre:
+-- select settlement_id,count(*) from competition_event_settlement_awards group by settlement_id;
+-- select metadata->>'settlement_id',count(*),sum(points) from competition_point_transactions
+-- where source_concept='COMPETITION_EVENT_SETTLEMENT' group by metadata->>'settlement_id';
+-- ROLLBACK en ambas sesiones. No declarar PASS hasta ejecutar y conservar salidas.

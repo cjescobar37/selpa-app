@@ -289,3 +289,30 @@ RPC públicas: `create_competition_event_homologation_draft`, `extract_competiti
 La evidencia V1 admite nota, enlace HTTPS o path acotado `homologations/{clubId}/{homologationId}/archivo`; no incorpora upload ni bucket. El DTO público de resultados, settlement, ledger y ranking quedan fuera de Stage 5A.4.
 
 Rollback antes de settlement: revocar RPC públicas, eliminar funciones y triggers propios, y eliminar en orden `commands`, `evidence`, `issues`, `participants`, `results`, `homologations`. No usar `CASCADE`; Stage 5A.3 debe permanecer intacto. Después de introducir settlement, el rollback destructivo queda prohibido y debe reemplazarse por una migración compensatoria.
+## Stage 5A.5 — Competition Settlement Engine
+
+Settlement transforma una homologación `APPROVED` vigente en adjudicaciones individuales auditables. La unidad es una división de evento y su homologación aprobada; no modifica el torneo, el evento, las entradas ni la homologación.
+
+- `competition_event_settlements` mantiene versiones, revisión optimista y lifecycle `DRAFT → CALCULATED → SUBMITTED → APPROVED → PUBLISHED`.
+- `competition_event_settlement_awards` conserva posición, resultado, puntos base, bonus, penalidad, multiplicador y total por jugador.
+- `competition_event_settlement_issues` es la fuente canónica de blockers/warnings usada por preflight y mutaciones.
+- `competition_event_settlement_commands` garantiza idempotencia por actor, operación y división sin exponer hashes por API.
+- El cálculo consume snapshots congelados de Events/Homologation. Los nombres o configuraciones actuales nunca cambian silenciosamente una adjudicación.
+- La política V1 de redondeo es `ROUND` al entero más cercano. Una regla inexistente es blocker, no cero silencioso.
+- `NON_SCORING` genera awards en cero y puede publicarse como constancia sin movimientos.
+- `APPROVE` no escribe puntos. `PUBLISH` inserta atómicamente una transacción `TOURNAMENT_RESULT` por award elegible distinto de cero, con idempotency key estable.
+- Un settlement publicado es terminal e inmutable. Una corrección publicada futura deberá revertir movimientos mediante Stage 4 y publicar una nueva homologación/versión; Stage 5A.5 no expone reversión.
+- OWNER/ADMIN pueden decidir y publicar; OPERADOR puede crear, calcular y enviar; PLANILLERO solo lee; PLAYER y anon no acceden.
+- Las mutaciones HTTP requieren sesión, `If-Match` e `Idempotency-Key` (create solo requiere la key) y devuelven 412 para revisión obsoleta.
+
+Rollback: antes de cualquier `PUBLISHED`, revocar RPC y eliminar funciones/tablas en orden de dependencias. Después de publicar, está prohibido un rollback destructivo: usar migración compensatoria preservando ledger e historial.
+
+Exclusiones: UI, backfill, edición de torneos, creación de entries, cuentas conjuntas de parejas y endpoint de reversión.
+
+### QA de concurrencia pendiente
+
+La QA transaccional de Stage 5A.5 obtuvo PASS real en Supabase. La validación de dos sesiones continúa pendiente porque el entorno disponible no posee `psql`, Supabase CLI ni conexión PostgreSQL directa; REST no permite mantener dos transacciones concurrentes abiertas.
+
+Cuando exista acceso PostgreSQL directo, ejecutar `20260803120000_competition_event_settlement_stage5a5_concurrency_manual.sql` con dos sesiones autenticadas contra el mismo settlement controlado en estado `APPROVED`. Ambas deben intentar publicar simultáneamente y luego comprobar settlements, awards, commands y `competition_point_transactions` antes de revertir los fixtures.
+
+El criterio de aprobación exige una sola publicación efectiva, un solo conjunto de awards, un solo conjunto de movimientos de ledger, ausencia de filas huérfanas o estados parciales, y que la segunda operación reutilice el resultado idempotente o sea rechazada de manera controlada por lock, lifecycle, revisión obsoleta o conflicto de idempotencia.

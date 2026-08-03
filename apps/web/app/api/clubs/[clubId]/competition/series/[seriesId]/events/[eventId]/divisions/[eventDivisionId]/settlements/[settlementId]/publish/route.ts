@@ -1,0 +1,1 @@
+import{NextRequest}from'next/server';import{settlementCommand}from'@/features/competition/settlement/competition-settlement.handlers';type C={params:Promise<{clubId:string;seriesId:string;eventId:string;eventDivisionId:string;settlementId:string}>};export async function POST(r:NextRequest,c:C){return settlementCommand(r,await c.params,'publish')}

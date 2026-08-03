@@ -1,0 +1,1 @@
+import{NextRequest}from'next/server';import{settlementPreflight}from'@/features/competition/settlement/competition-settlement.handlers';type C={params:Promise<{clubId:string;seriesId:string;eventId:string;eventDivisionId:string;settlementId:string}>};export async function GET(r:NextRequest,c:C){return settlementPreflight(r,await c.params)}
