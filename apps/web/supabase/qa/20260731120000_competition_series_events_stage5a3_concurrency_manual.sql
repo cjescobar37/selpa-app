@@ -1,0 +1,37 @@
+-- Stage 5A.3 — QA manual de concurrencia (DOS sesiones PostgreSQL)
+-- NO ejecutar en producción. Usar exclusivamente un club QA descartable.
+-- Este archivo documenta el protocolo; no afirma PASS hasta registrar ambas salidas.
+--
+-- Precondiciones:
+--   1. Migración Stage 5A.3 aplicada en una base aislada.
+--   2. OWNER QA autenticado en ambas sesiones mediante request.jwt.claim.sub.
+--   3. Serie QA ACTIVE y dos eventos DRAFT completos, con sus UUID obtenidos por SELECT.
+--   4. Dos tournaments QA libres y dos event divisions QA DRAFT.
+--
+-- PRUEBA A — sequence concurrente
+-- Sesión A: BEGIN; SELECT * FROM competition_series WHERE id=:series_id FOR UPDATE;
+--           SELECT * FROM create_competition_series_event(:club_id,:series_id,'QA concurrent A');
+--           mantener la transacción abierta.
+-- Sesión B: BEGIN; SELECT * FROM create_competition_series_event(:club_id,:series_id,'QA concurrent B');
+--           debe esperar a A.
+-- Sesión A: COMMIT;
+-- Sesión B: COMMIT;
+-- Verificación: ambos sequence son distintos y respetan competition_series_events_series_sequence_key.
+--
+-- PRUEBA B — misma Idempotency-Key
+-- Ejecutar simultáneamente transition_competition_series_event sobre el mismo evento,
+-- misma revisión, operación SCHEDULE, payload {} y key 'qa-two-session-schedule-0001'.
+-- La segunda sesión debe esperar y luego obtener exactamente response_payload de la primera;
+-- debe existir un command y la revisión global debe aumentar una sola vez.
+--
+-- PRUEBA C — stale revision
+-- Ambas sesiones leen la misma revisión. A ejecuta una mutación y COMMIT.
+-- B ejecuta otra mutación con la revisión anterior: debe recibir SQLSTATE 40001 y no mutar filas.
+--
+-- PRUEBA D — unique active tournament link
+-- A y B intentan vincular simultáneamente el mismo tournament a event divisions distintas.
+-- Solo una transacción puede conservar status ACTIVE; la otra debe fallar por el índice
+-- competition_event_links_active_tournament_uidx. Verificar ausencia de revisión/command parcial.
+--
+-- Final obligatorio: eliminar el club QA completo mediante el mecanismo de teardown autorizado
+-- para el entorno aislado. No reutilizar clubes ni torneos reales.

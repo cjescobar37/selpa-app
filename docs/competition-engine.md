@@ -238,3 +238,36 @@ Rollback, únicamente antes de que existan dependencias posteriores: revocar `EX
 5. Publicar API V2 y adaptar UI.
 6. Integrar torneos, resultados, seeds y Master Final.
 7. Retirar gradualmente las fuentes legacy.
+## Stage 5A.3 — Competition Series Events Foundation
+
+Stage 5A.3 agrega la fecha administrativa de un circuito sin reemplazar al torneo operativo. Un `competition_series_event` agrupa una o más `competition_series_event_divisions`; cada división conserva su regla de serie, scoring y vínculo histórico opcional con `tournaments`. La futura homologación y el settlement tendrán como unidad una event division.
+
+### Modelo y lifecycle
+
+- `competition_series_events`: identidad, planificación y estado `DRAFT`, `SCHEDULED`, `COMPLETED` o `CANCELLED`.
+- `competition_series_event_divisions`: división deportiva, regla provisional/congelada, tier, scoring y snapshot.
+- `competition_series_event_tournament_links`: vínculos `ACTIVE`, `REPLACED` y `REMOVED`, sin modificar el torneo.
+- `competition_series_event_schedule_history`: historial tipado de reprogramaciones.
+- `competition_series_event_commands`: idempotencia durable por club, evento, actor, operación y key. El hash incluye evento, operación y payload JSON canónico, por lo que una key nunca reproduce la respuesta de otro evento. La purga automática no está implementada: la retención es una política operativa pendiente.
+
+Una serie SCHEDULED permite preparar DRAFT; solo una serie ACTIVE permite programar y ejecutar lifecycle. Scheduling valida primero todo el agregado y solo congela divisiones activas DRAFT sin snapshots previos. Una división inválida revierte la operación completa. COMPLETED no significa homologado ni settled. Los eventos terminales no se reabren y solo COMPLETED/CANCELLED pueden archivarse. Cancelar un evento DRAFT cancela atómicamente sus divisiones activas y cierra sus vínculos activos, sin reactivar divisiones retiradas.
+
+### Reglas, tiers y scoring
+
+La event division resuelve en servidor la única regla ACTIVE de su series division. La base recorre y valida la cadena completa club/serie/temporada/series division/competition division/regla. Al programar debe seguir siendo la misma regla ACTIVE y frozen; no hay sustitución silenciosa. `STANDARD` admite POINTS y NON_SCORING; EXHIBITION y FRIENDLY solo NON_SCORING. POINTS exige un `points_scheme_override_id` explícito y un multiplicador efectivo positivo. Ni `competition_event_tiers.default_points_scheme_id` ni el esquema de la regla se usan como fallback runtime. Después del scheduling, scope, regla, tier, scoring, overrides, `configuration_snapshot` y `frozen_at` son inmutables; el guard genérico de escritura no autoriza el congelamiento.
+
+### Revisión, permisos y seguridad
+
+`competition_series_events.revision` representa el agregado completo y aumenta exactamente una vez por mutación efectiva. PATCH y comandos validan `If-Match`; lifecycle y vínculos también requieren `Idempotency-Key`. OWNER y ADMIN ejecutan lifecycle; OPERADOR prepara DRAFT; PLANILLERO solo lee Competition y continúa operando resultados en tournaments. Las tablas tienen RLS de lectura por `competition:view`, no admiten escrituras directas authenticated y se mutan mediante RPC SECURITY DEFINER con tenant scope y search_path explícitos. `allowed_actions` proviene de la misma respuesta SQL canónica de completitud consumida por scheduling y por el DTO; no sustituye la autorización de las RPC.
+
+El historial de reprogramación es append-only: solo `RESCHEDULE` puede insertar y ninguna operación actualiza o elimina filas. Los campos opcionales omitidos conservan su valor; un `null` explícito limpia venue cuando el contrato lo permite. Stage 5A.3 no modela `IN_PROGRESS`, por lo que `actual_starts_at` y `actual_ends_at` permanecen `NULL` y completar no inventa fechas reales. Si en una etapa futura se informan desde una fuente autorizada deberán escribirse como par y cumplir `actual_ends_at >= actual_starts_at`.
+
+La suite transaccional valida invariantes y rollback en una sesión. La carrera real entre dos conexiones para secuencia, idempotencia, stale revision y tournament link activo debe ejecutarse con `20260731120000_competition_series_events_stage5a3_concurrency_manual.sql`; no se declara probada por la suite de una sola sesión.
+
+### API administrativa
+
+Las rutas viven bajo `/api/clubs/{clubId}/competition/series/{seriesId}/events` e incluyen colección, detalle, divisiones, refresh de regla, vínculos, completitud, historial, scheduling, reprogramación, finalización, cancelación y archivo.
+
+### Fuera de alcance
+
+Esta etapa no implementa UI, homologación, settlement, adjudicación de puntos, backfill histórico, calendario visual, jornadas, sedes normalizadas ni cambios estructurales de `tournaments`.

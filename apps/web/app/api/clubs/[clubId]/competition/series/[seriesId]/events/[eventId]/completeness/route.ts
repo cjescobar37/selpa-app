@@ -1,0 +1,1 @@
+import {NextRequest} from 'next/server';import{eventReadSubresource}from '@/features/competition/events/competition-events.handlers';type C={params:Promise<{clubId:string;seriesId:string;eventId:string}>};export async function GET(r:NextRequest,c:C){return eventReadSubresource(r,await c.params,'completeness')}
