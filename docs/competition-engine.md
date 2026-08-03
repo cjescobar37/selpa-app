@@ -316,3 +316,11 @@ La QA transaccional de Stage 5A.5 obtuvo PASS real en Supabase. La validación d
 Cuando exista acceso PostgreSQL directo, ejecutar `20260803120000_competition_event_settlement_stage5a5_concurrency_manual.sql` con dos sesiones autenticadas contra el mismo settlement controlado en estado `APPROVED`. Ambas deben intentar publicar simultáneamente y luego comprobar settlements, awards, commands y `competition_point_transactions` antes de revertir los fixtures.
 
 El criterio de aprobación exige una sola publicación efectiva, un solo conjunto de awards, un solo conjunto de movimientos de ledger, ausencia de filas huérfanas o estados parciales, y que la segunda operación reutilice el resultado idempotente o sea rechazada de manera controlada por lock, lifecycle, revisión obsoleta o conflicto de idempotencia.
+
+## Stage 5A.6 — Ranking Refresh
+
+El ranking basado en Ledger utiliza una proyección por club, temporada, división y entry. Un trigger `AFTER INSERT` con transition table agrupa los movimientos de cada sentencia y refresca solamente las divisiones afectadas dentro de la misma transacción que los creó. Si el refresh falla, también se revierte la publicación del settlement y sus movimientos; nunca se expone una proyección parcial.
+
+`competition_ranking_refresh_scopes` versiona cada scope y `competition_ranking_entry_totals` conserva sus totales individuales. `get_competition_points_totals` mantiene su contrato previo, incluye entries activas en cero y lee la proyección. Opening Balance, resultados, correcciones y reversals pasan por el mismo Ledger y trigger. Un settlement `NON_SCORING` no inserta movimientos y no provoca refresh.
+
+La migración inicializa una vez los scopes competitivos existentes. Después, ningún movimiento recalcula el club completo ni otras temporadas o divisiones.
