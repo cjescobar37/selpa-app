@@ -18,3 +18,34 @@ export async function getEventDetail(client:SupabaseClient,clubId:string,eventId
   const allLinks=links.data??[]
   return {event,series:series.data as Record<string,unknown>,season:season.data as Record<string,unknown>,divisions:(divisions.data??[]).map((d)=>{const item=d as Record<string,unknown>;const own=allLinks.filter((l)=>l.event_division_id===item.id);return {...item,rule:(item.competition_series_rules??null) as Record<string,unknown>|null,tier:(item.competition_event_tiers??null) as Record<string,unknown>|null,active_tournament_link:(own.find((l)=>l.status==='ACTIVE')??null) as Record<string,unknown>|null,link_history:own as Record<string,unknown>[]}}),schedule_history:(history.data??[]) as Record<string,unknown>[],completeness:completeness.data as Record<string,unknown>}
 }
+
+type CompletionIssue={code:string;message:string}
+export type EventDivisionCompletionPreflight={ready:boolean;blockers:CompletionIssue[];warnings:CompletionIssue[];tournament:{id:string;name:string;status:string|null}|null}
+export async function getEventDivisionCompletionPreflight(client:SupabaseClient,clubId:string,eventId:string,eventDivisionId:string):Promise<EventDivisionCompletionPreflight>{
+  const blockers:CompletionIssue[]=[],warnings:CompletionIssue[]=[]
+  const division=await client.from('competition_series_event_divisions').select('id,status,event_id,competition_series_events!inner(id,status,club_id,competition_series!inner(status,club_id))').eq('club_id',clubId).eq('event_id',eventId).eq('id',eventDivisionId).maybeSingle()
+  if(division.error)throw fail('division completion preflight',division.error);if(!division.data)throw Object.assign(new Error('Recurso inexistente.'),{code:'P0002'})
+  const eventRelation=division.data.competition_series_events as unknown as Record<string,unknown>,seriesRelation=eventRelation.competition_series as Record<string,unknown>
+  if(division.data.status!=='SCHEDULED')blockers.push({code:'DIVISION_NOT_SCHEDULED',message:'La división no está programada.'})
+  if(eventRelation.status!=='SCHEDULED')blockers.push({code:'EVENT_NOT_SCHEDULED',message:'La fecha no está programada.'})
+  if(seriesRelation.status!=='ACTIVE')blockers.push({code:'SERIES_NOT_ACTIVE',message:'El circuito no está activo.'})
+  const link=await client.from('competition_series_event_tournament_links').select('tournament_id').eq('club_id',clubId).eq('event_division_id',eventDivisionId).eq('status','ACTIVE').maybeSingle()
+  if(link.error)throw fail('division tournament link',link.error)
+  if(!link.data){blockers.push({code:'TOURNAMENT_LINK_MISSING',message:'La división no tiene un torneo vinculado.'});return{ready:false,blockers,warnings,tournament:null}}
+  const tournament=await client.from('tournaments').select('id,name,status,club_id').eq('id',link.data.tournament_id).maybeSingle()
+  if(tournament.error)throw fail('linked tournament',tournament.error)
+  if(!tournament.data||tournament.data.club_id!==clubId){blockers.push({code:'TOURNAMENT_SCOPE_INVALID',message:'El torneo vinculado no pertenece al club.'});return{ready:false,blockers,warnings,tournament:null}}
+  const matches=await client.from('tournament_matches').select('id,phase,status,team1_id,team2_id,winner_team_id,match_order,created_at').eq('tournament_id',tournament.data.id)
+  if(matches.error)throw fail('linked tournament matches',matches.error);const rows=matches.data??[]
+  if(!rows.length)blockers.push({code:'MATCHES_MISSING',message:'El torneo todavía no tiene partidos.'})
+  const incomplete=rows.filter(match=>String(match.status??'').toUpperCase()!=='PLAYED'||!match.winner_team_id)
+  if(incomplete.length)blockers.push({code:'MATCHES_INCOMPLETE',message:`Quedan ${incomplete.length} partidos sin resultado definitivo.`})
+  const inconsistent=rows.filter(match=>match.winner_team_id&&match.winner_team_id!==match.team1_id&&match.winner_team_id!==match.team2_id)
+  if(inconsistent.length)blockers.push({code:'RESULTS_INCONSISTENT',message:'Hay resultados con un ganador que no participa del partido.'})
+  const finals=rows.filter(match=>String(match.phase??'').toUpperCase()==='FINAL').sort((a,b)=>Number(b.match_order??0)-Number(a.match_order??0)||String(b.created_at??'').localeCompare(String(a.created_at??''))),final=finals[0]
+  if(!final)blockers.push({code:'FINAL_MISSING',message:'El torneo todavía no tiene una final.'})
+  else if(String(final.status??'').toUpperCase()!=='PLAYED'||!final.team1_id||!final.team2_id||!final.winner_team_id)blockers.push({code:'FINAL_INCOMPLETE',message:'La final todavía no tiene un campeón válido.'})
+  else if(final.winner_team_id!==final.team1_id&&final.winner_team_id!==final.team2_id)blockers.push({code:'FINAL_INVALID',message:'El campeón no coincide con los finalistas.'})
+  if(finals.length>1)warnings.push({code:'MULTIPLE_FINALS',message:'El torneo registra más de una final; se usará la última llave vigente.'})
+  return{ready:blockers.length===0,blockers,warnings,tournament:{id:tournament.data.id,name:tournament.data.name,status:tournament.data.status}}
+}

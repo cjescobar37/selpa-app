@@ -10,15 +10,16 @@ import styles from './EventOperationsDashboard.module.css'
 
 type EventDetail = CompetitionEventDetail & { allowed_actions: Record<string, boolean> }
 type RecordRow = Record<string, unknown>
-type DivisionOps = { homologations: RecordRow[]; settlements: RecordRow[] }
+type CompletionPreflight = { ready: boolean; blockers: Array<{ code: string; message: string }>; warnings: Array<{ code: string; message: string }>; tournament: { id: string; name: string; status: string | null } | null }
+type DivisionOps = { homologations: RecordRow[]; settlements: RecordRow[]; preflight: CompletionPreflight | null }
 type ApiError = Error & { status?: number }
 const labels: Record<string, string> = { DRAFT: 'Borrador', SCHEDULED: 'Programado', ACTIVE: 'Activo', COMPLETED: 'Finalizado', CANCELLED: 'Cancelado', APPROVED: 'Aprobada', PUBLISHED: 'Publicado', SUBMITTED: 'En revisión' }
 const eventTypes: Record<string, string> = { STANDARD: 'Competitivo', EXHIBITION: 'Exhibición', FRIENDLY: 'Amistoso' }
 const blockerText: Record<string, string> = { SERIES_NOT_ACTIVE: 'El circuito todavía no está activo.', DATES_MISSING: 'Faltan la fecha de inicio o fin.', TIMEZONE_MISSING: 'Falta definir la zona horaria.', DIVISIONS_MISSING: 'Agregá al menos una división.', DIVISION_CONFIGURATION_INVALID: 'Hay una división sin configuración completa.', TOURNAMENT_LINK_MISSING: 'Falta vincular un torneo.' }
 
 async function accessToken() { return (await supabase.auth.getSession()).data.session?.access_token ?? '' }
-async function api<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store', headers: { Authorization: `Bearer ${await accessToken()}` } })
+async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, { ...init, cache: 'no-store', headers: { Authorization: `Bearer ${await accessToken()}`, 'Content-Type': 'application/json', ...init?.headers } })
   const body = await response.json().catch(() => ({})) as T & { error?: string }
   if (!response.ok) throw Object.assign(new Error(response.status >= 500 ? 'No pudimos completar la operación.' : body.error || 'No pudimos cargar el evento.'), { status: response.status })
   return body
@@ -38,6 +39,8 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
   const [operations, setOperations] = useState<Record<string, DivisionOps>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<ApiError | null>(null)
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
   const base = clubId ? `/api/clubs/${clubId}/competition/series/${seriesId}/events/${eventId}` : ''
 
   const load = useCallback(async () => {
@@ -48,17 +51,28 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
       const active = event.divisions.filter(item => item.is_active)
       const entries = await Promise.all(active.map(async division => {
         const id = String(division.id)
-        const [homologations, settlements] = await Promise.all([
+        const [homologations, settlements, preflight] = await Promise.all([
           api<{ homologations: RecordRow[] }>(`${base}/divisions/${id}/homologations`),
           api<{ settlements: RecordRow[] }>(`${base}/divisions/${id}/settlements`),
+          String(division.status) === 'SCHEDULED' ? api<CompletionPreflight>(`${base}/divisions/${id}/complete`) : Promise.resolve(null),
         ])
-        return [id, { homologations: homologations.homologations, settlements: settlements.settlements }] as const
+        return [id, { homologations: homologations.homologations, settlements: settlements.settlements, preflight }] as const
       }))
       setDetail(event); setOperations(Object.fromEntries(entries))
     } catch (cause) { setError(cause as ApiError) }
     finally { setLoading(false) }
   }, [base, clubId])
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer) }, [load])
+
+  async function completeDivision(id: string) {
+    if (!detail) return
+    setBusy(id); setError(null)
+    try {
+      await api(`${base}/divisions/${id}/complete`, { method: 'POST', headers: { 'If-Match': String(detail.event.revision), 'Idempotency-Key': crypto.randomUUID() }, body: '{}' })
+      setConfirming(null); await load()
+    } catch (cause) { const next = cause as ApiError; setError(next); if (next.status === 412) { setConfirming(null); await load() } }
+    finally { setBusy(null) }
+  }
 
   const activeDivisions = useMemo(() => detail?.divisions.filter(item => item.is_active) ?? [], [detail])
   const summary = useMemo(() => {
@@ -95,10 +109,10 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
 
     <section className={styles.section}><div className={styles.sectionTitle}><div><span>DIVISIONES</span><h2>Operación deportiva</h2></div></div>
       {!activeDivisions.length ? <div className={styles.empty}><Trophy size={22} /><strong>Esta fecha no tiene divisiones</strong><p>Agregalas desde la configuración del circuito.</p>{detail.allowed_actions.edit ? <Link href={`/club/competition/series/${seriesId}`}>Configurar divisiones</Link> : null}</div> : <div className={styles.list}>{activeDivisions.map(division => {
-        const id = String(division.id), ops = operations[id] ?? { homologations: [], settlements: [] }, homologation = latest(ops.homologations), settlement = latest(ops.settlements), link = division.active_tournament_link, published = status(settlement) === 'PUBLISHED'
-        const action = !link ? { text: 'Vincular torneo', href: `/club/competition/series/${seriesId}?event=${eventId}` } : published ? { text: 'Ver ranking', href: '/club/ranking' } : null
-        const nextStep = !homologation ? 'Homologación pendiente' : status(homologation) !== 'APPROVED' ? 'Homologación en revisión' : !settlement ? 'Settlement pendiente' : 'Settlement en revisión'
-        return <article className={styles.division} key={id}><div className={styles.divisionHead}><div><strong>{snapshotName(division)}</strong><small>{division.scoring_mode === 'POINTS' ? 'Con puntos' : division.scoring_mode === 'NON_SCORING' ? 'Sin puntos' : 'Scoring pendiente'} · {String(division.tier?.name ?? 'Sin tier')}</small></div><span className={styles.badge}>{labels[String(division.status)] ?? String(division.status)}</span></div><dl><div><dt>Regla</dt><dd>{String(division.rule?.name ?? 'Sin configurar')}</dd></div><div><dt>Torneo</dt><dd>{link ? 'Vinculado' : 'Sin torneo'}</dd></div><div><dt>Homologación</dt><dd>{homologation ? labels[status(homologation)] ?? status(homologation) : 'Pendiente'}</dd></div><div><dt>Settlement</dt><dd>{settlement ? labels[status(settlement)] ?? status(settlement) : 'Pendiente'}</dd></div><div><dt>Publicación</dt><dd>{published ? 'Publicada' : 'Pendiente'}</dd></div></dl>{action ? <Link className={styles.action} href={action.href}>{action.text}<ChevronRight size={16} /></Link> : <span className={styles.tournament}>{nextStep}</span>}{link ? <Link className={styles.tournament} href={`/club/torneos/${String(link.tournament_id)}`}>Ver torneo</Link> : null}</article>
+        const id = String(division.id), ops = operations[id] ?? { homologations: [], settlements: [], preflight: null }, homologation = latest(ops.homologations), settlement = latest(ops.settlements), link = division.active_tournament_link, completed = String(division.status) === 'COMPLETED'
+        const homologationHref = `/club/competition/series/${seriesId}/events/${eventId}/divisions/${id}/homologation`
+        const progress = completed ? 'Resultados listos para homologar' : ops.preflight?.ready ? 'Listo para cerrar' : link ? ops.preflight?.blockers.some(item => ['MATCHES_INCOMPLETE', 'FINAL_INCOMPLETE', 'FINAL_MISSING'].includes(item.code)) ? 'Resultados incompletos' : 'Torneo en curso' : 'Sin torneo vinculado'
+        return <article className={styles.division} key={id}><div className={styles.divisionHead}><div><strong>{snapshotName(division)}</strong><small>{division.scoring_mode === 'POINTS' ? 'Con puntos' : division.scoring_mode === 'NON_SCORING' ? 'Sin puntos' : 'Scoring pendiente'} · {String(division.tier?.name ?? 'Sin tier')}</small></div><span className={styles.badge}>{labels[String(division.status)] ?? String(division.status)}</span></div><p className={`${styles.progress} ${ops.preflight?.ready || completed ? styles.progressReady : ''}`}>{progress}</p><dl><div><dt>Regla</dt><dd>{String(division.rule?.name ?? 'Sin configurar')}</dd></div><div><dt>Torneo</dt><dd>{link ? 'Vinculado' : 'Sin torneo'}</dd></div><div><dt>Homologación</dt><dd>{homologation ? labels[status(homologation)] ?? status(homologation) : 'Pendiente'}</dd></div><div><dt>Settlement</dt><dd>{settlement ? labels[status(settlement)] ?? status(settlement) : 'Pendiente'}</dd></div></dl>{completed ? <Link className={styles.action} href={homologationHref}>{homologation ? 'Revisar homologación' : 'Homologar resultados'}<ChevronRight size={16} /></Link> : ops.preflight?.ready && detail.allowed_actions.complete_division ? <button className={styles.action} onClick={() => setConfirming(id)}>Cerrar división y preparar homologación<ChevronRight size={16} /></button> : !link ? <Link className={styles.action} href={`/club/competition/series/${seriesId}?event=${eventId}`}>Vincular torneo<ChevronRight size={16} /></Link> : null}{confirming === id && ops.preflight ? <div className={styles.confirm}><strong>¿Cerrar esta división?</strong><p>El torneo tiene final y campeón. Esta acción no modifica resultados ni publica puntos.</p>{ops.preflight.warnings.map(item => <small key={item.code}><AlertCircle size={13} />{item.message}</small>)}<div><button onClick={() => setConfirming(null)}>Volver</button><button disabled={busy === id} onClick={() => void completeDivision(id)}>{busy === id ? 'Cerrando…' : 'Confirmar cierre'}</button></div></div> : null}{ops.preflight && !ops.preflight.ready ? <div className={styles.preflight}>{ops.preflight.blockers.map(item => <small key={item.code}><AlertCircle size={13} />{item.message}</small>)}</div> : null}{link ? <Link className={styles.tournament} href={`/club/torneos/${String(link.tournament_id)}`}>Ver torneo</Link> : null}</article>
       })}</div>}
     </section>
 
