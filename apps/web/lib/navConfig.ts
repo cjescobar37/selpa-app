@@ -108,6 +108,11 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
         ],
       },
       {
+        label: 'Competencia',
+        href: '/club/competition',
+        requiredAnyCapabilities: ['competition:view', 'competition:manage'],
+      },
+      {
         label: 'Club',
         href: '/club/configuracion',
         requiredAnyCapabilities: ['roles:view', 'roles:manage', 'club:update', 'club:branding', 'club:profile_manage', 'finance:view', 'finance:manage'],
