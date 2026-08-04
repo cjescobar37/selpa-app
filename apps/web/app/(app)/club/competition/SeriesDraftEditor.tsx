@@ -8,6 +8,7 @@ import type { CompetitionSeriesDetail, CompetitionSeriesRule } from '@/features/
 import type { CompetitionSeriesEvent } from '@/features/competition/events/competition-events.types'
 import styles from './SeriesDraftEditor.module.css'
 import extra from './SeriesDraftAdvanced.module.css'
+import SeriesEventsAdmin from './SeriesEventsAdmin'
 
 type Request = <T>(url: string, init?: RequestInit) => Promise<T>
 type Catalog = { id: string; name: string }
@@ -23,7 +24,6 @@ export default function SeriesDraftEditor({ clubId, detail, events, request, rel
   const [ages, setAges] = useState<Catalog[]>([])
   const [selectedDivision, setSelectedDivision] = useState('')
   const [selectedScheme, setSelectedScheme] = useState<Record<string, string>>({})
-  const [eventName, setEventName] = useState('')
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
   const isDraft = detail.series.status === 'DRAFT'
@@ -108,7 +108,6 @@ export default function SeriesDraftEditor({ clubId, detail, events, request, rel
     void mutate(`eligibility-${rule.id}`, () => request(`${base}/eligibility`, json({ rule_id: rule.id, revision: current?.revision ?? null, series_revision: detail.series.revision, config }, 'PATCH')), 'Elegibilidad guardada.')
   }
 
-  const createEvent = () => eventName.trim() && void mutate('event', () => request(`${base}/events`, json({ name: eventName.trim() })), 'Primera fecha creada.').then(() => setEventName(''))
   const scheduleSeries = () => void mutate('schedule', () => request(`${base}/lifecycle`, json({ action: 'SCHEDULE', revision: detail.series.revision })), 'Circuito programado. Ya podés crear fechas.')
 
   function saveIdentity(form: HTMLFormElement) {
@@ -139,6 +138,6 @@ export default function SeriesDraftEditor({ clubId, detail, events, request, rel
       </article>
     }) : <p className={styles.muted}>Agregá una división para configurar sus reglas.</p>}</div></details>
 
-    <details className={styles.editorSection} open><summary><span><small>03</small><strong>Fechas</strong><em>{events.length ? `${events.length} creadas` : 'Pendiente'}</em></span><ChevronDown size={18} /></summary><div className={styles.editorBody}>{events.map((event) => <div className={styles.editorRow} key={event.id}><div><strong>{event.name}</strong><small>{event.status === 'DRAFT' ? 'Borrador' : event.status}</small></div></div>)}{isDraft ? <div className={styles.lifecycle}><p>Terminá la configuración y programá el circuito para crear fechas.</p>{blockers.length ? <ul>{blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : <button disabled={busy === 'schedule'} onClick={scheduleSeries}>Programar circuito</button>}</div> : canCreateEvents ? <div className={styles.inlineForm}><input value={eventName} onChange={(event) => setEventName(event.target.value)} placeholder="Nombre de la primera fecha" maxLength={120} /><button disabled={!eventName.trim() || busy === 'event'} onClick={createEvent}>Crear</button></div> : <p className={styles.muted}>El estado actual del circuito no permite crear fechas.</p>}</div></details>
+    {isDraft ? <details className={styles.editorSection} open><summary><span><small>03</small><strong>Fechas</strong><em>Pendiente</em></span><ChevronDown size={18} /></summary><div className={styles.editorBody}><div className={styles.lifecycle}><p>Terminá la configuración y programá el circuito para crear fechas.</p>{blockers.length ? <ul>{blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : <button disabled={busy === 'schedule'} onClick={scheduleSeries}>Programar circuito</button>}</div></div></details> : canCreateEvents ? <SeriesEventsAdmin clubId={clubId} series={detail} events={events} request={request} reload={reload} /> : <p className={styles.muted}>El estado actual del circuito no permite crear fechas.</p>}
   </>
 }
