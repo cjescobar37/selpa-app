@@ -324,3 +324,12 @@ El ranking basado en Ledger utiliza una proyección por club, temporada, divisi�
 `competition_ranking_refresh_scopes` versiona cada scope y `competition_ranking_entry_totals` conserva sus totales individuales. `get_competition_points_totals` mantiene su contrato previo, incluye entries activas en cero y lee la proyección. Opening Balance, resultados, correcciones y reversals pasan por el mismo Ledger y trigger. Un settlement `NON_SCORING` no inserta movimientos y no provoca refresh.
 
 La migración inicializa una vez los scopes competitivos existentes. Después, ningún movimiento recalcula el club completo ni otras temporadas o divisiones.
+## Stage 5A.7 — Esquemas de puntos configurables
+
+`points_schemes` y `points_scheme_rules` son la fuente configurable que seleccionan las reglas de circuito. Los esquemas de club nacen inactivos, usan revisión optimista y solo OWNER/ADMIN pueden activarlos o desactivarlos; OPERADOR puede preparar, editar y clonar, PLANILLERO conserva lectura administrativa y PLAYER no administra. Las escrituras autenticadas directas quedan revocadas y las mutaciones pasan por RPC `SECURITY DEFINER` con `search_path` y tenant scope explícitos.
+
+Settlement continúa consumiendo los códigos V1 `CHAMPION`, `RUNNER_UP`, `SEMIFINALIST`, `QUARTERFINALIST` y `PARTICIPANT`. Bonus y penalizaciones siguen siendo configuración de la regla de circuito: no se exponen como códigos ficticios que Settlement no entienda. Un esquema referenciado por una regla ACTIVE o congelada deja de ser editable; para evolucionarlo se clona. Los snapshots de homologación y settlement preservan la historia aunque el esquema sea desactivado.
+
+La administración vive en `/club/competition/points-schemes`. El bootstrap nunca crea esquemas: si no existe uno activo devuelve `setupRequired` con `CREATE_POINTS_SCHEME`; si hay más de uno utiliza el `schemeId` confirmado por el administrador. El editor de circuitos lista únicamente esquemas globales activos o activos del club.
+
+La migración es `20260804120000_competition_points_schemes_stage5a7.sql` y su QA transaccional es `20260804120000_competition_points_schemes_stage5a7_validation.sql`. Stage 5A.7 fue aplicado y validado en Supabase con resultado PASS. Cualquier rollback posterior requiere una migración compensatoria que preserve esquemas, reglas y snapshots históricos.

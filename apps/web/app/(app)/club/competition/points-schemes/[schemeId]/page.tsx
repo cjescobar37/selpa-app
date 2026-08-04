@@ -1,0 +1,1 @@
+import PointsSchemesAdmin from '../../PointsSchemesAdmin';export default async function Page({params}:{params:Promise<{schemeId:string}>}){return <PointsSchemesAdmin schemeId={(await params).schemeId}/>}
