@@ -23,6 +23,9 @@ type TournamentRow = {
   category_id: number | null
   category: number | null
   fixed_category_id: number | null
+  category_rule: string | null
+  category_sum_target: number | null
+  age_category_id: string | null
   start_date: string | null
   starts_on: string | null
   end_date: string | null
@@ -207,7 +210,7 @@ export async function GET(
 
     const { data: tournament, error: tournamentError } = await supabaseAdmin
       .from('tournaments')
-      .select('id,club_id,name,status,type,tournament_type,format,gender,segment,category_id,category,fixed_category_id,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,points_total,created_at,updated_at')
+      .select('id,club_id,name,status,type,tournament_type,format,gender,segment,category_id,category,fixed_category_id,category_rule,category_sum_target,age_category_id,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,points_total,created_at,updated_at')
       .eq('id', tournamentId)
       .eq('club_id', clubId)
       .maybeSingle()
@@ -358,6 +361,9 @@ export async function GET(
         segment: tournamentRow.segment ?? 'LIBRES',
         category_id: categoryId,
         category_name: categoryName,
+        category_rule: tournamentRow.category_rule,
+        category_sum_target: tournamentRow.category_sum_target,
+        age_category_id: tournamentRow.age_category_id,
         start_date: getDate(tournamentRow.starts_on, tournamentRow.start_date),
         end_date: getDate(tournamentRow.ends_on, tournamentRow.end_date),
         registration_deadline: getDate(tournamentRow.registration_deadline, tournamentRow.signup_deadline),

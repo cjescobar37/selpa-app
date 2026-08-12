@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
@@ -28,7 +28,13 @@ type TournamentType = 'OPEN' | 'CHALLENGER' | 'MASTER' | 'MASTER_FINAL'
 type TournamentGender = 'MALE' | 'FEMALE' | 'MIXED'
 type TournamentSegment = 'LIBRES' | 'MENORES' | 'VETERANOS'
 type CompetitionSystem = 'GROUPS_PLAYOFF' | 'ROUND_ROBIN' | 'SINGLE_ELIMINATION'
+type CategoryRule = 'FIXED_CATEGORY' | 'CATEGORY_SUM'
 type CourtSource = 'OWN_CLUB' | 'EXTERNAL_COMPLEX'
+
+function formatCategoryOrdinal(value: string | number) {
+  const labels: Record<number, string> = { 1: '1ra', 2: '2da', 3: '3ra', 4: '4ta', 5: '5ta', 6: '6ta', 7: '7ma', 8: '8va' }
+  return labels[Number(value)] ?? String(value)
+}
 
 type TournamentCourt = {
   id?: string
@@ -42,10 +48,16 @@ type FormState = {
   type: TournamentType
   gender: TournamentGender
   categoryId: string
+  categoryRule: CategoryRule
+  categorySumTarget: string
+  ageCategoryId: string
   segmentType: TournamentSegment
   competitionSystem: CompetitionSystem
   venueName: string
   publicDescription: string
+  prizesEnabled: boolean
+  championPrize: string
+  runnerUpPrize: string
   startDate: string
   endDate: string
   registrationDeadline: string
@@ -84,6 +96,22 @@ type ClubComplexOption = {
   courtsCount: number
 }
 
+type AgeCategoryOption = { id: string; name: string; min_age: number | null; max_age: number | null; age_reference_rule: string; is_active: boolean }
+type CompetitionDateDivision = {
+  series_division_id: string; rule_id: string; rule_revision: number; points_scheme_id: string | null
+  branch_slug: 'caballeros' | 'damas' | 'mixto'; branch_name: string
+  segment_slug: 'libres' | 'menores' | 'veteranos'; segment_name: string
+  category_id: string | null; category_name: string | null; legacy_category_id: number | null
+  age_category_id: string | null; age_category_name: string | null
+}
+type CompetitionDateContext = {
+  series_id: string; series_revision: number; series_name: string
+  season: { id: string; name: string }
+  allowed_actions: { create_date?: boolean }
+  divisions: CompetitionDateDivision[]
+}
+type EventTierOption = { id: string; name: string; code: string; is_active: boolean }
+
 const defaultPoints = {
   winner: '500',
   finalist: '400',
@@ -98,10 +126,16 @@ const initialForm: FormState = {
   type: 'OPEN',
   gender: 'MALE',
   categoryId: '7',
+  categoryRule: 'FIXED_CATEGORY',
+  categorySumTarget: '13',
+  ageCategoryId: '',
   segmentType: 'LIBRES',
   competitionSystem: 'GROUPS_PLAYOFF',
   venueName: '',
   publicDescription: '',
+  prizesEnabled: false,
+  championPrize: '',
+  runnerUpPrize: '',
   startDate: '',
   endDate: '',
   registrationDeadline: '',
@@ -161,8 +195,8 @@ const typeOptions: Array<{ value: TournamentType; label: string }> = [
 ]
 
 const genderOptions: Array<{ value: TournamentGender; label: string }> = [
-  { value: 'MALE', label: 'Masculino' },
-  { value: 'FEMALE', label: 'Femenino' },
+  { value: 'MALE', label: 'Caballeros' },
+  { value: 'FEMALE', label: 'Damas' },
   { value: 'MIXED', label: 'Mixto' },
 ]
 
@@ -179,18 +213,18 @@ const competitionSystemOptions: Array<{ value: CompetitionSystem; label: string 
 ]
 
 const scheduleModeOptions: Array<{ value: ScheduleMode; label: string }> = [
-  { value: 'AUTO', label: 'Automática' },
-  { value: 'MANUAL', label: 'Manual' },
+  { value: 'AUTO', label: 'SELPA arma los horarios' },
+  { value: 'MANUAL', label: 'Quiero armarlos yo' },
 ]
 
 const mobileSteps = [
-  'Identidad',
+  'Presentación',
+  'Participantes',
   'Competencia',
   'Fechas e inscripción',
-  'Sede y cupos',
-  'Formato deportivo',
-  'Puntaje',
-  'Identidad visual y revisión',
+  'Sede y organización',
+  'Publicación',
+  'Revisión final',
 ] as const
 
 function buildFlyerPayload(config: FlyerConfig, tournamentTypeLabel: string) {
@@ -251,6 +285,11 @@ function buildTournamentConfigPayload(form: FormState) {
   return {
     segment_type: form.segmentType,
     public_description: form.publicDescription.trim() || null,
+    prizes: {
+      enabled: form.prizesEnabled,
+      champion: form.prizesEnabled ? form.championPrize.trim() || null : null,
+      runner_up: form.prizesEnabled ? form.runnerUpPrize.trim() || null : null,
+    },
     competition_system: form.competitionSystem,
     venue_name: form.venueName.trim() || null,
     tournament_courts: form.tournamentCourts.map((court) => ({
@@ -313,12 +352,58 @@ function ReviewBlock({ title, step, onEdit, children }: { title: string; step: n
   )
 }
 
+function ChoiceChips<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+}: {
+  label: string
+  value: T
+  options: ReadonlyArray<{ value: T; label: string }>
+  onChange: (value: T) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="club-choiceField">
+      <span>{label}</span>
+      <div className="club-choiceChips" role="group" aria-label={label}>
+        {options.map((option) => (
+          <button
+            type="button"
+            key={option.value}
+            className={value === option.value ? 'is-active' : ''}
+            aria-pressed={value === option.value}
+            disabled={disabled}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function ClubNuevoTorneoPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { activeClub, user } = useSession()
+  const competitionSeriesId = searchParams.get('competitionSeriesId')?.trim() || null
   const [form, setForm] = useState<FormState>(initialForm)
   const [courtDraft, setCourtDraft] = useState<CourtDraftState>(initialCourtDraft)
   const [complexOptions, setComplexOptions] = useState<ClubComplexOption[]>([])
+  const [ageCategories, setAgeCategories] = useState<AgeCategoryOption[]>([])
+  const [loadingAgeCategories, setLoadingAgeCategories] = useState(true)
+  const [competitionContext, setCompetitionContext] = useState<CompetitionDateContext | null>(null)
+  const [selectedCompetitionDivisionId, setSelectedCompetitionDivisionId] = useState('')
+  const [eventTiers, setEventTiers] = useState<EventTierOption[]>([])
+  const [selectedEventTierId, setSelectedEventTierId] = useState('')
+  const [loadingCompetitionContext, setLoadingCompetitionContext] = useState(Boolean(competitionSeriesId))
+  const [competitionContextError, setCompetitionContextError] = useState('')
+  const [competitionIdempotencyKey, setCompetitionIdempotencyKey] = useState('')
+  const competitionKeyRef = useRef('')
   const [loadingComplexes, setLoadingComplexes] = useState(true)
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const [flyerConfig, setFlyerConfig] = useState<FlyerConfig>(defaultFlyerConfig)
@@ -332,7 +417,9 @@ export default function ClubNuevoTorneoPage() {
   const [flyerSnapshot, setFlyerSnapshot] = useState<FlyerConfig | null>(null)
   const [draftOffer, setDraftOffer] = useState<{ form: FormState; flyer: FlyerConfig; step: number; updatedAt: string } | null>(null)
   const [draftReady, setDraftReady] = useState(false)
-  const draftKey = user?.id && activeClub?.id ? `selpa:tournament-draft:${user.id}:${activeClub.id}` : null
+  const draftKey = user?.id && activeClub?.id ? `selpa:tournament-draft:${user.id}:${activeClub.id}:${competitionSeriesId ?? 'independent'}` : null
+  const isCompetitionDate = Boolean(competitionSeriesId)
+  const selectedCompetitionDivision = competitionContext?.divisions.find((division) => division.series_division_id === selectedCompetitionDivisionId) ?? null
 
   useEffect(() => {
     document.body.classList.add('club-tournament-wizard-active')
@@ -383,9 +470,13 @@ export default function ClubNuevoTorneoPage() {
     const matchDuration = toInteger(form.matchDurationMinutes, 90)
 
     if (!activeClub?.id) next.push('Seleccioná un club activo.')
+    if (isCompetitionDate && (!competitionContext || !selectedCompetitionDivision)) next.push(competitionContextError || 'Estamos preparando el circuito.')
+    if (isCompetitionDate && !selectedEventTierId) next.push('El circuito necesita un tier activo para crear esta fecha.')
     if (!form.name.trim()) next.push('El nombre es obligatorio.')
     if (!form.startDate) next.push('La fecha de inicio es obligatoria.')
-    if (!Number.isInteger(categoryId) || categoryId < 1 || categoryId > 7) next.push('La categoría debe estar entre 1 y 7.')
+    if (form.segmentType === 'LIBRES' && form.categoryRule === 'FIXED_CATEGORY' && (!Number.isInteger(categoryId) || categoryId < 1 || categoryId > 8)) next.push('Seleccioná una categoría válida.')
+    if (form.segmentType === 'LIBRES' && form.categoryRule === 'CATEGORY_SUM' && (toInteger(form.categorySumTarget, 0) < 2 || toInteger(form.categorySumTarget, 0) > 16)) next.push('La suma debe estar entre 2 y 16.')
+    if (form.segmentType !== 'LIBRES' && !form.ageCategoryId) next.push('Seleccioná una categoría de edad.')
     if (!Number.isInteger(minPairs) || minPairs < 2) next.push('El mínimo de parejas debe ser al menos 2.')
     if (maxPairs !== null && (!Number.isInteger(maxPairs) || maxPairs < minPairs)) next.push('El máximo debe ser mayor o igual al mínimo.')
     if (!Number.isFinite(price) || price < 0) next.push('El precio debe ser mayor o igual a 0.')
@@ -398,7 +489,7 @@ export default function ClubNuevoTorneoPage() {
     if (form.playoffStartTime && form.playoffEndTime && form.playoffStartTime >= form.playoffEndTime) next.push('El horario de playoff debe cerrar después de la hora de inicio.')
 
     return next
-  }, [activeClub?.id, form])
+  }, [activeClub?.id, competitionContext, competitionContextError, form, isCompetitionDate, selectedCompetitionDivision, selectedEventTierId])
 
   const groupsScheduleCapacity = useMemo(
     () =>
@@ -424,6 +515,20 @@ export default function ClubNuevoTorneoPage() {
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function selectCompetitionDivision(division: CompetitionDateDivision) {
+    setSelectedCompetitionDivisionId(division.series_division_id)
+    setForm((current) => ({
+      ...current,
+      gender: division.branch_slug === 'caballeros' ? 'MALE' : division.branch_slug === 'damas' ? 'FEMALE' : 'MIXED',
+      segmentType: division.segment_slug.toUpperCase() as TournamentSegment,
+      categoryId: division.legacy_category_id ? String(division.legacy_category_id) : '',
+      categoryRule: 'FIXED_CATEGORY',
+      ageCategoryId: division.age_category_id ?? '',
+      pointsEnabled: false,
+      pointsEditable: false,
+    }))
   }
 
   function updateStartDate(value: string) {
@@ -551,9 +656,12 @@ export default function ClubNuevoTorneoPage() {
     const price = toNumber(form.pricePerPlayer, 0)
     const matchDuration = toInteger(form.matchDurationMinutes, 90)
 
+    if (isCompetitionDate && (loadingCompetitionContext || competitionContextError || !selectedCompetitionDivision)) return competitionContextError || 'Estamos preparando el circuito.'
     if (step === 1 && !form.name.trim()) return 'Ingresá el nombre del torneo para continuar.'
-    if (step === 2 && (!Number.isInteger(categoryId) || categoryId < 1 || categoryId > 7)) return 'Seleccioná una categoría válida.'
-    if (step === 3) {
+    if (step === 2 && form.segmentType === 'LIBRES' && form.categoryRule === 'FIXED_CATEGORY' && (!Number.isInteger(categoryId) || categoryId < 1 || categoryId > 8)) return 'Seleccioná una categoría válida.'
+    if (step === 2 && form.segmentType === 'LIBRES' && form.categoryRule === 'CATEGORY_SUM' && (toInteger(form.categorySumTarget, 0) < 2 || toInteger(form.categorySumTarget, 0) > 16)) return 'La suma debe estar entre 2 y 16.'
+    if (step === 2 && form.segmentType !== 'LIBRES' && !form.ageCategoryId) return 'Seleccioná una categoría de edad para continuar.'
+    if (step === 4) {
       if (!form.startDate) return 'Ingresá la fecha de inicio para continuar.'
       if (form.endDate && form.endDate < form.startDate) return 'La fecha fin no puede ser anterior al inicio.'
       if (form.registrationDeadline && form.registrationDeadline.slice(0, 10) > form.startDate) return 'El cierre de inscripción no puede ser posterior al inicio.'
@@ -640,6 +748,68 @@ export default function ClubNuevoTorneoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClub?.id])
 
+  useEffect(() => {
+    if (!activeClub?.id) return
+    let cancelled = false
+    void supabase.auth.getSession().then(async ({ data }) => {
+      const response = await fetch(`/api/clubs/${activeClub.id}/competition/age-categories`, {
+        headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` },
+        cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => ({})) as { ageCategories?: AgeCategoryOption[] }
+      if (!cancelled) {
+        setAgeCategories(response.ok ? (payload.ageCategories ?? []).filter((category) => category.is_active) : [])
+        setLoadingAgeCategories(false)
+      }
+    })
+    return () => { cancelled = true }
+  }, [activeClub?.id])
+
+  useEffect(() => {
+    if (!competitionSeriesId || !activeClub?.id) return
+    let cancelled = false
+    void supabase.auth.getSession().then(async ({ data }) => {
+      const response = await fetch(`/api/clubs/${activeClub.id}/competition/series/${competitionSeriesId}/date-creation`, {
+        headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` }, cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => ({})) as { context?: CompetitionDateContext; error?: string }
+      if (cancelled) return
+      if (!response.ok || !payload.context) {
+        setCompetitionContextError(payload.error ?? 'No pudimos preparar esta fecha de circuito.')
+        setLoadingCompetitionContext(false)
+        return
+      }
+      const nextContext = payload.context
+      const firstDivision = nextContext.divisions[0]
+      if (!firstDivision) {
+        setCompetitionContextError('El circuito no tiene una división lista para crear fechas.')
+        setLoadingCompetitionContext(false)
+        return
+      }
+      setCompetitionContext(nextContext)
+      selectCompetitionDivision(firstDivision)
+      setLoadingCompetitionContext(false)
+    })
+    return () => { cancelled = true }
+  }, [activeClub?.id, competitionSeriesId])
+
+  useEffect(() => {
+    if (!isCompetitionDate || !activeClub?.id) return
+    let cancelled = false
+    void supabase.auth.getSession().then(async ({ data }) => {
+      const response = await fetch(`/api/clubs/${activeClub.id}/competition/event-tiers`, {
+        headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` }, cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => ({})) as { eventTiers?: EventTierOption[] }
+      const tiers = response.ok ? (payload.eventTiers ?? []).filter((tier) => tier.is_active) : []
+      if (!cancelled) {
+        setEventTiers(tiers)
+        setSelectedEventTierId((current) => current || tiers[0]?.id || '')
+      }
+    })
+    return () => { cancelled = true }
+  }, [activeClub?.id, isCompetitionDate])
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setMessage('')
@@ -676,34 +846,67 @@ export default function ClubNuevoTorneoPage() {
     }
 
     const tournamentConfig = buildTournamentConfigPayload(form)
-    const res = await fetch(`/api/clubs/${activeClub.id}/tournaments`, {
+    const tournamentPayload = {
+      name: form.name,
+      type: form.type,
+      gender: form.gender,
+      category_id: form.segmentType === 'LIBRES' ? Number(form.categoryId) : null,
+      category_rule: form.categoryRule,
+      category_sum_target: form.categoryRule === 'CATEGORY_SUM' ? Number(form.categorySumTarget) : null,
+      age_category_id: form.segmentType === 'LIBRES' ? null : form.ageCategoryId,
+      segment_type: tournamentConfig.segment_type,
+      segment: tournamentConfig.segment_type,
+      public_description: tournamentConfig.public_description,
+      prizes: tournamentConfig.prizes,
+      competition_system: tournamentConfig.competition_system,
+      venue_name: tournamentConfig.venue_name,
+      tournament_courts: tournamentConfig.tournament_courts,
+      schedule_config: tournamentConfig.schedule_config,
+      points_config: isCompetitionDate ? { ...tournamentConfig.points_config, enabled: false, editable: false, winner: 0, finalist: 0, semifinalist: 0, quarterfinalist: 0, eighthFinalist: 0, participation: 0 } : tournamentConfig.points_config,
+      group_tiebreakers: tournamentConfig.group_tiebreakers,
+      start_date: form.startDate,
+      end_date: form.endDate || null,
+      registration_deadline: form.registrationDeadline || null,
+      price_per_player: form.pricePerPlayer,
+      min_pairs: form.minPairs,
+      max_pairs: form.maxPairs || null,
+      flyer: buildFlyerPayload(preparedFlyerConfig, `${tournamentTypeLabel} ${tournamentGenderLabel}`),
+    }
+    const dateKey = competitionKeyRef.current || competitionIdempotencyKey || crypto.randomUUID()
+    if (isCompetitionDate && !competitionKeyRef.current) {
+      competitionKeyRef.current = dateKey
+      setCompetitionIdempotencyKey(dateKey)
+    }
+    const requestUrl = isCompetitionDate && competitionSeriesId
+      ? `/api/clubs/${activeClub.id}/competition/series/${competitionSeriesId}/date-creation`
+      : `/api/clubs/${activeClub.id}/tournaments`
+    const requestBody = isCompetitionDate && competitionContext && selectedCompetitionDivision
+      ? {
+          idempotencyKey: dateKey,
+          seriesRevision: competitionContext.series_revision,
+          seriesDivisionId: selectedCompetitionDivision.series_division_id,
+          ruleId: selectedCompetitionDivision.rule_id,
+          ruleRevision: selectedCompetitionDivision.rule_revision,
+          eventPayload: {
+            name: form.name,
+            event_type: 'STANDARD',
+            scoring_mode: 'POINTS',
+            event_tier_id: selectedEventTierId,
+            planned_starts_at: form.startDate || null,
+            planned_ends_at: form.endDate || form.startDate || null,
+            venue_name: form.venueName || null,
+            is_public: false,
+          },
+          tournamentPayload,
+        }
+      : tournamentPayload
+    const res = await fetch(requestUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        name: form.name,
-        type: form.type,
-        gender: form.gender,
-        category_id: Number(form.categoryId),
-        segment_type: tournamentConfig.segment_type,
-        segment: tournamentConfig.segment_type,
-        public_description: tournamentConfig.public_description,
-        competition_system: tournamentConfig.competition_system,
-        venue_name: tournamentConfig.venue_name,
-        tournament_courts: tournamentConfig.tournament_courts,
-        schedule_config: tournamentConfig.schedule_config,
-        points_config: tournamentConfig.points_config,
-        group_tiebreakers: tournamentConfig.group_tiebreakers,
-        start_date: form.startDate,
-        end_date: form.endDate || null,
-        registration_deadline: form.registrationDeadline || null,
-        price_per_player: form.pricePerPlayer,
-        min_pairs: form.minPairs,
-        max_pairs: form.maxPairs || null,
-        flyer: buildFlyerPayload(preparedFlyerConfig, `${tournamentTypeLabel} ${tournamentGenderLabel}`),
-      }),
+      body: JSON.stringify(requestBody),
     })
     const json = await res.json().catch(() => ({}))
 
@@ -715,7 +918,7 @@ export default function ClubNuevoTorneoPage() {
     }
 
     if (draftKey) localStorage.removeItem(draftKey)
-    router.replace('/club/torneos')
+    router.replace(isCompetitionDate && competitionSeriesId ? `/club/competition/series/${competitionSeriesId}` : '/club/torneos')
   }
 
   const flyerPreviewData = {
@@ -723,7 +926,9 @@ export default function ClubNuevoTorneoPage() {
     name: form.name,
     type: typeOptions.find((option) => option.value === form.type)?.label ?? form.type,
     gender: genderOptions.find((option) => option.value === form.gender)?.label ?? form.gender,
-    categoryLabel: `Categoria ${form.categoryId || '7'}`,
+    categoryLabel: form.segmentType === 'LIBRES'
+      ? (form.categoryRule === 'CATEGORY_SUM' ? `Suma ${form.categorySumTarget}` : formatCategoryOrdinal(form.categoryId || '7'))
+      : (ageCategories.find((category) => category.id === form.ageCategoryId)?.name ?? 'Edad por elegir'),
     publicDescription: form.publicDescription,
     segmentLabel: segmentOptions.find((option) => option.value === form.segmentType)?.label ?? form.segmentType,
     competitionSystemLabel: competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label ?? form.competitionSystem,
@@ -740,8 +945,8 @@ export default function ClubNuevoTorneoPage() {
         <div className="club-newHead">
           <div>
             <span className="club-kicker">Club Torneos</span>
-            <h1 className="club-title">Crear torneo</h1>
-            <p className="club-sub">Alta rápida para {activeClub?.name ?? 'tu club'}. El torneo queda como borrador.</p>
+            <h1 className="club-title">{isCompetitionDate ? 'Crear fecha' : 'Crear torneo'}</h1>
+            <p className="club-sub">{isCompetitionDate ? 'La fecha quedará vinculada al circuito como borrador.' : `Alta rápida para ${activeClub?.name ?? 'tu club'}. El torneo queda como borrador.`}</p>
           </div>
           <Link href="/club/torneos" className="club-secondaryBtn">Volver</Link>
         </div>
@@ -754,20 +959,36 @@ export default function ClubNuevoTorneoPage() {
         ) : null}
         {message ? <div className="club-message">{message}</div> : null}
 
+        {isCompetitionDate ? <aside className="club-competitionDateContext" aria-live="polite">
+          <span>FECHA DEL CIRCUITO</span>
+          {loadingCompetitionContext ? <strong>Preparando contexto…</strong> : competitionContextError ? <><strong>No se puede crear esta fecha</strong><p>{competitionContextError}</p></> : competitionContext && selectedCompetitionDivision ? <>
+            <strong>{competitionContext.series_name}</strong>
+            <p>{selectedCompetitionDivision.branch_name} · {selectedCompetitionDivision.segment_name} · {selectedCompetitionDivision.age_category_name ?? selectedCompetitionDivision.category_name ?? 'Categoría'}</p>
+            <small>{competitionContext.season.name} · Ranking y puntos administrados por el circuito</small>
+            {competitionContext.divisions.length > 1 ? <label><span>División del circuito</span><select value={selectedCompetitionDivisionId} onChange={(event) => { const division = competitionContext.divisions.find((item) => item.series_division_id === event.target.value); if (division) selectCompetitionDivision(division) }}>{competitionContext.divisions.map((division) => <option key={division.series_division_id} value={division.series_division_id}>{division.branch_name} · {division.segment_name} · {division.age_category_name ?? division.category_name ?? 'Categoría'}</option>)}</select></label> : null}
+            {eventTiers.length ? <label><span>Jerarquía de esta fecha</span><select value={selectedEventTierId} onChange={(event) => setSelectedEventTierId(event.target.value)}>{eventTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label> : null}
+          </> : null}
+        </aside> : null}
+
         <form className="club-formCard" onSubmit={submit}>
           <header className="club-mobileWizardHead">
-            <Link href="/club/torneos">← Crear torneo</Link>
+            <Link href={isCompetitionDate && competitionSeriesId ? `/club/competition/series/${competitionSeriesId}` : '/club/torneos'}>← {isCompetitionDate ? 'Crear fecha' : 'Crear torneo'}</Link>
             <div>
               <span>Paso {mobileStep} de 7</span>
               <strong>{mobileSteps[mobileStep - 1]}</strong>
             </div>
             <i aria-hidden="true"><span style={{ width: `${(mobileStep / 7) * 100}%` }} /></i>
+            <div className="club-mobileStepLegend" aria-label="Progreso del formulario">
+              <span>{mobileStep > 1 ? `✓ ${mobileSteps[mobileStep - 2]}` : '○ Inicio'}</span>
+              <strong>● {mobileSteps[mobileStep - 1]}</strong>
+              <span>{mobileStep < 7 ? `○ ${mobileSteps[mobileStep]}` : '✓ Listo'}</span>
+            </div>
           </header>
 
           <section className="club-formSection club-mobileStep" data-active={mobileStep === 1}>
             <div className="club-formSectionHead">
-              <span className="club-kicker">Identidad del torneo</span>
-              <p>Nombre y descripción pública.</p>
+              <span className="club-kicker">Presentación</span>
+              <p>¿Qué torneo vas a organizar?</p>
             </div>
             <div className="club-formSectionGrid">
               <label className="club-field club-field--span6">
@@ -787,58 +1008,108 @@ export default function ClubNuevoTorneoPage() {
                   className="club-textarea club-textarea--compact"
                   value={form.publicDescription}
                   onChange={(event) => updateField('publicDescription', event.target.value)}
-                  placeholder="Premios, condiciones o aclaraciones visibles."
+                  placeholder="Contá brevemente de qué se trata."
                   maxLength={280}
                   rows={2}
                 />
               </label>
+              <fieldset className="club-field club-field--span6 club-apbChoice">
+                <legend>Premios <small>Opcional</small></legend>
+                <label><input type="radio" name="prizes" checked={!form.prizesEnabled} onChange={() => updateField('prizesEnabled', false)} /><span>Sin premios</span></label>
+                <label><input type="radio" name="prizes" checked={form.prizesEnabled} onChange={() => updateField('prizesEnabled', true)} /><span>Entrega premios</span></label>
+              </fieldset>
+              {form.prizesEnabled ? <div className="club-formSectionGrid club-field--wide club-prizesGrid">
+                <label className="club-field club-field--span3"><span>🏆 Campeón</span><input className="px-input" value={form.championPrize} onChange={(event) => updateField('championPrize', event.target.value)} placeholder="Trofeo + $50.000" /></label>
+                <label className="club-field club-field--span3"><span>🥈 Subcampeón</span><input className="px-input" value={form.runnerUpPrize} onChange={(event) => updateField('runnerUpPrize', event.target.value)} placeholder="Paleta o voucher" /></label>
+              </div> : null}
             </div>
           </section>
 
           <section className="club-formSection club-formSection--soft club-mobileStep" data-active={mobileStep === 2}>
             <div className="club-formSectionHead">
-              <span className="club-kicker">Categoría y formato</span>
-              <p>Elegí cómo se jugará.</p>
+              <span className="club-kicker">Participantes</span>
+              <p>¿Quiénes juegan este torneo?</p>
             </div>
             <div className="club-formSectionGrid">
-              <label className="club-field club-field--span3">
-                <span>Tipo</span>
-                <select className="px-input" value={form.type} onChange={(event) => updateField('type', event.target.value as TournamentType)}>
-                  {typeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
+              <div className="club-field--wide">
+                <ChoiceChips
+                  label="Género"
+                  value={form.gender}
+                  options={genderOptions}
+                  onChange={(gender) => updateField('gender', gender)}
+                  disabled={isCompetitionDate}
+                />
+              </div>
+              <div className="club-field--wide">
+                <ChoiceChips
+                  label="Grupo"
+                  value={form.segmentType}
+                  options={segmentOptions}
+                  onChange={(segmentType) => setForm((current) => ({ ...current, segmentType, ageCategoryId: '', categoryRule: 'FIXED_CATEGORY' }))}
+                  disabled={isCompetitionDate}
+                />
+              </div>
 
-              <label className="club-field club-field--span3">
-                <span>Segmento</span>
-                <select className="px-input" value={form.segmentType} onChange={(event) => updateField('segmentType', event.target.value as TournamentSegment)}>
-                  {segmentOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
+              {form.segmentType === 'LIBRES' ? <div className="club-field--wide">
+                <ChoiceChips
+                  label="Categoría"
+                  value={form.categoryId}
+                  options={[8, 7, 6, 5, 4, 3, 2, 1].map((category) => ({ value: String(category), label: formatCategoryOrdinal(category) }))}
+                  onChange={(categoryId) => updateField('categoryId', categoryId)}
+                  disabled={isCompetitionDate}
+                />
+              </div> : null}
 
-              <label className="club-field club-field--span4">
-                <span>Categoría</span>
-                <select className="px-input" value={form.categoryId} onChange={(event) => updateField('categoryId', event.target.value)}>
-                  {[7, 6, 5, 4, 3, 2, 1].map((category) => <option key={category} value={category}>Categoría {category}</option>)}
-                </select>
-              </label>
+              {form.segmentType !== 'LIBRES' ? (() => {
+                const options = ageCategories.filter((category) => form.segmentType === 'MENORES'
+                  ? category.max_age !== null && category.max_age <= 18
+                  : category.min_age !== null && category.min_age >= 18)
+                return options.length ? <div className="club-field--wide">
+                  <ChoiceChips
+                    label="Categoría de edad"
+                    value={form.ageCategoryId}
+                    options={options.map((category) => ({ value: category.id, label: category.name }))}
+                    onChange={(ageCategoryId) => updateField('ageCategoryId', ageCategoryId)}
+                    disabled={isCompetitionDate}
+                  />
+                </div> : <div className="club-field club-field--wide club-ageEmpty">
+                  <strong>{loadingAgeCategories ? 'Cargando categorías…' : 'No hay categorías de edad configuradas'}</strong>
+                  {!loadingAgeCategories ? <><span>Configurá las opciones del club antes de crear este torneo.</span><Link href="/club/competition">Ir a Competencia</Link></> : null}
+                </div>
+              })() : null}
 
-              <label className="club-field club-field--span4">
-                <span>Género</span>
-                <select className="px-input" value={form.gender} onChange={(event) => updateField('gender', event.target.value as TournamentGender)}>
-                  {genderOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
+              {form.segmentType === 'LIBRES' ? <div className="club-field--wide">
+                <ChoiceChips
+                  label="Modalidad"
+                  value={form.categoryRule}
+                  options={[
+                    { value: 'FIXED_CATEGORY', label: 'Categoría fija' },
+                    { value: 'CATEGORY_SUM', label: 'Suma XX' },
+                  ]}
+                  onChange={(categoryRule) => updateField('categoryRule', categoryRule)}
+                  disabled={isCompetitionDate}
+                />
+              </div> : null}
+              {form.segmentType === 'LIBRES' && form.categoryRule === 'CATEGORY_SUM' ? <label className="club-field club-field--span4"><span>Suma de la pareja</span><input className="px-input" inputMode="numeric" min="2" max="16" value={form.categorySumTarget} onChange={(event) => updateField('categorySumTarget', event.target.value)} placeholder="13" /></label> : null}
 
-              <label className="club-field club-field--span4">
-                <span>Sistema de competencia</span>
-                <select className="px-input" value={form.competitionSystem} onChange={(event) => updateField('competitionSystem', event.target.value as CompetitionSystem)}>
-                  {competitionSystemOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
+              <div className="club-liveSummary club-field--wide">{genderOptions.find(option => option.value === form.gender)?.label} · {segmentOptions.find(option => option.value === form.segmentType)?.label} · {form.segmentType === 'LIBRES' ? (form.categoryRule === 'CATEGORY_SUM' ? `Suma ${form.categorySumTarget}` : formatCategoryOrdinal(form.categoryId)) : (ageCategories.find((category) => category.id === form.ageCategoryId)?.name ?? 'Edad por elegir')}</div>
             </div>
           </section>
 
           <section className="club-formSection club-mobileStep" data-active={mobileStep === 3}>
+            <div className="club-formSectionHead"><span className="club-kicker">Competencia</span><p>¿Cómo se juega?</p></div>
+            <div className="club-formSectionGrid">
+              <div className="club-field--wide">
+                <ChoiceChips label="Jerarquía" value={form.type} options={typeOptions} onChange={(type) => updateField('type', type)} />
+              </div>
+              <div className="club-field--wide">
+                <ChoiceChips label="Formato" value={form.competitionSystem} options={competitionSystemOptions} onChange={(competitionSystem) => updateField('competitionSystem', competitionSystem)} />
+              </div>
+              <details className="club-mobileSecondary club-field--wide"><summary>Tabla de puntos <small>Opciones avanzadas</small></summary><div className="club-mobileSecondaryContent"><label className="club-checkRow club-checkRow--wide"><input type="checkbox" checked={form.pointsEnabled} onChange={(event) => updateField('pointsEnabled', event.target.checked)} /><span>Este torneo asigna puntos</span></label></div></details>
+            </div>
+          </section>
+
+          <section className="club-formSection club-mobileStep" data-active={mobileStep === 4}>
             <div className="club-formSectionHead">
               <span className="club-kicker">Fechas e inscripción</span>
               <p>Definí fechas, cupos y precio.</p>
@@ -876,9 +1147,9 @@ export default function ClubNuevoTorneoPage() {
             </div>
           </section>
 
-          <section className="club-formSection club-formSection--highlight club-mobileStep" data-active={mobileStep === 4}>
+          <section className="club-formSection club-formSection--highlight club-mobileStep" data-active={mobileStep === 5}>
             <div className="club-formSectionHead">
-              <span className="club-kicker">Sede y canchas</span>
+              <span className="club-kicker">Sede y organización</span>
               <p>Elegí dónde se va a jugar.</p>
             </div>
             <div className="club-formSectionGrid club-venueRow">
@@ -982,16 +1253,14 @@ export default function ClubNuevoTorneoPage() {
 
           <section className="club-formSection club-mobileStep" data-active={mobileStep === 5}>
             <div className="club-formSectionHead">
-              <span className="club-kicker">Formato deportivo</span>
+              <span className="club-kicker">Horarios y partidos</span>
               <p>Planificación, duración y ventanas de juego.</p>
             </div>
             <div className="club-formSectionGrid">
-              <label className="club-field club-field--span3 club-field--compact">
-                <span>Modo de planificación</span>
-                <select className="px-input" value={form.scheduleMode} onChange={(event) => updateField('scheduleMode', event.target.value as ScheduleMode)}>
-                  {scheduleModeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
+              <div className="club-field--wide">
+                <ChoiceChips label="Planificación" value={form.scheduleMode} options={scheduleModeOptions} onChange={(scheduleMode) => updateField('scheduleMode', scheduleMode)} />
+                <p className="club-choiceHint">{form.scheduleMode === 'AUTO' ? 'SELPA propone el orden y los horarios; después podés ajustarlos.' : 'Vas a definir el orden y los horarios desde el torneo.'}</p>
+              </div>
 
               <label className="club-field club-field--span3 club-field--compact">
                 <span>Duración partido</span>
@@ -1105,7 +1374,7 @@ export default function ClubNuevoTorneoPage() {
             </details>
           </section>
 
-          <section className="club-formSection club-mobileStep" data-active={mobileStep === 6}>
+          <section className="club-formSection club-mobileStep club-desktopPoints" data-active={false}>
             <div className="club-formSectionHead">
               <span className="club-kicker">Puntaje</span>
               <p>Revisá la escala y editála solo si hace falta.</p>
@@ -1176,12 +1445,13 @@ export default function ClubNuevoTorneoPage() {
 
           <section
             className="club-formSection club-mobileStep club-reviewStep"
-            data-active={mobileStep === 7}
+            data-active={mobileStep === 6 || mobileStep === 7}
+            data-current-step={mobileStep}
             data-flyer-editor-open={flyerEditorOpen}
           >
             <div className="club-formSectionHead">
-              <span className="club-kicker">Identidad visual y revisión</span>
-              <p>Elegí el flyer y confirmá los datos antes de crear el borrador.</p>
+              <span className="club-kicker">{mobileStep === 6 ? 'Publicación' : 'Revisión final'}</span>
+              <p>{mobileStep === 6 ? '¿Cómo querés presentar el torneo?' : 'Revisá el torneo antes de crearlo.'}</p>
             </div>
             <div className="club-mobileFlyerOverview">
               <div className="club-mobileFlyerPrimaryPreview">
@@ -1263,36 +1533,45 @@ export default function ClubNuevoTorneoPage() {
             </details>
 
             <div className="club-review">
-              <ReviewBlock title="Identidad" step={1} onEdit={beginContextualEdit}>
+              {isCompetitionDate && competitionContext && selectedCompetitionDivision ? <article>
+                <div><span>Circuito</span></div>
+                <strong>{competitionContext.series_name}</strong>
+                <span>{selectedCompetitionDivision.branch_name} · {selectedCompetitionDivision.segment_name} · {selectedCompetitionDivision.age_category_name ?? selectedCompetitionDivision.category_name ?? 'Categoría'} · {competitionContext.season.name}</span>
+              </article> : null}
+              <ReviewBlock title="Información" step={1} onEdit={beginContextualEdit}>
                 <strong>{form.name || 'Sin nombre'}</strong>
                 <span>{form.publicDescription || 'Sin descripción pública'}</span>
               </ReviewBlock>
-              <ReviewBlock title="Competencia" step={2} onEdit={beginContextualEdit}>
-                <strong>Categoría {form.categoryId} · {genderOptions.find((option) => option.value === form.gender)?.label}</strong>
+              <ReviewBlock title="Participantes" step={2} onEdit={beginContextualEdit}>
+                <strong>{genderOptions.find((option) => option.value === form.gender)?.label} · {segmentOptions.find((option) => option.value === form.segmentType)?.label}</strong>
+                <span>{form.segmentType === 'LIBRES' ? (form.categoryRule === 'CATEGORY_SUM' ? `Suma ${form.categorySumTarget}` : formatCategoryOrdinal(form.categoryId)) : (ageCategories.find((category) => category.id === form.ageCategoryId)?.name ?? 'Edad por elegir')}</span>
+              </ReviewBlock>
+              <ReviewBlock title="Competencia" step={3} onEdit={beginContextualEdit}>
+                <strong>{typeOptions.find((option) => option.value === form.type)?.label}</strong>
                 <span>{competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label}</span>
               </ReviewBlock>
-              <ReviewBlock title="Fechas e inscripción" step={3} onEdit={beginContextualEdit}>
+              <ReviewBlock title="Fechas e inscripción" step={4} onEdit={beginContextualEdit}>
                 <strong>{form.startDate || 'Sin inicio'}{form.endDate ? ` → ${form.endDate}` : ''}</strong>
                 <span>{form.maxPairs ? `${form.minPairs}–${form.maxPairs} parejas` : `Desde ${form.minPairs} parejas`} · {form.pricePerPlayer === '0' ? 'Sin costo' : `$ ${form.pricePerPlayer}`}</span>
               </ReviewBlock>
-              <ReviewBlock title="Sede" step={4} onEdit={beginContextualEdit}>
+              <ReviewBlock title="Sede y organización" step={5} onEdit={beginContextualEdit}>
                 <strong>{form.venueName || 'Sede por definir'}</strong>
-                <span>{form.tournamentCourts.length ? `${form.tournamentCourts.length} cancha${form.tournamentCourts.length === 1 ? '' : 's'}` : 'Canchas por configurar'}</span>
+                <span>{form.tournamentCourts.length ? `${form.tournamentCourts.length} cancha${form.tournamentCourts.length === 1 ? '' : 's'}` : 'Canchas por configurar'} · {scheduleModeOptions.find((option) => option.value === form.scheduleMode)?.label}</span>
               </ReviewBlock>
-              <ReviewBlock title="Formato y puntaje" step={5} onEdit={beginContextualEdit}>
-                <strong>{scheduleModeOptions.find((option) => option.value === form.scheduleMode)?.label} · {form.matchDurationMinutes} min</strong>
-                <span>{competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label}</span>
+              <ReviewBlock title="Premios" step={1} onEdit={beginContextualEdit}>
+                <strong>{form.prizesEnabled ? form.championPrize || 'Premio de campeón por definir' : 'Sin premios'}</strong>
+                <span>{form.prizesEnabled ? form.runnerUpPrize || 'Premio de subcampeón por definir' : 'No se anuncian premios'}</span>
               </ReviewBlock>
-              <ReviewBlock title="Puntaje" step={6} onEdit={beginContextualEdit}>
-                <strong>{form.pointsEnabled ? `${form.pointsWinner} puntos al ganador` : 'Sin puntaje'}</strong>
-                <span>{form.pointsEnabled ? `${form.pointsFinalist} al finalista · ${form.pointsParticipation} por participación` : 'No asigna puntos'}</span>
+              <ReviewBlock title="Flyer" step={6} onEdit={beginContextualEdit}>
+                <strong>{flyerConfig.mode === 'NONE' ? 'Sin flyer' : flyerConfig.mode === 'MANUAL' ? 'Flyer manual' : 'Flyer automático'}</strong>
+                <span>Podés volver a Publicación para modificarlo.</span>
               </ReviewBlock>
             </div>
           </section>
 
           <div className="club-formActions">
             <button type="submit" className="club-primaryBtn" disabled={saving}>
-              {saving ? 'Creando...' : 'Crear torneo'}
+              {saving ? 'Creando...' : isCompetitionDate ? 'Crear fecha' : 'Crear torneo'}
             </button>
             <Link href="/club/torneos" className="club-secondaryBtn">Cancelar</Link>
           </div>
@@ -1309,7 +1588,7 @@ export default function ClubNuevoTorneoPage() {
             {mobileStep < 7 ? (
               <button type="button" className="club-primaryBtn" onClick={(event) => { event.preventDefault(); goToNextMobileStep() }}>Siguiente →</button>
             ) : (
-              <button type="submit" className="club-primaryBtn" disabled={saving}>{saving ? 'Creando...' : 'Crear torneo'}</button>
+              <button type="submit" className="club-primaryBtn" disabled={saving || Boolean(competitionContextError) || loadingCompetitionContext}>{saving ? 'Creando...' : isCompetitionDate ? 'Crear fecha' : 'Crear torneo'}</button>
             )}
               </>
             )}
@@ -1318,6 +1597,14 @@ export default function ClubNuevoTorneoPage() {
       </div>
 
       <style>{`
+        .club-competitionDateContext { background:#f2f8ff; border:1px solid color-mix(in srgb, var(--club-admin-accent) 25%, #cbd5e1); border-radius:14px; display:grid; gap:3px; margin:0 0 12px; padding:11px 13px; }
+        .club-competitionDateContext > span { color:var(--club-admin-accent); font-size:10px; font-weight:900; letter-spacing:.08em; }
+        .club-competitionDateContext strong { color:#0b2545; font-size:15px; }
+        .club-competitionDateContext p,.club-competitionDateContext small { color:#52657a; margin:0; }
+        .club-competitionDateContext p { font-size:12px; font-weight:700; }
+        .club-competitionDateContext small { font-size:11px; }
+        .club-competitionDateContext label { align-items:center; display:flex; font-size:11px; font-weight:800; gap:8px; justify-content:space-between; margin-top:5px; }
+        .club-competitionDateContext select { background:#fff; border:1px solid #cbd5e1; border-radius:9px; color:#17314f; font:inherit; max-width:64%; min-height:36px; padding:0 7px; }
         .club-newTournament {
           background: #fff;
           border: 1px solid rgba(15,23,42,.08);
@@ -1357,6 +1644,13 @@ export default function ClubNuevoTorneoPage() {
         .club-tiebreakerGrid { display: grid; gap: 8px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
         .club-inlineNote--compact { margin-top: 8px; padding: 8px 10px; }
         .club-field { color: #17253f; display: grid; font-size: 13px; font-weight: 900; gap: 6px; min-width: 0; }
+        .club-choiceField { display:grid; gap:7px; min-width:0; }
+        .club-choiceField > span { color:#17253f; font-size:13px; font-weight:900; }
+        .club-choiceChips { display:flex; flex-wrap:wrap; gap:7px; min-width:0; }
+        .club-choiceChips button { background:#fff; border:1px solid rgba(15,23,42,.14); border-radius:12px; color:#395069; cursor:pointer; font:inherit; font-size:12px; font-weight:900; min-height:38px; padding:7px 12px; transition:border-color .16s ease, box-shadow .16s ease, color .16s ease; }
+        .club-choiceChips button:hover, .club-choiceChips button:focus-visible { border-color:color-mix(in srgb,var(--club-admin-accent) 52%,transparent); box-shadow:0 0 0 3px var(--club-admin-soft); color:#071a35; outline:none; }
+        .club-choiceChips button.is-active { background:color-mix(in srgb,var(--club-admin-accent) 9%,white); border-color:var(--club-admin-accent); box-shadow:inset 0 -2px 0 var(--club-admin-accent); color:#071a35; }
+        .club-choiceHint { color:#64748b; font-size:12px; font-weight:750; line-height:1.4; margin:0; }
         .club-kicker { color: var(--club-admin-accent); font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
         .club-field .px-input { background: #fff; border-color: rgba(15,23,42,.10); border-radius: 12px; min-height: 36px; }
         .club-field .px-input:focus { border-color: color-mix(in srgb, var(--club-admin-accent) 45%, transparent); box-shadow: 0 0 0 3px var(--club-admin-soft); outline: none; }
@@ -1550,6 +1844,27 @@ export default function ClubNuevoTorneoPage() {
           .club-mobileWizardHead > div strong { color: #071a35; font-size: 13px; line-height: 1.15; text-align: right; }
           .club-mobileWizardHead > i { background: #e8edf2; border-radius: 999px; display: block; height: 3px; overflow: hidden; }
           .club-mobileWizardHead > i span { background: linear-gradient(90deg,var(--club-admin-accent),var(--club-admin-accent-2)); border-radius: inherit; display: block; height: 100%; transition: width .2s ease; }
+          .club-mobileWizardHead .club-mobileStepLegend { align-items:center; display:grid; gap:5px; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); margin-top:3px; }
+          .club-mobileWizardHead .club-mobileStepLegend span { font-size:9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+          .club-mobileWizardHead .club-mobileStepLegend span:last-child { text-align:right; }
+          .club-mobileWizardHead .club-mobileStepLegend strong { color:#071a35; font-size:10px; text-align:center; white-space:nowrap; }
+          .club-choiceChips { flex-wrap:nowrap; margin-right:-2px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+          .club-choiceChips::-webkit-scrollbar { display:none; }
+          .club-choiceChips button { flex:0 0 auto; min-height:42px; padding-inline:13px; }
+          .club-choiceField > span { font-size:12px; }
+          .club-apbChoice { border:0; display:grid; gap:7px; margin:0; padding:0; }
+          .club-apbChoice legend { color:#30455f; font-size:12px; font-weight:900; margin-bottom:4px; }
+          .club-apbChoice legend small { color:#64748b; font-weight:750; }
+          .club-apbChoice label { align-items:center; border:1px solid rgba(148,163,184,.26); border-radius:12px; display:flex; gap:9px; min-height:44px; padding:0 11px; }
+          .club-prizesGrid { gap:8px; }
+          .club-liveSummary { background:#f1f7ec; border:1px solid color-mix(in srgb,var(--club-admin-accent) 28%,transparent); border-radius:12px; color:#193654; font-size:13px; font-weight:900; padding:10px 12px; }
+          .club-ageEmpty { background:#fff8e8; border:1px solid rgba(217,151,28,.24); border-radius:12px; display:grid; gap:4px; padding:11px; }
+          .club-ageEmpty strong { color:#5f430c; font-size:13px; }
+          .club-ageEmpty span { color:#765d29; font-size:12px; }
+          .club-ageEmpty a { color:#075985; font-size:12px; font-weight:900; min-height:36px; align-items:center; display:inline-flex; width:fit-content; }
+          .club-reviewStep[data-current-step="6"] .club-review { display:none; }
+          .club-reviewStep[data-current-step="7"] .club-mobileFlyerOverview,
+          .club-reviewStep[data-current-step="7"] .club-desktopFlyerConfigurator { display:none; }
           .club-mobileStep { display: none; }
           .club-mobileStep[data-active="true"] { display: grid; }
           .club-mobileConditional[data-mobile-hidden="true"] { display: none !important; }

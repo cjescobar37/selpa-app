@@ -318,28 +318,27 @@ export default function ClubPage() {
       <div className="club-panel club-dashboard" style={themeStyle}>
         <div className="club-dashboardHead">
           <div>
-            <span className="club-kicker">Resumen operativo</span>
-            <h1 className="club-title">Dashboard del club</h1>
+            <span className="club-kicker">Centro operativo</span>
+            <h1 className="club-title">Buen día</h1>
             <p className="club-sub">{club.name} · {[club.city, club.province].filter(Boolean).join(' · ') || 'Sin ubicación cargada'}</p>
           </div>
           <span className={`club-mainBadge club-mainBadge--${statusCopy[club.status].tone}`}>{statusLabel(club.status)}</span>
         </div>
 
-        <StatusPanel club={club} />
+        {!isActive ? <StatusPanel club={club} /> : null}
 
         <section className="club-metricsGrid" aria-label="Resumen operativo">
+          <MetricCard label="Solicitudes pendientes" value={summary.counts.pending_player_requests} href="/club/solicitudes" />
+          <MetricCard label="Torneos en curso" value={summary.counts.active_or_upcoming_tournaments} href="/club/torneos" />
           <MetricCard label="Jugadores activos" value={summary.counts.active_players} href="/club/jugadores" />
-          <MetricCard label="Solicitudes pendientes" value={summary.counts.pending_player_requests} href="/club/jugadores" />
-          <MetricCard label="Staff interno" value={summary.counts.internal_staff} href="/club/usuarios" />
-          <MetricCard label="Torneos activos o próximos" value={summary.counts.active_or_upcoming_tournaments} href="/club/torneos" />
         </section>
 
         <section className="club-dashboardGrid">
           <div className="club-card">
             <div className="club-cardHead">
               <div>
-                <span className="club-kicker">Operación</span>
-                <h2>Torneos activos o próximos</h2>
+              <span className="club-kicker">Próximamente</span>
+                <h2>Actividad del club</h2>
               </div>
               <Link href="/club/torneos" className="club-cardLink">Ver torneos</Link>
             </div>
@@ -363,15 +362,15 @@ export default function ClubPage() {
           <div className="club-card">
             <div className="club-cardHead">
               <div>
-                <span className="club-kicker">Accesos rápidos</span>
-                <h2>{isActive ? 'Gestionar club' : 'Preparar aprobación'}</h2>
+              <span className="club-kicker">Acciones principales</span>
+                <h2>{isActive ? '¿Qué querés hacer?' : 'Preparar aprobación'}</h2>
               </div>
             </div>
             <div className="club-actionsGrid">
-              <Link href="/club/jugadores" className="club-action">Jugadores y solicitudes</Link>
-              <Link href="/club/configuracion" className="club-action">Configuración del club</Link>
-              <Link href="/club/torneos" className={`club-action ${!isActive ? 'is-muted' : ''}`}>Torneos</Link>
-              <Link href="/club/mensajes" className="club-action">Contactar superadmin</Link>
+              <Link href="/club/torneos/nuevo" className={`club-action ${!isActive ? 'is-muted' : ''}`}>+ Crear torneo</Link>
+              <Link href="/club/competition/series/new" className={`club-action ${!isActive ? 'is-muted' : ''}`}>+ Crear circuito</Link>
+              <Link href="/club/torneos/calendario" className="club-action">Ver agenda</Link>
+              <Link href="/club/jugadores" className="club-action">Gestionar jugadores</Link>
             </div>
           </div>
         </section>

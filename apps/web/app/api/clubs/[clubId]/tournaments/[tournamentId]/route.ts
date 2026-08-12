@@ -23,6 +23,9 @@ type UpdateDraftInput = {
   gender?: unknown
   segment?: unknown
   category_id?: unknown
+  category_rule?: unknown
+  category_sum_target?: unknown
+  age_category_id?: unknown
   segment_type?: unknown
   public_description?: unknown
   competition_system?: unknown
@@ -93,10 +96,6 @@ function normalizeObject(value: unknown) {
   return value as Record<string, unknown>
 }
 
-function normalizeArray(value: unknown) {
-  return Array.isArray(value) ? value : []
-}
-
 function buildFlyerRules(value: unknown) {
   const flyer = normalizeObject(value)
   const nullableInteger = (input: unknown) => {
@@ -150,6 +149,20 @@ function buildFlyerRules(value: unknown) {
   }
 }
 
+async function validateAgeCategorySelection(clubId: string, segment: string, ageCategoryId: string | null) {
+  if (segment === 'LIBRES') return ageCategoryId ? 'Libres no admite categoría de edad.' : null
+  if (!ageCategoryId) return 'Seleccioná una categoría de edad.'
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ageCategoryId)) return 'La categoría de edad es inválida.'
+  const { data, error } = await supabaseAdmin.from('competition_age_categories')
+    .select('id,min_age,max_age,is_active,age_reference_rule').eq('id', ageCategoryId).eq('club_id', clubId).maybeSingle()
+  if (error) throw error
+  if (!data || !data.is_active) return 'La categoría de edad no está disponible para este club.'
+  if (!['EVENT_START_DATE', 'CALENDAR_YEAR_END', 'FIXED_DATE'].includes(String(data.age_reference_rule))) return 'La regla de edad no es compatible con un torneo independiente.'
+  if (segment === 'MENORES' && (data.max_age === null || Number(data.max_age) > 18)) return 'Seleccioná una categoría configurada para menores.'
+  if (segment === 'VETERANOS' && (data.min_age === null || Number(data.min_age) < 18)) return 'Seleccioná una categoría configurada para veteranos.'
+  return null
+}
+
 function buildTournamentConfigRules(value: UpdateDraftInput) {
   const segmentType = normalizeText(value.segment_type ?? value.segment) ?? 'LIBRES'
   const publicDescription = normalizeText(value.public_description)
@@ -198,6 +211,10 @@ function validateDraftPayload(body: UpdateDraftInput) {
   const type = normalizeText(body.type) ?? 'OPEN'
   const gender = normalizeText(body.gender) ?? 'MALE'
   const categoryId = normalizeInteger(body.category_id, 0)
+  const segmentType = normalizeText(body.segment_type ?? body.segment) ?? 'LIBRES'
+  const categoryRule = normalizeText(body.category_rule) === 'CATEGORY_SUM' ? 'CATEGORY_SUM' : 'FIXED_CATEGORY'
+  const categorySumTarget = normalizeInteger(body.category_sum_target, 0)
+  const ageCategoryId = normalizeText(body.age_category_id)
   const startDate = normalizeDate(body.start_date)
   const endDate = normalizeDate(body.end_date)
   const registrationDeadline = normalizeDateTime(body.registration_deadline)
@@ -210,7 +227,9 @@ function validateDraftPayload(body: UpdateDraftInput) {
   if (!name) return { error: 'El nombre es obligatorio.' }
   if (!tournamentTypes.includes(type as typeof tournamentTypes[number])) return { error: 'Tipo de torneo inválido.' }
   if (!tournamentGenders.includes(gender as typeof tournamentGenders[number])) return { error: 'Género de torneo inválido.' }
-  if (!Number.isInteger(categoryId) || categoryId < 1 || categoryId > 7) return { error: 'La categoría debe estar entre 1 y 7.' }
+  if (segmentType === 'LIBRES' && categoryRule === 'FIXED_CATEGORY' && (!Number.isInteger(categoryId) || categoryId < 1 || categoryId > 8)) return { error: 'La categoría debe estar entre 1 y 8.' }
+  if (segmentType !== 'LIBRES' && categoryRule === 'CATEGORY_SUM') return { error: 'Suma XX solo está disponible para Libres.' }
+  if (categoryRule === 'CATEGORY_SUM' && (!Number.isInteger(categorySumTarget) || categorySumTarget < 2 || categorySumTarget > 16)) return { error: 'La suma debe estar entre 2 y 16.' }
   if (!startDate) return { error: 'La fecha de inicio es obligatoria.' }
   if (endDate && endDate < startDate) return { error: 'La fecha fin no puede ser anterior al inicio.' }
   if (registrationDeadline && registrationDeadline.slice(0, 10) > startDate) return { error: 'El cierre de inscripción no puede ser posterior al inicio.' }
@@ -224,6 +243,10 @@ function validateDraftPayload(body: UpdateDraftInput) {
       type,
       gender,
       categoryId,
+      categoryRule,
+      categorySumTarget,
+      ageCategoryId,
+      segmentType,
       startDate,
       endDate,
       registrationDeadline,
@@ -439,6 +462,8 @@ export async function PATCH(
       }
 
       const draft = validation.value
+      const ageCategoryError = await validateAgeCategorySelection(clubId, draft.segmentType, draft.ageCategoryId)
+      if (ageCategoryError) return NextResponse.json({ error: ageCategoryError, code: 'VALIDATION_ERROR' }, { status: 400 })
       const flyerRules = buildFlyerRules(body.flyer)
       const tournamentConfigRules = buildTournamentConfigRules(body)
       const currentRules = normalizeObject(current.rules_json ?? current.rules ?? {})
@@ -448,11 +473,12 @@ export async function PATCH(
         tournament_type: draft.type,
         gender: draft.gender,
         segment: tournamentConfigRules.segment_type,
-        category_id: draft.categoryId,
-        category: draft.categoryId,
-        category_rule: 'FIXED_CATEGORY',
-        fixed_category_id: draft.categoryId,
-        category_sum_target: null,
+        category_id: draft.segmentType === 'LIBRES' ? draft.categoryId : null,
+        category: draft.segmentType === 'LIBRES' ? draft.categoryId : null,
+        category_rule: draft.categoryRule,
+        fixed_category_id: draft.segmentType === 'LIBRES' && draft.categoryRule === 'FIXED_CATEGORY' ? draft.categoryId : null,
+        category_sum_target: draft.categoryRule === 'CATEGORY_SUM' ? draft.categorySumTarget : null,
+        age_category_id: draft.segmentType === 'LIBRES' ? null : draft.ageCategoryId,
         start_date: draft.startDate,
         starts_on: draft.startDate,
         end_date: draft.endDate,

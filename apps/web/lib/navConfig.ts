@@ -93,6 +93,7 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
         href: '/club/torneos',
         requiredAnyCapabilities: ['tournaments:create', 'tournaments:update', 'registrations:manage', 'groups:generate', 'playoff:generate'],
         children: [
+          { label: 'Gestión', href: '/club/torneos', requiredAnyCapabilities: ['tournaments:view'] },
           { label: 'Calendario', href: '/club/torneos/calendario', requiredAnyCapabilities: ['tournaments:view'] },
           { label: 'Crear torneo', href: '/club/torneos/nuevo', requiredAnyCapabilities: ['tournaments:create'] },
           { label: 'Reglamento', href: '/club/reglamento', requiredAnyCapabilities: ['news:manage', 'club:update'] },
@@ -104,11 +105,12 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
         requiredAnyCapabilities: ['players:view', 'ranking:view', 'memberships:view'],
         children: [
           { label: 'Gestión', href: '/club/jugadores', requiredAnyCapabilities: ['players:view'] },
+          { label: 'Solicitudes', href: '/club/solicitudes', requiredAnyCapabilities: ['memberships:view'] },
           { label: 'Ranking', href: '/club/ranking', requiredAnyCapabilities: ['ranking:view'] },
         ],
       },
       {
-        label: 'Competencia',
+        label: 'Competencias',
         href: '/club/competition',
         requiredAnyCapabilities: ['competition:view', 'competition:manage'],
       },
@@ -122,7 +124,6 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
           { label: 'Configuración', href: '/club/configuracion', requiredAnyCapabilities: ['club:update', 'club:branding'] },
           { label: 'Finanzas', href: '/club/contabilidad', requiredAnyCapabilities: ['finance:view', 'finance:manage'] },
           { label: 'Estadísticas', href: '/club/estadisticas', requiredAnyCapabilities: ['reports:operational_view'] },
-          { label: 'Reportes', href: '/club/reportes', requiredAnyCapabilities: ['finance:view', 'memberships:view'] },
         ],
       },
       {

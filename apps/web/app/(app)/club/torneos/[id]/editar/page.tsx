@@ -22,7 +22,13 @@ type TournamentType = 'OPEN' | 'CHALLENGER' | 'MASTER' | 'MASTER_FINAL'
 type TournamentGender = 'MALE' | 'FEMALE' | 'MIXED'
 type TournamentSegment = 'LIBRES' | 'MENORES' | 'VETERANOS'
 type CompetitionSystem = 'GROUPS_PLAYOFF' | 'ROUND_ROBIN' | 'SINGLE_ELIMINATION'
+type CategoryRule = 'FIXED_CATEGORY' | 'CATEGORY_SUM'
 type CourtSource = 'OWN_CLUB' | 'EXTERNAL_COMPLEX'
+
+function formatCategoryOrdinal(value: string | number) {
+  const labels: Record<number, string> = { 1: '1ra', 2: '2da', 3: '3ra', 4: '4ta', 5: '5ta', 6: '6ta', 7: '7ma', 8: '8va' }
+  return labels[Number(value)] ?? String(value)
+}
 
 type TournamentCourt = {
   id?: string
@@ -36,6 +42,9 @@ type FormState = {
   type: TournamentType
   gender: TournamentGender
   categoryId: string
+  categoryRule: CategoryRule
+  categorySumTarget: string
+  ageCategoryId: string
   segmentType: TournamentSegment
   competitionSystem: CompetitionSystem
   venueName: string
@@ -81,6 +90,9 @@ type TournamentSummary = {
     gender: string | null
     segment: string | null
     category_id: number | null
+    category_rule: string | null
+    category_sum_target: number | null
+    age_category_id: string | null
     start_date: string | null
     end_date: string | null
     registration_deadline: string | null
@@ -148,8 +160,8 @@ const typeOptions: Array<{ value: TournamentType; label: string }> = [
 ]
 
 const genderOptions: Array<{ value: TournamentGender; label: string }> = [
-  { value: 'MALE', label: 'Masculino' },
-  { value: 'FEMALE', label: 'Femenino' },
+  { value: 'MALE', label: 'Caballeros' },
+  { value: 'FEMALE', label: 'Damas' },
   { value: 'MIXED', label: 'Mixto' },
 ]
 
@@ -199,6 +211,7 @@ function buildFlyerPayload(config: FlyerConfig) {
     flyer_manual_height: config.manualFlyer?.height ?? null,
   }
 }
+type AgeCategoryOption = { id: string; name: string; min_age: number | null; max_age: number | null; is_active: boolean }
 
 async function prepareFlyerConfigForSubmit(config: FlyerConfig, clubId: string, tournamentId: string, tournamentTypeLabel: string) {
   const resolvedConfig = resolveAutoFlyerConfig(config, tournamentTypeLabel)
@@ -323,6 +336,9 @@ function formFromSummary(summary: TournamentSummary, rules?: Record<string, unkn
     type: toTournamentType(tournament.type),
     gender: toTournamentGender(tournament.gender),
     categoryId: String(tournament.category_id ?? 7),
+    categoryRule: tournament.category_rule === 'CATEGORY_SUM' ? 'CATEGORY_SUM' : 'FIXED_CATEGORY',
+    categorySumTarget: String(tournament.category_sum_target ?? 13),
+    ageCategoryId: tournament.age_category_id ?? '',
     segmentType: tournament.segment === 'MENORES' || tournament.segment === 'VETERANOS'
       ? tournament.segment
       : safeRules.segment_type === 'MENORES' || safeRules.segment_type === 'VETERANOS'
@@ -369,6 +385,7 @@ export default function EditClubTournamentPage() {
   const [form, setForm] = useState<FormState | null>(null)
   const [courtDraft, setCourtDraft] = useState<CourtDraftState>(initialCourtDraft)
   const [complexOptions, setComplexOptions] = useState<ClubComplexOption[]>([])
+  const [ageCategories, setAgeCategories] = useState<AgeCategoryOption[]>([])
   const [loadingComplexes, setLoadingComplexes] = useState(true)
   const [flyerConfig, setFlyerConfig] = useState<FlyerConfig>(defaultFlyerConfig)
   const [status, setStatus] = useState('')
@@ -391,7 +408,9 @@ export default function EditClubTournamentPage() {
     if (!activeClub?.id) next.push('Seleccioná un club activo.')
     if (!form.name.trim()) next.push('El nombre es obligatorio.')
     if (!form.startDate) next.push('La fecha de inicio es obligatoria.')
-    if (!Number.isInteger(categoryId) || categoryId < 1 || categoryId > 7) next.push('La categoría debe estar entre 1 y 7.')
+    if (form.segmentType === 'LIBRES' && form.categoryRule === 'FIXED_CATEGORY' && (!Number.isInteger(categoryId) || categoryId < 1 || categoryId > 8)) next.push('La categoría debe estar entre 1 y 8.')
+    if (form.segmentType === 'LIBRES' && form.categoryRule === 'CATEGORY_SUM' && (toInteger(form.categorySumTarget, 0) < 2 || toInteger(form.categorySumTarget, 0) > 16)) next.push('La suma debe estar entre 2 y 16.')
+    if (form.segmentType !== 'LIBRES' && !form.ageCategoryId) next.push('Seleccioná una categoría de edad.')
     if (!Number.isInteger(minPairs) || minPairs < 2) next.push('El mínimo de parejas debe ser al menos 2.')
     if (maxPairs !== null && (!Number.isInteger(maxPairs) || maxPairs < minPairs)) next.push('El máximo debe ser mayor o igual al mínimo.')
     if (!Number.isFinite(price) || price < 0) next.push('El precio debe ser mayor o igual a 0.')
@@ -632,6 +651,9 @@ export default function EditClubTournamentPage() {
         type: form.type,
         gender: form.gender,
         category_id: Number(form.categoryId),
+        category_rule: form.categoryRule,
+        category_sum_target: form.categoryRule === 'CATEGORY_SUM' ? Number(form.categorySumTarget) : null,
+        age_category_id: form.segmentType === 'LIBRES' ? null : form.ageCategoryId,
         segment_type: tournamentConfig.segment_type,
         segment: tournamentConfig.segment_type,
         public_description: tournamentConfig.public_description,
@@ -674,9 +696,21 @@ export default function EditClubTournamentPage() {
   }, [activeClub?.id, tournamentId])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadComplexOptions()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClub?.id, form?.venueName])
+
+  useEffect(() => {
+    if (!activeClub?.id) return
+    let cancelled = false
+    void supabase.auth.getSession().then(async ({ data }) => {
+      const response = await fetch(`/api/clubs/${activeClub.id}/competition/age-categories`, { headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` }, cache: 'no-store' })
+      const payload = await response.json().catch(() => ({})) as { ageCategories?: AgeCategoryOption[] }
+      if (!cancelled) setAgeCategories(response.ok ? (payload.ageCategories ?? []).filter((category) => category.is_active) : [])
+    })
+    return () => { cancelled = true }
+  }, [activeClub?.id])
 
   useEffect(() => {
     if (!form) return
@@ -685,6 +719,7 @@ export default function EditClubTournamentPage() {
     const nextPlayoffDate = form.playoffDate || form.endDate || form.startDate
     if (nextGroupsDate === form.groupsDate && nextPlayoffDate === form.playoffDate) return
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm((current) => current ? {
       ...current,
       groupsDate: current.groupsDate || current.startDate,
@@ -746,17 +781,17 @@ export default function EditClubTournamentPage() {
 
                 <label className="club-field club-field--span3">
                 <span>Segmento</span>
-                  <select className="px-input" value={form.segmentType} onChange={(event) => updateField('segmentType', event.target.value as TournamentSegment)}>
+                  <select className="px-input" value={form.segmentType} onChange={(event) => setForm((current) => current ? { ...current, segmentType: event.target.value as TournamentSegment, ageCategoryId: '', categoryRule: 'FIXED_CATEGORY' } : current)}>
                     {segmentOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
 
-                <label className="club-field club-field--span4">
+                {form.segmentType === 'LIBRES' ? <label className="club-field club-field--span4">
                   <span>Categoría</span>
                   <select className="px-input" value={form.categoryId} onChange={(event) => updateField('categoryId', event.target.value)}>
-                    {[7, 6, 5, 4, 3, 2, 1].map((category) => <option key={category} value={category}>Categoría {category}</option>)}
+                    {[8, 7, 6, 5, 4, 3, 2, 1].map((category) => <option key={category} value={category}>{formatCategoryOrdinal(category)}</option>)}
                   </select>
-                </label>
+                </label> : <label className="club-field club-field--span4"><span>Edad</span><select className="px-input" value={form.ageCategoryId} onChange={(event) => updateField('ageCategoryId', event.target.value)}><option value="">Seleccioná una opción</option>{ageCategories.filter((category) => form.segmentType === 'MENORES' ? category.max_age !== null && category.max_age <= 18 : category.min_age !== null && category.min_age >= 18).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>}
 
                 <label className="club-field club-field--span4">
                   <span>Género</span>
@@ -1109,7 +1144,7 @@ export default function EditClubTournamentPage() {
                   name: form.name,
                   type: typeOptions.find((option) => option.value === form.type)?.label ?? form.type,
                   gender: genderOptions.find((option) => option.value === form.gender)?.label ?? form.gender,
-                  categoryLabel: `Categoria ${form.categoryId || '7'}`,
+                  categoryLabel: `Categoria ${formatCategoryOrdinal(form.categoryId || '7')}`,
                   publicDescription: form.publicDescription,
                   segmentLabel: segmentOptions.find((option) => option.value === form.segmentType)?.label ?? form.segmentType,
                   competitionSystemLabel: competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label ?? form.competitionSystem,

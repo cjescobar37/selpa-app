@@ -30,6 +30,14 @@ function normalizeGender(value?: string | null) {
   return normalized || null
 }
 
+function ageAtDate(birthDate: string, referenceDate: string) {
+  const birth = new Date(`${birthDate.slice(0, 10)}T00:00:00Z`)
+  const reference = new Date(`${referenceDate.slice(0, 10)}T00:00:00Z`)
+  let age = reference.getUTCFullYear() - birth.getUTCFullYear()
+  if (reference.getUTCMonth() < birth.getUTCMonth() || (reference.getUTCMonth() === birth.getUTCMonth() && reference.getUTCDate() < birth.getUTCDate())) age -= 1
+  return age
+}
+
 const allowedPaymentMethods = new Set(['MERCADO_PAGO', 'CASH_ON_SITE_REQUEST', 'BANK_TRANSFER'])
 
 function isMissingSchemaObjectError(error: { code?: string; message?: string } | null | undefined) {
@@ -92,6 +100,8 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
     .maybeSingle()
 
   if (tournamentError) return NextResponse.json({ error: tournamentError.message }, { status: 500 })
+  // The Supabase generic is not available for this legacy select.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tournament = toTournamentView(tournamentRow as any)
   if (!tournament) return NextResponse.json({ error: 'Torneo no encontrado.' }, { status: 404 })
 
@@ -127,6 +137,31 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
     }
     if (Number(partner.category ?? 0) < tournamentCategory) {
       return NextResponse.json({ error: `La categoría de tu compañero no habilita este torneo (${tournamentCategory}).` }, { status: 409 })
+    }
+  }
+
+  if (tournament.ageCategoryId) {
+    const { data: ageCategory, error: ageCategoryError } = await supabaseAdmin
+      .from('competition_age_categories')
+      .select('id,club_id,min_age,max_age,age_reference_rule,age_reference_config')
+      .eq('id', tournament.ageCategoryId).eq('club_id', tournament.club_id).maybeSingle()
+    if (ageCategoryError) return NextResponse.json({ error: ageCategoryError.message }, { status: 500 })
+    if (!ageCategory) return NextResponse.json({ error: 'La categoría de edad del torneo ya no está disponible.' }, { status: 409 })
+    const { data: profiles, error: profilesError } = await supabaseAdmin.from('profiles').select('user_id,birth_date').in('user_id', [user.id, partnerUserId])
+    if (profilesError) return NextResponse.json({ error: profilesError.message }, { status: 500 })
+    const referenceRule = String(ageCategory.age_reference_rule)
+    const config = ageCategory.age_reference_config && typeof ageCategory.age_reference_config === 'object' ? ageCategory.age_reference_config as Record<string, unknown> : {}
+    const referenceDate = referenceRule === 'CALENDAR_YEAR_END'
+      ? `${new Date(`${tournament.startDate ?? tournament.endDate}T00:00:00Z`).getUTCFullYear()}-12-31`
+      : referenceRule === 'FIXED_DATE' ? String(config.date ?? '') : String(tournament.startDate ?? '')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(referenceDate)) return NextResponse.json({ error: 'La regla de edad del torneo no tiene una fecha válida.' }, { status: 409 })
+    for (const player of [{ id: user.id, label: 'Tu perfil' }, { id: partnerUserId, label: 'El perfil de tu compañero' }]) {
+      const birthDate = String((profiles ?? []).find(profile => String(profile.user_id) === player.id)?.birth_date ?? '')
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return NextResponse.json({ error: `${player.label} no tiene fecha de nacimiento completa.` }, { status: 409 })
+      const age = ageAtDate(birthDate, referenceDate)
+      if ((ageCategory.min_age !== null && age < Number(ageCategory.min_age)) || (ageCategory.max_age !== null && age > Number(ageCategory.max_age))) {
+        return NextResponse.json({ error: `${player.label} no cumple la edad requerida para este torneo.` }, { status: 409 })
+      }
     }
   }
 

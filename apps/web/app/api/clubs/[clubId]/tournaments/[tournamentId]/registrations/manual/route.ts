@@ -23,6 +23,8 @@ type TournamentRow = {
   status: string
   category_id?: number | null
   category?: number | null
+  age_category_id?: string | null
+  start_date?: string | null
   gender?: string | null
   registration_deadline?: string | null
   signup_deadline?: string | null
@@ -42,6 +44,7 @@ type ProfileRow = {
   first_name: string | null
   last_name: string | null
   display_name: string | null
+  birth_date?: string | null
 }
 
 type TeamRow = {
@@ -75,6 +78,29 @@ function normalizeName(value?: string | null) {
 
 function normalizeStatus(value?: string | null) {
   return (value ?? '').trim().toUpperCase()
+}
+
+function ageAtDate(birthDate: string, referenceDate: string) {
+  const birth = new Date(`${birthDate.slice(0, 10)}T00:00:00Z`)
+  const reference = new Date(`${referenceDate.slice(0, 10)}T00:00:00Z`)
+  let age = reference.getUTCFullYear() - birth.getUTCFullYear()
+  if (reference.getUTCMonth() < birth.getUTCMonth() || (reference.getUTCMonth() === birth.getUTCMonth() && reference.getUTCDate() < birth.getUTCDate())) age -= 1
+  return age
+}
+
+async function ensureAgeEligibility(tournament: TournamentRow, birthDate: string | null | undefined) {
+  if (!tournament.age_category_id) return
+  if (!birthDate) throw new Error('PLAYER_BIRTH_DATE_REQUIRED')
+  const { data: category, error } = await supabaseAdmin.from('competition_age_categories')
+    .select('min_age,max_age,age_reference_rule,age_reference_config').eq('club_id', tournament.club_id).eq('id', tournament.age_category_id).maybeSingle()
+  if (error) throw error
+  if (!category) throw new Error('TOURNAMENT_AGE_CATEGORY_INVALID')
+  const config = category.age_reference_config && typeof category.age_reference_config === 'object' ? category.age_reference_config as Record<string, unknown> : {}
+  const year = new Date(`${tournament.start_date}T00:00:00Z`).getUTCFullYear()
+  const referenceDate = category.age_reference_rule === 'CALENDAR_YEAR_END' ? `${year}-12-31` : category.age_reference_rule === 'FIXED_DATE' ? String(config.date ?? '') : String(tournament.start_date ?? '')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(referenceDate)) throw new Error('TOURNAMENT_AGE_CATEGORY_INVALID')
+  const age = ageAtDate(birthDate, referenceDate)
+  if ((category.min_age !== null && age < Number(category.min_age)) || (category.max_age !== null && age > Number(category.max_age))) throw new Error('PLAYER_AGE_MISMATCH')
 }
 
 function isRegistrationClosed(tournament: Pick<TournamentRow, 'registration_deadline' | 'signup_deadline'>) {
@@ -184,7 +210,7 @@ export async function GET(
 
     const { data: tournament, error: tournamentError } = await supabaseAdmin
       .from('tournaments')
-      .select('id,club_id,status,category_id,category,gender')
+      .select('id,club_id,status,category_id,category,gender,age_category_id,start_date')
       .eq('id', tournamentId)
       .eq('club_id', clubId)
       .maybeSingle()
@@ -330,11 +356,12 @@ async function resolveExistingClubPlayer(
 
   const { data: profile, error: profileError } = await supabaseAdmin
     .from('profiles')
-    .select('user_id,email,first_name,last_name,display_name')
+    .select('user_id,email,first_name,last_name,display_name,birth_date')
     .eq('user_id', userId)
     .maybeSingle()
 
   if (profileError) throw profileError
+  await ensureAgeEligibility(tournament, (profile as ProfileRow | null)?.birth_date)
 
   const fullName =
     normalizeName(input.full_name) ||
@@ -466,7 +493,7 @@ export async function POST(
 
     const { data: tournament, error: tournamentError } = await supabaseAdmin
       .from('tournaments')
-      .select('id,club_id,status,category_id,category,gender,registration_deadline,signup_deadline')
+      .select('id,club_id,status,category_id,category,gender,age_category_id,start_date,registration_deadline,signup_deadline')
       .eq('id', tournamentId)
       .eq('club_id', clubId)
       .maybeSingle()
@@ -594,6 +621,9 @@ export async function POST(
       PLAYER_NOT_IN_CLUB: 'Seleccioná un jugador aprobado del club.',
       PLAYER_CATEGORY_MISMATCH: 'El jugador seleccionado no corresponde a la categoría del torneo.',
       PLAYER_GENDER_MISMATCH: 'El jugador seleccionado no corresponde al género del torneo.',
+      PLAYER_BIRTH_DATE_REQUIRED: 'El jugador necesita una fecha de nacimiento para validar esta categoría.',
+      PLAYER_AGE_MISMATCH: 'El jugador no cumple la edad requerida por el torneo.',
+      TOURNAMENT_AGE_CATEGORY_INVALID: 'La categoría de edad del torneo no es válida.',
       PLAYER_AUTH_REQUIRED: 'El jugador seleccionado no tiene un usuario Auth válido. El modelo actual requiere migración para inscribir jugadores sin Auth.',
       INVALID_PLAYER_NAME: 'Completá el nombre del jugador.',
       MANUAL_PLAYER_CREATE_FAILED: 'No pude crear el jugador manual.',

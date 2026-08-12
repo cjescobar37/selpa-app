@@ -783,10 +783,9 @@ export default function AppNavbarClient() {
               <em>{readableRole} · {displayClubName}</em>
             </div>
           </div>
-          <Link className="px-ddItem" href="/club/configuracion" onClick={closeAllMenus}>Preferencias</Link>
-          <button className="px-ddItem px-ddItem--disabled" type="button" disabled>Auditoría / actividad <span>Próximamente</span></button>
+          <Link className="px-ddItem" href="/perfil" onClick={closeAllMenus}>Mi perfil</Link>
+          <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}>Preferencias</Link>
           <Link className="px-ddItem" href="/club/usuarios" onClick={closeAllMenus}>Seguridad y permisos</Link>
-          <button className="px-ddItem px-ddItem--disabled" type="button" disabled>Soporte <span>Próximamente</span></button>
           <Link className="px-ddItem" href={clubPublicHomeHref} onClick={closeAllMenus}>Ver home pública del club</Link>
           <button className="px-ddItem px-ddItem--danger" onClick={() => { closeAllMenus(); void signOut() }}>Cerrar sesión</button>
         </div>

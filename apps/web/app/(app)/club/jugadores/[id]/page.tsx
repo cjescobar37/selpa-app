@@ -409,6 +409,7 @@ export default function ClubJugadorDetailPage() {
   const rankingPositionLabel = player?.ranking_points && player.ranking_points > 0 ? 'A definir' : 'Sin ranking'
   const rankingPointsLabel = formatRankingPoints(player?.ranking_points ?? null)
   const isOwnProfile = Boolean(player?.user_id && user?.id && player.user_id === user.id)
+  const isClubAdminView = pathname.startsWith('/club/') && searchParams.get('own') === '1'
   const recentMatches = data?.recent_matches.slice(0, 5) ?? []
   const activePartnership = player
     ? activePartnerships.find((partnership) =>
@@ -450,6 +451,13 @@ export default function ClubJugadorDetailPage() {
           <PlayerStatePanel kind="error" title="No encontramos el perfil" message="Volvé a intentarlo desde tu espacio de jugador." action={{ label: 'Volver a Mi espacio', href: '/player' }} compact />
         ) : (
           <>
+            {isClubAdminView ? <section className="club-playerAdminIntro" aria-label="Ficha administrativa del jugador">
+              <div><span>Ficha administrativa</span><strong>{player.full_name}</strong><small>{profileClub.name} · {player.approved_at ? 'Activo' : 'Pendiente'}</small></div>
+              <div className="club-playerAdminActions">
+                <Link href={`/jugadores/${player.user_id}`}>Ver perfil público</Link>
+                <Link href="/club/jugadores">Volver a jugadores</Link>
+              </div>
+            </section> : null}
             <section className="playerProfileV3">
               <div className="playerProfileV3__cover">
                 {heroCover ? <>
@@ -478,6 +486,7 @@ export default function ClubJugadorDetailPage() {
                   <Link href={`/clubs/${profileClub.id}`} className="playerProfileV3__club">{profileClub.name}</Link>
                   <div className="playerProfileV3__actions">
                     {isOwnProfile ? <Link href="/mis-datos"><Pencil size={15} />Editar perfil</Link> : null}
+                    {isClubAdminView ? <Link href="/club/usuarios">Gestionar equipo</Link> : null}
                     <Link className="is-primary" href={isOwnProfile ? '/player/ranking' : pathname.startsWith('/club/') ? '/club/ranking' : '/ranking'}>Ver ranking</Link>
                   </div>
                 </div>
@@ -588,6 +597,13 @@ export default function ClubJugadorDetailPage() {
       </div>
 
       <style>{`
+        .club-playerAdminIntro { align-items:center; background:#fff; border:1px solid rgba(15,23,42,.09); border-radius:16px; display:flex; gap:12px; justify-content:space-between; margin:0 0 10px; padding:12px; }
+        .club-playerAdminIntro > div:first-child { display:grid; gap:2px; min-width:0; }
+        .club-playerAdminIntro span { color:#568500; font-size:10px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; }
+        .club-playerAdminIntro strong { color:#071a35; font-size:17px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .club-playerAdminIntro small { color:#64748b; font-size:12px; }
+        .club-playerAdminActions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
+        .club-playerAdminActions a { border:1px solid rgba(15,23,42,.12); border-radius:999px; color:#17314f; font-size:12px; font-weight:900; min-height:38px; display:inline-flex; align-items:center; padding:0 10px; text-decoration:none; white-space:nowrap; }
         .player-premium { background: linear-gradient(180deg, #ffffff, #f8fafc); display: grid; gap: 13px; overflow: hidden; }
         .club-panel.player-premium::before { background: linear-gradient(90deg, #22d3ee, #2563eb 52%, #ec4899); opacity: .86; }
         .playerProfileV3 { --profile-accent: var(--px-club-accent, #06b6d4); --profile-accent-2: var(--px-club-accent-2, #ec4899); --profile-soft: var(--px-club-soft, rgba(34,211,238,.13)); --profile-glow: var(--px-club-glow, rgba(14,165,233,.16)); display: grid; gap: 14px; margin: -18px; padding-bottom: 18px; }

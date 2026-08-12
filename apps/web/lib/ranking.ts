@@ -21,8 +21,8 @@ export function normalizeRankingGender(value?: string | null): RankingGender {
 
 export function formatRankingGender(value?: string | null) {
   const normalized = normalizeRankingGender(value)
-  if (normalized === 'M') return 'Masculino'
-  if (normalized === 'F') return 'Femenino'
+  if (normalized === 'M') return 'Caballeros'
+  if (normalized === 'F') return 'Damas'
   if (normalized === 'MIXED') return 'Mixto'
   return 'Sin rama'
 }

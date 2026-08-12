@@ -8,6 +8,7 @@ export type TournamentView = {
   gender: string
   segment: string
   category: number | null
+  ageCategoryId: string | null
   startDate: string | null
   endDate: string | null
   registrationDeadline: string | null
@@ -30,6 +31,8 @@ function asNumber(value: unknown): number | null {
   return null
 }
 
+// Rows come from several legacy selects with slightly different generated types.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function toTournamentView(row: Record<string, any> | null | undefined): TournamentView | null {
   if (!row?.id) return null
 
@@ -43,6 +46,7 @@ export function toTournamentView(row: Record<string, any> | null | undefined): T
     gender: String(row.gender ?? 'MALE'),
     segment: String(row.segment ?? row.rules_json?.segment_type ?? row.rules?.segment_type ?? 'LIBRES'),
     category: asNumber(row.category ?? row.category_id),
+    ageCategoryId: (row.age_category_id ?? null) as string | null,
     startDate: (row.starts_on ?? row.start_date ?? null) as string | null,
     endDate: (row.ends_on ?? row.end_date ?? null) as string | null,
     registrationDeadline: (row.registration_deadline ?? row.signup_deadline ?? null) as string | null,
@@ -69,6 +73,7 @@ export const TOURNAMENT_SELECT = [
   'segment',
   'category_id',
   'category',
+  'age_category_id',
   'start_date',
   'starts_on',
   'end_date',

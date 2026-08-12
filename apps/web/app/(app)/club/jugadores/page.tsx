@@ -52,8 +52,8 @@ function emailOf(profile?: Profile | null) {
 }
 
 function genderLabel(gender?: string | null) {
-  if (gender === 'M') return 'Masculino'
-  if (gender === 'F') return 'Femenino'
+  if (gender === 'M') return 'Caballeros'
+  if (gender === 'F') return 'Damas'
   return gender ?? '-'
 }
 
@@ -424,7 +424,7 @@ export default function ClubJugadoresPage() {
                     {paginatedPlayers.map((player) => {
                       const hasAccount = hasPlayerAccount(player)
                       return (
-                        <Link key={player.id} className="club-playerTableRow" role="row" href={`/club/jugadores/${player.user_id ?? player.id}`}>
+                        <Link key={player.id} className="club-playerTableRow" role="row" href={`/club/jugadores/${player.user_id ?? player.id}?own=1`} aria-label={`Gestionar a ${player.full_name}`}>
                           <div className="club-playerIdentity">
                             <div className="club-person club-person--compact">
                               <span className="club-avatar club-avatar--sm">
@@ -444,9 +444,7 @@ export default function ClubJugadoresPage() {
                           <span data-label="Género">{genderLabel(player.gender)}</span>
                           <span data-label="Ranking">{player.ranking_points ?? 0} pts</span>
                           <span data-label="Estado">
-                            <span className={`club-statusPill ${player.approved_at ? 'club-statusPill--ok' : 'club-statusPill--pending'}`}>
-                              {playerStatusLabel(player)}
-                            </span>
+                            {!player.approved_at ? <span className="club-statusPill club-statusPill--pending">{playerStatusLabel(player)}</span> : null}
                           </span>
                           <span data-label="Alta">{formatDate(player.approved_at ?? player.created_at)}</span>
                           <span data-label="Perfil">

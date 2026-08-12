@@ -333,3 +333,13 @@ Settlement continúa consumiendo los códigos V1 `CHAMPION`, `RUNNER_UP`, `SEMIF
 La administración vive en `/club/competition/points-schemes`. El bootstrap nunca crea esquemas: si no existe uno activo devuelve `setupRequired` con `CREATE_POINTS_SCHEME`; si hay más de uno utiliza el `schemeId` confirmado por el administrador. El editor de circuitos lista únicamente esquemas globales activos o activos del club.
 
 La migración es `20260804120000_competition_points_schemes_stage5a7.sql` y su QA transaccional es `20260804120000_competition_points_schemes_stage5a7_validation.sql`. Stage 5A.7 fue aplicado y validado en Supabase con resultado PASS. Cualquier rollback posterior requiere una migración compensatoria que preserve esquemas, reglas y snapshots históricos.
+
+## Stage 5A.8 — Atomic Competition Date Bridge
+
+El puente canónico entre ambos motores es `Competition Series → Competition Event → Competition Event Division → Tournament Link → Tournament`. `tournaments` no recibe columnas de circuito o evento: el Tournament Engine conserva la propiedad de inscripción, cuadros, resultados y campeón; Competition conserva la serie, la regla, elegibilidad, homologación, settlement y ranking.
+
+`get_competition_date_creation_context` entrega al wizard el contexto autorizado y canónico de una serie `SCHEDULED` o `ACTIVE`. `create_competition_date_tournament_atomic` es la única operación de alta para una fecha de circuito: valida actor, `competition:manage`, `tournaments:create`, revisión de serie/regla, scope deportivo, tabla de puntos y tier; crea un Tournament DRAFT, Event DRAFT, Event Division DRAFT y su Link ACTIVE en la misma transacción. No crea homologaciones, settlements, movimientos de Ledger ni actualizaciones de ranking.
+
+`competition_date_creation_commands` garantiza idempotencia por club, actor y clave. Una repetición con el mismo payload devuelve los mismos IDs; una misma clave con otro payload falla. El índice existente de links activos mantiene un único vínculo ACTIVE por Event Division y por Tournament, preservando el historial `REPLACED`/`REMOVED`.
+
+La QA transaccional es `20260811140000_competition_date_bridge_stage5a8_validation.sql`. La prueba de concurrencia requiere dos sesiones PostgreSQL reales y está documentada en `20260811140000_competition_date_bridge_stage5a8_concurrency_manual.md`; no debe declararse aprobada desde una sola sesión SQL.
