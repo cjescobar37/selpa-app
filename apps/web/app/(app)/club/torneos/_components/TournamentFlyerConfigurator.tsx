@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react'
 import fondo1 from '@/app/flyers/fondo1.png'
 import fondo2 from '@/app/flyers/fondo2.png'
 import fondo3 from '@/app/flyers/fondo3.png'
@@ -93,6 +93,10 @@ type Props = {
   previewData: FlyerPreviewData
   helperText?: string
   advancedControls?: boolean
+  progressive?: boolean
+  hideModeControls?: boolean
+  onResetToAutomatic?: () => void
+  onPreviewVisibilityChange?: (isVisible: boolean) => void
 }
 
 const backgroundOptions = Array.from({ length: 17 }, (_, index) => ({
@@ -244,7 +248,7 @@ function getTournamentTypePreset(type: string) {
   return tournamentTypePresets.DEFAULT
 }
 
-function usePresetColor(current: string, fallback: string, preset: string) {
+function resolvePresetColor(current: string, fallback: string, preset: string) {
   return !current || current.toLowerCase() === fallback.toLowerCase() ? preset : current
 }
 
@@ -253,10 +257,10 @@ export function resolveAutoFlyerConfig(value: FlyerConfig, tournamentType: strin
   const preset = getTournamentTypePreset(tournamentType)
   return {
     ...value,
-    accentColor: usePresetColor(value.accentColor, defaultFlyerConfig.accentColor, preset.accentColor),
-    badgeColor: usePresetColor(value.badgeColor, defaultFlyerConfig.badgeColor, preset.badgeColor),
-    dateBlockColor: usePresetColor(value.dateBlockColor, defaultFlyerConfig.dateBlockColor, preset.dateBlockColor),
-    dataCardColor: usePresetColor(value.dataCardColor, defaultFlyerConfig.dataCardColor, preset.dataCardColor),
+    accentColor: resolvePresetColor(value.accentColor, defaultFlyerConfig.accentColor, preset.accentColor),
+    badgeColor: resolvePresetColor(value.badgeColor, defaultFlyerConfig.badgeColor, preset.badgeColor),
+    dateBlockColor: resolvePresetColor(value.dateBlockColor, defaultFlyerConfig.dateBlockColor, preset.dateBlockColor),
+    dataCardColor: resolvePresetColor(value.dataCardColor, defaultFlyerConfig.dataCardColor, preset.dataCardColor),
   }
 }
 
@@ -463,12 +467,22 @@ export function TournamentFlyerPreviewCard({
   value,
   previewData,
   variant = 'editor',
+  onVisibilityChange,
 }: {
   value: FlyerConfig
   previewData: FlyerPreviewData
   variant?: FlyerPreviewVariant
+  onVisibilityChange?: (isVisible: boolean) => void
 }) {
+  const previewShellRef = useRef<HTMLDivElement | null>(null)
   const previewStyle = useMemo(() => getBackgroundStyle(value.backgroundId, value.style), [value.backgroundId, value.style])
+
+  useEffect(() => {
+    if (!onVisibilityChange || !previewShellRef.current) return
+    const observer = new IntersectionObserver(([entry]) => onVisibilityChange(entry.isIntersecting), { threshold: 0.01 })
+    observer.observe(previewShellRef.current)
+    return () => observer.disconnect()
+  }, [onVisibilityChange])
 
   const headline = previewData.name.trim() || 'Nombre del torneo'
   const isManualMode = value.mode === 'MANUAL'
@@ -521,7 +535,7 @@ export function TournamentFlyerPreviewCard({
   ].filter(Boolean) as Array<{ key: string; label: string; value: string; tone: string }>
 
   return (
-    <div className="flyerPreviewShell">
+    <div ref={previewShellRef} className="flyerPreviewShell">
       {variant === 'editor' ? <span className="flyerPreviewLabel">Preview</span> : null}
       <div
         className={`flyerPreview flyerPreview--${value.mode.toLowerCase()} flyerPreview--${variant} flyerPreview--data-${value.dataStyle.toLowerCase()} flyerPreview--title-${value.titleSize.toLowerCase()}`}
@@ -617,9 +631,21 @@ export function TournamentFlyerPreviewCard({
   )
 }
 
-export function TournamentFlyerConfigurator({ value, onChange, previewData, helperText, advancedControls = false }: Props) {
+export function TournamentFlyerConfigurator({
+  value,
+  onChange,
+  previewData,
+  helperText,
+  advancedControls = false,
+  progressive = false,
+  hideModeControls = false,
+  onResetToAutomatic,
+  onPreviewVisibilityChange,
+}: Props) {
   const showLargePreview = value.mode === 'AUTO' || value.mode === 'MANUAL'
   const [manualError, setManualError] = useState('')
+  const [openProgressiveSection, setOpenProgressiveSection] = useState<'COLORS' | 'TYPOGRAPHY' | 'STYLE' | 'VISIBLE' | null>(null)
+  const [showAllBackgrounds, setShowAllBackgrounds] = useState(false)
   const resolvedValue = resolveAutoFlyerConfig(value, `${previewData.type} ${previewData.gender}`)
   const manualWarning = value.manualFlyer && value.manualFlyer.width > value.manualFlyer.height
     ? 'El flyer deberia ser vertical para verse bien.'
@@ -702,11 +728,11 @@ export function TournamentFlyerConfigurator({ value, onChange, previewData, help
         {helperText ? <p>{helperText}</p> : null}
       </div>
 
-      <div className="flyerModeSwitch" role="tablist" aria-label="Modo de flyer">
+      {!hideModeControls ? <div className="flyerModeSwitch" role="tablist" aria-label="Modo de flyer">
         {[
           ['NONE', 'Sin flyer'],
           ['AUTO', 'Automatico'],
-          ['MANUAL', 'Manual'],
+          ['MANUAL', 'Personalizar'],
         ].map(([mode, label]) => (
           <button
             key={mode}
@@ -717,7 +743,7 @@ export function TournamentFlyerConfigurator({ value, onChange, previewData, help
             {label}
           </button>
         ))}
-      </div>
+      </div> : null}
 
       <div className={`flyerLayout${showLargePreview ? '' : ' flyerLayout--compact'}`}>
         <div className="flyerControls">
@@ -767,15 +793,24 @@ export function TournamentFlyerConfigurator({ value, onChange, previewData, help
                   </div>
                 </div>
               ) : null}
+              {progressive ? <div className="flyerManualBackRow">
+                <button type="button" className="flyerTextAction" onClick={() => onChange({ ...value, mode: 'AUTO' })}>Volver al diseño configurable</button>
+                {onResetToAutomatic ? <button type="button" className="flyerTextAction" onClick={onResetToAutomatic}>Restablecer automático</button> : null}
+              </div> : null}
             </div>
           ) : null}
 
           {value.mode === 'AUTO' ? (
             <>
-              <div className="flyerControlSection">
-                <span className="flyerControlTitle">Fondos</span>
-                <div className="flyerBackgroundGrid">
-                  {backgroundOptions.map((background) => (
+              <div className={`flyerControlSection${progressive ? ' flyerControlSection--progressiveBackgrounds' : ''}`}>
+                <div className="flyerProgressiveSectionHead">
+                  <span className="flyerControlTitle">Fondo</span>
+                  {progressive ? <button type="button" className="flyerTextAction" onClick={() => setShowAllBackgrounds((current) => !current)}>
+                    {showAllBackgrounds ? 'Ver menos' : 'Ver todos'}
+                  </button> : null}
+                </div>
+                <div className={`flyerBackgroundGrid${progressive && !showAllBackgrounds ? ' flyerBackgroundGrid--rail' : ''}`}>
+                  {(progressive && !showAllBackgrounds ? backgroundOptions.slice(0, 4) : backgroundOptions).map((background) => (
                     <button
                       key={background.id}
                       type="button"
@@ -791,7 +826,55 @@ export function TournamentFlyerConfigurator({ value, onChange, previewData, help
                 </div>
               </div>
 
-              {advancedControls ? (
+              {advancedControls && progressive ? (
+                <div className="flyerProgressivePanels">
+                  <section className="flyerProgressivePanel">
+                    <button type="button" className="flyerProgressivePanelTrigger" aria-expanded={openProgressiveSection === 'COLORS'} onClick={() => setOpenProgressiveSection((current) => current === 'COLORS' ? null : 'COLORS')}>
+                      <span><strong>Colores</strong><small>Automático · <i style={{ background: resolvedValue.accentColor }} /> <i style={{ background: resolvedValue.badgeColor }} /></small></span><b>›</b>
+                    </button>
+                    {openProgressiveSection === 'COLORS' ? <div className="flyerProgressivePanelContent flyerControlRow flyerControlRow--colors">
+                      <label className="flyerColorField"><span>Título</span><input type="color" value={resolvedValue.titleColor} onChange={(event) => onChange({ ...value, titleColor: event.target.value })} /></label>
+                      <label className="flyerColorField"><span>Texto</span><input type="color" value={resolvedValue.textColor} onChange={(event) => onChange({ ...value, textColor: event.target.value })} /></label>
+                      <label className="flyerColorField"><span>Acento</span><input type="color" value={resolvedValue.accentColor} onChange={(event) => onChange({ ...value, accentColor: event.target.value })} /></label>
+                      <label className="flyerColorField"><span>Badge</span><input type="color" value={resolvedValue.badgeColor} onChange={(event) => onChange({ ...value, badgeColor: event.target.value })} /></label>
+                      <label className="flyerColorField"><span>Fecha</span><input type="color" value={resolvedValue.dateBlockColor} onChange={(event) => onChange({ ...value, dateBlockColor: event.target.value })} /></label>
+                      <label className="flyerColorField"><span>Datos</span><input type="color" value={resolvedValue.dataCardColor} onChange={(event) => onChange({ ...value, dataCardColor: event.target.value })} /></label>
+                    </div> : null}
+                  </section>
+                  <section className="flyerProgressivePanel">
+                    <button type="button" className="flyerProgressivePanelTrigger" aria-expanded={openProgressiveSection === 'TYPOGRAPHY'} onClick={() => setOpenProgressiveSection((current) => current === 'TYPOGRAPHY' ? null : 'TYPOGRAPHY')}>
+                      <span><strong>Tipografía</strong><small>{fontOptions.find((option) => option.value === value.fontFamily)?.label} · {titleSizeOptions.find((option) => option.value === value.titleSize)?.label} · {value.textAlign === 'left' ? 'Izquierda' : value.textAlign === 'center' ? 'Centro' : 'Derecha'}</small></span><b>›</b>
+                    </button>
+                    {openProgressiveSection === 'TYPOGRAPHY' ? <div className="flyerProgressivePanelContent flyerControlRow flyerControlRow--selects">
+                      <label className="flyerSelectField"><span>Tipografía</span><select className="px-input" value={value.fontFamily} onChange={(event) => onChange({ ...value, fontFamily: event.target.value as FlyerFont })}>{fontOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                      <label className="flyerSelectField"><span>Tamaño</span><select className="px-input" value={value.titleSize} onChange={(event) => onChange({ ...value, titleSize: event.target.value as FlyerTitleSize })}>{titleSizeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                      <label className="flyerSelectField"><span>Alineación</span><select className="px-input" value={value.textAlign} onChange={(event) => onChange({ ...value, textAlign: event.target.value as FlyerTextAlign })}><option value="left">Izquierda</option><option value="center">Centro</option><option value="right">Derecha</option><option value="justify">Justificado</option></select></label>
+                      <label className="flyerSelectField"><span>Peso</span><select className="px-input" value={value.fontWeight} onChange={(event) => onChange({ ...value, fontWeight: event.target.value as FlyerFontWeight })}>{fontWeightOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                    </div> : null}
+                  </section>
+                  <section className="flyerProgressivePanel">
+                    <button type="button" className="flyerProgressivePanelTrigger" aria-expanded={openProgressiveSection === 'STYLE'} onClick={() => setOpenProgressiveSection((current) => current === 'STYLE' ? null : 'STYLE')}>
+                      <span><strong>Estilo</strong><small>{styleOptions.find((option) => option.value === value.style)?.label} · {dataStyleOptions.find((option) => option.value === value.dataStyle)?.label}</small></span><b>›</b>
+                    </button>
+                    {openProgressiveSection === 'STYLE' ? <div className="flyerProgressivePanelContent flyerControlRow flyerControlRow--selects">
+                      <label className="flyerSelectField"><span>Estilo</span><select className="px-input" value={value.style} onChange={(event) => onChange({ ...value, style: event.target.value as FlyerStyle })}>{styleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                      <label className="flyerSelectField"><span>Datos</span><select className="px-input" value={value.dataStyle} onChange={(event) => onChange({ ...value, dataStyle: event.target.value as FlyerDataStyle })}>{dataStyleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                      <label className="flyerRangeField"><span>Opacidad</span><input type="range" min="0" max="1" step="0.01" value={value.dataCardOpacity} onChange={(event) => onChange({ ...value, dataCardOpacity: Number(event.target.value) })} /><small>{Math.round(value.dataCardOpacity * 100)}%</small></label>
+                      <label className="flyerRangeField"><span>Radio</span><input type="range" min="8" max="28" step="1" value={value.dataCardRadius} onChange={(event) => onChange({ ...value, dataCardRadius: Number(event.target.value) })} /><small>{value.dataCardRadius}px</small></label>
+                      <button type="button" className="flyerInlineAction" onClick={() => onChange({ ...value, mode: 'MANUAL' })}>Usar una imagen propia</button>
+                    </div> : null}
+                  </section>
+                  <section className="flyerProgressivePanel">
+                    <button type="button" className="flyerProgressivePanelTrigger" aria-expanded={openProgressiveSection === 'VISIBLE'} onClick={() => setOpenProgressiveSection((current) => current === 'VISIBLE' ? null : 'VISIBLE')}>
+                      <span><strong>Información visible</strong><small>{Object.values(value.visibleFields).filter(Boolean).length} elementos visibles</small></span><b>›</b>
+                    </button>
+                    {openProgressiveSection === 'VISIBLE' ? <div className="flyerProgressivePanelContent flyerVisibleGrid">
+                      {visibleFieldOptions.map((option) => <label key={option.key} className="flyerToggleField"><input type="checkbox" checked={value.visibleFields[option.key]} onChange={(event) => updateVisibleField(option.key, event.target.checked)} /><span>{option.label}</span></label>)}
+                    </div> : null}
+                  </section>
+                  {onResetToAutomatic ? <button type="button" className="flyerResetAction" onClick={onResetToAutomatic}>Restablecer diseño automático</button> : null}
+                </div>
+              ) : advancedControls ? (
                 <div className="flyerPersonalization">
                   <div className="flyerPersonalizationHead">
                     <span className="flyerControlTitle">Personalizacion del flyer</span>
@@ -985,7 +1068,7 @@ export function TournamentFlyerConfigurator({ value, onChange, previewData, help
         </div>
 
         {showLargePreview ? (
-          <TournamentFlyerPreviewCard value={resolvedValue} previewData={previewData} variant="editor" />
+          <TournamentFlyerPreviewCard value={resolvedValue} previewData={previewData} variant="editor" onVisibilityChange={onPreviewVisibilityChange} />
         ) : null}
       </div>
     </section>

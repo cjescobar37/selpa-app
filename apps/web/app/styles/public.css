@@ -6974,15 +6974,15 @@
   .clubPublicHome > .pampraxHero .pampraxHero__body.has-logo{
     align-items:center;
     gap:10px;
-    grid-template-columns:44px minmax(0,1fr);
+    grid-template-columns:52px minmax(0,1fr);
   }
 
   .clubPublicHome > .pampraxHero.has-identity-logo .pampraxHero__logo{
     border-radius:13px;
     border-width:2px;
     font-size:13px;
-    height:44px;
-    width:44px;
+    height:52px;
+    width:52px;
   }
 
   .clubPublicHome > .pampraxHero .pampraxHero__text{
@@ -7010,14 +7010,18 @@
   }
 
   .clubPublicHome > .pampraxHero .pampraxHero__stats{
-    gap:4px;
+    display:grid;
+    gap:3px;
+    grid-template-columns:repeat(3,minmax(0,1fr));
     margin-top:3px;
+    width:100%;
   }
 
   .clubPublicHome > .pampraxHero .pampraxHero__stats em{
-    font-size:9px;
+    font-size:8px;
+    gap:2px;
     min-height:24px;
-    padding:3px 6px;
+    padding:3px 4px;
   }
 
   .clubPublicHome > .pampraxHero .pampraxHero__actions{

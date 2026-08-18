@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { resolveStorageUrl } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { BRAND } from '@/lib/branding'
+import { canUpdateTournament } from '@/lib/clubPermissions'
 
 type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
 
@@ -156,23 +157,8 @@ function StatusPanel({ club }: { club: ClubData }) {
   )
 }
 
-function MetricCard({ label, value, href }: { label: string; value: number | string; href?: string }) {
-  const content = (
-    <>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </>
-  )
-
-  if (href) {
-    return <Link href={href} className="club-metric">{content}</Link>
-  }
-
-  return <div className="club-metric">{content}</div>
-}
-
 export default function ClubPage() {
-  const { role, activeClub } = useSession()
+  const { role, activeClub, user, clubRole } = useSession()
   const [summary, setSummary] = useState<ClubSummary | null>(null)
   const [clubForPlayer, setClubForPlayer] = useState<ClubData | null>(null)
   const [themeKey, setThemeKey] = useState<string | null>(null)
@@ -312,6 +298,16 @@ export default function ClubPage() {
 
   const club = summary.club
   const isActive = club.status === 'ACTIVE'
+  const greeting = user?.name?.trim() ? `Hola, ${user.name.trim().split(/\s+/)[0]} 👋` : 'Todo listo para hoy'
+  const priorities = [
+    ...(summary.tournaments.slice(0, 2).filter((tournament) => tournament.registration_deadline).map((tournament) => ({ href: '/club/torneos', title: tournament.name, detail: `Inscripciones cierran ${formatDate(tournament.registration_deadline!)}`, badge: 'URGENTE', tone: 'urgent' }))),
+    ...(summary.counts.pending_player_requests > 0 ? [{ href: '/club/solicitudes', title: `${summary.counts.pending_player_requests} solicitud${summary.counts.pending_player_requests === 1 ? '' : 'es'} pendiente${summary.counts.pending_player_requests === 1 ? '' : 's'}`, detail: 'Revisalas para mantener el padrón actualizado.', badge: 'PENDIENTE', tone: 'pending' }] : []),
+    ...(summary.counts.active_or_upcoming_tournaments > 0 ? [{ href: '/club/torneos', title: 'Torneos próximos', detail: 'Revisá sede, cupos y organización.', badge: 'PRÓXIMO', tone: 'upcoming' }] : []),
+  ].slice(0, 3)
+  const recommendedTournament = summary.tournaments[0]
+  // La membresía aprobada/capacidad canónica del club activo decide el destino.
+  // La API administrativa vuelve a validar el permiso al cargar el detalle.
+  const canManageAgendaTournament = canUpdateTournament(clubRole)
 
   return (
     <div className="px-wrap">
@@ -319,61 +315,64 @@ export default function ClubPage() {
         <div className="club-dashboardHead">
           <div>
             <span className="club-kicker">Centro operativo</span>
-            <h1 className="club-title">Buen día</h1>
-            <p className="club-sub">{club.name} · {[club.city, club.province].filter(Boolean).join(' · ') || 'Sin ubicación cargada'}</p>
+            <h1 className="club-greeting">{greeting}</h1>
+            <p className="club-sub">{isActive ? '✓ Todo listo para hoy.' : 'Hay acciones pendientes para dejar el club listo.'}</p>
           </div>
           <span className={`club-mainBadge club-mainBadge--${statusCopy[club.status].tone}`}>{statusLabel(club.status)}</span>
+          <div className="club-heroMetrics" aria-label="Estado del club">
+            <Link href="/club/jugadores"><strong>{summary.counts.active_players}</strong><span>Jugadores</span></Link>
+            <Link href="/club/torneos"><strong>{summary.counts.active_or_upcoming_tournaments}</strong><span>Torneos activos</span></Link>
+            <Link href="/club/solicitudes"><strong>{summary.counts.pending_player_requests}</strong><span>Solicitudes</span></Link>
+          </div>
         </div>
 
         {!isActive ? <StatusPanel club={club} /> : null}
 
-        <section className="club-metricsGrid" aria-label="Resumen operativo">
-          <MetricCard label="Solicitudes pendientes" value={summary.counts.pending_player_requests} href="/club/solicitudes" />
-          <MetricCard label="Torneos en curso" value={summary.counts.active_or_upcoming_tournaments} href="/club/torneos" />
-          <MetricCard label="Jugadores activos" value={summary.counts.active_players} href="/club/jugadores" />
+        <section className="club-priorityStrip" aria-label="Prioridades de hoy">
+          <div><span className="club-kicker">Prioridades</span><h2>Lo que necesita atención hoy</h2></div>
+          <div className="club-priorityList">{priorities.length ? priorities.map((priority) => <Link href={priority.href} key={`${priority.tone}-${priority.title}`}><span className="club-priorityCopy"><b>{priority.title}</b><small>{priority.detail}</small></span><em className={`club-priorityBadge club-priorityBadge--${priority.tone}`}>{priority.badge}</em><i>›</i></Link>) : <div className="club-priorityClear"><b>✓ Todo está al día.</b><span>No hay acciones pendientes.</span></div>}</div>
         </section>
 
         <section className="club-dashboardGrid">
           <div className="club-card">
+            <div className="club-cardHead"><div><span className="club-kicker">Acciones principales</span><h2>{isActive ? '¿Qué querés hacer?' : 'Preparar aprobación'}</h2></div></div>
+            <div className="club-actionsGrid">
+              <Link href="/club/torneos/nuevo" className={`club-action ${!isActive ? 'is-muted' : ''}`}><b>🏆</b><span><strong>Crear torneo</strong><small>Organizá una competencia independiente.</small></span><i>›</i></Link>
+              <Link href="/club/competition/series/new" className={`club-action ${!isActive ? 'is-muted' : ''}`}><b>🏅</b><span><strong>Crear circuito</strong><small>Administrá varias fechas con ranking.</small></span><i>›</i></Link>
+              <Link href="/club/torneos/calendario" className="club-action"><b>◷</b><span><strong>Ver agenda</strong><small>Consultá las próximas fechas del club.</small></span><i>›</i></Link>
+              <Link href="/club/jugadores" className="club-action"><b>◉</b><span><strong>Gestionar jugadores</strong><small>Revisá el padrón y solicitudes.</small></span><i>›</i></Link>
+            </div>
+          </div>
+          <section className="club-card club-agendaCard">
             <div className="club-cardHead">
               <div>
-              <span className="club-kicker">Próximamente</span>
-                <h2>Actividad del club</h2>
+                <span className="club-kicker">Agenda</span>
+                <h2>Próximas competencias</h2>
               </div>
-              <Link href="/club/torneos" className="club-cardLink">Ver torneos</Link>
+              <Link href="/club/torneos" className="club-cardLink">Ver todas →</Link>
             </div>
 
             {summary.tournaments.length ? (
               <div className="club-list">
                 {summary.tournaments.map((tournament) => (
-                  <div key={tournament.id} className="club-listRow">
-                    <div className="club-listMain">
+                  <Link key={tournament.id} href={canManageAgendaTournament ? `/club/torneos/${tournament.id}` : `/torneos/${tournament.id}`} className="club-listRow club-agendaRow">
+                    <div className="club-agendaDate">
+                      <span className="club-agendaMonth">{tournament.date ? new Date(tournament.date).toLocaleDateString('es-AR', { month: 'short' }).replace('.', '').toUpperCase() : 'FECHA'}</span>
+                      <b>{tournament.date ? new Date(tournament.date).getDate() : '—'}</b>
+                    </div><div className="club-listMain">
                       <strong>{tournament.name}</strong>
-                      <span>{tournament.date ? formatDate(tournament.date) : 'Sin fecha'} · {tournament.status ?? 'Sin estado'}</span>
-                    </div>
-                  </div>
+                      <span>Torneo · {tournament.status ?? 'Sin estado'}</span>
+                    </div><span className="club-agendaCta">{canManageAgendaTournament ? 'Gestionar →' : 'Entrar →'}</span>
+                  </Link>
                 ))}
               </div>
             ) : (
               <div className="px-empty">Todavía no hay torneos activos o próximos.</div>
             )}
-          </div>
+          </section>
 
-          <div className="club-card">
-            <div className="club-cardHead">
-              <div>
-              <span className="club-kicker">Acciones principales</span>
-                <h2>{isActive ? '¿Qué querés hacer?' : 'Preparar aprobación'}</h2>
-              </div>
-            </div>
-            <div className="club-actionsGrid">
-              <Link href="/club/torneos/nuevo" className={`club-action ${!isActive ? 'is-muted' : ''}`}>+ Crear torneo</Link>
-              <Link href="/club/competition/series/new" className={`club-action ${!isActive ? 'is-muted' : ''}`}>+ Crear circuito</Link>
-              <Link href="/club/torneos/calendario" className="club-action">Ver agenda</Link>
-              <Link href="/club/jugadores" className="club-action">Gestionar jugadores</Link>
-            </div>
-          </div>
         </section>
+        <section className="club-recommendation"><div className="club-assistantLead"><span className="club-kicker">SELPA recomienda</span><strong>{recommendedTournament ? 'Hoy te recomiendo...' : 'No te olvides de...'}</strong></div><p>{recommendedTournament ? <>Revisá la organización de <b>{recommendedTournament.name}</b> antes de la próxima jornada.</> : 'Prepará la próxima competencia para mantener la actividad del club en movimiento.'}</p><Link href={recommendedTournament ? '/club/torneos' : '/club/competition'}>Revisar →</Link></section>
       </div>
 
       <style>{`
@@ -401,11 +400,18 @@ export default function ClubPage() {
           background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-admin-soft));
           border: 1px solid rgba(15,23,42,.07);
           border-radius: 20px;
-          display: flex;
+          display: grid;
           gap: 14px;
+          grid-template-columns: minmax(0, 1fr) auto;
           justify-content: space-between;
-          padding: 18px;
+          padding: 16px;
         }
+        .club-greeting { color:#17253f; font-size:18px; font-weight:900; line-height:1.2; margin:4px 0 0; }.club-dashboardHead .club-sub { margin:3px 0 0; max-width:46ch; }
+        .club-heroMetrics { border-top:1px solid rgba(15,23,42,.08); display:grid; gap:0; grid-column:1 / -1; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:0; padding-top:10px; }.club-heroMetrics a { color:#52657a; display:grid; gap:1px; min-width:0; padding:0 8px; text-decoration:none; }.club-heroMetrics a+a { border-left:1px solid rgba(15,23,42,.08); }.club-heroMetrics strong { color:#071b3a; font-size:24px; line-height:1; }.club-heroMetrics span { font-size:10px; font-weight:800; line-height:1.2; }
+        .club-priorityStrip { align-items:center; background:#071b39; border-radius:18px; color:#fff; display:grid; gap:10px; grid-template-columns:minmax(0,1fr); margin-top:12px; padding:12px 14px; }
+        .club-priorityStrip .club-kicker { color:#bde97c; }.club-priorityStrip h2 { font-size:17px; line-height:1.15; margin:3px 0 0; }
+        .club-priorityList { display:grid; gap:0; }.club-priorityList a,.club-priorityClear { align-items:center; color:#fff; display:grid; gap:8px; grid-template-columns:minmax(0,1fr) auto auto; min-height:39px; padding:5px 0; text-decoration:none; }.club-priorityList a+a { border-top:1px solid rgba(255,255,255,.14); }.club-priorityCopy { display:grid; gap:1px; min-width:0; }.club-priorityList b { color:#fff; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.club-priorityList small,.club-priorityClear span { color:rgba(255,255,255,.72); font-size:10px; font-weight:700; line-height:1.15; }.club-priorityBadge { border:1px solid transparent; border-radius:999px; font-size:9px; font-style:normal; font-weight:950; letter-spacing:.04em; padding:3px 6px; }.club-priorityBadge--urgent { background:rgba(255,219,135,.16); border-color:rgba(255,219,135,.34); color:#ffe0a1; }.club-priorityBadge--pending { background:rgba(190,233,124,.13); border-color:rgba(190,233,124,.30); color:#d6f2a2; }.club-priorityBadge--upcoming { background:rgba(143,211,255,.12); border-color:rgba(143,211,255,.30); color:#b9e8ff; }.club-priorityList i { color:#d6f2a2; font-size:18px; font-style:normal; }.club-priorityClear { grid-template-columns:1fr; }
+        .club-agendaCard { color:inherit; transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease; }.club-agendaCard:hover { border-color:color-mix(in srgb,var(--club-admin-accent) 30%,transparent); box-shadow:0 18px 44px var(--club-admin-glow); transform:translateY(-1px); }.club-agendaRow { align-items:center; border-left:2px solid var(--club-admin-accent); color:inherit; display:grid; gap:10px; grid-template-columns:auto minmax(0,1fr) auto; padding-left:8px; text-decoration:none; }.club-agendaRow:hover .club-agendaCta { text-decoration:underline; }.club-agendaCta { align-self:end; color:var(--club-admin-accent); font-size:11px; font-weight:900; justify-self:end; padding-bottom:2px; white-space:nowrap; }.club-agendaDate { background:#fff; border:1px solid rgba(15,23,42,.12); border-radius:10px; display:grid; justify-items:center; min-width:46px; overflow:hidden; position:relative; }.club-agendaMonth { background:var(--club-admin-soft); color:#36506e; font-size:9px; font-weight:950; letter-spacing:.06em; line-height:1; padding:5px 4px; text-align:center; width:100%; }.club-agendaDate b { color:#071b3a; font-size:21px; line-height:1; padding:6px 4px 7px; }.club-agendaDate .club-agendaRelative { background:var(--club-admin-accent); border-radius:999px; color:#fff; font-size:8px; font-weight:950; padding:3px 5px; position:absolute; right:-4px; top:-5px; }.club-recommendation { align-items:center; background:transparent; border:0; border-left:3px solid var(--club-admin-accent); border-radius:0; display:grid; gap:4px 12px; grid-template-columns:minmax(0,1fr) auto; margin-top:12px; padding:8px 0 8px 12px; }.club-assistantLead { display:grid; gap:2px; }.club-assistantLead .club-kicker { font-size:9px; }.club-recommendation strong { color:#102544; font-size:14px; }.club-recommendation p { color:#607089; font-size:12px; grid-column:1 / -1; line-height:1.35; margin:0; }.club-recommendation p b { color:#334b68; }.club-recommendation a { align-self:center; color:var(--club-admin-accent); font-size:12px; font-weight:900; text-decoration:none; white-space:nowrap; }
         .club-mainBadge, .club-statusBadge {
           border: 1px solid rgba(15, 23, 42, 0.10);
           border-radius: 999px;
@@ -425,6 +431,13 @@ export default function ClubPage() {
         .club-mainBadge--info,
         .club-mainBadge--warning,
         .club-mainBadge--danger { background: #061b3a; }
+        .club-dashboardHead .club-mainBadge {
+          align-self: start;
+          box-shadow: none;
+          font-size: 10px;
+          letter-spacing: .03em;
+          padding: 4px 7px;
+        }
         .club-statusPanel {
           border: 1px solid rgba(15, 23, 42, 0.10);
           border-radius: 18px;
@@ -478,7 +491,7 @@ export default function ClubPage() {
           display: grid;
           gap: 12px;
           min-width: 0;
-          padding: 16px;
+          padding: 14px;
         }
         .club-cardHead { align-items: flex-start; display: flex; gap: 10px; justify-content: space-between; }
         .club-cardHead h2 { color: #17253f; font-size: 18px; line-height: 1.15; margin: 2px 0 0; }
@@ -505,20 +518,23 @@ export default function ClubPage() {
           border: 1px solid color-mix(in srgb, var(--club-admin-accent) 28%, transparent);
           border-radius: 999px;
           color: #061b3a;
-          display: inline-flex;
+          display: grid;
           font-weight: 950;
-          justify-content: center;
-          min-height: 42px;
-          padding: 10px 13px;
+          gap: 9px;
+          grid-template-columns: auto minmax(0,1fr) auto;
+          justify-content: start;
+          min-height: 58px;
+          padding: 8px 10px;
           text-decoration: none;
           transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
         }
-        .club-action:hover {
+        .club-action:hover, .club-action:focus-visible {
           border-color: color-mix(in srgb, var(--club-admin-accent) 46%, transparent);
           box-shadow: 0 14px 30px var(--club-admin-glow);
           transform: translateY(-1px);
         }
         .club-action.is-muted { opacity: .62; }
+        .club-action:active { transform:translateY(0) scale(.985); }.club-action > b { align-items:center; background:var(--club-admin-soft); border-radius:10px; display:grid; font-size:18px; height:38px; justify-content:center; width:38px; }.club-action > span { display:grid; gap:2px; min-width:0; }.club-action > span strong { font-size:13px; }.club-action > span small { color:#64748b; font-size:10px; font-weight:750; line-height:1.15; }.club-action > i { color:var(--club-admin-accent); font-size:25px; font-style:normal; font-weight:800; line-height:1; }
         .club-publicGrid { display: grid; gap: 14px; margin-top: 16px; }
         .club-logoBox { align-items: center; display: flex; justify-content: center; min-height: 150px; }
         .club-logoBox img { max-height: 110px; max-width: 100%; object-fit: contain; }

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { getCurrentSession, supabase } from '@/lib/supabaseClient'
 import { buildAssetProxyUrl } from '@/lib/clubAssets'
 import { getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
 import { globalProfileFields, isGlobalProfileComplete, type GlobalProfile } from '@/lib/globalProfile'
@@ -113,7 +113,7 @@ function getPostLoginDestination(ctx: Pick<SessionCtx, 'role' | 'user' | 'global
 }
 
 async function resolveContext() {
-  const { data: s } = await supabase.auth.getSession()
+  const { data: s } = await getCurrentSession()
   const user = s?.session?.user
 
   if (!user) {
@@ -373,7 +373,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         throw new Error('No podés activar un club que no pertenece a tu sesión.')
       }
 
-      const { data: s } = await supabase.auth.getSession()
+      const { data: s } = await getCurrentSession()
       const u = s?.session?.user
       if (!u) return
 

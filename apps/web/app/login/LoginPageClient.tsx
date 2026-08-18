@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
+import { getCurrentSession, supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
 import PasswordField from '@/components/auth/PasswordField'
 import SelpaLoader from '@/components/SelpaLoader'
@@ -41,38 +41,44 @@ export default function LoginPageClient() {
     return `${window.location.origin}/auth/callback${next}`
   }, [nextPath])
 
-  useEffect(() => {
+  const queryAlert = useMemo<AlertState>(() => {
     const confirmed = searchParams.get('confirmed')
     const error = searchParams.get('error')
 
     if (confirmed === '1') {
-      setAlert({
+      return {
         variant: 'success',
         title: 'Email confirmado',
         message:
           'Tu cuenta fue validada correctamente. Ahora podés iniciar sesión.',
-      })
-      return
+      }
     }
 
     if (error) {
-      setAlert({
+      return {
         variant: 'error',
         title: 'No se pudo completar la validación',
         message: decodeURIComponent(error),
-      })
+      }
     }
+
+    return null
   }, [searchParams])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data?.session?.user) router.replace(nextPath ? `/auth/post-login?next=${encodeURIComponent(nextPath)}` : '/auth/post-login')
-    })
+    getCurrentSession()
+      .then(({ data }) => {
+        if (data?.session?.user) router.replace(nextPath ? `/auth/post-login?next=${encodeURIComponent(nextPath)}` : '/auth/post-login')
+      })
+      .catch(() => {})
   }, [nextPath, router])
 
   async function signInWithGoogle() {
     setAlert(null)
     setLoading(true)
+
+    // Espera la lectura inicial compartida para no competir por el lock de auth.
+    await getCurrentSession().catch(() => null)
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -105,6 +111,9 @@ export default function LoginPageClient() {
 
     setLoading(true)
     setAlert(null)
+
+    // La comprobación inicial y el login no deben correr sobre el mismo token a la vez.
+    await getCurrentSession().catch(() => null)
 
     const { error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
@@ -180,11 +189,11 @@ export default function LoginPageClient() {
               </button>
               <p className="px-loginSecureText">Tus datos viajan protegidos mediante conexión segura.</p>
 
-              {alert ? (
+              {alert ?? queryAlert ? (
                 <AuthAlert
-                  variant={alert.variant}
-                  title={alert.title}
-                  message={alert.message}
+                  variant={(alert ?? queryAlert)!.variant}
+                  title={(alert ?? queryAlert)!.title}
+                  message={(alert ?? queryAlert)!.message}
                 />
               ) : null}
 

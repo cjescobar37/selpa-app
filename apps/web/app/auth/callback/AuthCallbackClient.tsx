@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
+import { getCurrentSession, supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
 
 type AlertState =
@@ -42,6 +42,7 @@ export default function AuthCallbackClient() {
 
         const code = searchParams.get('code')
         if (code) {
+          await getCurrentSession().catch(() => null)
           const { error } = await supabase.auth.exchangeCodeForSession(code)
           if (error) {
             if (!active) return
@@ -55,7 +56,7 @@ export default function AuthCallbackClient() {
         }
 
         await new Promise((resolve) => setTimeout(resolve, 250))
-        const { data } = await supabase.auth.getSession()
+        const { data } = await getCurrentSession()
 
         if (!active) return
 
@@ -70,12 +71,12 @@ export default function AuthCallbackClient() {
           title: 'No encontramos una sesión activa',
           message: 'Volvé a intentar o ingresá manualmente.',
         })
-      } catch (e: any) {
+      } catch (error: unknown) {
         if (!active) return
         setAlert({
           variant: 'error',
           title: 'Falló la validación',
-          message: e?.message ?? 'Error inesperado.',
+          message: error instanceof Error ? error.message : 'Error inesperado.',
         })
       }
     })()

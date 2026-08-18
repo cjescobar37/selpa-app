@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import type { ClubCapability } from '@/lib/clubPermissions'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -31,6 +32,8 @@ type UpdateDraftInput = {
   competition_system?: unknown
   venue_name?: unknown
   tournament_courts?: unknown
+  court_ids?: unknown
+  primary_venue_id?: unknown
   schedule_config?: unknown
   points_config?: unknown
   group_tiebreakers?: unknown
@@ -257,50 +260,6 @@ function validateDraftPayload(body: UpdateDraftInput) {
   }
 }
 
-async function getTournamentRegistrationIds(tournamentId: string, clubId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('tournament_registrations')
-    .select('id')
-    .eq('tournament_id', tournamentId)
-    .eq('club_id', clubId)
-
-  if (error) throw error
-  return (data ?? []).map((row) => String(row.id)).filter(Boolean)
-}
-
-async function deleteRows(table: string, filters: Record<string, string>) {
-  let query = supabaseAdmin
-    .from(table)
-    .delete()
-
-  Object.entries(filters).forEach(([key, value]) => {
-    query = query.eq(key, value)
-  })
-
-  const { error } = await query
-  if (error) throw error
-}
-
-async function cleanupTournamentDataForDelete(tournamentId: string, clubId: string) {
-  const registrationIds = await getTournamentRegistrationIds(tournamentId, clubId)
-
-  if (registrationIds.length > 0) {
-    const { error: paymentsError } = await supabaseAdmin
-      .from('payments')
-      .delete()
-      .in('registration_id', registrationIds)
-
-    if (paymentsError) throw paymentsError
-  }
-
-  await deleteRows('tournament_team_seed_snapshots', { tournament_id: tournamentId, club_id: clubId })
-  await deleteRows('tournament_group_teams', { tournament_id: tournamentId })
-  await deleteRows('tournament_groups', { tournament_id: tournamentId })
-  await deleteRows('tournament_matches', { tournament_id: tournamentId, club_id: clubId })
-  await deleteRows('tournament_registrations', { tournament_id: tournamentId, club_id: clubId })
-  await deleteRows('tournament_teams', { tournament_id: tournamentId, club_id: clubId })
-}
-
 export async function PATCH(
   req: NextRequest,
   context: { params: Promise<{ clubId: string; tournamentId: string }> }
@@ -317,6 +276,7 @@ export async function PATCH(
     if (
       action !== 'publish' &&
       action !== 'update_tournament_courts' &&
+      action !== 'replace_tournament_court_assignments' &&
       action !== 'update_draft' &&
       action !== 'delete_tournament' &&
       action !== 'cancel_tournament'
@@ -327,6 +287,7 @@ export async function PATCH(
     const capabilityByAction: Record<string, ClubCapability> = {
       publish: 'tournaments:publish',
       update_tournament_courts: 'tournaments:update',
+      replace_tournament_court_assignments: 'tournaments:update',
       update_draft: 'tournaments:update',
       delete_tournament: 'tournaments:delete',
       cancel_tournament: 'tournaments:cancel',
@@ -353,16 +314,35 @@ export async function PATCH(
 
     const current = tournament as TournamentRow
     if (action === 'delete_tournament') {
-      await cleanupTournamentDataForDelete(tournamentId, clubId)
-
-      const { error: deleteError } = await supabaseAdmin
-        .from('tournaments')
-        .delete()
-        .eq('id', tournamentId)
-        .eq('club_id', clubId)
+      const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (!url || !anonKey || !token) {
+        return NextResponse.json({ error: 'Sesión inválida.', code: 'UNAUTHORIZED' }, { status: 401 })
+      }
+      const userClient = createClient(url, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+      const { error: deleteError } = await userClient.rpc('delete_tournament_draft_atomic', {
+        p_club_id: clubId,
+        p_tournament_id: tournamentId,
+      })
 
       if (deleteError) {
-        return NextResponse.json({ error: deleteError.message }, { status: 500 })
+        if (deleteError.message.includes('TOURNAMENT_DELETE_BLOCKED')) {
+          return NextResponse.json({
+            error: 'Este torneo ya tiene actividad vinculada y no puede eliminarse. Podés cancelarlo para conservar el historial.',
+            code: 'TOURNAMENT_DELETE_BLOCKED',
+          }, { status: 409 })
+        }
+        if (deleteError.code === '42501') {
+          return NextResponse.json({ error: 'No tenés permisos para eliminar este torneo.', code: 'UNAUTHORIZED' }, { status: 403 })
+        }
+        if (deleteError.code === 'P0002') {
+          return NextResponse.json({ error: 'Torneo no encontrado para este club.', code: 'TOURNAMENT_NOT_FOUND' }, { status: 404 })
+        }
+        return NextResponse.json({ error: 'No pudimos eliminar el torneo. Intentá nuevamente.', code: 'TOURNAMENT_DELETE_FAILED' }, { status: 500 })
       }
 
       return NextResponse.json({ ok: true, deleted: true, tournamentId })
@@ -415,6 +395,35 @@ export async function PATCH(
       }
 
       return NextResponse.json({ ok: true, tournament: updated })
+    }
+
+    if (action === 'replace_tournament_court_assignments') {
+      const primaryVenueId = normalizeText(body.primary_venue_id)
+      const courtIds = Array.isArray(body.court_ids)
+        ? body.court_ids.map((value) => normalizeText(value)).filter((value): value is string => Boolean(value))
+        : []
+      if (!primaryVenueId) {
+        return NextResponse.json({ error: 'La sede principal es obligatoria.', code: 'VALIDATION_ERROR' }, { status: 400 })
+      }
+      const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (!url || !anonKey || !token) return NextResponse.json({ error: 'Sesión inválida.', code: 'UNAUTHORIZED' }, { status: 401 })
+      const userClient = createClient(url, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+      const { data, error } = await userClient.rpc('replace_tournament_court_assignments', {
+        p_club_id: clubId,
+        p_tournament_id: tournamentId,
+        p_primary_venue_id: primaryVenueId,
+        p_court_ids: courtIds,
+      })
+      if (error) {
+        const status = error.code === '42501' ? 403 : error.code === 'P0002' ? 404 : 400
+        return NextResponse.json({ error: error.message, code: 'COURT_ASSIGNMENT_FAILED' }, { status })
+      }
+      return NextResponse.json({ ok: true, assignment: data })
     }
 
     if (action === 'update_tournament_courts') {

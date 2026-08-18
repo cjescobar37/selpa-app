@@ -12,14 +12,14 @@ import styles from './SeriesEventsAdmin.module.css'
 type Request = <T>(url: string, init?: RequestInit) => Promise<T>
 type EventAdminDetail = CompetitionEventDetail & { allowed_actions: Record<string, boolean> }
 type Option = { id: string; name: string }
-type Props = { clubId: string; series: CompetitionSeriesDetail; events: CompetitionSeriesEvent[]; request: Request; reload: () => Promise<void> }
+type Props = { clubId: string; series: CompetitionSeriesDetail; events: CompetitionSeriesEvent[]; request: Request; reload: () => Promise<void>; hideCreate?: boolean }
 const statusLabel: Record<string, string> = { DRAFT: 'Borrador', SCHEDULED: 'Programado', COMPLETED: 'Finalizado', CANCELLED: 'Cancelado' }
 const typeLabel: Record<string, string> = { STANDARD: 'Competitivo', EXHIBITION: 'Exhibición', FRIENDLY: 'Amistoso' }
 const blockerLabel: Record<string, string> = { SERIES_NOT_ACTIVE: 'Activá el circuito para programar la fecha.', DATES_MISSING: 'Completá inicio y fin.', TIMEZONE_MISSING: 'Guardá la fecha para definir la zona horaria.', DIVISIONS_MISSING: 'Agregá al menos una división.' }
 const idempotency = () => crypto.randomUUID()
 const localValue = (value: string | null) => value ? new Date(value).toISOString().slice(0, 16) : ''
 
-export default function SeriesEventsAdmin({ clubId, series, events, request, reload }: Props) {
+export default function SeriesEventsAdmin({ clubId, series, events, request, reload, hideCreate = false }: Props) {
   const searchParams = useSearchParams()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, EventAdminDetail>>({})
@@ -109,7 +109,7 @@ export default function SeriesEventsAdmin({ clubId, series, events, request, rel
   const lifecycle = (operation: 'schedule' | 'cancel' | 'archive') => detail && void mutate(operation, () => request(`${base}/${detail.event.id}/${operation}`, json(operation === 'cancel' ? { reason } : {}, 'POST', detail.event.revision, true)), operation === 'schedule' ? 'Fecha programada.' : operation === 'cancel' ? 'Fecha cancelada.' : 'Fecha archivada.')
 
   return <section className={styles.events}>
-    <header><div><span>FECHAS</span><h2>Agenda del circuito</h2></div>{series.series.status === 'SCHEDULED' || series.series.status === 'ACTIVE' ? <details><summary><Plus size={15} />Nueva fecha</summary><div className={styles.create}><input value={newName} onChange={event => setNewName(event.target.value)} placeholder="Nombre de la fecha" maxLength={120} /><button disabled={!newName.trim() || busy === 'create'} onClick={() => void createEvent()}>{busy === 'create' ? 'Creando…' : 'Crear borrador'}</button></div></details> : null}</header>
+    {!hideCreate ? <header><div><span>FECHAS</span><h2>Agenda del circuito</h2></div>{series.series.status === 'SCHEDULED' || series.series.status === 'ACTIVE' ? <details><summary><Plus size={15} />Nueva fecha</summary><div className={styles.create}><input value={newName} onChange={event => setNewName(event.target.value)} placeholder="Nombre de la fecha" maxLength={120} /><button disabled={!newName.trim() || busy === 'create'} onClick={() => void createEvent()}>{busy === 'create' ? 'Creando…' : 'Crear borrador'}</button></div></details> : null}</header> : null}
     {notice && !selectedId ? <p className={notice.kind === 'error' ? styles.error : styles.success}>{notice.text}</p> : null}
     {!events.length ? <div className={styles.empty}><CalendarDays size={22} /><strong>Sin fechas todavía</strong><p>Creá el primer borrador cuando el circuito esté programado.</p></div> : <div className={styles.list}>{events.map(event => {
       const item = details[event.id], divisions = item?.divisions.filter(value => value.is_active) ?? [], link = divisions.find(value => value.active_tournament_link)?.active_tournament_link

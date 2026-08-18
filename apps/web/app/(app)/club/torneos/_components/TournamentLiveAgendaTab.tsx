@@ -37,6 +37,11 @@ type LiveAgendaResponse = {
 type Props = {
   clubId?: string | null
   tournamentId?: string | null
+  tournamentStatus?: string | null
+  registrationsCount?: number
+  hasGroups?: boolean
+  onPublish?: () => void
+  onOpenGroups?: () => void
 }
 
 function formatTime(value?: string | null) {
@@ -93,10 +98,11 @@ function LiveMatchRow({ match, compactCourt }: { match: LiveAgendaMatch; compact
   )
 }
 
-export function TournamentLiveAgendaTab({ clubId, tournamentId }: Props) {
+export function TournamentLiveAgendaTab({ clubId, tournamentId, tournamentStatus, registrationsCount = 0, hasGroups = false, onPublish, onOpenGroups }: Props) {
   const [agenda, setAgenda] = useState<LiveAgendaResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [filter, setFilter] = useState<'all' | 'pending' | 'live' | 'played'>('all')
 
   useEffect(() => {
     let cancelled = false
@@ -146,11 +152,27 @@ export function TournamentLiveAgendaTab({ clubId, tournamentId }: Props) {
     }
   }, [clubId, tournamentId])
 
-  const timeline = agenda?.timeline ?? []
-  const scheduledCourts = useMemo(
-    () => (agenda?.courts ?? []).filter((court) => court.matches.length > 0),
-    [agenda?.courts]
-  )
+  const timeline = useMemo(() => agenda?.timeline ?? [], [agenda])
+  const filteredTimeline = useMemo(() => timeline.filter((match) => {
+    if (filter === 'pending') return !match.isPlayed && !match.isProbablyInProgress
+    if (filter === 'live') return match.isProbablyInProgress
+    if (filter === 'played') return match.isPlayed
+    return true
+  }), [filter, timeline])
+  const matchesByDay = useMemo(() => filteredTimeline.reduce<Record<string, LiveAgendaMatch[]>>((groups, match) => {
+    const key = match.scheduled_at ? new Date(match.scheduled_at).toISOString().slice(0, 10) : 'Sin fecha'
+    groups[key] = [...(groups[key] ?? []), match]
+    return groups
+  }, {}), [filteredTimeline])
+  const conflicts = useMemo(() => {
+    const slots = new Map<string, number>()
+    timeline.filter((match) => match.scheduled_at && match.court_name).forEach((match) => {
+      const key = `${match.court_name}|${match.scheduled_at}`
+      slots.set(key, (slots.get(key) ?? 0) + 1)
+    })
+    return [...slots.entries()].filter(([, count]) => count > 1)
+  }, [timeline])
+  const isDraft = String(tournamentStatus ?? '').toUpperCase() === 'DRAFT'
 
   if (loading && !agenda) {
     return <div className="live-empty">Cargando agenda del torneo...</div>
@@ -162,76 +184,48 @@ export function TournamentLiveAgendaTab({ clubId, tournamentId }: Props) {
 
   return (
     <section className="live-agenda">
-      <div className="live-metrics">
+      <div className="live-metrics" aria-label="Resumen de agenda">
         <div className="live-metric">
           <span>Pendientes</span>
           <strong>{agenda?.metrics.pendingMatches ?? 0}</strong>
         </div>
-        <div className="live-metric live-metric--late">
-          <span>Atrasados</span>
-          <strong>{agenda?.metrics.lateMatches ?? 0}</strong>
-        </div>
-        <div className="live-metric live-metric--live">
+        <div className={`live-metric ${(agenda?.metrics.probablyInProgressMatches ?? 0) > 0 ? 'live-metric--live' : ''}`}>
           <span>En curso</span>
           <strong>{agenda?.metrics.probablyInProgressMatches ?? 0}</strong>
         </div>
+        <div className={`live-metric ${(agenda?.metrics.lateMatches ?? 0) > 0 ? 'live-metric--late' : ''}`}>
+          <span>Atrasados</span>
+          <strong>{agenda?.metrics.lateMatches ?? 0}</strong>
+        </div>
       </div>
 
-      <section className="live-section">
-        <div className="live-sectionHead">
-          <span>Por cancha</span>
-          <strong>{scheduledCourts.length} cancha{scheduledCourts.length === 1 ? '' : 's'}</strong>
-        </div>
-        {scheduledCourts.length > 0 ? (
-          <div className="live-courtGrid">
-            {scheduledCourts.map((court) => (
-              <article key={court.key} className="live-courtCard">
-                <header>
-                  <strong>{court.courtName ?? 'Sin cancha'}</strong>
-                  <span>{court.matches.length} partido{court.matches.length === 1 ? '' : 's'}</span>
-                </header>
-                <div className="live-matchList">
-                  {court.matches.map((match) => <LiveMatchRow key={match.id} match={match} />)}
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="live-empty">Todavía no hay partidos con cancha asignada.</div>
-        )}
-      </section>
-
-      <section className="live-section">
-        <div className="live-sectionHead">
-          <span>Timeline</span>
-          <strong>{timeline.length} partido{timeline.length === 1 ? '' : 's'}</strong>
-        </div>
-        {timeline.length > 0 ? (
-          <div className="live-timeline">
-            {timeline.map((match) => <LiveMatchRow key={match.id} match={match} compactCourt />)}
-          </div>
-        ) : (
-          <div className="live-empty">Todavía no hay partidos para mostrar en agenda.</div>
-        )}
-      </section>
+      {timeline.length === 0 ? (
+        <section className="live-empty live-empty--context">
+          <strong>Todavía no hay partidos en la agenda</strong>
+          <span>{isDraft ? 'Primero publicá el torneo y completá las inscripciones. Después SELPA podrá organizar los partidos.' : registrationsCount > 0 && !hasGroups ? 'Las parejas están listas. Generá los grupos para crear los primeros partidos.' : 'Cuando se generen los grupos, vas a ver los partidos organizados por día y cancha.'}</span>
+          {isDraft && onPublish ? <button type="button" onClick={onPublish}>Publicar torneo</button> : null}
+          {!isDraft && registrationsCount > 0 && !hasGroups && onOpenGroups ? <button type="button" onClick={onOpenGroups}>Ir a Grupos</button> : null}
+        </section>
+      ) : (
+        <section className="live-agendaList">
+          {conflicts.length > 0 ? <div className="live-conflicts"><strong>⚠ {conflicts.length} conflicto{conflicts.length === 1 ? '' : 's'} de programación</strong><span>{conflicts[0][0].replace('|', ' · ')}</span></div> : null}
+          <header className="live-agendaHead"><div><span>Agenda</span><strong>{timeline.length} partido{timeline.length === 1 ? '' : 's'}</strong></div><div className="live-filters">{([['all', 'Todos'], ['pending', 'Pendientes'], ['live', 'En curso'], ['played', 'Finalizados']] as const).map(([value, label]) => <button key={value} type="button" className={filter === value ? 'is-active' : ''} onClick={() => setFilter(value)}>{label}</button>)}</div></header>
+          {Object.entries(matchesByDay).map(([day, matches]) => <div key={day} className="live-day"><strong>{day === 'Sin fecha' ? day : new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'short' }).format(new Date(`${day}T12:00:00`))}</strong><div className="live-timeline">{matches.map((match) => <LiveMatchRow key={match.id} match={match} compactCourt />)}</div></div>)}
+        </section>
+      )}
 
       <style jsx>{`
         .live-agenda { display: grid; gap: 12px; min-width: 0; }
-        .live-metrics { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .live-metric { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 12px; display: grid; gap: 3px; min-width: 0; padding: 11px 12px; }
+        .live-metrics { background:#fff; border:1px solid rgba(15,23,42,.08); border-radius:12px; display:grid; gap:0; grid-template-columns:repeat(3,minmax(0,1fr)); overflow:hidden; }
+        .live-metric { border-right:1px solid rgba(15,23,42,.07); display:grid; gap:3px; min-width:0; padding:10px 11px; }
+        .live-metric:last-child { border-right:0; }
         .live-metric span { color: #64748b; font-size: 11px; font-weight: 950; text-transform: uppercase; }
         .live-metric strong { color: #17253f; font-size: 24px; font-weight: 950; line-height: 1; }
-        .live-metric--late { background: #fff7ed; border-color: rgba(217,119,6,.18); }
-        .live-metric--live { background: #ecfdf3; border-color: rgba(22,163,74,.18); }
-        .live-section { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 14px; display: grid; gap: 10px; min-width: 0; padding: 12px; }
+        .live-metric--late { background:#fff7ed; }
+        .live-metric--live { background:#ecfdf3; }
         .live-sectionHead { align-items: center; display: flex; gap: 10px; justify-content: space-between; min-width: 0; }
         .live-sectionHead span { color: #17253f; font-size: 15px; font-weight: 950; }
         .live-sectionHead strong { color: #64748b; font-size: 12px; font-weight: 900; white-space: nowrap; }
-        .live-courtGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
-        .live-courtCard { background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 12px; display: grid; gap: 8px; min-width: 0; padding: 10px; }
-        .live-courtCard header { align-items: center; display: flex; gap: 8px; justify-content: space-between; min-width: 0; }
-        .live-courtCard header strong { color: #17253f; font-size: 14px; font-weight: 950; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .live-courtCard header span { color: #64748b; font-size: 11px; font-weight: 900; white-space: nowrap; }
         .live-matchList, .live-timeline { display: grid; gap: 7px; min-width: 0; }
         .live-matchRow { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 10px; display: grid; gap: 8px; grid-template-columns: 76px minmax(0, 1fr) auto; min-width: 0; padding: 8px; }
         .live-matchMeta { display: grid; gap: 2px; min-width: 0; }
@@ -247,17 +241,37 @@ export function TournamentLiveAgendaTab({ clubId, tournamentId }: Props) {
         .live-status--played { background: #eef2ff; color: #3730a3; }
         .live-status--cancelled { background: #ffe4e6; color: #9f1239; }
         .live-status--empty { background: #f1f5f9; color: #64748b; }
-        .live-empty { background: #f8fafc; border: 1px dashed rgba(15,23,42,.12); border-radius: 12px; color: #64748b; font-size: 13px; font-weight: 850; padding: 12px; }
+        .live-empty { background:#f8fafc; border:1px dashed rgba(15,23,42,.12); border-radius:12px; color:#64748b; font-size:13px; font-weight:850; padding:12px; }
+        .live-empty--context { display:grid; gap:5px; padding:14px; }
+        .live-empty--context strong { color:#17253f; font-size:16px; }
+        .live-empty--context span { line-height:1.4; }
+        .live-empty--context button { background:var(--club-admin-accent,#65a30d); border:0; border-radius:9px; color:#fff; font:inherit; font-size:12px; font-weight:950; justify-self:start; margin-top:4px; min-height:38px; padding:8px 12px; }
+        .live-agendaList { display:grid; gap:10px; }
+        .live-agendaHead { align-items:center; display:flex; gap:8px; justify-content:space-between; }
+        .live-agendaHead > div:first-child { display:grid; gap:1px; }
+        .live-agendaHead span { color:#64748b; font-size:10px; font-weight:950; letter-spacing:.06em; text-transform:uppercase; }
+        .live-agendaHead strong { color:#17253f; font-size:15px; }
+        .live-filters { display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; }
+        .live-filters button { background:#f8fafc; border:1px solid rgba(15,23,42,.08); border-radius:999px; color:#64748b; font:inherit; font-size:10px; font-weight:900; min-height:28px; padding:4px 7px; }
+        .live-filters button.is-active { background:color-mix(in srgb,var(--club-admin-accent,#65a30d) 12%,white); border-color:color-mix(in srgb,var(--club-admin-accent,#65a30d) 36%,transparent); color:#17253f; }
+        .live-day { border-top:1px solid rgba(15,23,42,.08); display:grid; gap:7px; padding-top:9px; }
+        .live-day > strong { color:#52657a; font-size:11px; font-weight:950; letter-spacing:.05em; text-transform:uppercase; }
+        .live-conflicts { background:#fff7df; border:1px solid rgba(217,119,6,.22); border-radius:10px; color:#854d0e; display:grid; gap:2px; padding:8px 10px; }
+        .live-conflicts strong { font-size:12px; }
+        .live-conflicts span { font-size:11px; font-weight:750; }
         .live-empty--warning { background: #fff7df; border-color: rgba(217,119,6,.24); color: #854d0e; }
         @media (max-width: 900px) {
-          .live-courtGrid { grid-template-columns: 1fr; }
+          .live-agendaHead { align-items:flex-start; flex-direction:column; }
         }
         @media (max-width: 560px) {
-          .live-metrics { grid-template-columns: 1fr; }
+          .live-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
           .live-matchRow { align-items: start; grid-template-columns: 1fr; }
           .live-matchTeams { grid-template-columns: 1fr; }
           .live-matchTeams span { display: none; }
           .live-status { justify-self: start; }
+          .live-matchRow { grid-template-columns:60px minmax(0,1fr) auto; }
+          .live-matchTeams { grid-template-columns:1fr; }
+          .live-matchTeams span { display:none; }
         }
       `}</style>
     </section>

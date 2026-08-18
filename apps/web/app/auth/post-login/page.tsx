@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import AuthAlert from '@/components/AuthAlert'
 import SelpaLoader from '@/components/SelpaLoader'
 import { useSession } from '@/components/session/SessionProvider'
-import { supabase } from '@/lib/supabaseClient'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
@@ -31,25 +30,13 @@ export default function PostLoginPage() {
     let alive = true
     let timeout: ReturnType<typeof setTimeout> | null = null
 
-    setStuck(false)
-
     if (session.status === 'loading') return
 
     if (!session.user) {
-      ;(async () => {
-        const { data } = await supabase.auth.getSession()
+      timeout = setTimeout(() => {
         if (!alive) return
-
-        if (data.session?.user) {
-          await session.refresh({ silent: true })
-          return
-        }
-
-        timeout = setTimeout(() => {
-          if (!alive) return
-          setStuck(true)
-        }, 4500)
-      })()
+        setStuck(true)
+      }, 4500)
 
       return () => {
         alive = false

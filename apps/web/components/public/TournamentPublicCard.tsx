@@ -48,13 +48,6 @@ function formatMoney(value?: number | null) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value)
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return 'Fecha a definir'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Fecha a definir'
-  return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }).format(date)
-}
-
 function resolveFlyerUrl(rawUrl?: string | null) {
   if (!rawUrl) return null
   if (rawUrl.startsWith('/')) return rawUrl
@@ -66,6 +59,13 @@ function getTournamentType(value: TournamentPublicCardData) {
   const normalized = String(raw ?? '').trim().toUpperCase()
   if (normalized === 'CHALLENGER' || normalized === 'MASTER' || normalized === 'MASTER_FINAL') return normalized
   return 'OPEN'
+}
+
+function formatCompactDate(value?: string | null) {
+  if (!value) return 'A definir'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'A definir'
+  return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short', year: '2-digit' }).format(date).replace('.', '')
 }
 
 function isManualFlyer(value: TournamentPublicCardData) {
@@ -149,8 +149,15 @@ export default function TournamentPublicCard({
         ) : null}
         <h3>{tournament.name}</h3>
         <div className="TournamentPublicCard__dates">
-          <p><CalendarDays size={13} /> <span><strong>{formatDate(tournament.startDate)}</strong></span></p>
-          <p><CalendarDays size={13} /> <span><strong>{formatDate(endDate ?? tournament.endDate ?? tournament.startDate)}</strong></span></p>
+          <div className="TournamentPublicCard__dateRange">
+            <p className="TournamentPublicCard__period">
+              <CalendarDays size={13} />
+              <span><small>Inicio</small><strong>{formatCompactDate(tournament.startDate)}</strong></span>
+              <i aria-hidden="true">—</i>
+              <span><small>Fin</small><strong>{formatCompactDate(endDate ?? tournament.endDate ?? tournament.startDate)}</strong></span>
+            </p>
+          </div>
+          {tournament.registrationDeadline ? <p className="TournamentPublicCard__deadline"><CalendarDays size={13} /><span><small>Cierre</small><strong>{formatCompactDate(tournament.registrationDeadline)}</strong></span></p> : null}
         </div>
         <div className="TournamentPublicCard__actions">
           <Link href={`/torneos/${tournament.id}`}>ENTRAR <ArrowRight className="TournamentPublicCard__actionIcon" size={14} /></Link>

@@ -424,7 +424,7 @@ export default function ClubJugadoresPage() {
                     {paginatedPlayers.map((player) => {
                       const hasAccount = hasPlayerAccount(player)
                       return (
-                        <Link key={player.id} className="club-playerTableRow" role="row" href={`/club/jugadores/${player.user_id ?? player.id}?own=1`} aria-label={`Gestionar a ${player.full_name}`}>
+                        <Link key={player.id} className="club-playerTableRow" role="row" href={`/club/jugadores/${player.user_id ?? player.id}/administracion`} aria-label={`Gestionar a ${player.full_name}`}>
                           <div className="club-playerIdentity">
                             <div className="club-person club-person--compact">
                               <span className="club-avatar club-avatar--sm">

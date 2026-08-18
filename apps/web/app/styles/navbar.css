@@ -2843,7 +2843,7 @@
   }
 
   .TournamentPublicCard__date strong{
-    font-size: 22px;
+    font-size: 25px;
     grid-row: 1 / span 2;
     letter-spacing: -.04em;
     line-height: .9;
@@ -2861,7 +2861,7 @@
 
   .TournamentPublicCard__status{
     flex: 0 0 auto;
-    font-size: 8px;
+    font-size: 8.5px;
     gap: 3px;
     min-height: 18px;
     order: 2;
@@ -2909,10 +2909,11 @@
 
   .TournamentPublicCard__dates{
     align-items: center;
-    justify-content: center;
     display: flex;
-    flex-wrap: nowrap;
-    margin-top: 6px;
+    flex-direction: column;
+    justify-content: stretch;
+    gap: 2px;
+    margin-top: 5px;
     min-width: 0;
     order: 4;
     overflow: hidden;
@@ -2922,39 +2923,89 @@
 
   .TournamentPublicCard__dates p{
     align-items: center;
-    display: inline-grid;
-    flex: 0 1 auto;
-    gap: 4px;
-    grid-template-columns: 12px minmax(0,1fr);
+    display: grid;
+    gap: 3px;
+    grid-template-columns: 10px minmax(0, 1fr);
     min-width: 0;
   }
 
+  .TournamentPublicCard__dateRange{
+    display:block;
+    width: 100%;
+  }
+
+  .TournamentPublicCard__period{
+    align-items:center !important;
+    display:flex !important;
+    gap:4px !important;
+    grid-template-columns:none !important;
+    justify-content:center;
+    width:100%;
+  }
+
+  .TournamentPublicCard__period i{
+    color:#94a3b8;
+    font-size:10px;
+    font-style:normal;
+    line-height:1;
+  }
+
+  .TournamentPublicCard__period span,
+  .TournamentPublicCard__deadline span{
+    align-items:baseline;
+    display:inline-flex;
+    gap:3px;
+  }
+
+  .TournamentPublicCard__period small,
+  .TournamentPublicCard__deadline small{
+    font-size:7.5px;
+  }
+
+  .TournamentPublicCard__deadline{
+    align-self:flex-end;
+    align-items:center;
+    display:flex !important;
+    grid-template-columns:none !important;
+    justify-content:center;
+    text-align:center;
+    width: 100%;
+  }
+
   .TournamentPublicCard__dates svg{
-    height: 11px;
+    height: 10px;
     margin-top: 0;
-    width: 11px;
+    width: 10px;
+  }
+
+  .TournamentPublicCard__dates small{
+    display: block;
+    font-size: 7.5px;
+    line-height: 1;
   }
 
   .TournamentPublicCard__dates strong{
-    font-size: 10.5px;
+    display: block;
+    font-size: 9.5px;
     font-weight: 820;
     white-space: nowrap;
   }
 
   .TournamentPublicCard__actions{
-    align-self: end;
-    justify-content: flex-end;
+    align-self: center;
+    justify-content: center;
     margin-top: auto;
     order: 5;
+    width: 100%;
   }
 
   .TournamentPublicCard__actions a{
     font-size: 10px;
     font-weight: 850;
     gap: 4px;
-    min-height: 26px;
-    min-width: 0;
-    padding: 4px 8px;
+    min-height: 28px;
+    min-width: 78px;
+    padding: 5px 10px;
   }
 
   .TournamentPublicCard__actionIcon{

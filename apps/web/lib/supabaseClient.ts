@@ -8,13 +8,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
-  var __supabase__: SupabaseClient<any> | undefined
+  var __supabase__: SupabaseClient | undefined
 }
 
-export const supabase: SupabaseClient<any> =
+export const supabase: SupabaseClient =
   globalThis.__supabase__ ??
-  createClient<any>(supabaseUrl, supabaseAnonKey, {
+  createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
@@ -23,3 +22,18 @@ export const supabase: SupabaseClient<any> =
   })
 
 if (process.env.NODE_ENV !== 'production') globalThis.__supabase__ = supabase
+
+// Auth-js serializa el acceso al token en el navegador. Durante un redirect de
+// login, el callback, el provider y la pantalla puente pueden pedir la sesión
+// en el mismo tick; esta compuerta evita que compitan por ese lock.
+let sessionReadPromise: ReturnType<typeof supabase.auth.getSession> | null = null
+
+export function getCurrentSession() {
+  if (!sessionReadPromise) {
+    sessionReadPromise = supabase.auth.getSession().finally(() => {
+      sessionReadPromise = null
+    })
+  }
+
+  return sessionReadPromise
+}
