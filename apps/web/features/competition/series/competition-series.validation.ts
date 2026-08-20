@@ -63,6 +63,14 @@ export function validateEligibility(input: unknown): Result<{ ruleId:string; rev
   return { value:{ruleId:body.rule_id,revision,seriesRevision,config} }
 }
 
+export function validatePrizes(input: unknown): Result<{ seriesRevision: number; prizes: unknown[] }> {
+  const body=object(input); if (!body || !Array.isArray(body.prizes)) return { error:'Los premios no son válidos.' }
+  const seriesRevision=Number(body.series_revision)
+  if (!Number.isInteger(seriesRevision) || seriesRevision<1) return { error:'La revisión del circuito es inválida.' }
+  if (body.prizes.length>50) return { error:'La cantidad de premios no es válida.' }
+  return { value:{seriesRevision,prizes:body.prizes} }
+}
+
 export function validateLifecycle(input: unknown): Result<{ action:string; revision:number; confirm:boolean; reason:string|null }> {
   const body=object(input); if (!body) return { error:'El contenido no es válido.' }
   const action=text(body.action).toUpperCase(), revision=Number(body.revision)

@@ -10,11 +10,11 @@ export async function listSeries(client:SupabaseClient,clubId:string,seasonId?:s
 export async function getSeriesDetail(client:SupabaseClient,clubId:string,seriesId:string):Promise<CompetitionSeriesDetail> {
   const {data:series,error}=await client.from('competition_series').select('*').eq('club_id',clubId).eq('id',seriesId).maybeSingle()
   if(error) throw fail('No pude leer el circuito',error); if(!series) throw Object.assign(new Error('Circuito inexistente.'),{code:'P0002'})
-  const {data:divisions,error:divisionError}=await client.from('competition_series_divisions').select('*').eq('club_id',clubId).eq('series_id',seriesId).order('sort_order')
+  const {data:divisions,error:divisionError}=await client.from('competition_series_divisions').select('*,division:competition_divisions(id,modality,branch:competition_branches(name),segment:competition_segments(name),category:competition_categories(name))').eq('club_id',clubId).eq('series_id',seriesId).order('sort_order')
   if(divisionError) throw fail('No pude leer las divisiones',divisionError)
   const ids=(divisions??[]).map((item)=>item.id); const rules=ids.length ? await client.from('competition_series_rules').select('*').in('series_division_id',ids).order('version',{ascending:false}) : {data:[],error:null}
   if(rules.error) throw fail('No pude leer las reglas',rules.error)
-  const ruleIds=(rules.data??[]).map((item)=>item.id); const eligibility=ruleIds.length ? await client.from('competition_series_eligibility').select('*').in('series_rule_id',ruleIds) : {data:[],error:null}
+  const ruleIds=(rules.data??[]).map((item)=>item.id); const eligibility=ruleIds.length ? await client.from('competition_series_eligibility').select('*,age_category:competition_age_categories(name)').in('series_rule_id',ruleIds) : {data:[],error:null}
   if(eligibility.error) throw fail('No pude leer la elegibilidad',eligibility.error)
   return {series,divisions:(divisions??[]).map((division)=>({...division,rules:(rules.data??[]).filter((rule)=>rule.series_division_id===division.id).map((rule)=>({...rule,eligibility:(eligibility.data??[]).find((item)=>item.series_rule_id===rule.id)??null}))}))} as CompetitionSeriesDetail
 }

@@ -20,6 +20,12 @@ export type CompetitionSeriesDivision = {
   id: string; club_id: string; series_id: string; division_id: string; sort_order: number
   is_active: boolean; division_snapshot: Record<string, unknown> | null; frozen_at: string | null
   removed_at: string | null; revision: number; created_at: string; updated_at: string
+  division?: {
+    id: string; modality: string
+    branch: { name: string } | null
+    segment: { name: string } | null
+    category: { name: string } | null
+  } | null
 }
 
 export type CompetitionSeriesRule = {
@@ -39,6 +45,7 @@ export type CompetitionSeriesEligibility = {
   require_same_division_pair: boolean; age_category_id: string | null
   additional_rules: Record<string, unknown>; frozen_at: string | null
   revision: number; created_at: string; updated_at: string
+  age_category?: { name: string } | null
 }
 
 export type CompetitionSeriesDetail = {
@@ -46,4 +53,13 @@ export type CompetitionSeriesDetail = {
   divisions: Array<CompetitionSeriesDivision & {
     rules: Array<CompetitionSeriesRule & { eligibility: CompetitionSeriesEligibility | null }>
   }>
+}
+
+export type CompetitionSeriesPrizeType = 'CASH' | 'GOODS' | 'SERVICE' | 'TROPHY' | 'OTHER'
+export type CompetitionSeriesPrize = {
+  id: string; club_id: string; series_id: string
+  position_from: number; position_to: number; title: string; description: string | null
+  prize_type: CompetitionSeriesPrizeType; amount: number | null; currency_code: string | null
+  sort_order: number; is_active: boolean; revision: number
+  created_by: string; updated_by: string; created_at: string; updated_at: string
 }
