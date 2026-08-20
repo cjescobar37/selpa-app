@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
+import { mapTournamentError } from '@/lib/tournamentErrors'
 
 type TournamentRow = {
   id: string
@@ -149,6 +150,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
     }
 
     const body = await req.json().catch(() => ({}))
+    const idempotencyKey = req.headers.get('idempotency-key')?.trim() ?? ''
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 200) {
+      return NextResponse.json({ error: 'La solicitud de creación es inválida. Volvé a intentarlo.', code: 'INVALID_IDEMPOTENCY_KEY' }, { status: 400 })
+    }
     const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -160,13 +165,15 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
     const { data, error } = await userClient.rpc('create_tournament_canonical', {
       p_club_id: clubId,
       p_payload: body,
+      p_idempotency_key: idempotencyKey,
     })
     if (error) {
-      const status = error.code === '42501' ? 403 : error.code === '28000' ? 401 : error.code === 'P0002' ? 404 : 400
-      return NextResponse.json({ error: error.message }, { status })
+      const mapped = mapTournamentError(error, 'No pudimos crear el torneo. Revisá los datos e intentá nuevamente.')
+      return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status === 500 ? 400 : mapped.status })
     }
     return NextResponse.json({ ok: true, tournament: data }, { status: 201 })
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error, 'Error creando torneo del club.') }, { status: 500 })
+    const mapped = mapTournamentError(error, 'No pudimos crear el torneo. Intentá nuevamente.')
+    return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
   }
 }

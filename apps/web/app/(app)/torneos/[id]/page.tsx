@@ -60,7 +60,7 @@ type PublicTournamentDetail = {
     themeKey: string | null
   } | null
   status: {
-    key: 'live' | 'registration_open' | 'upcoming' | 'finished' | 'draft' | 'cancelled'
+    key: 'live' | 'registration_open' | 'upcoming' | 'finished' | 'draft' | 'paused' | 'cancelled'
     label: string
     priority: number
     className: string
@@ -447,6 +447,7 @@ export default function TorneoDetallePage() {
   const progressPercent = progressMax > 0 ? Math.min(100, Math.max(0, (detail.capacity.registeredTeamsCount / progressMax) * 100)) : 0
   const countdown = getCountdownParts(detail.dates.registrationDeadline)
   const registrationClosed = isRegistrationClosed(detail.dates.registrationDeadline)
+  const tournamentPaused = String(detail.tournament.status ?? '').toUpperCase() === 'PAUSED'
   const theme = getClubTheme(detail.club?.themeKey)
   const themeStyle = {
     ['--pamprax-hero-accent' as string]: theme.vars.accent,
@@ -545,7 +546,7 @@ export default function TorneoDetallePage() {
         title={detail.tournament.name}
         subtitle={subtitle}
         mobileSubtitle={`${subtitle} · ${formatSystem(detail.tournament.rulesSummary.competitionSystem ?? detail.tournament.format)}`}
-        statusBadge={registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : detail.status.key === 'registration_open' ? { label: 'Inscripción abierta', tone: 'success' } : { label: detail.status.label, tone: 'info' }}
+        statusBadge={tournamentPaused ? { label: 'Torneo pausado', tone: 'info' } : registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : detail.status.key === 'registration_open' ? { label: 'Inscripción abierta', tone: 'success' } : { label: detail.status.label, tone: 'info' }}
         mobilePrimaryAction={{ label: 'Volver a torneos', href: '/torneos' }}
         secondaryAction={detail.club ? { label: 'Ver club', href: `/clubs/${detail.club.id}` } : { label: 'Calendario', href: '/torneos' }}
         logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'SE' }}
@@ -618,12 +619,17 @@ export default function TorneoDetallePage() {
         ) : (
           <div className="tournamentPublicDetail__pitchGrid">
             <div className="tournamentPublicDetail__pitchCopy">
-              <span className="tournamentPublicDetail__eyebrow">{registrationClosed ? 'Inscripción cerrada' : 'Inscripción'}</span>
-              <h2>{registrationClosed ? 'Inscripción cerrada' : 'No te quedes afuera'}</h2>
-              <p>{registrationClosed ? 'La inscripción para este torneo ya finalizó.' : 'Asegurá tu lugar y llegá listo para competir.'}</p>
+              <span className="tournamentPublicDetail__eyebrow">{tournamentPaused ? 'Torneo pausado' : registrationClosed ? 'Inscripción cerrada' : 'Inscripción'}</span>
+              <h2>{tournamentPaused ? 'Torneo pausado' : registrationClosed ? 'Inscripción cerrada' : 'No te quedes afuera'}</h2>
+              <p>{tournamentPaused ? 'El club pausó temporalmente las inscripciones.' : registrationClosed ? 'La inscripción para este torneo ya finalizó.' : 'Asegurá tu lugar y llegá listo para competir.'}</p>
             </div>
             <div className="tournamentPublicDetail__signupCard">
-              {registrationClosed ? (
+              {tournamentPaused ? (
+                <div className="tournamentPublicDetail__closedBox">
+                  <strong>TORNEO PAUSADO</strong>
+                  <span>El club reanudará las inscripciones cuando esté listo.</span>
+                </div>
+              ) : registrationClosed ? (
                 <div className="tournamentPublicDetail__closedBox">
                   <strong>INSCRIPCIÓN CERRADA</strong>
                   <span>Ya no se reciben nuevas parejas para este torneo.</span>
@@ -635,7 +641,7 @@ export default function TorneoDetallePage() {
                   <span>para cerrar inscripción</span>
                 </div>
               )}
-              {registrationClosed ? (
+              {tournamentPaused || registrationClosed ? (
                 <Link href={detail.club ? `/clubs/${detail.club.id}` : `/torneos/${detail.tournament.id}`}>Ver club <span>→</span></Link>
               ) : (
                 <Link href={`/torneos/${detail.tournament.id}/inscripcion`}>INSCRIBIRME AHORA <span>→</span></Link>

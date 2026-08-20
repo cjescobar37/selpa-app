@@ -92,6 +92,7 @@ function statusLabel(value?: string | null) {
   if (status === 'CANCELLED') return 'Cancelado'
   if (status === 'OPEN' || status === 'PUBLISHED' || status === 'REGISTRATION_OPEN') return 'Inscripción abierta'
   if (status === 'DRAFT') return 'Borrador'
+  if (status === 'PAUSED') return 'Torneo pausado'
   if (status === 'FINISHED' || status === 'COMPLETED') return 'Finalizado'
   return value || 'Por definirse'
 }

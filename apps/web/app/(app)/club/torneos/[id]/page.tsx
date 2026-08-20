@@ -923,6 +923,7 @@ export default function ClubTournamentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
   const [deletingTournament, setDeletingTournament] = useState(false)
+  const [pausingTournament, setPausingTournament] = useState(false)
   const [activeTab, setActiveTab] = useState<TournamentTab>('general')
   const [actionFeedback, setActionFeedback] = useState<{ tone: ActionFeedbackTone; title: string; message: string } | null>(null)
   const [registrations, setRegistrations] = useState<Registration[]>([])
@@ -1147,6 +1148,8 @@ export default function ClubTournamentDetailPage() {
     ? 'Este torneo tiene grupos/partidos/resultados asociados. Se eliminarán datos vinculados.'
     : null
   const canCancelTournament = Boolean(summary) && String(summary?.tournament.status ?? '').toUpperCase() !== 'CANCELLED'
+  const isTournamentPaused = String(summary?.tournament.status ?? '').toUpperCase() === 'PAUSED'
+  const canPauseTournament = Boolean(summary) && ['OPEN', 'PAUSED'].includes(String(summary?.tournament.status ?? '').toUpperCase())
   const isTournamentOpen = Boolean(summary) && isTournamentRegistrationOpen({
     status: summary?.tournament.status,
     registrationDeadline: summary?.tournament.registration_deadline,
@@ -3245,6 +3248,31 @@ export default function ClubTournamentDetailPage() {
     window.setTimeout(() => router.push('/club/torneos'), 900)
   }
 
+  async function setTournamentPaused(paused: boolean) {
+    if (!activeClub?.id || !tournamentId || !summary) return
+    setPausingTournament(true)
+    const token = await getToken()
+    if (!token) {
+      setActionFeedback({ tone: 'error', title: 'No pudimos actualizar el torneo', message: 'Tu sesión ya no es válida. Volvé a ingresar e intentá nuevamente.' })
+      setPausingTournament(false)
+      return
+    }
+    const response = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: paused ? 'pause_tournament' : 'resume_tournament' }),
+    })
+    const json = await response.json().catch(() => ({})) as { error?: string; code?: string }
+    if (!response.ok) {
+      setActionFeedback({ tone: 'error', title: paused ? 'No pudimos pausar el torneo' : 'No pudimos reanudar el torneo', message: json.error ?? 'Intentá nuevamente.' })
+      setPausingTournament(false)
+      return
+    }
+    setActionFeedback({ tone: 'success', title: paused ? 'Torneo pausado' : 'Torneo reanudado', message: paused ? 'Las inscripciones quedaron temporalmente detenidas.' : 'El torneo vuelve a estar disponible según sus fechas de inscripción.' })
+    setPausingTournament(false)
+    await refreshTournamentExperience()
+  }
+
   async function cancelTournament() {
     if (!activeClub?.id || !tournamentId || !summary) return
 
@@ -4047,8 +4075,8 @@ export default function ClubTournamentDetailPage() {
                       <div className="club-summaryMain">
                         <article className="club-nextCard">
                           <span className="club-kicker">Próximo paso</span>
-                          <h2>{summary.nextStep}</h2>
-                          <p>{isDraft ? 'Publicalo para abrir las inscripciones.' : 'Seguimos el estado operativo del torneo en tiempo real.'}</p>
+                          <h2>{isTournamentPaused ? 'Este torneo está pausado.' : summary.nextStep}</h2>
+                          <p>{isTournamentPaused ? 'Nadie puede inscribirse hasta que lo reanudes.' : isDraft ? 'Publicalo para abrir las inscripciones.' : 'Seguimos el estado operativo del torneo en tiempo real.'}</p>
                           {isDraft ? <button type="button" className="club-nextAction" onClick={() => requestConfirmation({ title: 'Publicar torneo', body: 'Esto abre las inscripciones del torneo. Podés seguir gestionándolo desde este centro de control.', confirmLabel: 'Publicar torneo', onConfirm: publishTournament })} disabled={publishing || loading || deletingTournament || cancellingTournament}>{publishing ? 'Publicando...' : 'Publicar ahora →'}</button> : null}
                         </article>
 
@@ -4135,6 +4163,26 @@ export default function ClubTournamentDetailPage() {
                       </div>
 
                       <div className="club-dangerZoneGrid">
+                        <article className="club-dangerCard club-pauseCard">
+                          <div className="club-dangerCardBody">
+                            <strong>{isTournamentPaused ? 'Reanudar torneo' : 'Pausar torneo'}</strong>
+                            <p>{isTournamentPaused ? 'Volvé a habilitarlo sin perder parejas, agenda ni configuración.' : 'Detiene nuevas inscripciones temporalmente sin perder parejas ni configuración.'}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="club-pauseBtn"
+                            disabled={pausingTournament || deletingTournament || cancellingTournament || loading || !canPauseTournament}
+                            onClick={() => requestConfirmation({
+                              title: isTournamentPaused ? 'Reanudar torneo' : 'Pausar torneo',
+                              body: isTournamentPaused ? 'El torneo volverá a estar disponible según sus fechas y cierre de inscripción.' : 'Los jugadores no podrán seguir inscribiéndose hasta que lo reanudes. No se perderán parejas ni configuración.',
+                              confirmLabel: isTournamentPaused ? 'Reanudar torneo' : 'Pausar torneo',
+                              tone: 'cyan',
+                              onConfirm: () => setTournamentPaused(!isTournamentPaused),
+                            })}
+                          >
+                            {pausingTournament ? 'Actualizando...' : isTournamentPaused ? 'Reanudar torneo' : 'Pausar torneo'}
+                          </button>
+                        </article>
                         <article className="club-dangerCard">
                           <div className="club-dangerCardBody">
                             <strong>Cancelar / anular torneo</strong>
@@ -5752,6 +5800,9 @@ export default function ClubTournamentDetailPage() {
           display: none;
         }
         .club-deleteBtn { align-items: center; background: #fff1f2; border: 1px solid rgba(190,18,60,.22); border-radius: 8px; color: #be123c; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 950; justify-content: center; min-height: 36px; padding: 8px 12px; text-decoration: none; transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; white-space: nowrap; }
+        .club-pauseCard { background:#fffdf7; border-color:rgba(180,83,9,.18); }
+        .club-pauseBtn { align-items:center; background:#fff8e7; border:1px solid rgba(180,83,9,.28); border-radius:8px; color:#9a5b09; cursor:pointer; display:inline-flex; font:inherit; font-size:13px; font-weight:900; justify-content:center; min-height:36px; padding:8px 12px; white-space:nowrap; }
+        .club-pauseBtn:disabled { cursor:not-allowed; opacity:.55; }
         .club-deleteBtn:hover { background: #ffe4e6; border-color: rgba(190,18,60,.42); box-shadow: 0 8px 18px rgba(190,18,60,.12); transform: translateY(-1px); }
         .club-deleteBtn:disabled { cursor: not-allowed; opacity: .58; }
         .club-deleteBtn:disabled:hover { background: #fff1f2; border-color: rgba(190,18,60,.22); box-shadow: none; transform: none; }
@@ -5812,6 +5863,7 @@ export default function ClubTournamentDetailPage() {
         }
         .club-statusBadge--danger { background: #fff1f2; color: #9f1239; }
         .club-statusBadge--draft { background: #fff7df; color: #854d0e; }
+        .club-statusBadge--paused { background: #fff8e7; color: #9a5b09; }
         .club-statusBadge--cancelled { background: #f1f5f9; color: #475569; }
         .club-stepper { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 14px; display: grid; gap: 6px; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: 9px; padding: 7px; }
         .club-stepperMobileLead { display:none; }

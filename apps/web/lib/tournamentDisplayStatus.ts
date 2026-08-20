@@ -4,6 +4,7 @@ export type TournamentDisplayStatusKey =
   | 'upcoming'
   | 'finished'
   | 'draft'
+  | 'paused'
   | 'cancelled'
 
 export type TournamentDisplayStatus = {
@@ -27,6 +28,7 @@ export type TournamentOperationalStatusTone =
   | 'live'
   | 'finished'
   | 'draft'
+  | 'paused'
   | 'cancelled'
 
 type TournamentOperationalCounts = {
@@ -68,6 +70,7 @@ const legacyToneByOperationalTone: Record<TournamentOperationalStatusTone, strin
   live: 'live',
   finished: 'done',
   draft: 'draft',
+  paused: 'muted',
   cancelled: 'muted',
 }
 
@@ -139,6 +142,10 @@ function getTournamentDisplayStatusInfo(tournament: unknown, now = new Date()): 
     return { key: 'draft', label: 'Borrador', priority: 90, className: 'is-draft' }
   }
 
+  if (status === 'PAUSED') {
+    return { key: 'paused', label: 'Pausado', priority: 15, className: 'is-paused' }
+  }
+
   if (cancelledStatusValues.has(status)) {
     return { key: 'cancelled', label: 'Cancelado', priority: 95, className: 'is-cancelled' }
   }
@@ -196,6 +203,10 @@ export function getTournamentOperationalStatus(input: DisplayStatusInput): {
 
   if (status === 'DRAFT' || stage === 'BORRADOR') {
     return { label: displayByStage.BORRADOR, tone: 'draft', stage: 'BORRADOR' }
+  }
+
+  if (status === 'PAUSED') {
+    return { label: 'Pausado', tone: 'paused', stage: 'INSCRIPCIONES' }
   }
 
   if (cancelledStatusValues.has(status)) {

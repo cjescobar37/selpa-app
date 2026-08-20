@@ -19,6 +19,7 @@ type PublicTournamentDetail = {
     category: number | null
     startDate?: string | null
     registrationDeadline: string | null
+    status?: string | null
     pricePerPlayer: number | null
   }
   club: { id: string; name: string; logoUrl: string | null; themeKey: string | null } | null
@@ -389,11 +390,13 @@ export default function TorneoInscripcionPage() {
   const alreadyRegistered = Boolean(detail?.viewer.isRegisteredInTournament)
   const forcePaymentStep = requestedStep === 'pago'
   const registrationClosed = isRegistrationClosed(detail?.tournament.registrationDeadline)
+  const tournamentPaused = String(detail?.tournament.status ?? '').toUpperCase() === 'PAUSED'
 
   useEffect(() => {
     if (!detail || restoredDraft) return
     const key = getDraftKey(detail.tournament.id, detail.viewer.clubPlayer?.userId)
     if (!key) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- closes the one-time local-draft restoration gate.
       setRestoredDraft(true)
       return
     }
@@ -722,7 +725,7 @@ export default function TorneoInscripcionPage() {
         mobileKicker={detail.club?.name ?? 'Inscripción al torneo'}
         title={detail.tournament.name}
         subtitle={`${detail.club?.name ?? 'Club'} · ${detail.labels.category} · ${detail.labels.gender} · ${detail.labels.segment}`}
-        mobileStatusBadge={registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : { label: 'Inscripción abierta', tone: 'success' }}
+        mobileStatusBadge={tournamentPaused ? { label: 'Torneo pausado', tone: 'info' } : registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : { label: 'Inscripción abierta', tone: 'success' }}
         primaryAction={{ label: 'Volver al torneo', href: `/torneos/${detail.tournament.id}` }}
         secondaryAction={detail.club ? { label: 'Ver club', href: `/clubs/${detail.club.id}` } : undefined}
         logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'SE' }}
@@ -755,10 +758,10 @@ export default function TorneoInscripcionPage() {
             Volver al torneo
           </Link>
         </section>
-      ) : registrationClosed && !alreadyRegistered ? (
+      ) : (tournamentPaused || registrationClosed) && !alreadyRegistered ? (
         <section className="tournamentSignupPage__panel tournamentSignupPage__panel--center">
-          <h2>Inscripción cerrada</h2>
-          <p>La inscripción para este torneo ya finalizó.</p>
+          <h2>{tournamentPaused ? 'Torneo pausado' : 'Inscripción cerrada'}</h2>
+          <p>{tournamentPaused ? 'El club pausó temporalmente las inscripciones.' : 'La inscripción para este torneo ya finalizó.'}</p>
           <Link className="tournamentSignupPage__primary" href={`/torneos/${detail.tournament.id}`}>
             Ver torneo
           </Link>

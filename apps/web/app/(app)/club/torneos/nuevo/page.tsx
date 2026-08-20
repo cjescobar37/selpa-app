@@ -989,8 +989,8 @@ export default function ClubNuevoTorneoPage() {
         `${tournamentTypeLabel} ${tournamentGenderLabel}`
       )
       if (preparedFlyerConfig !== flyerConfig) setFlyerConfig(preparedFlyerConfig)
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'No pude subir el flyer manual.')
+    } catch {
+      setMessage('No pudimos preparar el flyer. Revisá el archivo e intentá nuevamente.')
       setSaving(false)
       return
     }
@@ -1022,7 +1022,7 @@ export default function ClubNuevoTorneoPage() {
       flyer: buildFlyerPayload(preparedFlyerConfig, `${tournamentTypeLabel} ${tournamentGenderLabel}`),
     }
     const dateKey = competitionKeyRef.current || competitionIdempotencyKey || crypto.randomUUID()
-    if (isCompetitionDate && !competitionKeyRef.current) {
+    if (!competitionKeyRef.current) {
       competitionKeyRef.current = dateKey
       setCompetitionIdempotencyKey(dateKey)
     }
@@ -1056,6 +1056,7 @@ export default function ClubNuevoTorneoPage() {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'Idempotency-Key': dateKey,
         },
         body: JSON.stringify(requestBody),
       })

@@ -16,9 +16,15 @@ begin
      or to_regprocedure('public.create_tournament_canonical(uuid,jsonb)') is null then
     return query select 'FAIL', 'QA no ejecutable: faltan las RPC canónicas de torneo o PAUSED.'; return;
   end if;
-  if (select array_agg(enumlabel::text order by enumsortorder) from pg_catalog.pg_enum where enumtypid='public.tournament_status'::regtype)
-       is distinct from array['DRAFT','OPEN','PAUSED','RUNNING','FINISHED','CANCELLED']::text[] then
-    return query select 'FAIL', 'QA enum: tournament_status no contiene exactamente los estados esperados.'; return;
+  if not exists (
+    select 1
+    from information_schema.columns column_def
+    where column_def.table_schema = 'public'
+      and column_def.table_name = 'tournaments'
+      and column_def.column_name = 'status'
+      and column_def.data_type = 'text'
+  ) then
+    return query select 'FAIL', 'QA status: public.tournaments.status no coincide con el contrato text vigente.'; return;
   end if;
 
   select membership.user_id,membership.club_id into v_owner,v_club
@@ -110,6 +116,13 @@ begin
     if not v_failed then raise exception '% -> resume aceptado',v_state; end if; reset role;
   end loop;
 
+  -- La primitive canónica no permite bypass directo de lifecycle desde DRAFT.
+  update public.tournaments set status='DRAFT',registration_deadline=now()+interval '1 day',signup_deadline=now()+interval '1 day' where id=v_tournament;
+  perform set_config('request.jwt.claim.sub',v_players[3]::text,true); perform set_config('request.jwt.claim.role','authenticated',true); set local role authenticated;
+  v_failed:=false; begin perform public.register_team_for_tournament(v_tournament,v_club,v_players[4]); exception when check_violation then if sqlerrm='TOURNAMENT_REGISTRATION_NOT_OPEN' then v_failed:=true; else raise; end if; end;
+  if not v_failed then raise exception 'La inscripción directa durante DRAFT fue aceptada'; end if;
+  reset role;
+
   -- RLS/tenant: PLAYER y ADMIN de otro club no pueden pausar.
   update public.tournaments set status='OPEN' where id=v_tournament;
   perform set_config('request.jwt.claim.sub',v_players[1]::text,true); perform set_config('request.jwt.claim.role','authenticated',true); set local role authenticated;
@@ -119,9 +132,8 @@ begin
   v_failed:=false; begin perform public.pause_tournament(v_club,v_tournament); exception when insufficient_privilege then if sqlerrm='TOURNAMENT_FORBIDDEN' then v_failed:=true; else raise; end if; end;
   if not v_failed then raise exception 'Administrador cross-club pudo pausar'; end if; reset role;
 
-  -- Contract check: resume may restore OPEN but must never change an expired close.
-  -- The canonical HTTP registration route owns deadline validation before invoking
-  -- register_team_for_tournament; this primitive is exercised above for PAUSED.
+  -- Resume puede restaurar OPEN, pero no reabre inscripciones vencidas: la RPC
+  -- canónica de inscripción también debe rechazar el cierre ya vencido.
   update public.tournaments set registration_deadline=now()-interval '1 minute',signup_deadline=now()-interval '1 minute',status='OPEN' where id=v_tournament;
   perform set_config('request.jwt.claim.sub',v_owner::text,true); perform set_config('request.jwt.claim.role','authenticated',true); set local role authenticated;
   perform public.pause_tournament(v_club,v_tournament); perform public.resume_tournament(v_club,v_tournament); reset role;
@@ -130,8 +142,11 @@ begin
      or (select signup_deadline from public.tournaments where id=v_tournament)>=now() then
     raise exception 'PAUSED -> OPEN alteró indebidamente el cierre vencido';
   end if;
+  perform set_config('request.jwt.claim.sub',v_players[3]::text,true); perform set_config('request.jwt.claim.role','authenticated',true); set local role authenticated;
+  v_failed:=false; begin perform public.register_team_for_tournament(v_tournament,v_club,v_players[4]); exception when check_violation then if sqlerrm='TOURNAMENT_REGISTRATION_CLOSED' then v_failed:=true; else raise; end if; end;
+  if not v_failed then raise exception 'La inscripción vencida fue aceptada después de reanudar'; end if;
   reset role;
-  return query select 'PASS','Tournament PAUSED válido: enum, lifecycle, roles, inscripción PAUSED, preservación y rollback.';
+  return query select 'PASS','Tournament PAUSED válido: status text, lifecycle, roles, inscripción PAUSED/vencida, preservación y rollback.';
 exception when others then
   reset role; return query select 'FAIL',sqlerrm;
 end $$;

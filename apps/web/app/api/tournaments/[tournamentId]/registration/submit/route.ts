@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { mapTournamentError } from '@/lib/tournamentErrors'
 import { NextRequest, NextResponse } from 'next/server'
 import { notifyClubAdmins } from '@/lib/operationalNotifications'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -99,7 +100,10 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
     .eq('id', tournamentId)
     .maybeSingle()
 
-  if (tournamentError) return NextResponse.json({ error: tournamentError.message }, { status: 500 })
+  if (tournamentError) {
+    const mapped = mapTournamentError(tournamentError, 'No pudimos consultar este torneo. Intentá nuevamente.')
+    return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
+  }
   // The Supabase generic is not available for this legacy select.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tournament = toTournamentView(tournamentRow as any)
@@ -120,7 +124,10 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
     .eq('club_id', tournament.club_id)
     .in('user_id', [user.id, partnerUserId])
 
-  if (playersError) return NextResponse.json({ error: playersError.message }, { status: 500 })
+  if (playersError) {
+    const mapped = mapTournamentError(playersError, 'No pudimos validar a los jugadores. Intentá nuevamente.')
+    return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
+  }
 
   const me = (players ?? []).find((player) => String(player.user_id) === user.id)
   const partner = (players ?? []).find((player) => String(player.user_id) === partnerUserId)
@@ -145,10 +152,16 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
       .from('competition_age_categories')
       .select('id,club_id,min_age,max_age,age_reference_rule,age_reference_config')
       .eq('id', tournament.ageCategoryId).eq('club_id', tournament.club_id).maybeSingle()
-    if (ageCategoryError) return NextResponse.json({ error: ageCategoryError.message }, { status: 500 })
+    if (ageCategoryError) {
+      const mapped = mapTournamentError(ageCategoryError, 'No pudimos validar la categoría de edad. Intentá nuevamente.')
+      return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
+    }
     if (!ageCategory) return NextResponse.json({ error: 'La categoría de edad del torneo ya no está disponible.' }, { status: 409 })
     const { data: profiles, error: profilesError } = await supabaseAdmin.from('profiles').select('user_id,birth_date').in('user_id', [user.id, partnerUserId])
-    if (profilesError) return NextResponse.json({ error: profilesError.message }, { status: 500 })
+    if (profilesError) {
+      const mapped = mapTournamentError(profilesError, 'No pudimos validar los perfiles de los jugadores. Intentá nuevamente.')
+      return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
+    }
     const referenceRule = String(ageCategory.age_reference_rule)
     const config = ageCategory.age_reference_config && typeof ageCategory.age_reference_config === 'object' ? ageCategory.age_reference_config as Record<string, unknown> : {}
     const referenceDate = referenceRule === 'CALENDAR_YEAR_END'
@@ -197,7 +210,10 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
     p_partner_user_id: partnerUserId,
   })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 409 })
+  if (error) {
+    const mapped = mapTournamentError(error, 'No pudimos registrar la pareja. Intentá nuevamente.')
+    return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status === 500 ? 409 : mapped.status })
+  }
   const row = Array.isArray(data) ? data[0] : data
   const registrationId = row?.registration_id ?? null
 
@@ -212,7 +228,8 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
       .eq('id', registrationId)
 
     if (availabilityError && !isMissingSchemaObjectError(availabilityError)) {
-      return NextResponse.json({ error: availabilityError.message }, { status: 500 })
+      const mapped = mapTournamentError(availabilityError, 'La pareja se creó, pero no pudimos guardar la disponibilidad.')
+      return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
     }
 
     if (availabilityError && process.env.NODE_ENV !== 'production') {

@@ -5,6 +5,7 @@ import type { ClubCapability } from '@/lib/clubPermissions'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { normalizeScheduleConfig, normalizeTournamentCourts } from '@/lib/tournamentSchedule'
 import { normalizeGroupTiebreakerConfig } from '@/lib/tournamentTiebreakers'
+import { mapTournamentError } from '@/lib/tournamentErrors'
 
 type TournamentRow = {
   id: string
@@ -59,10 +60,6 @@ async function getTokenUser(req: NextRequest) {
   const { data, error } = await supabaseAdmin.auth.getUser(token)
   if (error || !data?.user) return null
   return data.user
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback
 }
 
 function normalizeText(value: unknown) {
@@ -278,6 +275,8 @@ export async function PATCH(
       action !== 'update_tournament_courts' &&
       action !== 'replace_tournament_court_assignments' &&
       action !== 'update_draft' &&
+      action !== 'pause_tournament' &&
+      action !== 'resume_tournament' &&
       action !== 'delete_tournament' &&
       action !== 'cancel_tournament'
     ) {
@@ -289,6 +288,8 @@ export async function PATCH(
       update_tournament_courts: 'tournaments:update',
       replace_tournament_court_assignments: 'tournaments:update',
       update_draft: 'tournaments:update',
+      pause_tournament: 'tournaments:update',
+      resume_tournament: 'tournaments:update',
       delete_tournament: 'tournaments:delete',
       cancel_tournament: 'tournaments:cancel',
     }
@@ -305,7 +306,8 @@ export async function PATCH(
       .maybeSingle()
 
     if (tournamentError) {
-      return NextResponse.json({ error: tournamentError.message }, { status: 500 })
+      const mapped = mapTournamentError(tournamentError, 'No pudimos consultar este torneo. Intentá nuevamente.')
+      return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
     }
 
     if (!tournament) {
@@ -313,6 +315,25 @@ export async function PATCH(
     }
 
     const current = tournament as TournamentRow
+    if (action === 'pause_tournament' || action === 'resume_tournament') {
+      const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (!url || !anonKey || !token) return NextResponse.json({ error: 'Sesión inválida.', code: 'UNAUTHORIZED' }, { status: 401 })
+      const userClient = createClient(url, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+      const { data, error } = await userClient.rpc(action === 'pause_tournament' ? 'pause_tournament' : 'resume_tournament', {
+        p_club_id: clubId,
+        p_tournament_id: tournamentId,
+      })
+      if (error) {
+        const mapped = mapTournamentError(error, action === 'pause_tournament' ? 'No pudimos pausar el torneo.' : 'No pudimos reanudar el torneo.')
+        return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
+      }
+      return NextResponse.json({ ok: true, tournament: data })
+    }
     if (action === 'delete_tournament') {
       const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -330,19 +351,8 @@ export async function PATCH(
       })
 
       if (deleteError) {
-        if (deleteError.message.includes('TOURNAMENT_DELETE_BLOCKED')) {
-          return NextResponse.json({
-            error: 'Este torneo ya tiene actividad vinculada y no puede eliminarse. Podés cancelarlo para conservar el historial.',
-            code: 'TOURNAMENT_DELETE_BLOCKED',
-          }, { status: 409 })
-        }
-        if (deleteError.code === '42501') {
-          return NextResponse.json({ error: 'No tenés permisos para eliminar este torneo.', code: 'UNAUTHORIZED' }, { status: 403 })
-        }
-        if (deleteError.code === 'P0002') {
-          return NextResponse.json({ error: 'Torneo no encontrado para este club.', code: 'TOURNAMENT_NOT_FOUND' }, { status: 404 })
-        }
-        return NextResponse.json({ error: 'No pudimos eliminar el torneo. Intentá nuevamente.', code: 'TOURNAMENT_DELETE_FAILED' }, { status: 500 })
+        const mapped = mapTournamentError(deleteError, 'No pudimos eliminar el torneo. Intentá nuevamente.')
+        return NextResponse.json({ error: mapped.message, code: mapped.code === 'TOURNAMENT_OPERATION_FAILED' ? 'TOURNAMENT_DELETE_FAILED' : mapped.code }, { status: mapped.status })
       }
 
       return NextResponse.json({ ok: true, deleted: true, tournamentId })
@@ -542,6 +552,7 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true, tournament: updated })
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error, 'Error actualizando torneo.') }, { status: 500 })
+    const mapped = mapTournamentError(error, 'No pudimos actualizar el torneo. Intentá nuevamente.')
+    return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
   }
 }
