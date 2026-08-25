@@ -22,9 +22,9 @@ export type CompetitionSeriesDivision = {
   removed_at: string | null; revision: number; created_at: string; updated_at: string
   division?: {
     id: string; modality: string
-    branch: { name: string } | null
-    segment: { name: string } | null
-    category: { name: string } | null
+    branch: { name: string; slug: string } | null
+    segment: { name: string; slug: string } | null
+    category: { name: string; legacy_category_id: number | null } | null
   } | null
 }
 
@@ -62,4 +62,15 @@ export type CompetitionSeriesPrize = {
   prize_type: CompetitionSeriesPrizeType; amount: number | null; currency_code: string | null
   sort_order: number; is_active: boolean; revision: number
   created_by: string; updated_by: string; created_at: string; updated_at: string
+}
+
+export type CompetitionSeriesRankingRow = {
+  position: number
+  club_player_id: string
+  player_id: string
+  display_name: string
+  avatar_url: string | null
+  points: number
+  events_played: number
+  titles: number
 }

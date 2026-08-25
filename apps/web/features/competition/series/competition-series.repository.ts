@@ -10,7 +10,7 @@ export async function listSeries(client:SupabaseClient,clubId:string,seasonId?:s
 export async function getSeriesDetail(client:SupabaseClient,clubId:string,seriesId:string):Promise<CompetitionSeriesDetail> {
   const {data:series,error}=await client.from('competition_series').select('*').eq('club_id',clubId).eq('id',seriesId).maybeSingle()
   if(error) throw fail('No pude leer el circuito',error); if(!series) throw Object.assign(new Error('Circuito inexistente.'),{code:'P0002'})
-  const {data:divisions,error:divisionError}=await client.from('competition_series_divisions').select('*,division:competition_divisions(id,modality,branch:competition_branches(name),segment:competition_segments(name),category:competition_categories(name))').eq('club_id',clubId).eq('series_id',seriesId).order('sort_order')
+  const {data:divisions,error:divisionError}=await client.from('competition_series_divisions').select('*,division:competition_divisions(id,modality,branch:competition_branches(name,slug),segment:competition_segments(name,slug),category:competition_categories(name,legacy_category_id))').eq('club_id',clubId).eq('series_id',seriesId).order('sort_order')
   if(divisionError) throw fail('No pude leer las divisiones',divisionError)
   const ids=(divisions??[]).map((item)=>item.id); const rules=ids.length ? await client.from('competition_series_rules').select('*').in('series_division_id',ids).order('version',{ascending:false}) : {data:[],error:null}
   if(rules.error) throw fail('No pude leer las reglas',rules.error)
