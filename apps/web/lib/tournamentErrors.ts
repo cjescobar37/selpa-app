@@ -8,6 +8,7 @@ const messages: Record<string, Omit<TournamentError, 'code'>> = {
   TOURNAMENT_PAUSED: { status: 409, message: 'El club pausó temporalmente las inscripciones de este torneo.' },
   TOURNAMENT_REGISTRATION_CLOSED: { status: 409, message: 'La inscripción para este torneo ya finalizó.' },
   TOURNAMENT_REGISTRATION_NOT_OPEN: { status: 409, message: 'Este torneo no está abierto para inscripciones.' },
+  CLUB_PLAYER_NOT_ELIGIBLE: { status: 409, message: 'Uno de los jugadores no está habilitado actualmente en el club.' },
   TOURNAMENT_FORBIDDEN: { status: 403, message: 'No tenés permisos para realizar esta acción en el torneo.' },
   UNAUTHORIZED: { status: 401, message: 'Tu sesión no es válida. Volvé a ingresar e intentá nuevamente.' },
   TOURNAMENT_DELETE_BLOCKED: { status: 409, message: 'Este torneo ya tiene actividad vinculada y no puede eliminarse. Podés cancelarlo para conservar el historial.' },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Plus, Send, MessageSquareText, X } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
@@ -51,6 +51,12 @@ type PampraxInboxProps = {
   scope: InboxScope
   title: string
   subtitle: string
+  /** Opens the existing composer with a recipient supplied by the calling context. */
+  lockedRecipient?: { clubId: string; userId: string; fullName: string }
+  /** Renders only the composer sheet; used from contextual administrative screens. */
+  composerOnly?: boolean
+  onComposerClose?: () => void
+  onMessageSent?: () => void
 }
 
 function formatDate(value?: string | null) {
@@ -78,16 +84,36 @@ function initials(name?: string | null) {
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'SE'
 }
 
+function composerFailureMessage(payload: unknown) {
+  const text = typeof payload === 'object' && payload && 'error' in payload
+    ? String((payload as { error?: unknown }).error ?? '')
+    : ''
+  if (/permiso|forbidden|unauthorized/i.test(text)) return 'No tenés permisos para enviar mensajes a este jugador.'
+  if (/sesión|session/i.test(text)) return 'Tu sesión ya no es válida. Volvé a ingresar para enviar el mensaje.'
+  return 'No pudimos enviar el mensaje. Revisá los datos e intentá nuevamente.'
+}
+
 function counterpartLabel(scope: InboxScope, thread: ThreadSummary) {
   if (scope === 'player') return thread.club?.name ?? 'Club'
   if (scope === 'club') return thread.player?.name ?? 'Jugador'
   return `${thread.club?.name ?? 'Club'} · ${thread.player?.name ?? 'Jugador'}`
 }
 
-export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxProps) {
+export default function PampraxInbox({
+  scope,
+  title,
+  subtitle,
+  lockedRecipient,
+  composerOnly = false,
+  onComposerClose,
+  onMessageSent,
+}: PampraxInboxProps) {
   const session = useSession()
   const searchParams = useSearchParams()
   const requestedThreadId = searchParams.get('thread')
+  const requestedPlayerId = searchParams.get('playerId')
+  const requestedComposer = searchParams.get('compose') === '1'
+  const handledRequestedComposer = useRef(false)
   const [threads, setThreads] = useState<ThreadSummary[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ThreadMessage[]>([])
@@ -186,7 +212,7 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
       return
     }
 
-    setPlayerOptions(((payload?.players ?? []) as any[]).map((player) => ({
+    setPlayerOptions(((payload?.players ?? []) as Array<{ user_id?: string; full_name?: string; display_name?: string; profile?: { avatar_url?: string | null } | null; category?: number | null; gender?: string | null }>).map((player) => ({
       user_id: String(player.user_id),
       full_name: String(player.full_name ?? player.display_name ?? 'Jugador'),
       avatar_url: player.profile?.avatar_url ?? null,
@@ -202,13 +228,19 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
     setNotice('')
     setComposerSubject('')
     setComposerMessage('')
-    setComposerPlayerUserId('')
+    setComposerPlayerUserId(lockedRecipient?.userId ?? '')
     setComposerPlayerSearch('')
-    const initialClubId = session.activeClub?.id ?? clubOptions[0]?.id ?? ''
+    const initialClubId = lockedRecipient?.clubId ?? session.activeClub?.id ?? clubOptions[0]?.id ?? ''
     setComposerClubId(initialClubId)
-    if (scope === 'club' && initialClubId) {
+    if (scope === 'club' && initialClubId && !lockedRecipient) {
       loadClubPlayers(initialClubId)
     }
+  }
+
+  function closeComposer() {
+    if (composerSending) return
+    setComposerOpen(false)
+    if (composerOnly) onComposerClose?.()
   }
 
   async function sendNewMessage() {
@@ -258,7 +290,7 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
     })
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) {
-      setComposerError(payload?.error ?? 'No pude crear el mensaje.')
+      setComposerError(composerFailureMessage(payload))
       setComposerSending(false)
       return
     }
@@ -268,7 +300,8 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
     setComposerMessage('')
     setComposerPlayerUserId('')
     setNotice('Mensaje enviado.')
-    await loadThreads(payload?.threadId ?? null)
+    if (!composerOnly) await loadThreads(payload?.threadId ?? null)
+    onMessageSent?.()
     setComposerSending(false)
   }
 
@@ -367,17 +400,43 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
   }
 
   useEffect(() => {
+    if (composerOnly) return
     loadThreads()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedThreadId, scope])
+  }, [requestedThreadId, scope, composerOnly])
 
   useEffect(() => {
-    loadThemeAndComposerOptions()
+    queueMicrotask(() => { void loadThemeAndComposerOptions() })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.activeClub?.id, session.clubs.length, scope])
 
+  useEffect(() => {
+    if (!composerOnly || !lockedRecipient || handledRequestedComposer.current) return
+    handledRequestedComposer.current = true
+    queueMicrotask(() => {
+      setComposerOpen(true)
+      setComposerClubId(lockedRecipient.clubId)
+      setComposerPlayerUserId(lockedRecipient.userId)
+      setComposerError('')
+    })
+  }, [composerOnly, lockedRecipient])
+
+  useEffect(() => {
+    if (scope !== 'club' || !requestedComposer || !requestedPlayerId || handledRequestedComposer.current) return
+    const clubId = session.activeClub?.id ?? clubOptions[0]?.id ?? ''
+    if (!clubId) return
+    handledRequestedComposer.current = true
+    queueMicrotask(() => {
+      setComposerOpen(true)
+      setComposerClubId(clubId)
+      setComposerPlayerUserId(requestedPlayerId)
+      void loadClubPlayers(clubId)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, requestedComposer, requestedPlayerId, session.activeClub?.id, clubOptions.length])
+
   return (
-    <main className="px-inboxShell" style={themeStyle}>
+    <main className={`px-inboxShell${composerOnly ? ' is-composerOnly' : ''}`} style={themeStyle}>
       <section className="px-inboxHero">
         <div className="px-inboxHero__copy">
           <span>Mensajes</span>
@@ -503,14 +562,14 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
       </section>
 
       {composerOpen ? (
-        <div className="px-composerOverlay" onClick={() => !composerSending && setComposerOpen(false)}>
+        <div className="px-composerOverlay" onClick={closeComposer}>
           <div className="px-composerModal" onClick={(event) => event.stopPropagation()}>
             <div className="px-composerHead">
               <div>
                 <span>Nuevo mensaje</span>
                 <h2>{scope === 'player' ? 'Escribile al club' : 'Enviar mensaje a jugador'}</h2>
               </div>
-              <button type="button" onClick={() => setComposerOpen(false)} disabled={composerSending} aria-label="Cerrar">
+              <button type="button" onClick={closeComposer} disabled={composerSending} aria-label="Cerrar">
                 <X size={18} />
               </button>
             </div>
@@ -531,7 +590,15 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
                 </label>
               ) : null}
 
-              {scope === 'club' ? (
+              {scope === 'club' && lockedRecipient ? (
+                <div className="px-composeField">
+                  <span>Destinatario</span>
+                  <div className="px-lockedRecipient" aria-label={`Destinatario: ${lockedRecipient.fullName}`}>
+                    <span>{initials(lockedRecipient.fullName)}</span>
+                    <strong>{lockedRecipient.fullName}</strong>
+                  </div>
+                </div>
+              ) : scope === 'club' ? (
                 <div className="px-composeField">
                   <span>Jugador del club</span>
                   <input
@@ -576,7 +643,7 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
             </div>
 
             <div className="px-composerActions">
-              <button type="button" className="px-composeCancel" onClick={() => setComposerOpen(false)} disabled={composerSending}>Cancelar</button>
+              <button type="button" className="px-composeCancel" onClick={closeComposer} disabled={composerSending}>Cancelar</button>
               <button type="button" className="px-composeSubmit" onClick={sendNewMessage} disabled={composerSending}>
                 {composerSending ? 'Enviando...' : 'Enviar mensaje'}
                 <Send size={15} />
@@ -588,6 +655,8 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
 
       <style jsx>{`
         .px-inboxShell { display: grid; gap: 14px; margin: 0 auto; max-width: 1180px; min-width: 0; padding: 18px clamp(14px, 3vw, 24px) 36px; width: 100%; }
+        .px-inboxShell.is-composerOnly { display: contents; padding: 0; }
+        .px-inboxShell.is-composerOnly > .px-inboxHero, .px-inboxShell.is-composerOnly > .px-inboxAlert, .px-inboxShell.is-composerOnly > .px-inboxNotice, .px-inboxShell.is-composerOnly > .px-inboxGrid { display: none; }
         .px-inboxHero { align-items: center; background: linear-gradient(135deg, rgba(255,255,255,.98), var(--px-inbox-soft)); border: 1px solid rgba(15,23,42,.08); border-radius: 20px; box-shadow: 0 16px 38px rgba(15,23,42,.08); color: #061b3a; display: flex; gap: 14px; justify-content: space-between; min-width: 0; overflow: hidden; padding: 16px 18px; position: relative; }
         .px-inboxHero::before { background: linear-gradient(90deg, var(--px-inbox-accent) 0%, var(--px-inbox-accent-2) 100%); content: ""; height: 4px; left: 0; position: absolute; right: 0; top: 0; }
         .px-inboxHero::after { background: radial-gradient(circle, var(--px-inbox-glow), transparent 64%); content: ""; height: 150px; pointer-events: none; position: absolute; right: -42px; top: -72px; width: 220px; }
@@ -659,6 +728,9 @@ export default function PampraxInbox({ scope, title, subtitle }: PampraxInboxPro
         .px-composeField > span { color: #475569; font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
         .px-composeField input, .px-composeField select, .px-composeField textarea { background: #fff; border: 1px solid rgba(15,23,42,.12); border-radius: 15px; color: #061b3a; font-size: 13px; font-weight: 780; min-height: 44px; min-width: 0; outline: none; padding: 10px 12px; width: 100%; }
         .px-composeField textarea { line-height: 1.45; resize: vertical; }
+        .px-lockedRecipient { align-items: center; background: var(--px-inbox-soft); border: 1px solid color-mix(in srgb, var(--px-inbox-accent) 28%, transparent); border-radius: 14px; color: #061b3a; display: flex; gap: 9px; min-height: 44px; padding: 8px 10px; }
+        .px-lockedRecipient > span { align-items: center; background: #fff; border-radius: 999px; color: var(--px-inbox-accent); display: inline-flex; font-size: 11px; font-weight: 950; height: 28px; justify-content: center; letter-spacing: 0; text-transform: none; width: 28px; }
+        .px-lockedRecipient strong { font-size: 13px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .px-composeField input:focus, .px-composeField select:focus, .px-composeField textarea:focus { border-color: color-mix(in srgb, var(--px-inbox-accent) 48%, transparent); box-shadow: 0 0 0 3px var(--px-inbox-glow); }
         .px-playerPicker { border: 1px solid rgba(15,23,42,.08); border-radius: 16px; display: grid; gap: 6px; max-height: 240px; overflow: auto; padding: 8px; }
         .px-playerPicker button { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 14px; color: #061b3a; cursor: pointer; display: grid; gap: 4px 10px; grid-template-columns: auto minmax(0, 1fr); padding: 9px; text-align: left; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }

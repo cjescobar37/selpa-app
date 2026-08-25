@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getApprovedMembership, userHasClubCapability } from '@/lib/clubMembershipServer'
 
 type ProfileRow = {
-  user_id: string
+  user_id: string | null
   email: string | null
   first_name: string | null
   last_name: string | null
@@ -21,6 +21,7 @@ type PlayerRow = {
   ranking_points: number | null
   approved_at: string | null
   created_at: string
+  operational_status: 'ACTIVE' | 'BLOCKED' | 'LEFT'
 }
 
 type MembershipRow = {
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     const [playersRes, membershipsRes] = await Promise.all([
       supabaseAdmin
         .from('club_players')
-        .select('id,club_id,user_id,display_name,category,gender,ranking_points,approved_at,created_at')
+        .select('id,club_id,user_id,display_name,category,gender,ranking_points,approved_at,created_at,operational_status')
         .eq('club_id', clubId)
         .not('approved_at', 'is', null)
         .order('created_at', { ascending: false }),
@@ -109,13 +110,13 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     const memberships = (membershipsRes.data ?? []) as MembershipRow[]
     const isPlanillero = membership.role === 'PLANILLERO'
     const profiles = await getProfilesMap([
-      ...players.map((player) => player.user_id),
+      ...players.map((player) => player.user_id).filter((userId): userId is string => Boolean(userId)),
       ...memberships.map((membership) => membership.user_id),
     ], !isPlanillero)
 
     return NextResponse.json({
       players: players.map((player) => {
-        const profile = profiles.get(player.user_id) ?? null
+        const profile = player.user_id ? profiles.get(player.user_id) ?? null : null
         return {
           ...player,
           profile,

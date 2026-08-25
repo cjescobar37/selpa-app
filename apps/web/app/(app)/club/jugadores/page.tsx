@@ -8,6 +8,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import PlayerModuleHeader from './PlayerModuleHeader'
+import ClubAdminHubNav from '@/components/club/ClubAdminHubNav'
 
 type Profile = {
   user_id: string
@@ -27,6 +28,7 @@ type ClubPlayer = {
   ranking_points: number | null
   approved_at: string | null
   created_at: string
+  operational_status: 'ACTIVE' | 'BLOCKED' | 'LEFT'
   profile: Profile | null
   full_name: string
 }
@@ -62,6 +64,8 @@ function hasPlayerAccount(player: ClubPlayer) {
 }
 
 function playerStatusLabel(player: ClubPlayer) {
+  if (player.operational_status === 'BLOCKED') return 'Bloqueo temporal'
+  if (player.operational_status === 'LEFT') return 'Baja del club'
   return player.approved_at ? 'Aprobado' : 'Pendiente'
 }
 
@@ -116,7 +120,7 @@ export default function ClubJugadoresPage() {
         || player.full_name.toLowerCase().includes(query)
         || emailOf(player.profile).toLowerCase().includes(query)
       const matchesCategory = categoryFilter === 'all' || String(player.category ?? '') === categoryFilter
-      const status = player.approved_at ? 'approved' : 'pending'
+      const status = player.operational_status === 'BLOCKED' ? 'blocked' : player.operational_status === 'LEFT' ? 'left' : player.approved_at ? 'approved' : 'pending'
       const matchesStatus = statusFilter === 'all' || statusFilter === status
       const account = hasPlayerAccount(player) ? 'account' : 'manual'
       const matchesAccount = accountFilter === 'all' || accountFilter === account
@@ -137,7 +141,7 @@ export default function ClubJugadoresPage() {
 
   const playerStats = useMemo(() => {
     return {
-      active: players.filter((player) => player.approved_at).length,
+      active: players.filter((player) => player.approved_at && player.operational_status === 'ACTIVE').length,
       manual: players.filter((player) => !hasPlayerAccount(player)).length,
       pending: players.filter((player) => !player.approved_at).length + requests.length,
       categories: new Set(players.map((player) => player.category).filter(Boolean)).size,
@@ -256,6 +260,10 @@ export default function ClubJugadoresPage() {
               { label: 'Categorías', value: playerStats.categories },
             ]}
         />
+        <ClubAdminHubNav label="Herramientas de jugadores" variant="competition" items={[
+          { href:'/club/jugadores', label:'Jugadores', description:'Listado y fichas', icon:'players', requiredAnyCapabilities:['players:view'] },
+          { href:'/club/solicitudes', label:'Solicitudes', description:'Altas pendientes', icon:'requests', requiredAnyCapabilities:['memberships:view'] },
+        ]} />
 
         {message ? <div className="club-message">{message}</div> : null}
 
@@ -358,6 +366,8 @@ export default function ClubJugadoresPage() {
                     <option value="all">Todos</option>
                     <option value="approved">Aprobados</option>
                     <option value="pending">Pendientes</option>
+                    <option value="blocked">Bloqueo temporal</option>
+                    <option value="left">Baja del club</option>
                   </select>
                 </label>
                 <label>
@@ -385,7 +395,7 @@ export default function ClubJugadoresPage() {
                     <div className="club-playerFilterSheetHead"><h2 id="player-filter-title">Filtros</h2><button type="button" onClick={() => setFiltersOpen(false)} aria-label="Cerrar filtros">×</button></div>
                     <div className="club-playerFilterSheetGrid">
                       <label><span>Categoría</span><select className="px-input" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1) }}><option value="all">Todas</option>{categories.map((category) => <option key={category} value={String(category)}>{category}ta</option>)}</select></label>
-                      <label><span>Estado</span><select className="px-input" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1) }}><option value="all">Todos</option><option value="approved">Aprobados</option><option value="pending">Pendientes</option></select></label>
+                      <label><span>Estado</span><select className="px-input" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1) }}><option value="all">Todos</option><option value="approved">Aprobados</option><option value="pending">Pendientes</option><option value="blocked">Bloqueo temporal</option><option value="left">Baja del club</option></select></label>
                       <label><span>Tipo</span><select className="px-input" value={accountFilter} onChange={(event) => { setAccountFilter(event.target.value); setPage(1) }}><option value="all">Todos</option><option value="account">Con cuenta</option><option value="manual">Manual / sin cuenta</option></select></label>
                     </div>
                     <div className="club-playerFilterSheetActions"><button type="button" className="club-btn club-btn--ghost" onClick={resetPlayerFilters}>Limpiar</button><button type="button" className="club-btn club-btn--ok" onClick={() => setFiltersOpen(false)}>Ver jugadores</button></div>
@@ -444,7 +454,7 @@ export default function ClubJugadoresPage() {
                           <span data-label="Género">{genderLabel(player.gender)}</span>
                           <span data-label="Ranking">{player.ranking_points ?? 0} pts</span>
                           <span data-label="Estado">
-                            {!player.approved_at ? <span className="club-statusPill club-statusPill--pending">{playerStatusLabel(player)}</span> : null}
+                            <span className={`club-statusPill ${player.operational_status === 'ACTIVE' && player.approved_at ? 'club-statusPill--ok' : player.operational_status === 'BLOCKED' || player.operational_status === 'LEFT' ? 'club-statusPill--danger' : 'club-statusPill--pending'}`}>{playerStatusLabel(player)}</span>
                           </span>
                           <span data-label="Alta">{formatDate(player.approved_at ?? player.created_at)}</span>
                           <span data-label="Perfil">
@@ -583,6 +593,7 @@ export default function ClubJugadoresPage() {
         .club-btn--ghost:hover:not(:disabled) { border-color: color-mix(in srgb, var(--club-admin-accent) 48%, transparent); box-shadow: 0 10px 22px var(--club-admin-glow); }
         .club-statusPill { border-radius: 999px; font-size: 11px; font-weight: 950; padding: 5px 7px; text-align: center; white-space: nowrap; width: fit-content; }
         .club-statusPill--ok { background: #ecfdf3; color: #166534; }
+        .club-statusPill--danger { background: #fff1f2; color: #a11d1d; }
         .club-statusPill--pending { background: #fff7df; color: #854d0e; }
         .club-statusPill--muted { background: #f1f5f9; color: #475569; }
         .club-playerTable { display: grid; gap: 6px; min-width: 0; width: 100%; }
