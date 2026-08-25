@@ -66,7 +66,7 @@
   .app-shell--club .px-main > .px-wrap{
     box-sizing:border-box;
     max-width:none;
-    padding:8px 16px calc(88px + env(safe-area-inset-bottom));
+    padding:8px var(--app-mobile-gutter,12px) calc(88px + env(safe-area-inset-bottom));
     width:100%;
   }
   .app-shell--club .px-main > .px-wrap > .px-wrap{

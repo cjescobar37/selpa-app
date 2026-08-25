@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
@@ -484,8 +485,9 @@ export default function ClubConfiguracionPage() {
       <div className="club-panel club-config" style={themeStyle}>
         <div className="club-configHead">
           <div>
-            <span className="club-kicker">Club Core</span>
-            <h1 className="club-title">Configuración</h1>
+            <Link href="/club/admin" style={{ color: '#64748b', display: 'inline-flex', fontSize: 13, fontWeight: 850, marginBottom: 8, textDecoration: 'none' }}>← Club</Link>
+            <span className="club-kicker">CLUB</span>
+            <h1 className="club-title">Configuración del club</h1>
             <p className="club-sub">Datos del club, branding, contacto y reglamento PDF.</p>
           </div>
           <div className="club-configOps">

@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
   const user = await getTokenUser(req)
   if (!user) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
 
-  const [membership, canView, canViewPrivate, canManagePlayer, canViewMembership, canManageMembership, canViewMessages, canReplyMessages, canViewCompetition, canViewRanking] = await Promise.all([
+  const [membership, canView, canViewPrivate, canManagePlayer, canViewMembership, canManageMembership, canViewMessages, canReplyMessages, canViewCompetition, canViewRanking, canManageRoles] = await Promise.all([
     getApprovedMembership(user.id, clubId),
     userHasClubCapability(user.id, clubId, 'players:view'),
     userHasClubCapability(user.id, clubId, 'players:private_view'),
@@ -49,6 +49,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     userHasClubCapability(user.id, clubId, 'messages:reply'),
     userHasClubCapability(user.id, clubId, 'competition:view'),
     userHasClubCapability(user.id, clubId, 'ranking:view'),
+    userHasClubCapability(user.id, clubId, 'roles:manage'),
   ])
   if (!membership || !canView) return NextResponse.json({ error: 'No tenés permisos para administrar este jugador.' }, { status: 403 })
 
@@ -106,7 +107,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       const tournament = tournaments.get(String(registration.tournament_id))
       return { id: registration.id, status: registration.status, created_at: registration.created_at, tournament: tournament ? { id: tournament.id, name: tournament.name, category: tournament.category ?? null, starts_on: tournament.starts_on ?? tournament.start_date ?? null, status: tournament.status } : null }
     }),
-    permissions: { can_manage: canManagePlayer, can_view_private: canViewPrivate, can_view_membership: canViewMembership, can_manage_membership: canManageMembership, can_manage_lifecycle: canManageLifecycle, can_reincorporate: canReincorporate, can_view_messages: canViewMessages, can_reply_messages: canReplyMessages, can_view_competition: canViewCompetition, can_view_ranking: canViewRanking },
+    permissions: { can_manage: canManagePlayer, can_view_private: canViewPrivate, can_view_membership: canViewMembership, can_manage_membership: canManageMembership, can_manage_lifecycle: canManageLifecycle, can_reincorporate: canReincorporate, can_manage_roles: canManageRoles, lifecycle_staff_protected: Boolean(playerMembership && playerMembership.role !== 'PLAYER'), can_view_messages: canViewMessages, can_reply_messages: canReplyMessages, can_view_competition: canViewCompetition, can_view_ranking: canViewRanking },
   })
 }
 

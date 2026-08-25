@@ -144,6 +144,7 @@ function isActiveChild(pathname: string | null, currentSearch: string, child: Na
 
 function isActiveItem(pathname: string | null, currentSearch: string, item: NavItem) {
   if (isActiveHref(pathname, currentSearch, item.href, item.exact)) return true
+  if (item.activePrefixes?.some((prefix) => isActiveHref(pathname, currentSearch, prefix))) return true
   if (item.children?.length) {
     return item.children.some((c) => isActiveChild(pathname, currentSearch, c))
   }
@@ -328,11 +329,8 @@ export default function AppNavbarClient() {
   const clubPublicHomeHref = displayClub?.id ? `/clubs/${displayClub.id}` : '/club'
   const nav = useMemo(() => {
     const items = cfg.main as NavItem[]
-    const contextualItems = role === 'club'
-      ? items.map((item) => item.label === 'Inicio' ? { ...item, href: clubPublicHomeHref } : item)
-      : items
-    return role === 'club' ? filterClubNavItems(contextualItems, clubRole) : contextualItems
-  }, [cfg.main, clubPublicHomeHref, clubRole, role])
+    return role === 'club' ? filterClubNavItems(items, clubRole) : items
+  }, [cfg.main, clubRole, role])
 
   const playerIdentityMeta = useMemo(() => {
     const category = playerCategory ? `${playerCategory}ta categoría` : null
@@ -785,7 +783,7 @@ export default function AppNavbarClient() {
           </div>
           <Link className="px-ddItem" href="/perfil" onClick={closeAllMenus}>Mi perfil</Link>
           <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}>Preferencias</Link>
-          <Link className="px-ddItem" href="/club/usuarios" onClick={closeAllMenus}>Seguridad y permisos</Link>
+          <Link className="px-ddItem" href="/mis-datos" onClick={closeAllMenus}>Seguridad</Link>
           <Link className="px-ddItem" href={clubPublicHomeHref} onClick={closeAllMenus}>Ver home pública del club</Link>
           <button className="px-ddItem px-ddItem--danger" onClick={() => { closeAllMenus(); void signOut() }}>Cerrar sesión</button>
         </div>

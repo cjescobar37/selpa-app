@@ -12,6 +12,7 @@ export type NavItem = {
   label: string
   href: string
   exact?: boolean
+  activePrefixes?: readonly string[]
   dot?: boolean
   requiredAnyCapabilities?: readonly ClubCapability[]
   children?: NavChild[]
@@ -87,53 +88,35 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
   club: {
     leftMode: 'club-static',
     main: [
-      { label: 'Inicio', href: '/club', exact: true },
       {
-        label: 'Torneos',
-        href: '/club/torneos',
-        requiredAnyCapabilities: ['tournaments:create', 'tournaments:update', 'registrations:manage', 'groups:generate', 'playoff:generate'],
-        children: [
-          { label: 'Gestión', href: '/club/torneos', requiredAnyCapabilities: ['tournaments:view'] },
-          { label: 'Calendario', href: '/club/torneos/calendario', requiredAnyCapabilities: ['tournaments:view'] },
-          { label: 'Crear torneo', href: '/club/torneos/nuevo', requiredAnyCapabilities: ['tournaments:create'] },
-          { label: 'Reglamento', href: '/club/reglamento', requiredAnyCapabilities: ['news:manage', 'club:update'] },
-        ],
+        label: 'Inicio',
+        href: '/club',
+        exact: true,
+        requiredAnyCapabilities: ['dashboard:view'],
+      },
+      {
+        label: 'Competencia',
+        href: '/club/competition',
+        activePrefixes: ['/club/competition', '/club/torneos', '/club/ranking', '/club/calendario', '/club/reglamento', '/club/partidos'],
+        requiredAnyCapabilities: ['competition:view', 'competition:manage', 'ranking:view', 'ranking:manage', 'tournaments:view', 'tournaments:create', 'tournaments:update', 'registrations:view', 'groups:generate', 'matches:view', 'playoff:generate'],
       },
       {
         label: 'Jugadores',
         href: '/club/jugadores',
-        requiredAnyCapabilities: ['players:view', 'ranking:view', 'memberships:view'],
-        children: [
-          { label: 'Gestión', href: '/club/jugadores', requiredAnyCapabilities: ['players:view'] },
-          { label: 'Solicitudes', href: '/club/solicitudes', requiredAnyCapabilities: ['memberships:view'] },
-          { label: 'Ranking', href: '/club/ranking', requiredAnyCapabilities: ['ranking:view'] },
-        ],
-      },
-      {
-        label: 'Competencias',
-        href: '/club/competition',
-        requiredAnyCapabilities: ['competition:view', 'competition:manage'],
+        activePrefixes: ['/club/jugadores', '/club/solicitudes', '/club/inscripciones'],
+        requiredAnyCapabilities: ['players:view', 'players:manage', 'memberships:view', 'memberships:manage', 'registrations:view'],
       },
       {
         label: 'Club',
-        href: '/club/configuracion',
-        requiredAnyCapabilities: ['roles:view', 'roles:manage', 'club:update', 'club:branding', 'club:profile_manage', 'finance:view', 'finance:manage'],
-        children: [
-          { label: 'Equipo y roles', href: '/club/usuarios', requiredAnyCapabilities: ['roles:view', 'roles:manage'] },
-          { label: 'Perfil del club', href: '/club/perfil', requiredAnyCapabilities: ['club:profile_manage'] },
-          { label: 'Configuración', href: '/club/configuracion', requiredAnyCapabilities: ['club:update', 'club:branding'] },
-          { label: 'Finanzas', href: '/club/contabilidad', requiredAnyCapabilities: ['finance:view', 'finance:manage'] },
-          { label: 'Estadísticas', href: '/club/estadisticas', requiredAnyCapabilities: ['reports:operational_view'] },
-        ],
+        href: '/club/admin',
+        activePrefixes: ['/club/admin', '/club/configuracion', '/club/equipo', '/club/usuarios', '/club/perfil', '/club/finanzas', '/club/contabilidad', '/club/estadisticas', '/club/reportes', '/club/mensajes'],
+        requiredAnyCapabilities: ['club:update', 'club:branding', 'club:profile_manage', 'roles:view', 'roles:manage', 'finance:view', 'finance:manage', 'reports:operational_view', 'messages:view', 'audit:view', 'security:manage'],
       },
       {
         label: 'Contenido',
         href: '/club/noticias',
+        activePrefixes: ['/club/noticias', '/club/publicidad', '/club/sponsors'],
         requiredAnyCapabilities: ['content:view', 'news:manage', 'sponsors:manage', 'ads:manage'],
-        children: [
-          { label: 'Noticias', href: '/club/noticias', requiredAnyCapabilities: ['news:manage'] },
-          { label: 'Sponsors y publicidad', href: '/club/publicidad', requiredAnyCapabilities: ['sponsors:manage', 'ads:manage'] },
-        ],
       },
     ],
     right: {

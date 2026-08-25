@@ -1,0 +1,42 @@
+.actionGrid {
+  margin-top: 10px;
+}
+
+.actionCard {
+  background: #071c3b;
+  border-color: #19365c;
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgb(7 28 59 / 14%);
+}
+
+.actionCard h2,
+.actionCard p b {
+  color: #ffffff;
+}
+
+.actionCard p {
+  color: #c4d0df;
+}
+
+.actionCard > svg {
+  color: #a5d95b;
+}
+
+.actionCard:hover,
+.actionCard:focus-visible {
+  background: #102b51;
+  border-color: #41658f;
+  box-shadow: 0 10px 24px rgb(7 28 59 / 20%);
+}
+
+.actionIcon {
+  color: #93d143;
+  background: #12325b;
+  border: 1px solid #31567f;
+}
+
+@media (min-width: 768px) {
+  .actionGrid {
+    margin-top: 12px;
+  }
+}
