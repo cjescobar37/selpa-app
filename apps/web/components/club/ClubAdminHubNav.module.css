@@ -1,0 +1,23 @@
+.hub { display:grid; gap:12px; margin:14px 0; min-width:0; }
+.group { display:grid; gap:7px; min-width:0; }
+.groupLabel { color:#64748b; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.grid { display:grid; gap:8px; grid-template-columns:repeat(3,minmax(0,1fr)); min-width:0; }
+.link { align-items:center; background:#fff; border:1px solid rgba(15,35,64,.1); border-radius:14px; color:#0c2d48; display:flex; gap:9px; min-height:62px; min-width:0; padding:9px 10px; text-decoration:none; transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease; }
+.link:hover { border-color:color-mix(in srgb,var(--club-admin-accent,var(--club-accent,#20a4bc)) 38%,transparent); box-shadow:0 8px 20px rgba(15,35,64,.08); transform:translateY(-1px); }
+.link:active { transform:scale(.985); }
+.link > svg { color:var(--club-admin-accent,var(--club-accent,#1597ae)); flex:0 0 auto; }
+.link > span { display:grid; gap:2px; min-width:0; }
+.link strong { font-size:13px; line-height:1.1; }
+.link small { color:#64748b; font-size:10px; font-weight:700; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.active { background:color-mix(in srgb,var(--club-admin-soft,var(--club-soft,#eef9fb)) 72%,white); border-color:color-mix(in srgb,var(--club-admin-accent,var(--club-accent,#20a4bc)) 42%,transparent); }
+.competition { margin-top:12px; }
+.competition .group:first-child .groupLabel { color:#53657d; }
+.competition .group:first-child .link { background:#071c3b; border-color:#19365c; color:#f8fbff; box-shadow:0 7px 18px rgba(7,28,59,.12); }
+.competition .group:first-child .link > svg { color:var(--club-admin-accent,#66b91d); }
+.competition .group:first-child .link small { color:#bac7d7; }
+.competition .group:first-child .link:hover,.competition .group:first-child .link:focus-visible { background:#102b51; border-color:#355a89; box-shadow:0 10px 23px rgba(7,28,59,.2); }
+.competition .group:first-child .active { background:#102b51; border-color:#355a89; }
+.competition .group:nth-child(2) .link { background:#fff; }
+.competition .group:nth-child(2) .link > svg { color:var(--club-admin-accent,#568500); }
+@media (max-width:700px) { .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .link { min-height:58px; padding:8px 9px; } }
+@media (max-width:340px) { .link { gap:7px; } .link strong { font-size:12px; } .link small { font-size:9px; } }
