@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
+import ClubBackLink from '@/components/club/ClubBackLink'
 
 type PaymentRow = {
   amount: number | string | null
@@ -15,6 +16,7 @@ type ReportState = {
   activePlayers: number
   tournaments: number
   registrations: number
+  matches: number
   payments: PaymentRow[]
   paymentsAvailable: boolean
 }
@@ -61,6 +63,7 @@ export default function ClubReportesPage() {
     activePlayers: 0,
     payments: [],
     paymentsAvailable: true,
+    matches: 0,
     registrations: 0,
     tournaments: 0,
   })
@@ -85,6 +88,7 @@ export default function ClubReportesPage() {
           activePlayers: 0,
           payments: [],
           paymentsAvailable: true,
+          matches: 0,
           registrations: 0,
           tournaments: 0,
         })
@@ -96,12 +100,13 @@ export default function ClubReportesPage() {
       setError('')
 
       try {
-        const [clubResult, playersResult, tournamentsResult, registrationsResult, paymentsResult] = await Promise.all([
+        const [clubResult, playersResult, tournamentsResult, registrationsResult, matchesResult, paymentsResult] = await Promise.all([
           supabase.from('clubs').select('theme_key').eq('id', activeClub.id).maybeSingle(),
           supabase
             .from('club_players')
             .select('id', { count: 'exact', head: true })
             .eq('club_id', activeClub.id)
+            .eq('operational_status', 'ACTIVE')
             .not('approved_at', 'is', null),
           supabase
             .from('tournaments')
@@ -109,6 +114,10 @@ export default function ClubReportesPage() {
             .eq('club_id', activeClub.id),
           supabase
             .from('tournament_registrations')
+            .select('id', { count: 'exact', head: true })
+            .eq('club_id', activeClub.id),
+          supabase
+            .from('tournament_matches')
             .select('id', { count: 'exact', head: true })
             .eq('club_id', activeClub.id),
           supabase
@@ -124,6 +133,7 @@ export default function ClubReportesPage() {
         if (playersResult.error) throw playersResult.error
         if (tournamentsResult.error) throw tournamentsResult.error
         if (registrationsResult.error) throw registrationsResult.error
+        if (matchesResult.error) throw matchesResult.error
 
         let payments: PaymentRow[] = []
         let paymentsAvailable = true
@@ -142,12 +152,13 @@ export default function ClubReportesPage() {
           activePlayers: playersResult.count ?? 0,
           payments,
           paymentsAvailable,
+          matches: matchesResult.count ?? 0,
           registrations: registrationsResult.count ?? 0,
           tournaments: tournamentsResult.count ?? 0,
         })
       } catch (loadError) {
         if (!alive) return
-        setError(loadError instanceof Error ? loadError.message : 'No pude cargar los reportes del club.')
+        setError('No pudimos cargar los reportes del club. Intentá nuevamente.')
       } finally {
         if (alive) setLoading(false)
       }
@@ -179,6 +190,7 @@ export default function ClubReportesPage() {
 
   return (
     <div className="club-shell">
+      <ClubBackLink />
       <div className="club-panel club-reportPage" style={themeStyle}>
         <header className="club-reportHero">
           <div>
@@ -240,25 +252,8 @@ export default function ClubReportesPage() {
                   </div>
                   <div>
                     <span>Partidos registrados</span>
-                    <strong>Próximamente</strong>
+                    <strong>{loading ? '...' : kpiValue(report.matches)}</strong>
                   </div>
-                </div>
-              </article>
-
-              <article className="club-reportCard club-reportCard--soft">
-                <div className="club-reportCardHead">
-                  <div>
-                    <span className="club-reportKicker">Exportaciones</span>
-                    <h2>Próximamente</h2>
-                  </div>
-                </div>
-                <p>
-                  En esta sección van a vivir los reportes exportables de participación, ingresos por torneo y uso de canchas.
-                </p>
-                <div className="club-reportExportList">
-                  <span>PDF ejecutivo</span>
-                  <span>Excel operativo</span>
-                  <span>Resumen financiero</span>
                 </div>
               </article>
             </section>
@@ -272,7 +267,7 @@ export default function ClubReportesPage() {
 
             {!report.paymentsAvailable ? (
               <div className="club-reportNotice">
-                La tabla <strong>tournament_payments</strong> todavía no está disponible en este entorno. Los reportes funcionan igual, pero sin métricas de pagos.
+                Las métricas de pagos todavía no están disponibles. El resto del reporte sigue operativo.
               </div>
             ) : null}
           </>

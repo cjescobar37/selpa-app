@@ -14,12 +14,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     supabaseAdmin.from('club_public_profiles').select('club_id,tagline,story,publication_status,published_at,updated_at').eq('club_id', clubId).maybeSingle(),
     supabaseAdmin.from('club_media').select('id,club_id,kind,storage_path,public_url,alt_text,caption,sort_order,is_visible,created_at').eq('club_id', clubId).order('sort_order').order('created_at'),
     supabaseAdmin.from('club_facilities').select('id,facility_key,label,description,is_available,sort_order').eq('club_id', clubId).order('sort_order').order('label'),
-    supabaseAdmin.from('club_players').select('id', { count: 'exact', head: true }).eq('club_id', clubId).not('approved_at', 'is', null),
+    supabaseAdmin.from('club_players').select('id', { count: 'exact', head: true }).eq('club_id', clubId).eq('operational_status', 'ACTIVE').not('approved_at', 'is', null),
     supabaseAdmin.from('tournaments').select('id', { count: 'exact', head: true }).eq('club_id', clubId).not('status', 'in', '("DRAFT","CANCELLED","ARCHIVED")'),
   ])
 
   const firstError = [clubResult.error, profileResult.error, mediaResult.error, facilitiesResult.error].find(Boolean)
-  if (firstError) return isMissingClubProfileSchema(firstError) ? clubProfileSetupResponse() : NextResponse.json({ error: firstError.message }, { status: 500 })
+  if (firstError) return isMissingClubProfileSchema(firstError) ? clubProfileSetupResponse() : NextResponse.json({ error: 'No pudimos cargar el perfil del club.', code: 'CLUB_PROFILE_LOAD_FAILED' }, { status: 500 })
   if (!clubResult.data) return NextResponse.json({ error: 'Club no encontrado.' }, { status: 404 })
 
   return NextResponse.json({
@@ -57,11 +57,11 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ clubI
   const facilities = Array.isArray(body.facilities) ? body.facilities.slice(0, 24) : []
 
   const { error: profileError } = await supabaseAdmin.from('club_public_profiles').upsert(profilePatch, { onConflict: 'club_id' })
-  if (profileError) return isMissingClubProfileSchema(profileError) ? clubProfileSetupResponse() : NextResponse.json({ error: profileError.message }, { status: 500 })
+  if (profileError) return isMissingClubProfileSchema(profileError) ? clubProfileSetupResponse() : NextResponse.json({ error: 'No pudimos guardar el perfil público.', code: 'CLUB_PROFILE_SAVE_FAILED' }, { status: 500 })
   const { error: clubError } = await supabaseAdmin.from('clubs').update(clubPatch).eq('id', clubId)
-  if (clubError) return NextResponse.json({ error: clubError.message }, { status: 500 })
+  if (clubError) return NextResponse.json({ error: 'No pudimos actualizar los datos públicos del club.', code: 'CLUB_PROFILE_CLUB_UPDATE_FAILED' }, { status: 500 })
   const { error: deleteError } = await supabaseAdmin.from('club_facilities').delete().eq('club_id', clubId)
-  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 })
+  if (deleteError) return NextResponse.json({ error: 'No pudimos actualizar los servicios del club.', code: 'CLUB_PROFILE_FACILITIES_FAILED' }, { status: 500 })
   if (facilities.length) {
     const rows = facilities.map((item, index) => {
       const record = item as Record<string, unknown>
@@ -69,7 +69,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ clubI
       return { club_id: clubId, facility_key: FACILITY_KEYS.has(requestedKey) ? requestedKey : 'OTHER', label: text(record.label, 80) ?? 'Otro servicio', description: text(record.description, 500), is_available: record.is_available !== false, sort_order: index }
     })
     const { error } = await supabaseAdmin.from('club_facilities').insert(rows)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) return NextResponse.json({ error: 'No pudimos actualizar los servicios del club.', code: 'CLUB_PROFILE_FACILITIES_FAILED' }, { status: 500 })
   }
   return NextResponse.json({ ok: true })
 }

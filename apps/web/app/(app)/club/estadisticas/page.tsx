@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { AlertTriangle, BarChart3, CalendarRange, ChevronDown } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
+import ClubBackLink from '@/components/club/ClubBackLink'
 import styles from './estadisticas.module.css'
 
 type Section = 'summary' | 'players' | 'tournaments' | 'activity' | 'finance' | 'content'
@@ -22,7 +23,7 @@ type Analytics = {
   players: {
     active: number; new: number; pending: number; competitive: number; inactive: number; averageTournaments: number
     categories: Array<{ label: string; value: number }>; genders: Array<{ label: string; value: number }>
-    top: Array<{ userId: string; name: string; category: number | null; tournaments: number; matches: number }>
+    top: Array<{ playerId: string; name: string; category: number | null; tournaments: number; matches: number }>
   }
   tournaments: {
     created: number; published: number; completed: number; cancelled: number; registrations: number
@@ -130,6 +131,7 @@ export default function ClubAnalyticsPage() {
   const updated = data ? new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt)) : null
 
   return <main className={styles.page}>
+    <ClubBackLink />
     <header className={styles.header}>
       <div><span>CLUB ADMIN</span><h1>Estadísticas</h1><p>{data ? periodLabel(from, to) : 'Información operativa del club'}</p></div>
       <button className={styles.filterButton} onClick={() => setFilterOpen(true)}><CalendarRange size={17} /><span>{presets.find((item) => item.id === preset)?.label}</span><ChevronDown size={15} /></button>
@@ -176,7 +178,7 @@ function Summary({ data, onSection }: { data: Analytics; onSection: (section: Se
   </div>
 }
 function Players({ data }: { data: Analytics }) {
-  return <div className={styles.section}><div className={styles.kpis}><Kpi label="Activos" value={data.players.active} /><Kpi label="Nuevos" value={data.players.new} /><Kpi label="Con actividad" value={data.players.competitive} /><Kpi label="Sin actividad" value={data.players.inactive} /><Kpi label="Solicitudes pendientes" value={data.players.pending} /><Kpi label="Promedio de torneos" value={data.players.averageTournaments} /></div><div className={styles.twoColumns}><BarPanel title="Distribución por categoría" unit="jugadores" values={data.players.categories} /><BarPanel title="Distribución por género" unit="jugadores" values={data.players.genders} /></div><ListPanel title="Jugadores con mayor actividad">{data.players.top.length ? data.players.top.map((player) => <Link className={styles.playerRow} href={`/jugadores/${player.userId}`} key={player.userId}><span><b>{player.name}</b><small>{player.category ? `${player.category}ta` : 'Sin categoría'}</small></span><em>{player.tournaments} torneos · {player.matches} partidos</em></Link>) : <p className={styles.empty}>No hubo actividad competitiva en el período.</p>}</ListPanel></div>
+  return <div className={styles.section}><div className={styles.kpis}><Kpi label="Activos" value={data.players.active} /><Kpi label="Nuevos" value={data.players.new} /><Kpi label="Con actividad" value={data.players.competitive} /><Kpi label="Sin actividad" value={data.players.inactive} /><Kpi label="Solicitudes pendientes" value={data.players.pending} /><Kpi label="Promedio de torneos" value={data.players.averageTournaments} /></div><div className={styles.twoColumns}><BarPanel title="Distribución por categoría" unit="jugadores" values={data.players.categories} /><BarPanel title="Distribución por género" unit="jugadores" values={data.players.genders} /></div><ListPanel title="Jugadores con mayor actividad">{data.players.top.length ? data.players.top.map((player) => <Link className={styles.playerRow} href={`/club/jugadores/${player.playerId}/administracion`} key={player.playerId}><span><b>{player.name}</b><small>{player.category ? `${player.category}ta` : 'Sin categoría'}</small></span><em>{player.tournaments} torneos · {player.matches} partidos</em></Link>) : <p className={styles.empty}>No hubo actividad competitiva en el período.</p>}</ListPanel></div>
 }
 function Tournaments({ data }: { data: Analytics }) {
   return <div className={styles.section}><div className={styles.kpis}><Kpi label="Creados" value={data.tournaments.created} /><Kpi label="Publicados" value={data.tournaments.published} /><Kpi label="Completados" value={data.tournaments.completed} /><Kpi label="Cancelados" value={data.tournaments.cancelled} /><Kpi label="Inscripciones" value={data.tournaments.registrations} /><Kpi label="Ocupación" value={data.tournaments.occupancyRate === null ? 'Sin datos' : `${data.tournaments.occupancyRate}%`} /></div><ListPanel title="Rendimiento por torneo">{data.tournaments.performance.length ? data.tournaments.performance.map((tournament) => <Link href={`/club/torneos/${tournament.id}`} className={styles.tournamentRow} key={tournament.id}><span><b>{tournament.name}</b><small>{tournament.date ? new Date(`${tournament.date}T12:00:00`).toLocaleDateString('es-AR') : 'Sin fecha'} · {tournament.status}</small></span><span><strong>{tournament.occupancy === null ? '—' : `${tournament.occupancy}%`}</strong><small>{tournament.registrations}/{tournament.capacity || '—'} parejas</small></span></Link>) : <p className={styles.empty}>No se crearon torneos en este período.</p>}</ListPanel></div>
@@ -186,13 +188,13 @@ function Activity({ data }: { data: Analytics }) {
 }
 function Finance({ data }: { data: Analytics }) {
   if (!data.permissions.finance) return <AnalyticsState title="Sin acceso financiero" detail="Tu rol no posee finance:view." />
-  if (!data.finance?.available) return <AnalyticsState title="Finanzas todavía no disponible" detail="Aplicá la migración del módulo Finanzas para habilitar estas métricas." />
+  if (!data.finance?.available) return <AnalyticsState title="Finanzas todavía no disponible" detail="Las métricas financieras se mostrarán cuando el módulo esté habilitado para el club." />
   const currencies = Object.entries(data.finance.currencies)
   return <div className={styles.section}>{currencies.length ? currencies.map(([currency, row]) => <section className={styles.currency} key={currency}><div className={styles.title}><div><span>MONEDA</span><h2>{currency}</h2></div><Link href="/club/contabilidad">Ver Finanzas</Link></div><div className={styles.kpis}><Kpi label="Ingresos" value={money(row.income, currency)} /><Kpi label="Gastos" value={money(row.expenses, currency)} /><Kpi label="Ajustes" value={money(row.adjustments, currency)} /><Kpi label="Resultado neto" value={money(row.net, currency)} /></div>{data.finance?.receivables[currency] ? <div className={styles.debt}><span>Por cobrar <b>{money(data.finance.receivables[currency].pending, currency)}</b></span><span>Vencido <b>{money(data.finance.receivables[currency].overdue, currency)}</b></span></div> : null}</section>) : <AnalyticsState title="Sin movimientos" detail="No hubo movimientos financieros en el período seleccionado." />}</div>
 }
 function Content({ data }: { data: Analytics }) {
   if (!data.permissions.content) return <AnalyticsState title="Sin acceso a contenido" detail="Tu rol no posee permisos de contenido o publicidad." />
-  if (!data.content) return <AnalyticsState title="Métricas comerciales no disponibles" detail="Aplicá la migración de Sponsors y publicidad." />
+  if (!data.content) return <AnalyticsState title="Métricas comerciales no disponibles" detail="Estas métricas se mostrarán cuando el contenido comercial esté habilitado para el club." />
   const ctr = data.content.impressions ? Math.round((data.content.clicks / data.content.impressions) * 1000) / 10 : 0
   return <div className={styles.section}><div className={styles.kpis}><Kpi label="Noticias publicadas" value={data.content.newsPublished ?? 'Sin tracking'} /><Kpi label="Sponsors activos" value={data.content.activeSponsors} /><Kpi label="Campañas activas" value={data.content.activeCampaigns} /><Kpi label="Impresiones" value={data.content.impressions} /><Kpi label="Clics" value={data.content.clicks} /><Kpi label="CTR" value={`${ctr}%`} /></div><ListPanel title="Campañas con mejor rendimiento">{data.content.campaignPerformance.length ? data.content.campaignPerformance.map((campaign) => <div className={styles.campaignRow} key={campaign.id}><span><b>{campaign.name}</b><small>{campaign.sponsor}</small></span><em>{campaign.impressions} imp. · {campaign.clicks} clics · <strong>{campaign.ctr}%</strong></em></div>) : <p className={styles.empty}>Todavía no hay eventos publicitarios en el período.</p>}</ListPanel></div>
 }

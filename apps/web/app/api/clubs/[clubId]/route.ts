@@ -93,7 +93,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     .maybeSingle()
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'No pudimos cargar la configuración del club.', code: 'CLUB_SETTINGS_LOAD_FAILED' }, { status: 500 })
   }
 
   if (!club) {

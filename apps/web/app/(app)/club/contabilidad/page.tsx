@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties, type For
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
+import ClubBackLink from '@/components/club/ClubBackLink'
 
 type Section = 'summary' | 'transactions' | 'receivables' | 'expenses' | 'balance' | 'debtors' | 'closures'
 type Sheet = 'income' | 'expense' | 'receivable' | 'payment' | 'void' | 'close' | 'reopen' | null
@@ -60,7 +61,8 @@ function money(value: number | string, currency = 'ARS') {
 
 function shortDate(value?: string | null) {
   if (!value) return 'Sin fecha'
-  return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short' }).format(new Date(value)).replace('.', '')
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value)
+  return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short' }).format(date).replace('.', '')
 }
 
 function monthLabel(start: string) {
@@ -181,6 +183,7 @@ export default function ClubContabilidadPage() {
 
   return (
     <div className="club-shell">
+      <ClubBackLink />
       <main className="finance-workspace" style={themeStyle}>
         <header className="finance-hero">
           <div><span>Club Admin</span><h1>Finanzas</h1><p>{activeClub?.name ?? 'Tu club'} · {monthLabel(period.start)}</p></div>
@@ -213,9 +216,9 @@ export default function ClubContabilidadPage() {
             <Metric label="Pendiente" value={money(summary.pendingTotal)} />
             <Metric label="Deudores" value={String(summary.pending.length)} />
           </div>
-          <div className="finance-quick">
+          {data.canManage ? <div className="finance-quick">
             <button onClick={() => open('income')}>+ Ingreso</button><button onClick={() => open('expense')}>− Gasto</button><button onClick={() => open('receivable')}>Crear cobro</button>
-          </div>
+          </div> : null}
           <div className="finance-twoColumns">
             <article className="finance-card"><header><div><span>Movimientos</span><h2>Últimos registros</h2></div><button onClick={() => setActiveSection('transactions')}>Ver todos</button></header>
               <TransactionList rows={data.transactions.slice(0, 5)} canManage={data.canManage} onVoid={(id) => open('void', id)} />

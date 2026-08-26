@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
+import ClubBackLink from '@/components/club/ClubBackLink'
 import type { ClubRole } from '@/lib/clubMembershipRules'
 import {
   getCanonicalClubPermissionRole,
@@ -1038,8 +1039,8 @@ export default function ClubUsuariosPage() {
 
         {activityEvents.length === 0 ? (
           <div className="club-activityPlaceholder">
-            <strong>Próximamente</strong>
-            <span>Historial de cambios de rol, resultados, pagos y horarios.</span>
+            <strong>Sin actividad registrada</strong>
+            <span>Las invitaciones, altas y cambios de rol aparecerán acá cuando ocurran.</span>
           </div>
         ) : (
           <div className="club-activityTimeline" aria-label="Timeline de actividad del club">
@@ -1076,6 +1077,7 @@ export default function ClubUsuariosPage() {
 
   return (
     <div className="px-wrap">
+      <ClubBackLink />
       <div className="club-panel club-users" style={themeStyle}>
         <div className="club-usersHead">
           <div>

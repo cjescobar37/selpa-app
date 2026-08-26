@@ -1,0 +1,14 @@
+.back {
+  align-items: center;
+  color: #5f7085;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 850;
+  gap: 5px;
+  min-height: 44px;
+  text-decoration: none;
+  width: max-content;
+}
+
+.back:hover { color: #0b2248; }
+.back:focus-visible { border-radius: 8px; outline: 2px solid var(--club-accent, #69ad16); outline-offset: 2px; }

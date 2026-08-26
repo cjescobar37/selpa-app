@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import ClubBackLink from '@/components/club/ClubBackLink'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
@@ -312,13 +312,6 @@ export default function ClubConfiguracionPage() {
     }
   }, [activeClub?.id])
 
-  useEffect(() => {
-    if (!activeClub?.id || typeof window === 'undefined') return
-    const stored = window.localStorage.getItem(`club-theme-request:${activeClub.id}`)
-    const pendingKey = stored ? getClubTheme(stored).key : null
-    queueMicrotask(() => setPendingThemeKey(pendingKey))
-  }, [activeClub?.id])
-
   const onChange = (k: keyof ClubForm, value: string) =>
     setV((prev) => ({ ...prev, [k]: value }))
   const openingHourValues = useMemo(() => parseOpeningHours(v.opening_hours), [v.opening_hours])
@@ -465,19 +458,32 @@ export default function ClubConfiguracionPage() {
     setBanner({ type: 'success', text: 'Cambios guardados.' })
   }
 
-  function submitThemeRequest(themeKey: ClubThemeKey) {
-    setPendingThemeKey(themeKey)
-    if (activeClub?.id && typeof window !== 'undefined') {
-      window.localStorage.setItem(`club-theme-request:${activeClub.id}`, themeKey)
+  async function submitThemeRequest(themeKey: ClubThemeKey) {
+    if (!activeClub?.id || saving) return
+    setSaving(true)
+    setBanner(null)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      setSaving(false)
+      setBanner({ type: 'error', text: 'Tu sesión venció. Volvé a ingresar.' })
+      return
     }
-    setBanner({ type: 'success', text: 'Solicitud enviada para revisión.' })
-  }
-
-  function showMissingSportsModel() {
-    setBanner({
-      type: 'info',
-      text: 'Para activar esta configuración falta un modelo real en DB: categorías/ramas por club, segmentos, tipos, sistemas y catálogo de canchas.',
+    const response = await fetch(`/api/clubs/${activeClub.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ theme_key: themeKey }),
     })
+    const json = await response.json().catch(() => ({}))
+    setSaving(false)
+    if (!response.ok) {
+      setBanner({ type: 'error', text: json?.error ?? 'No pudimos actualizar la identidad visual.' })
+      return
+    }
+    setPendingThemeKey(null)
+    await loadClubData(activeClub.id)
+    await refresh()
+    setBanner({ type: 'success', text: 'Identidad visual actualizada.' })
   }
 
   return (
@@ -485,7 +491,7 @@ export default function ClubConfiguracionPage() {
       <div className="club-panel club-config" style={themeStyle}>
         <div className="club-configHead">
           <div>
-            <Link href="/club/admin" style={{ color: '#64748b', display: 'inline-flex', fontSize: 13, fontWeight: 850, marginBottom: 8, textDecoration: 'none' }}>← Club</Link>
+            <ClubBackLink />
             <span className="club-kicker">CLUB</span>
             <h1 className="club-title">Configuración del club</h1>
             <p className="club-sub">Datos del club, branding, contacto y reglamento PDF.</p>
@@ -556,7 +562,7 @@ export default function ClubConfiguracionPage() {
             </AdminCollapsibleSection>
 
             <AdminCollapsibleSection title="Configuración deportiva" summary={`${v.courts_count || 0} canchas configuradas`} open={activeMobileSection === 'sports'} onToggle={() => setActiveMobileSection((value) => value === 'sports' ? null : 'sports')}>
-              <SportsSettingsCard courtsCount={v.courts_count} onActivate={showMissingSportsModel} />
+              <SportsSettingsCard courtsCount={v.courts_count} />
             </AdminCollapsibleSection>
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

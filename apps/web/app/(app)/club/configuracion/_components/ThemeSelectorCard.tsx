@@ -224,7 +224,7 @@ export function ThemeSelectorCard({
         <div>
           <div className="px-sectionTitle">Identidad visual</div>
           <p className="px-help" style={{ marginTop: 4 }}>
-            La identidad actual se mantiene activa. Los cambios quedan preparados para revisión.
+            Elegí la identidad visual del club. La selección se guarda en el perfil activo.
           </p>
         </div>
         <button
@@ -242,7 +242,7 @@ export function ThemeSelectorCard({
             padding: '8px 13px',
           }}
         >
-          {hasPendingRequest ? 'Solicitud pendiente' : 'Solicitar cambio de identidad'}
+          {hasPendingRequest ? 'Guardando cambio' : 'Cambiar identidad'}
         </button>
       </div>
 
@@ -464,9 +464,9 @@ export function ThemeSelectorCard({
             </div>
 
             <div>
-              <h3 style={{ color: '#061b3a', fontSize: 22, margin: 0 }}>Solicitud de identidad</h3>
+              <h3 style={{ color: '#061b3a', fontSize: 22, margin: 0 }}>Cambiar identidad</h3>
               <p className="px-help" style={{ marginTop: 6 }}>
-                La identidad actual sigue activa. Esta acción prepara una solicitud para revisión de superadmin.
+                Confirmá la paleta que querés usar para el club.
               </p>
             </div>
 
@@ -517,7 +517,7 @@ export function ThemeSelectorCard({
                   padding: '9px 13px',
                 }}
               >
-                {hasPendingRequest ? 'Solicitud pendiente' : previewTheme.key === selectedTheme.key ? 'Elegí otra paleta' : 'Enviar solicitud'}
+                {hasPendingRequest ? 'Guardando cambio' : previewTheme.key === selectedTheme.key ? 'Elegí otra paleta' : 'Usar esta identidad'}
               </button>
             </div>
           </div>

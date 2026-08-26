@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireClubCapability } from '@/lib/clubMembershipServer'
+import { hasClubCapability } from '@/lib/clubPermissions'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -83,7 +84,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         error: missing
-          ? 'El módulo Finanzas todavía no está inicializado. Aplicá la migración 20260727_club_internal_finance.sql.'
+          ? 'El módulo Finanzas todavía no está disponible para este club.'
           : 'No pudimos cargar las finanzas.',
         code: missing ? 'CLUB_FINANCE_SCHEMA_MISSING' : 'CLUB_FINANCE_LOAD_FAILED',
       },
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     period: { start, end },
-    canManage: auth.membership?.role === 'OWNER' || auth.membership?.role === 'ADMIN',
+    canManage: hasClubCapability(auth.membership?.role, 'finance:manage'),
     canReopen: auth.membership?.role === 'OWNER',
     transactions: transactions.data ?? [],
     receivables: receivables.data ?? [],

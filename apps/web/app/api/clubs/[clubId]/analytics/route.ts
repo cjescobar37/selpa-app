@@ -60,9 +60,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     tournamentsResult, previousTournamentsResult, registrationsResult, previousRegistrationsResult,
     matchesResult, teamsResult,
   ] = await Promise.all([
-    supabaseAdmin.from('club_players').select('id,user_id,display_name,category,gender,approved_at').eq('club_id', clubId).not('approved_at', 'is', null),
-    supabaseAdmin.from('club_players').select('id', { count: 'exact', head: true }).eq('club_id', clubId).gte('approved_at', fromIso).lte('approved_at', toIso),
-    supabaseAdmin.from('club_players').select('id', { count: 'exact', head: true }).eq('club_id', clubId).gte('approved_at', previousFromIso).lte('approved_at', previousToIso),
+    supabaseAdmin.from('club_players').select('id,user_id,display_name,category,gender,approved_at,operational_status').eq('club_id', clubId).eq('operational_status', 'ACTIVE').not('approved_at', 'is', null),
+    supabaseAdmin.from('club_players').select('id', { count: 'exact', head: true }).eq('club_id', clubId).eq('operational_status', 'ACTIVE').gte('approved_at', fromIso).lte('approved_at', toIso),
+    supabaseAdmin.from('club_players').select('id', { count: 'exact', head: true }).eq('club_id', clubId).eq('operational_status', 'ACTIVE').gte('approved_at', previousFromIso).lte('approved_at', previousToIso),
     supabaseAdmin.from('club_memberships').select('id', { count: 'exact', head: true }).eq('club_id', clubId).eq('status', 'PENDING'),
     supabaseAdmin.from('tournaments').select('id,name,status,type,tournament_type,gender,category,max_pairs,price_per_player,starts_on,start_date,created_at').eq('club_id', clubId).gte('created_at', fromIso).lte('created_at', toIso),
     supabaseAdmin.from('tournaments').select('id', { count: 'exact', head: true }).eq('club_id', clubId).gte('created_at', previousFromIso).lte('created_at', previousToIso),
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     supabaseAdmin.from('tournament_teams').select('id,tournament_id,player1_user_id,player2_user_id,created_at').eq('club_id', clubId),
   ])
   const coreError = [playersResult.error, tournamentsResult.error, registrationsResult.error].find(Boolean)
-  if (coreError) return NextResponse.json({ error: coreError.message }, { status: 500 })
+  if (coreError) return NextResponse.json({ error: 'No pudimos cargar las estadísticas del club.', code: 'CLUB_ANALYTICS_LOAD_FAILED' }, { status: 500 })
   if (matchesResult.error) warnings.push('La actividad de partidos no está disponible en este entorno.')
 
   const players = playersResult.data ?? []
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
   }
   const topPlayers = players.map((player) => {
     const activity = activityByUser.get(player.user_id)
-    return { userId: player.user_id, name: player.display_name || 'Jugador', category: player.category, tournaments: activity?.tournaments.size ?? 0, matches: activity?.matches ?? 0 }
+    return { playerId: player.id, name: player.display_name || 'Jugador', category: player.category, tournaments: activity?.tournaments.size ?? 0, matches: activity?.matches ?? 0 }
   }).filter((row) => row.tournaments || row.matches).sort((a, b) => b.matches - a.matches || b.tournaments - a.tournaments).slice(0, 8)
 
   const dayActivity = Array.from({ length: 7 }, (_, day) => ({ day, count: 0 }))
@@ -145,7 +145,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     ])
     if (transactionsResult.error && missingRelation(transactionsResult.error)) {
       finance = { available: false, currencies: {}, receivables: {}, closuresPending: false }
-      warnings.push('Aplicá la migración de Finanzas para ver métricas económicas.')
+      warnings.push('Las métricas financieras todavía no están disponibles.')
     } else if (transactionsResult.error || receivablesResult.error) {
       warnings.push('Las métricas financieras no pudieron cargarse.')
     } else {
@@ -181,7 +181,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       supabaseAdmin.from('club_ad_events').select('campaign_id,event_type,occurred_at').eq('club_id', clubId).gte('occurred_at', fromIso).lte('occurred_at', toIso),
     ])
     if ([sponsorsResult.error, campaignsResult.error, eventsResult.error].some((error) => error && missingRelation(error))) {
-      warnings.push('Aplicá la migración de Sponsors y publicidad para ver métricas de contenido comercial.')
+      warnings.push('Las métricas de contenido comercial todavía no están disponibles.')
     } else {
       const eventMap = new Map<string, { impressions: number; clicks: number }>()
       for (const event of eventsResult.data ?? []) {
