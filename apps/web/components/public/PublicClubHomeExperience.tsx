@@ -40,6 +40,11 @@ export type PublicClubTournament = {
   registeredPairs?: number | null
   flyerUrl?: string | null
   rules?: Record<string, unknown> | null
+  circuit?: {
+    series_name: string
+    event_number: number | null
+    planned_events_count: number | null
+  } | null
 }
 
 export type PublicClubRankingSummary = {
@@ -478,6 +483,7 @@ export default function PublicClubHomeExperience({
           {visibleTournaments.length ? visibleTournaments.map((tournament) => (
             <TournamentPublicCard
               key={tournament.id}
+              compactAgenda
               tournament={{
                 ...tournament,
                 clubName: club.name,

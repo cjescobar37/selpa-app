@@ -30,6 +30,11 @@ export type TournamentPublicCardData = {
   clubThemeKey?: string | null
   flyerUrl?: string | null
   rules?: Record<string, unknown> | null
+  circuit?: {
+    series_name: string
+    event_number: number | null
+    planned_events_count: number | null
+  } | null
 }
 
 function dateParts(value?: string | null) {
@@ -68,6 +73,35 @@ function formatCompactDate(value?: string | null) {
   return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short', year: '2-digit' }).format(date).replace('.', '')
 }
 
+function formatAgendaDay(value?: string | null) {
+  if (!value) return 'A definir'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'A definir'
+  return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short' }).format(date).replace('.', '')
+}
+
+function formatAgendaDayWithPreposition(value?: string | null) {
+  if (!value) return 'A definir'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'A definir'
+  const month = new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(date).replace('.', '')
+  return `${date.getDate()} de ${month}`
+}
+
+function formatAgendaRange(start?: string | null, end?: string | null) {
+  if (!start) return 'Fecha a definir'
+  const startDate = new Date(start)
+  const endDate = end ? new Date(end) : null
+  if (Number.isNaN(startDate.getTime()) || (endDate && Number.isNaN(endDate.getTime()))) return formatAgendaDay(start)
+  if (!endDate || startDate.toDateString() === endDate.toDateString()) return `El ${formatAgendaDayWithPreposition(start)}`
+  const sameMonth = startDate.getMonth() === endDate.getMonth() && startDate.getFullYear() === endDate.getFullYear()
+  if (sameMonth) {
+    const month = new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(startDate).replace('.', '')
+    return `Del ${startDate.getDate()} al ${endDate.getDate()} de ${month}`
+  }
+  return `Del ${formatAgendaDayWithPreposition(start)} al ${formatAgendaDayWithPreposition(end)}`
+}
+
 function isManualFlyer(value: TournamentPublicCardData) {
   const mode = String(value.rules?.flyer_mode ?? '').trim().toUpperCase()
   const manualUrl = String(value.rules?.flyer_manual_url ?? '').trim()
@@ -81,12 +115,21 @@ function formatTournamentType(value: string) {
   return 'Open'
 }
 
+function formatCircuitPosition(circuit?: TournamentPublicCardData['circuit']) {
+  if (!circuit) return null
+  if (circuit.event_number && circuit.planned_events_count) return `${circuit.series_name} · Fecha ${circuit.event_number} de ${circuit.planned_events_count}`
+  if (circuit.event_number) return `${circuit.series_name} · Fecha ${circuit.event_number}`
+  return circuit.series_name
+}
+
 export default function TournamentPublicCard({
   tournament,
   showClub = false,
+  compactAgenda = false,
 }: {
   tournament: TournamentPublicCardData
   showClub?: boolean
+  compactAgenda?: boolean
   showRegisterAction?: boolean
 }) {
   const theme = getClubTheme(tournament.clubThemeKey)
@@ -100,6 +143,7 @@ export default function TournamentPublicCard({
   const genderLabel = formatGenderLabel(tournament.gender)
   const segmentLabel = formatSegmentLabel(tournament.segment ?? tournament.rules?.segment_type ?? tournament.rules?.segment)
   const tournamentType = getTournamentType(tournament)
+  const circuitPosition = formatCircuitPosition(tournament.circuit)
   const endDate = tournament.endDate && tournament.endDate !== tournament.startDate ? tournament.endDate : null
   const style = {
     ['--tournament-card-accent' as string]: theme.vars.accent,
@@ -111,7 +155,7 @@ export default function TournamentPublicCard({
   } as CSSProperties
 
   return (
-    <article className={`TournamentPublicCard ${flyer ? 'has-flyer' : ''}${manualFlyer ? ' is-manual-flyer' : ''}`} style={style}>
+    <article className={`TournamentPublicCard ${flyer ? 'has-flyer' : ''}${manualFlyer ? ' is-manual-flyer' : ''}${circuitPosition ? ' has-circuit' : ''}${compactAgenda ? ' is-agendaCompact' : ''}`} style={style}>
       <Link className="TournamentPublicCard__hitArea" href={`/torneos/${tournament.id}`} aria-label={`Entrar al torneo ${tournament.name}`} />
       <div className="TournamentPublicCard__poster">
         {flyer ? <img src={flyer} alt="" /> : null}
@@ -136,6 +180,7 @@ export default function TournamentPublicCard({
           </div>
           <em className={`TournamentPublicCard__status ${displayStatus.className}`}>{displayStatus.label}</em>
         </div>
+        {circuitPosition ? <p className="TournamentPublicCard__circuit">{circuitPosition}</p> : null}
         {showClub ? (
           <div className="TournamentPublicCard__club">
             <span
@@ -148,20 +193,30 @@ export default function TournamentPublicCard({
           </div>
         ) : null}
         <h3>{tournament.name}</h3>
-        <div className="TournamentPublicCard__dates">
-          <div className="TournamentPublicCard__dateRange">
-            <p className="TournamentPublicCard__period">
-              <CalendarDays size={13} />
-              <span><small>Inicio</small><strong>{formatCompactDate(tournament.startDate)}</strong></span>
-              <i aria-hidden="true">—</i>
-              <span><small>Fin</small><strong>{formatCompactDate(endDate ?? tournament.endDate ?? tournament.startDate)}</strong></span>
-            </p>
+        {compactAgenda ? (
+          <div className="TournamentPublicCard__agendaDates">
+            <CalendarDays size={14} aria-hidden="true" />
+            <span>{formatAgendaRange(tournament.startDate, endDate ?? tournament.endDate ?? tournament.startDate)}{tournament.registrationDeadline ? ` · Cierre ${formatAgendaDayWithPreposition(tournament.registrationDeadline)}` : ''}</span>
+            <ArrowRight aria-hidden="true" size={21} />
           </div>
-          {tournament.registrationDeadline ? <p className="TournamentPublicCard__deadline"><CalendarDays size={13} /><span><small>Cierre</small><strong>{formatCompactDate(tournament.registrationDeadline)}</strong></span></p> : null}
-        </div>
-        <div className="TournamentPublicCard__actions">
-          <Link href={`/torneos/${tournament.id}`}>ENTRAR <ArrowRight className="TournamentPublicCard__actionIcon" size={14} /></Link>
-        </div>
+        ) : (
+          <>
+            <div className="TournamentPublicCard__dates">
+              <div className="TournamentPublicCard__dateRange">
+                <p className="TournamentPublicCard__period">
+                  <CalendarDays size={13} />
+                  <span><small>Inicio</small><strong>{formatCompactDate(tournament.startDate)}</strong></span>
+                  <i aria-hidden="true">—</i>
+                  <span><small>Fin</small><strong>{formatCompactDate(endDate ?? tournament.endDate ?? tournament.startDate)}</strong></span>
+                </p>
+              </div>
+              {tournament.registrationDeadline ? <p className="TournamentPublicCard__deadline"><CalendarDays size={13} /><span><small>Cierre</small><strong>{formatCompactDate(tournament.registrationDeadline)}</strong></span></p> : null}
+            </div>
+            <div className="TournamentPublicCard__actions">
+              <Link href={`/torneos/${tournament.id}`}>ENTRAR <ArrowRight className="TournamentPublicCard__actionIcon" size={14} /></Link>
+            </div>
+          </>
+        )}
       </div>
     </article>
   )

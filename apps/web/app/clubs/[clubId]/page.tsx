@@ -9,6 +9,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { TOURNAMENT_SELECT, toTournamentView, type TournamentView } from '@/lib/tournamentHelpers'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
+import { getTournamentCircuitContexts } from '@/features/competition/events/competition-events.repository'
 
 export const dynamic = 'force-dynamic'
 
@@ -177,12 +178,16 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
     .map((row) => toTournamentView(row))
     .filter((item): item is TournamentView => Boolean(item))
   const tournamentIds = tournamentViews.map((item) => item.id).filter(Boolean)
-  const { data: registrationRows } = tournamentIds.length
-    ? await supabaseAdmin
-      .from('tournament_registrations')
-      .select('tournament_id,status')
-      .in('tournament_id', tournamentIds)
-    : { data: [] }
+  const [registrationResult, circuitContexts] = await Promise.all([
+    tournamentIds.length
+      ? supabaseAdmin
+        .from('tournament_registrations')
+        .select('tournament_id,status')
+        .in('tournament_id', tournamentIds)
+      : Promise.resolve({ data: [] }),
+    getTournamentCircuitContexts(supabaseAdmin, clubId, tournamentIds),
+  ])
+  const registrationRows = registrationResult.data
   const registrationsByTournamentId = new Map<string, number>()
   for (const row of (registrationRows ?? []) as Array<{ tournament_id: string | null; status: string | null }>) {
     if (!row.tournament_id || String(row.status ?? '').toUpperCase() === 'CANCELLED') continue
@@ -217,6 +222,7 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
       maxPairs: item.maxPairs,
       registeredPairs: registrationsByTournamentId.get(item.id) ?? 0,
       rules: item.rules,
+      circuit: circuitContexts[item.id] ?? null,
     }))
 
   let campaignRows: CampaignRow[] = []

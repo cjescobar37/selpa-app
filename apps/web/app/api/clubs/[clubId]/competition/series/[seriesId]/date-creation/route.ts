@@ -8,6 +8,9 @@ type Context = { params: Promise<{ clubId: string; seriesId: string }> }
 function dateCreationError(error: unknown) {
   const coded = error instanceof Error ? error as Error & { code?: string } : null
   if (coded?.code === '23514' && coded.message.includes('no admite nuevas fechas')) return NextResponse.json({ error: 'Este circuito no admite nuevas fechas.' }, { status: 409 })
+  if (coded?.code === '23514' && coded.message.includes('divisiones sin regla o elegibilidad deportiva válida')) {
+    return NextResponse.json({ error: 'La configuración deportiva del circuito necesita revisión. En Libres la categoría de edad debe quedar vacía; en Menores y Veteranos debe ser compatible.' }, { status: 400 })
+  }
   return eventErrorResponse(error)
 }
 

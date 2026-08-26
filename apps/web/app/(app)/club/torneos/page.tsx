@@ -12,6 +12,7 @@ import {
   type OperationalStage,
 } from '@/lib/tournamentDisplayStatus'
 import { getClubTheme } from '@/lib/clubThemes'
+import { formatBranchLabel } from '@/lib/tournamentLabels'
 
 type Tournament = {
   id: string
@@ -29,6 +30,13 @@ type Tournament = {
   max_pairs: number | null
   price_per_player: number | null
   rules_json?: Record<string, unknown> | null
+  circuit?: {
+    series_id: string
+    series_name: string
+    event_id: string
+    event_number: number | null
+    planned_events_count: number | null
+  } | null
   created_at: string
   updated_at: string
 }
@@ -58,11 +66,6 @@ type TournamentListSummary = {
   } | null
 }
 
-const genderLabels: Record<string, string> = {
-  MALE: 'Masculino',
-  FEMALE: 'Femenino',
-  MIXED: 'Mixto',
-}
 const historyStatuses = new Set([
   'FINISHED',
   'FINALIZED',
@@ -99,6 +102,15 @@ function formatDate(value?: string | null) {
 function money(value?: number | null) {
   if (!value) return 'Sin costo'
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value)
+}
+
+function formatCircuitPosition(circuit: Tournament['circuit']) {
+  if (!circuit) return null
+  const eventNumber = circuit.event_number ?? null
+  const total = circuit.planned_events_count ?? null
+  if (eventNumber && total) return `${circuit.series_name} · Fecha ${eventNumber} de ${total}`
+  if (eventNumber) return `${circuit.series_name} · Fecha ${eventNumber}`
+  return circuit.series_name
 }
 
 function isHistoryTournament(tournament: Tournament, operationalStage?: OperationalStage) {
@@ -367,6 +379,7 @@ export default function ClubTorneosPage() {
       ? { backgroundImage: `url("${resolvedFlyerUrl}")` }
       : { background: '#061b3a' }
     const statusBadge = getTournamentListBadge(tournament)
+    const circuitPosition = formatCircuitPosition(tournament.circuit)
     return (
       <article
         key={tournament.id}
@@ -393,11 +406,12 @@ export default function ClubTorneosPage() {
               {statusBadge.label}
             </span>
           </div>
+          {circuitPosition ? <span className="club-circuitContext">{circuitPosition}</span> : null}
           <div className="club-metaLine">
             <span>{formatDate(tournament.start_date)}{tournament.end_date ? ` - ${formatDate(tournament.end_date)}` : ''}</span>
             <span>{tournament.category_name ?? 'Sin categoría'}</span>
             <span>{tournament.type ?? 'Sin tipo'}</span>
-            <span>{tournament.gender ? genderLabels[tournament.gender] ?? tournament.gender : 'Sin género'}</span>
+            <span>{formatBranchLabel(tournament.gender)}</span>
           </div>
         </div>
 
@@ -437,6 +451,7 @@ export default function ClubTorneosPage() {
             <p className="club-sub">Torneos creados por {activeClub?.name ?? 'tu club'} y próximos pasos operativos.</p>
           </div>
           <div className="club-headActions">
+            <Link href="/club/competition" className="club-circuitsLink">Circuitos <span aria-hidden="true">→</span></Link>
             <Link href="/club/torneos/nuevo" className="club-primaryBtn">Crear torneo</Link>
           </div>
         </div>
@@ -631,6 +646,8 @@ export default function ClubTorneosPage() {
           padding: 18px;
         }
         .club-headActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+        .club-circuitsLink { align-items:center; border:1px solid color-mix(in srgb, var(--club-admin-accent) 26%, rgba(15,23,42,.12)); border-radius:999px; color:#061b3a; display:inline-flex; font-size:12px; font-weight:900; gap:5px; min-height:42px; padding:9px 13px; text-decoration:none; white-space:nowrap; }
+        .club-circuitsLink span { color:var(--club-admin-accent); font-size:15px; line-height:1; }
         .club-message { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 24%, transparent); border-radius: 14px; color: #061b3a; font-weight: 850; margin-top: 12px; padding: 10px 12px; }
         .club-primaryBtn, .club-secondaryBtn { align-items: center; border-radius: 999px; display: inline-flex; font-weight: 950; justify-content: center; min-height: 42px; padding: 9px 15px; text-decoration: none; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease, opacity .16s ease; white-space: nowrap; }
         .club-primaryBtn { background: #061b3a; border: 1px solid color-mix(in srgb, var(--club-admin-accent) 38%, transparent); box-shadow: 0 14px 30px var(--club-admin-glow); color: #fff; }
@@ -699,6 +716,7 @@ export default function ClubTorneosPage() {
         .club-tournamentMain { display: grid; gap: 10px; }
         .club-titleLine { align-items: flex-start; display: flex; gap: 8px; justify-content: space-between; min-width: 0; overflow: visible; }
         .club-titleLine strong { color: #17253f; display: -webkit-box; font-size: 15px; font-weight: 950; line-height: 1.15; min-width: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        .club-circuitContext { color:#35506f; display:block; font-size:11px; font-weight:850; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .club-metaLine { color: #475569; display: flex; flex-wrap: wrap; font-size: 11px; gap: 6px; min-width: 0; }
         .club-metaLine span { background: rgba(255,255,255,.72); border: 1px solid rgba(15,23,42,.06); border-radius: 999px; min-width: 0; overflow: hidden; padding: 4px 7px; text-overflow: ellipsis; white-space: nowrap; }
         .club-tournamentDetails { display: grid; gap: 7px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -752,6 +770,7 @@ export default function ClubTorneosPage() {
           .club-tournamentsHead .club-title { font-size:26px; line-height:1; }
           .club-tournamentsHead .club-sub { display:none; }
           .club-headActions { margin-left:auto; }
+          .club-circuitsLink { font-size:11px; min-height:44px; padding:8px 10px; }
           .club-headActions .club-primaryBtn { min-height:44px; padding:8px 14px; width:auto; }
           .club-metrics { background:#fff; border:1px solid rgba(15,23,42,.08); border-radius:14px; gap:0; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:4px; overflow:hidden; }
           .club-metric { border:0; border-radius:0; box-shadow:none; gap:2px; padding:9px 8px; }
@@ -788,9 +807,9 @@ export default function ClubTorneosPage() {
           .club-tournamentRow--compact {
             align-content:center;
             gap:5px 10px;
-            grid-template-columns:82px minmax(0,1fr) 14px;
+            grid-template-columns:80px minmax(0,1fr) 14px;
             grid-template-rows:auto auto;
-            min-height:118px;
+            min-height:120px;
             padding:10px;
           }
           .club-tournamentRow::after { bottom:10px; height:auto; left:0; right:auto; top:10px; width:3px; }
@@ -801,14 +820,16 @@ export default function ClubTorneosPage() {
             left:10px;
             right:auto;
             top:10px;
-            width:82px;
+            width:80px;
           }
-          .club-tournamentRow::before { background:rgba(255,255,255,.94); border-radius:0 14px 14px 0; left:102px; }
+          .club-tournamentRow--hasFlyer .club-tournamentBackdrop { background-color:#061b3a !important; background-size:contain !important; }
+          .club-tournamentRow::before { background:rgba(255,255,255,.94); border-radius:0 14px 14px 0; left:100px; }
           .club-tournamentRow--active::before,
           .club-tournamentRow--hasFlyer::before { background:rgba(255,255,255,.94); }
           .club-tournamentMain { align-self:center; gap:4px; grid-column:2; grid-row:1; }
           .club-titleLine { align-items:start; display:grid; gap:6px; grid-template-columns:minmax(0,1fr) auto; }
           .club-titleLine strong { font-size:14px; line-height:1.12; -webkit-line-clamp:2; }
+          .club-circuitContext { color:#35506f; font-size:9px; line-height:1.2; }
           .club-statusBadge { animation:none; box-shadow:none; font-size:8px; justify-self:end; line-height:1.08; max-width:92px; padding:4px 6px; text-align:center; white-space:normal; }
           .club-statusBadge::after { display:none; }
           .club-statusBadge--draft { background:#fff7df; color:#854d0e; }

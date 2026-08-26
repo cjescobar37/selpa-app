@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const result = await rpc<{ series_id: string; status: string; reused: boolean }>(
       auth.client,
-      'create_competition_series_with_prizes_from_wizard',
+      'create_competition_series_from_wizard',
       { p_club_id: clubId, p_idempotency_key: idempotencyKey, p_payload: payload },
     )
     return NextResponse.json({ seriesId: result.series_id, status: result.status, reused: result.reused }, { status: 201 })

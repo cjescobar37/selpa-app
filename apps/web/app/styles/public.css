@@ -5091,6 +5091,29 @@
   -webkit-line-clamp:3;
 }
 
+.TournamentPublicCard__circuit{
+  align-items:center !important;
+  background:#e6f0ff;
+  border-bottom:1px solid #c7d8f7;
+  border-radius:8px;
+  border-top:1px solid #c7d8f7;
+  box-sizing:border-box;
+  color:#0c2d48 !important;
+  font-size:13px !important;
+  font-weight:700 !important;
+  justify-content:center;
+  line-height:1.15;
+  margin:8px 0 0 !important;
+  min-width:0;
+  overflow:hidden;
+  padding:8px 10px;
+  text-align:center;
+  text-overflow:ellipsis;
+  text-transform:uppercase;
+  white-space:nowrap;
+  width:100%;
+}
+
 .TournamentPublicCard p{
   align-items:center;
   color:#64748b;
@@ -5107,6 +5130,32 @@
   gap:6px;
   margin-top:12px;
   min-width:0;
+}
+
+.TournamentPublicCard__agendaDates{
+  align-items:center;
+  color:#6b7280;
+  display:grid;
+  font-size:12px;
+  font-weight:750;
+  gap:8px;
+  grid-template-columns:16px minmax(0,1fr) 24px;
+  margin-top:auto;
+  min-width:0;
+  padding-top:10px;
+}
+
+.TournamentPublicCard__agendaDates span{
+  min-width:0;
+  overflow:hidden;
+  text-align:center;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.TournamentPublicCard__agendaDates > svg:last-child{
+  color:var(--tournament-card-accent,#65a30d);
+  justify-self:end;
 }
 
 .TournamentPublicCard__dates p{
@@ -6455,6 +6504,12 @@
     -webkit-line-clamp:unset;
   }
 
+  .TournamentPublicCard__circuit{
+    font-size:13px !important;
+    margin-top:8px !important;
+    padding:6px 8px;
+  }
+
   .TournamentPublicCard__dates{
     gap:4px;
     margin-top:8px;
@@ -6524,22 +6579,125 @@
     min-height:154px !important;
   }
 
+  .clubPublicTournamentGrid .TournamentPublicCard.has-circuit{
+    height:154px !important;
+    min-height:154px !important;
+  }
+
   .clubPublicTournamentGrid .TournamentPublicCard__body{
     align-content:start;
-    grid-template-rows:auto auto auto auto;
+    grid-template-rows:auto auto auto auto auto;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard.has-circuit h3{
+    -webkit-line-clamp:1;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard__circuit{
+    border:1px solid #bdd5fb;
+    font-size:8px !important;
+    font-weight:600 !important;
+    margin:8px 0 0 !important;
+    order:2;
+    padding:3px 6px;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard.has-circuit h3{
+    border-top:1px solid rgba(15,23,42,.12);
+    margin:6px 0 0;
+    padding-top:5px;
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard__dates{
-    margin-top:6px;
+    margin-top:4px;
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard__actions{
     align-self:start;
-    margin-top:7px;
+    margin-top:5px;
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard__actions a{
-    min-height:38px;
+    min-height:34px;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact .TournamentPublicCard__body{
+    align-content:stretch;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    padding:6px 1px 6px 0;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact .TournamentPublicCard__circuit{
+    background:#e3efff;
+    border-color:#c7d8f7;
+    color:#4157b2 !important;
+    font-size:9px !important;
+    font-weight:650 !important;
+    letter-spacing:.01em;
+    margin:8px 0 0 !important;
+    padding:4px 7px;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact h3{
+    color:#071936;
+    font-size:19px;
+    font-weight:900;
+    line-height:1.05;
+    margin:12px 0 0;
+    padding:0;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact:not(.has-circuit) h3{
+    margin-top:auto;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact.has-circuit h3{
+    border-top:1px solid rgba(15,23,42,.12);
+    margin-top:10px;
+    padding-top:8px;
+  }
+
+  .TournamentPublicCard__agendaDates{
+    align-items:center;
+    color:#6b7280;
+    display:grid;
+    font-size:11px;
+    font-weight:650;
+    gap:7px;
+    grid-template-columns:14px minmax(0,1fr) 22px;
+    margin-top:auto;
+    min-width:0;
+    order:4;
+    padding-top:5px;
+  }
+
+  .TournamentPublicCard__agendaDates > svg:first-child{
+    color:#64748b;
+    height:14px;
+    width:14px;
+  }
+
+  .TournamentPublicCard__agendaDates span{
+    min-width:0;
+    overflow:hidden;
+    text-align:center;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  .TournamentPublicCard__agendaDates > svg:last-child{
+    color:var(--tournament-card-accent,#65a30d);
+    height:21px;
+    justify-self:end;
+    width:21px;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact:active{
+    background:#f8fafc;
+    transform:scale(.98);
+    transition:background .12s ease,transform .12s ease;
   }
 }
 

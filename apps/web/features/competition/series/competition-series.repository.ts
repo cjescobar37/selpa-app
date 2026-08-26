@@ -16,7 +16,13 @@ export async function getSeriesDetail(client:SupabaseClient,clubId:string,series
   if(rules.error) throw fail('No pude leer las reglas',rules.error)
   const ruleIds=(rules.data??[]).map((item)=>item.id); const eligibility=ruleIds.length ? await client.from('competition_series_eligibility').select('*,age_category:competition_age_categories(name)').in('series_rule_id',ruleIds) : {data:[],error:null}
   if(eligibility.error) throw fail('No pude leer la elegibilidad',eligibility.error)
-  return {series,divisions:(divisions??[]).map((division)=>({...division,rules:(rules.data??[]).filter((rule)=>rule.series_division_id===division.id).map((rule)=>({...rule,eligibility:(eligibility.data??[]).find((item)=>item.series_rule_id===rule.id)??null}))}))} as CompetitionSeriesDetail
+  const [finalization,finalRanking]=await Promise.all([
+    client.rpc('get_competition_series_finalization_preflight',{p_club_id:clubId,p_series_id:seriesId}),
+    client.from('competition_series_final_rankings').select('*').eq('club_id',clubId).eq('series_id',seriesId).order('series_division_id').order('ranking_position'),
+  ])
+  if(finalization.error)throw fail('No pude validar el cierre del circuito',finalization.error)
+  if(finalRanking.error)throw fail('No pude leer el ranking final',finalRanking.error)
+  return {series,divisions:(divisions??[]).map((division)=>({...division,rules:(rules.data??[]).filter((rule)=>rule.series_division_id===division.id).map((rule)=>({...rule,eligibility:(eligibility.data??[]).find((item)=>item.series_rule_id===rule.id)??null}))})),finalization:finalization.data,finalRanking:finalRanking.data??[]} as CompetitionSeriesDetail
 }
 export async function rpc<T>(client:SupabaseClient,name:string,args:Record<string,unknown>):Promise<T> { const {data,error}=await client.rpc(name,args); if(error) throw fail(`Falló ${name}`,error); return data as T }
 export async function getSeriesRevision(client:SupabaseClient,clubId:string,seriesId:string):Promise<number>{const {data,error}=await client.from('competition_series').select('revision').eq('club_id',clubId).eq('id',seriesId).single();if(error)throw fail('No pude leer la revisión del circuito',error);return Number(data.revision)}

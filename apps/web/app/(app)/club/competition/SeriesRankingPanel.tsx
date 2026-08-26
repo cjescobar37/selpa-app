@@ -15,7 +15,7 @@ type CompetitionSeriesRankingRow = {
   titles: number
 }
 
-export default function SeriesRankingPanel({ clubId, seriesId, request, hasCompletedEvent }: { clubId: string; seriesId: string; request: Request; hasCompletedEvent: boolean }) {
+export default function SeriesRankingPanel({ clubId, seriesId, request, hasCompletedEvent, finalized = false }: { clubId: string; seriesId: string; request: Request; hasCompletedEvent: boolean; finalized?: boolean }) {
   const [rows, setRows] = useState<CompetitionSeriesRankingRow[] | null>(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
@@ -28,5 +28,5 @@ export default function SeriesRankingPanel({ clubId, seriesId, request, hasCompl
 
   if (rows === null) return <section className={styles.controlEmpty}><Medal size={23} /><strong>Cargando posiciones…</strong></section>
   if (!rows.length) return <section className={styles.controlEmpty}><Trophy size={25} /><strong>{failed ? 'No pudimos cargar las posiciones' : 'Todavía no hay posiciones.'}</strong><p>{hasCompletedEvent ? 'Procesá los resultados de la fecha para actualizar el ranking.' : 'El ranking aparecerá cuando se procesen los primeros resultados.'}</p></section>
-  return <section className={styles.rankingList} aria-label="Ranking del circuito">{rows.map(row => <article className={styles.rankingRow} key={row.club_player_id}><strong className={styles.rankingPosition}>#{row.position}</strong><div className={styles.rankingIdentity}><span className={row.avatar_url ? styles.rankingAvatar : undefined} style={row.avatar_url ? { backgroundImage: `url(${row.avatar_url})` } : undefined}>{row.avatar_url ? null : row.display_name.slice(0, 1)}</span><div><b>{row.display_name}</b><small>{row.events_played} {row.events_played === 1 ? 'fecha' : 'fechas'}{row.titles ? ` · ${row.titles} ${row.titles === 1 ? 'título' : 'títulos'}` : ''}</small></div></div><strong className={styles.rankingPoints}>{row.points.toLocaleString('es-AR')} <small>pts</small></strong></article>)}</section>
+  return <section><header className={styles.rankingHeader}><small>{finalized ? 'RANKING FINAL' : 'RANKING'}</small><strong>{finalized ? 'Posiciones definitivas' : 'Posiciones del circuito'}</strong></header><div className={styles.rankingList} aria-label={finalized ? 'Ranking final del circuito' : 'Ranking del circuito'}>{rows.map(row => <article className={styles.rankingRow} key={`${row.club_player_id}-${row.position}`}><strong className={styles.rankingPosition}>#{row.position}</strong><div className={styles.rankingIdentity}><span className={row.avatar_url ? styles.rankingAvatar : undefined} style={row.avatar_url ? { backgroundImage: `url(${row.avatar_url})` } : undefined}>{row.avatar_url ? null : row.display_name.slice(0, 1)}</span><div><b>{row.display_name}</b><small>{row.events_played} {row.events_played === 1 ? 'fecha' : 'fechas'}{row.titles ? ` · ${row.titles} ${row.titles === 1 ? 'título' : 'títulos'}` : ''}</small></div></div><strong className={styles.rankingPoints}>{row.points.toLocaleString('es-AR')} <small>pts</small></strong></article>)}</div></section>
 }

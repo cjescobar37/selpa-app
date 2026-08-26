@@ -12,14 +12,14 @@ import styles from './SeriesEventsAdmin.module.css'
 type Request = <T>(url: string, init?: RequestInit) => Promise<T>
 type EventAdminDetail = CompetitionEventDetail & { allowed_actions: Record<string, boolean> }
 type Option = { id: string; name: string }
-type Props = { clubId: string; series: CompetitionSeriesDetail; events: CompetitionSeriesEvent[]; request: Request; reload: () => Promise<void>; hideCreate?: boolean }
+type Props = { clubId: string; series: CompetitionSeriesDetail; events: CompetitionSeriesEvent[]; request: Request; reload: () => Promise<void>; hideCreate?: boolean; hideList?: boolean }
 const statusLabel: Record<string, string> = { DRAFT: 'Borrador', SCHEDULED: 'Programado', COMPLETED: 'Finalizado', CANCELLED: 'Cancelado' }
 const typeLabel: Record<string, string> = { STANDARD: 'Competitivo', EXHIBITION: 'Exhibición', FRIENDLY: 'Amistoso' }
 const blockerLabel: Record<string, string> = { SERIES_NOT_ACTIVE: 'Activá el circuito para programar la fecha.', DATES_MISSING: 'Completá inicio y fin.', TIMEZONE_MISSING: 'Guardá la fecha para definir la zona horaria.', DIVISIONS_MISSING: 'Agregá al menos una división.' }
 const idempotency = () => crypto.randomUUID()
 const localValue = (value: string | null) => value ? new Date(value).toISOString().slice(0, 16) : ''
 
-export default function SeriesEventsAdmin({ clubId, series, events, request, reload, hideCreate = false }: Props) {
+export default function SeriesEventsAdmin({ clubId, series, events, request, reload, hideCreate = false, hideList = false }: Props) {
   const searchParams = useSearchParams()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, EventAdminDetail>>({})
@@ -111,10 +111,10 @@ export default function SeriesEventsAdmin({ clubId, series, events, request, rel
   return <section className={styles.events}>
     {!hideCreate ? <header><div><span>FECHAS</span><h2>Agenda del circuito</h2></div>{series.series.status === 'SCHEDULED' || series.series.status === 'ACTIVE' ? <details><summary><Plus size={15} />Nueva fecha</summary><div className={styles.create}><input value={newName} onChange={event => setNewName(event.target.value)} placeholder="Nombre de la fecha" maxLength={120} /><button disabled={!newName.trim() || busy === 'create'} onClick={() => void createEvent()}>{busy === 'create' ? 'Creando…' : 'Crear borrador'}</button></div></details> : null}</header> : null}
     {notice && !selectedId ? <p className={notice.kind === 'error' ? styles.error : styles.success}>{notice.text}</p> : null}
-    {!events.length ? <div className={styles.empty}><CalendarDays size={22} /><strong>Sin fechas todavía</strong><p>Creá el primer borrador cuando el circuito esté programado.</p></div> : <div className={styles.list}>{events.map(event => {
+    {!hideList ? (!events.length ? <div className={styles.empty}><CalendarDays size={22} /><strong>Sin fechas todavía</strong><p>Creá el primer borrador cuando el circuito esté programado.</p></div> : <div className={styles.list}>{events.map(event => {
       const item = details[event.id], divisions = item?.divisions.filter(value => value.is_active) ?? [], link = divisions.find(value => value.active_tournament_link)?.active_tournament_link
       const modes = new Set(divisions.map(value => String(value.scoring_mode ?? '')).filter(Boolean))
-      return <Link className={styles.row} key={event.id} href={`/club/competition/series/${series.series.id}/events/${event.id}`}><div><strong>{event.name}</strong><small>{typeLabel[event.event_type]} · {modes.size === 1 ? [...modes][0] === 'POINTS' ? 'Con puntos' : 'Sin puntos' : modes.size > 1 ? 'Scoring mixto' : 'Sin scoring'}</small><small>{event.planned_starts_at ? new Date(event.planned_starts_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'Sin fecha'} · {divisions.length} divisiones{link ? ' · Torneo vinculado' : ''}</small></div><span className={`${styles.badge} ${styles[`status_${event.status}`]}`}>{statusLabel[event.status]}</span><ChevronRight size={17} /></Link>})}</div>}
+      return <Link className={styles.row} key={event.id} href={`/club/competition/series/${series.series.id}/events/${event.id}`}><div><strong>{event.name}</strong><small>{typeLabel[event.event_type]} · {modes.size === 1 ? [...modes][0] === 'POINTS' ? 'Con puntos' : 'Sin puntos' : modes.size > 1 ? 'Puntuación mixta' : 'Puntuación pendiente'}</small><small>{event.planned_starts_at ? new Date(event.planned_starts_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'Sin fecha'} · {divisions.length} divisiones{link ? ' · Torneo vinculado' : ''}</small></div><span className={`${styles.badge} ${styles[`status_${event.status}`]}`}>{statusLabel[event.status]}</span><ChevronRight size={17} /></Link>})}</div>) : null}
 
     {selectedId ? <div className={styles.backdrop} onClick={() => setSelectedId(null)}><aside className={styles.sheet} role="dialog" aria-modal="true" aria-label="Editar fecha" onClick={event => event.stopPropagation()}><div className={styles.sheetHead}><div><small>FECHA DEL CIRCUITO</small><h3>{detail?.event.name ?? 'Cargando…'}</h3></div><div className={styles.sheetActions}>{detail?.allowed_actions.edit ? <button type="submit" form="event-edit-form">Guardar</button> : null}<button onClick={() => setSelectedId(null)} aria-label="Cerrar"><X size={19} /></button></div></div>{busy === 'load' || !detail ? <div className={styles.loading}><LoaderCircle size={20} />Cargando…</div> : <div className={styles.sheetBody}>
       {notice ? <p className={notice.kind === 'error' ? styles.error : styles.success}>{notice.text}</p> : null}

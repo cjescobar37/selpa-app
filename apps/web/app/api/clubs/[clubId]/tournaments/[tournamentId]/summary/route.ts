@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getTournamentCircuitContexts } from '@/features/competition/events/competition-events.repository'
 
 type OperationalStage =
   | 'BORRADOR'
@@ -224,6 +225,8 @@ export async function GET(
     }
 
     const tournamentRow = tournament as TournamentRow
+    const circuitContexts = await getTournamentCircuitContexts(supabaseAdmin, clubId, [tournamentId])
+    const circuit = circuitContexts[tournamentId] ?? null
     const categoryId = getCategoryId(tournamentRow)
 
     let categoryName: string | null = categoryId ? `Categoría ${categoryId}` : null
@@ -373,6 +376,7 @@ export async function GET(
         points_total: tournamentRow.points_total,
         created_at: tournamentRow.created_at,
         updated_at: tournamentRow.updated_at,
+        circuit,
       },
       counts: {
         registrations: registrationCounts,

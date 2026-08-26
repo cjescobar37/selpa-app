@@ -78,3 +78,11 @@ export function validateLifecycle(input: unknown): Result<{ action:string; revis
   if (!Number.isInteger(revision)||revision<1) return { error:'La revisión es inválida.' }
   return { value:{action,revision,confirm:body.confirm===true,reason:nullableText(body.reason)} }
 }
+
+export function validateSeriesDelete(input: unknown): Result<{ revision:number; confirmation:string }> {
+  const body=object(input); if (!body) return { error:'El contenido no es válido.' }
+  const revision=Number(body.revision); if (!Number.isInteger(revision)||revision<1) return { error:'La revisión es inválida.' }
+  const confirmation=text(body.confirmation)
+  if (confirmation !== 'ACEPTAR') return { error:'Escribí ACEPTAR para eliminar el circuito.' }
+  return { value:{revision,confirmation} }
+}

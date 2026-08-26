@@ -78,6 +78,18 @@ function formatReviewDateTime(value: string) {
   return time ? `${date} · ${time[1]}:${time[2]}` : date
 }
 
+function formatPriceInput(value: string) {
+  if (!value) return ''
+  const amount = Number(value)
+  return Number.isFinite(amount) ? `$ ${amount.toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : value
+}
+
+function formatPriceSummary(value: string) {
+  if (value === '0') return 'Sin costo'
+  const formatted = formatPriceInput(value)
+  return formatted ? formatted.replace('$ ', '$') : 'Precio por definir'
+}
+
 type TournamentCourt = {
   id?: string
   name: string
@@ -151,6 +163,16 @@ type CompetitionDateContext = {
   divisions: CompetitionDateDivision[]
 }
 type EventTierOption = { id: string; name: string; code: string; is_active: boolean }
+
+function tournamentTypeFromEventTier(tier: EventTierOption | undefined): TournamentType | null {
+  if (!tier) return null
+  const value = `${tier.code} ${tier.name}`.toUpperCase().replace(/[\s-]+/g, '_')
+  if (value.includes('MASTER_FINAL')) return 'MASTER_FINAL'
+  if (value.includes('CHALLENGER')) return 'CHALLENGER'
+  if (value.includes('MASTER')) return 'MASTER'
+  if (value.includes('OPEN')) return 'OPEN'
+  return null
+}
 
 const tournamentWizardDraftVersion = 2
 
@@ -511,10 +533,10 @@ export default function ClubNuevoTorneoPage() {
   useEffect(() => {
     if (!creationSuccess) return
     const timer = window.setTimeout(() => {
-      router.replace(`/club/torneos/${creationSuccess.id}`)
+      router.replace(isCompetitionDate && competitionSeriesId ? `/club/competition/series/${competitionSeriesId}?tab=dates` : `/club/torneos/${creationSuccess.id}`)
     }, 2600)
     return () => window.clearTimeout(timer)
-  }, [creationSuccess, router])
+  }, [competitionSeriesId, creationSuccess, isCompetitionDate, router])
 
   useEffect(() => {
     if (!draftKey) return
@@ -590,7 +612,7 @@ export default function ClubNuevoTorneoPage() {
 
     if (!activeClub?.id) next.push('Seleccioná un club activo.')
     if (isCompetitionDate && (!competitionContext || !selectedCompetitionDivision)) next.push(competitionContextError || 'Estamos preparando el circuito.')
-    if (isCompetitionDate && !selectedEventTierId) next.push('El circuito necesita un tier activo para crear esta fecha.')
+    if (isCompetitionDate && selectedCompetitionDivision?.points_scheme_id && !selectedEventTierId) next.push('Elegí la jerarquía de esta fecha.')
     if (!form.name.trim()) next.push('El nombre es obligatorio.')
     if (!form.startDate) next.push('La fecha de inicio es obligatoria.')
     if (form.segmentType === 'LIBRES' && form.categoryRule === 'FIXED_CATEGORY' && (!Number.isInteger(categoryId) || categoryId < 1 || categoryId > 8)) next.push('Seleccioná una categoría válida.')
@@ -649,6 +671,12 @@ export default function ClubNuevoTorneoPage() {
       pointsEnabled: false,
       pointsEditable: false,
     }))
+  }
+
+  function selectEventTier(eventTierId: string, tiers = eventTiers) {
+    setSelectedEventTierId(eventTierId)
+    const type = tournamentTypeFromEventTier(tiers.find((tier) => tier.id === eventTierId))
+    if (type) updateField('type', type)
   }
 
   function updateStartDate(value: string) {
@@ -933,9 +961,9 @@ export default function ClubNuevoTorneoPage() {
         const restoredDivision = current && nextContext.divisions.some((division) => division.series_division_id === current)
           ? nextContext.divisions.find((division) => division.series_division_id === current) ?? firstDivision
           : firstDivision
-        if (!current || !nextContext.divisions.some((division) => division.series_division_id === current)) {
-          queueMicrotask(() => selectCompetitionDivision(restoredDivision))
-        }
+        // La división del circuito es fuente de verdad, incluso al restaurar un borrador local.
+        // Así nunca queda una categoría heredada de otra división oculta en el formulario.
+        queueMicrotask(() => selectCompetitionDivision(restoredDivision))
         return restoredDivision.series_division_id
       })
       setLoadingCompetitionContext(false)
@@ -954,7 +982,12 @@ export default function ClubNuevoTorneoPage() {
       const tiers = response.ok ? (payload.eventTiers ?? []).filter((tier) => tier.is_active) : []
       if (!cancelled) {
         setEventTiers(tiers)
-        setSelectedEventTierId((current) => current || tiers[0]?.id || '')
+        setSelectedEventTierId((current) => {
+          const next = tiers.some((tier) => tier.id === current) ? current : tiers[0]?.id ?? ''
+          const type = tournamentTypeFromEventTier(tiers.find((tier) => tier.id === next))
+          if (type) queueMicrotask(() => updateField('type', type))
+          return next
+        })
       }
     })
     return () => { cancelled = true }
@@ -1039,8 +1072,8 @@ export default function ClubNuevoTorneoPage() {
           eventPayload: {
             name: form.name,
             event_type: 'STANDARD',
-            scoring_mode: 'POINTS',
-            event_tier_id: selectedEventTierId,
+            scoring_mode: selectedCompetitionDivision.points_scheme_id ? 'POINTS' : 'NON_SCORING',
+            event_tier_id: selectedCompetitionDivision.points_scheme_id ? selectedEventTierId : null,
             planned_starts_at: form.startDate || null,
             planned_ends_at: form.endDate || form.startDate || null,
             venue_name: form.venueName || null,
@@ -1136,13 +1169,13 @@ export default function ClubNuevoTorneoPage() {
           autoDismissMs={noticeTone === 'success' ? 4000 : undefined}
         /> : null}
         {creationSuccess ? <CreationSuccess
-          kicker="Torneo creado"
+          kicker={isCompetitionDate ? 'Fecha creada' : 'Torneo creado'}
           title="¡Felicitaciones!"
           message={<>Acabás de crear <strong>{creationSuccess.name}</strong>.</>}
-          nextStep="El siguiente paso es publicarlo cuando esté listo."
-          actionLabel="Ir al torneo"
-          redirectLabel="Te llevamos al torneo…"
-          onAction={() => router.replace(`/club/torneos/${creationSuccess.id}`)}
+          nextStep={isCompetitionDate ? 'La fecha ya quedó vinculada al circuito.' : 'El siguiente paso es publicarlo cuando esté listo.'}
+          actionLabel={isCompetitionDate ? 'Volver al circuito' : 'Ir al torneo'}
+          redirectLabel={isCompetitionDate ? 'Volvemos al circuito…' : 'Te llevamos al torneo…'}
+          onAction={() => router.replace(isCompetitionDate && competitionSeriesId ? `/club/competition/series/${competitionSeriesId}?tab=dates` : `/club/torneos/${creationSuccess.id}`)}
         /> : <>
         <div className="club-newHead">
           <div>
@@ -1171,9 +1204,7 @@ export default function ClubNuevoTorneoPage() {
           {loadingCompetitionContext ? <strong>Preparando contexto…</strong> : competitionContextError ? <><strong>No se puede crear esta fecha</strong><p>{competitionContextError}</p></> : competitionContext && selectedCompetitionDivision ? <>
             <strong>{competitionContext.series_name}</strong>
             <p>{selectedCompetitionDivision.branch_name} · {selectedCompetitionDivision.segment_name} · {selectedCompetitionDivision.age_category_name ?? selectedCompetitionDivision.category_name ?? 'Categoría'}</p>
-            <small>{competitionContext.season.name} · Ranking y puntos administrados por el circuito</small>
-            {competitionContext.divisions.length > 1 ? <label><span>División del circuito</span><select value={selectedCompetitionDivisionId} onChange={(event) => { const division = competitionContext.divisions.find((item) => item.series_division_id === event.target.value); if (division) selectCompetitionDivision(division) }}>{competitionContext.divisions.map((division) => <option key={division.series_division_id} value={division.series_division_id}>{division.branch_name} · {division.segment_name} · {division.age_category_name ?? division.category_name ?? 'Categoría'}</option>)}</select></label> : null}
-            {eventTiers.length ? <label><span>Jerarquía de esta fecha</span><select value={selectedEventTierId} onChange={(event) => setSelectedEventTierId(event.target.value)}>{eventTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label> : null}
+            {selectedCompetitionDivision.points_scheme_id && eventTiers.length ? <label><span>Jerarquía</span><select value={selectedEventTierId} onChange={(event) => selectEventTier(event.target.value)}>{eventTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label> : null}
           </> : null}
         </aside> : null}
 
@@ -1220,9 +1251,10 @@ export default function ClubNuevoTorneoPage() {
                 />
               </label>
               <fieldset className="club-field club-field--span6 club-apbChoice">
-                <legend>Premios <small>Opcional</small></legend>
-                <label><input type="radio" name="prizes" checked={!form.prizesEnabled} onChange={() => updateField('prizesEnabled', false)} /><span>Sin premios</span></label>
-                <label><input type="radio" name="prizes" checked={form.prizesEnabled} onChange={() => updateField('prizesEnabled', true)} /><span>Entrega premios</span></label>
+                <legend>{isCompetitionDate ? 'Premios de esta fecha' : 'Premios'} <small>Opcional</small></legend>
+                <label><input type="radio" name="prizes" checked={!form.prizesEnabled} onChange={() => updateField('prizesEnabled', false)} /><span>{isCompetitionDate ? 'Sin premio adicional' : 'Sin premios'}</span></label>
+                <label><input type="radio" name="prizes" checked={form.prizesEnabled} onChange={() => updateField('prizesEnabled', true)} /><span>{isCompetitionDate ? 'Esta fecha entrega premios' : 'Entrega premios'}</span></label>
+                {isCompetitionDate ? <small className="club-prizeDateHint">Es independiente del premio general del circuito.</small> : null}
               </fieldset>
               {form.prizesEnabled ? <div className="club-formSectionGrid club-field--wide club-prizesGrid">
                 <label className="club-field club-field--span3"><span>🏆 Campeón</span><input className="px-input" value={form.championPrize} onChange={(event) => updateField('championPrize', event.target.value)} placeholder="Trofeo + $50.000" /></label>
@@ -1237,6 +1269,12 @@ export default function ClubNuevoTorneoPage() {
               <p>¿Quiénes juegan este torneo?</p>
             </div>
             <div className="club-formSectionGrid">
+              {isCompetitionDate && competitionContext && selectedCompetitionDivision ? <div className="club-inheritedDivision club-field--wide">
+                <span>DIVISIÓN DEL CIRCUITO</span>
+                {competitionContext.divisions.length > 1 ? <label>Elegí la división de esta fecha<select value={selectedCompetitionDivisionId} onChange={(event) => { const division = competitionContext.divisions.find((item) => item.series_division_id === event.target.value); if (division) selectCompetitionDivision(division) }}>{competitionContext.divisions.map((division) => <option key={division.series_division_id} value={division.series_division_id}>{division.branch_name} · {division.segment_name} · {division.age_category_name ?? division.category_name ?? 'Categoría'}</option>)}</select></label> : null}
+                <strong>{selectedCompetitionDivision.branch_name} · {selectedCompetitionDivision.segment_name} · {selectedCompetitionDivision.age_category_name ?? selectedCompetitionDivision.category_name ?? 'Categoría'}</strong>
+                <small>✓ Heredada del circuito</small>
+              </div> : <>
               <div className="club-field--wide">
                 <ChoiceChips
                   label="Género"
@@ -1297,27 +1335,28 @@ export default function ClubNuevoTorneoPage() {
                 />
               </div> : null}
               {form.segmentType === 'LIBRES' && form.categoryRule === 'CATEGORY_SUM' ? <label className="club-field club-field--span4"><span>Suma de la pareja</span><input className="px-input" inputMode="numeric" min="2" max="16" value={form.categorySumTarget} onChange={(event) => updateField('categorySumTarget', event.target.value)} placeholder="13" /></label> : null}
+              </>}
 
               <div className="club-liveSummary club-field--wide">{genderOptions.find(option => option.value === form.gender)?.label} · {segmentOptions.find(option => option.value === form.segmentType)?.label} · {form.segmentType === 'LIBRES' ? (form.categoryRule === 'CATEGORY_SUM' ? `Suma ${form.categorySumTarget}` : formatCategoryOrdinal(form.categoryId)) : (ageCategories.find((category) => category.id === form.ageCategoryId)?.name ?? 'Edad por elegir')}</div>
             </div>
           </section>
 
           <section className="club-formSection club-mobileStep" data-active={mobileStep === 3} data-origin-error={messageOriginStep === 3}>
-            <div className="club-formSectionHead"><span className="club-kicker">Configuración deportiva</span><p>Elegí la jerarquía y el formato de juego.</p></div>
+            <div className="club-formSectionHead"><span className="club-kicker">Configuración deportiva</span><p>{isCompetitionDate ? 'Definí el formato y revisá los puntos efectivos de esta fecha.' : 'Elegí la jerarquía y el formato de juego.'}</p></div>
             <div className="club-formSectionGrid">
-              <div className="club-field--wide">
+              {!isCompetitionDate ? <div className="club-field--wide">
                 <ChoiceChips label="Jerarquía" value={form.type} options={typeOptions} onChange={(type) => updateField('type', type)} />
-              </div>
+              </div> : null}
               <div className="club-field--wide">
                 <ChoiceChips label="Formato" value={form.competitionSystem} options={competitionSystemOptions} onChange={(competitionSystem) => updateField('competitionSystem', competitionSystem)} />
               </div>
-              <details className="club-mobileSecondary club-field--wide">
+              {isCompetitionDate ? <div className="club-inheritedPoints club-field--wide"><strong>Tabla de puntos</strong><span>{selectedCompetitionDivision?.points_scheme_id ? 'Esta fecha usa la tabla efectiva del circuito.' : 'Esta fecha no asigna puntos.'}</span><small>Los ajustes por fecha se realizan sobre una fecha ya creada; al crearla mantiene la regla del circuito.</small></div> : <details className="club-mobileSecondary club-field--wide">
                 <summary>Tabla de puntos <small>{form.pointsEnabled ? 'Activa' : 'Sin puntos'}</small></summary>
                 <div className="club-mobileSecondaryContent">
                   <label className="club-checkRow club-checkRow--wide"><input type="checkbox" checked={form.pointsEnabled} onChange={(event) => updateField('pointsEnabled', event.target.checked)} /><span>Este torneo asigna puntos</span></label>
                   {form.pointsEnabled ? <details className="club-mobilePointsTable"><summary>Ver tabla</summary><p>Ganador {form.pointsWinner} · Finalista {form.pointsFinalist} · Semifinalista {form.pointsSemifinalist}</p></details> : <p className="club-mobilePointsNote">Este torneo no asigna puntos.</p>}
                 </div>
-              </details>
+              </details>}
             </div>
           </section>
 
@@ -1357,7 +1396,7 @@ export default function ClubNuevoTorneoPage() {
                 <div className="club-formSectionGrid club-mobileDatesGrid">
               <label className="club-field club-field--span3 club-field--compact">
                 <span>Precio por jugador</span>
-                <input className="px-input" inputMode="decimal" value={form.pricePerPlayer} onChange={(event) => updateField('pricePerPlayer', event.target.value)} />
+                <input className="px-input" inputMode="numeric" value={isCompetitionDate ? formatPriceInput(form.pricePerPlayer) : form.pricePerPlayer} onChange={(event) => updateField('pricePerPlayer', isCompetitionDate ? event.target.value.replace(/\D/g, '') : event.target.value)} placeholder={isCompetitionDate ? '$ 35.000' : undefined} />
               </label>
 
               <label className="club-field club-field--span2 club-field--compact">
@@ -1715,17 +1754,17 @@ export default function ClubNuevoTorneoPage() {
                 <div className="club-reviewFacts">
                   <span>{typeOptions.find((option) => option.value === form.type)?.label} · {reviewDateRange}</span>
                   <span>{form.venueName || 'Sede por definir'}</span>
-                  <span>{form.pricePerPlayer === '0' ? 'Sin costo' : `$${form.pricePerPlayer}`} · {form.maxPairs ? `${form.minPairs}–${form.maxPairs}` : `desde ${form.minPairs}`} parejas</span>
+                  <span>{formatPriceSummary(form.pricePerPlayer)} · {form.maxPairs ? `${form.minPairs}–${form.maxPairs}` : `desde ${form.minPairs}`} parejas</span>
                 </div>
                 {flyerConfig.mode !== 'NONE' ? <div className="club-reviewMainFlyer" aria-hidden="true"><div><TournamentFlyerPreviewCard value={resolveAutoFlyerConfig(flyerConfig, `${flyerPreviewData.type} ${flyerPreviewData.gender}`)} previewData={flyerPreviewData} variant="card" /></div></div> : null}
               </article>
 
               {isCompetitionDate && competitionContext && selectedCompetitionDivision ? <article className="club-reviewCircuit">
-                <span>Circuito</span><strong>{competitionContext.series_name}</strong><small>{selectedCompetitionDivision.branch_name} · {selectedCompetitionDivision.segment_name} · {competitionContext.season.name}</small>
+                <span>Circuito</span><strong>{competitionContext.series_name}</strong><small>{selectedCompetitionDivision.branch_name} · {selectedCompetitionDivision.segment_name} · {selectedCompetitionDivision.age_category_name ?? selectedCompetitionDivision.category_name ?? 'Categoría'} · {typeOptions.find((option) => option.value === form.type)?.label ?? form.type}</small>
               </article> : null}
-              <ReviewBlock title="Presentación" step={1} onEdit={beginContextualEdit} issue={reviewIssueByStep.get(1)}>
+              <ReviewBlock title={isCompetitionDate ? 'Presentación y premio de esta fecha' : 'Presentación'} step={1} onEdit={beginContextualEdit} issue={reviewIssueByStep.get(1)}>
                 <strong>{form.name || 'Sin nombre'}</strong>
-                <span>{form.publicDescription || (form.prizesEnabled ? 'Premios configurados' : 'Sin descripción pública')}</span>
+                <span>{form.publicDescription || (form.prizesEnabled ? (isCompetitionDate ? 'Premio de esta fecha configurado' : 'Premios configurados') : (isCompetitionDate ? 'Sin premio adicional para esta fecha' : 'Sin descripción pública'))}</span>
               </ReviewBlock>
               <ReviewBlock title="Participantes" step={2} onEdit={beginContextualEdit} issue={reviewIssueByStep.get(2)}>
                 <strong>{genderOptions.find((option) => option.value === form.gender)?.label} · {segmentOptions.find((option) => option.value === form.segmentType)?.label} · {reviewParticipantSummary}</strong>
@@ -1733,11 +1772,11 @@ export default function ClubNuevoTorneoPage() {
               </ReviewBlock>
               <ReviewBlock title="Configuración deportiva" step={3} onEdit={beginContextualEdit} issue={reviewIssueByStep.get(3)}>
                 <strong>{typeOptions.find((option) => option.value === form.type)?.label} · {competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label}</strong>
-                <span>{form.pointsEnabled ? 'Tabla de puntos activa' : 'No asigna puntos'}</span>
+                <span>{isCompetitionDate ? (selectedCompetitionDivision?.points_scheme_id ? 'Tabla efectiva del circuito' : 'No asigna puntos') : (form.pointsEnabled ? 'Tabla de puntos activa' : 'No asigna puntos')}</span>
               </ReviewBlock>
               <ReviewBlock title="Fechas e inscripción" step={4} onEdit={beginContextualEdit} issue={reviewIssueByStep.get(4)} multiline>
                 <strong>{reviewDateRange}</strong>
-                <span>Cierre {form.registrationDeadline ? formatReviewDateTime(form.registrationDeadline) : 'por definir'} · {form.pricePerPlayer === '0' ? 'Sin costo' : `$${form.pricePerPlayer}`} · {form.maxPairs ? `${form.minPairs}–${form.maxPairs}` : `desde ${form.minPairs}`} parejas</span>
+                <span>Cierre {form.registrationDeadline ? formatReviewDateTime(form.registrationDeadline) : 'por definir'} · {formatPriceSummary(form.pricePerPlayer)} · {form.maxPairs ? `${form.minPairs}–${form.maxPairs}` : `desde ${form.minPairs}`} parejas</span>
               </ReviewBlock>
               <ReviewBlock title="Sede y organización" step={5} onEdit={beginContextualEdit} issue={reviewIssueByStep.get(5)}>
                 <strong>{form.venueName || 'Sede por definir'}</strong>
@@ -1783,14 +1822,25 @@ export default function ClubNuevoTorneoPage() {
       </div>
 
       <style>{`
-        .club-competitionDateContext { background:#f2f8ff; border:1px solid color-mix(in srgb, var(--club-admin-accent) 25%, #cbd5e1); border-radius:14px; display:grid; gap:3px; margin:0 0 12px; padding:11px 13px; }
+        .club-competitionDateContext { background:#f7fbff; border:1px solid color-mix(in srgb, var(--club-admin-accent) 18%, #cbd5e1); border-radius:12px; display:grid; gap:2px; margin:0 0 10px; padding:9px 11px; }
         .club-competitionDateContext > span { color:var(--club-admin-accent); font-size:10px; font-weight:900; letter-spacing:.08em; }
-        .club-competitionDateContext strong { color:#0b2545; font-size:15px; }
+        .club-competitionDateContext strong { color:#0b2545; font-size:14px; }
         .club-competitionDateContext p,.club-competitionDateContext small { color:#52657a; margin:0; }
-        .club-competitionDateContext p { font-size:12px; font-weight:700; }
-        .club-competitionDateContext small { font-size:11px; }
-        .club-competitionDateContext label { align-items:center; display:flex; font-size:11px; font-weight:800; gap:8px; justify-content:space-between; margin-top:5px; }
-        .club-competitionDateContext select { background:#fff; border:1px solid #cbd5e1; border-radius:9px; color:#17314f; font:inherit; max-width:64%; min-height:36px; padding:0 7px; }
+        .club-competitionDateContext p { font-size:11px; font-weight:800; }
+        .club-competitionDateContext small { font-size:10px; }
+        .club-competitionDateContext label { align-items:center; display:flex; font-size:11px; font-weight:850; gap:8px; justify-content:space-between; margin-top:3px; }
+        .club-competitionDateContext select { background:#fff; border:1px solid #cbd5e1; border-radius:8px; color:#17314f; font:inherit; max-width:66%; min-height:32px; padding:0 7px; }
+        .club-prizeDateHint { color:#64748b; display:block; font-size:11px; font-weight:750; line-height:1.35; margin-top:4px; }
+        .club-inheritedDivision { background:color-mix(in srgb,var(--club-admin-accent) 5%,#fff); border:1px solid color-mix(in srgb,var(--club-admin-accent) 18%,#dce5ef); border-radius:12px; display:grid; gap:3px; padding:10px 11px; }
+        .club-inheritedDivision>span { color:var(--club-admin-accent); font-size:10px; font-weight:900; letter-spacing:.07em; }
+        .club-inheritedDivision strong { color:#112946; font-size:14px; }
+        .club-inheritedDivision small { color:#5b738b; font-size:11px; font-weight:800; }
+        .club-inheritedDivision label { color:#50657c; display:grid; font-size:11px; font-weight:800; gap:4px; }
+        .club-inheritedDivision select { background:#fff; border:1px solid #cbd5e1; border-radius:8px; color:#17314f; font:inherit; min-height:36px; padding:0 8px; }
+        .club-inheritedPoints { background:#f7f9fc; border:1px solid #e0e7ef; border-radius:12px; display:grid; gap:3px; padding:10px 11px; }
+        .club-inheritedPoints strong { color:#142a46; font-size:13px; }
+        .club-inheritedPoints span { color:#536a82; font-size:12px; font-weight:800; }
+        .club-inheritedPoints small { color:#73859a; font-size:10px; font-weight:700; line-height:1.35; }
         .club-newTournament {
           background: #fff;
           border: 1px solid rgba(15,23,42,.08);

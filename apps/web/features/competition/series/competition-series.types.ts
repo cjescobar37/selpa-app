@@ -53,6 +53,22 @@ export type CompetitionSeriesDetail = {
   divisions: Array<CompetitionSeriesDivision & {
     rules: Array<CompetitionSeriesRule & { eligibility: CompetitionSeriesEligibility | null }>
   }>
+  finalization: CompetitionSeriesFinalization
+  finalRanking: CompetitionSeriesFinalRankingRow[]
+}
+
+export type CompetitionSeriesFinalizationBlocker = { code: string; message: string }
+export type CompetitionSeriesFinalization = {
+  series_id: string; status: CompetitionSeriesStatus; revision: number
+  events_total: number; events_completed: number; can_finalize: boolean
+  blockers: CompetitionSeriesFinalizationBlocker[]; champions: CompetitionSeriesFinalRankingRow[]
+}
+export type CompetitionSeriesFinalRankingRow = {
+  id: string; series_division_id: string; division_id: string; ranking_position: number
+  club_player_id: string; player_id: string; display_name: string; avatar_url: string | null
+  points: number; events_played: number; titles: number; finals: number; semifinals: number
+  rule_id: string; rule_version: number; rule_snapshot: Record<string, unknown>
+  tie_break_snapshot: Record<string, unknown>; finalized_at: string
 }
 
 export type CompetitionSeriesPrizeType = 'CASH' | 'GOODS' | 'SERVICE' | 'TROPHY' | 'OTHER'

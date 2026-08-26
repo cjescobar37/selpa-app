@@ -63,6 +63,13 @@ type TournamentSummary = {
         points: number
       }>
     } | null
+    circuit?: {
+      series_id: string
+      series_name: string
+      event_id: string
+      event_number: number | null
+      planned_events_count: number | null
+    } | null
   }
   counts: {
     registrations: {
@@ -1026,6 +1033,10 @@ export default function ClubTournamentDetailPage() {
     [theme]
   )
   const isDraft = summary?.tournament.status?.toUpperCase() === 'DRAFT'
+  const circuitBackTarget = summary?.tournament.circuit
+    ? `/club/competition/series/${summary.tournament.circuit.series_id}?tab=dates`
+    : '/club/torneos'
+  const circuitBackLabel = summary?.tournament.circuit?.series_name ?? null
   const runnerUp = useMemo(() => {
     if (!summary?.champion) return null
     if (summary.runnerUp?.name) return summary.runnerUp
@@ -3913,7 +3924,7 @@ export default function ClubTournamentDetailPage() {
       <div className="club-panel club-tournamentDetail" style={themeStyle}>
         {actionFeedback ? <ActionFeedbackNotice {...actionFeedback} onDismiss={() => setActionFeedback(null)} autoDismissMs={actionFeedback.tone === 'success' ? 4000 : undefined} /> : null}
         <div className="club-detailTopbar">
-          <Link href="/club/torneos" className="club-backBtn"><span className="club-backDesktop">Volver a torneos</span><span className="club-backMobile"><ChevronLeft aria-hidden="true" size={18} />Volver</span></Link>
+          <Link href={circuitBackTarget} className="club-backBtn"><span className="club-backDesktop">{circuitBackLabel ? `Volver a ${circuitBackLabel}` : 'Volver a torneos'}</span><span className="club-backMobile"><ChevronLeft aria-hidden="true" size={18} />{circuitBackLabel ?? 'Volver'}</span></Link>
           <div className="club-topbarActions">
             <div className="club-mobileActionMenu">
               <button type="button" className="club-mobileMenuTrigger" aria-label="Más acciones" aria-expanded={mobileActionsOpen} onClick={() => setMobileActionsOpen((open) => !open)}>
@@ -6505,6 +6516,8 @@ export default function ClubTournamentDetailPage() {
           .club-tournamentDetail::before { border-radius:16px 16px 0 0; }
           .club-detailTopbar { background:rgba(255,255,255,.94); border-bottom:1px solid color-mix(in srgb,var(--club-admin-accent) 18%,transparent); box-shadow:0 10px 24px rgba(15,23,42,.08); margin:0 -22px 8px; padding:7px 16px; position:sticky; top:calc(46px + env(safe-area-inset-top)); z-index:40; }
           .club-backMobile { align-items:center; display:inline-flex; font-size:12px; gap:1px; }
+          .club-detailTopbar .club-backBtn { max-width:min(52vw,240px); overflow:hidden; }
+          .club-detailTopbar .club-backMobile { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
           .club-tabs { display:grid; gap:0; grid-template-columns:repeat(3,minmax(0,1fr)); overflow:visible; padding:3px 16px 0; }
           .club-tab { align-items:center; display:flex; font-size:10px; justify-content:center; min-height:34px; min-width:0; padding:7px 2px 8px; white-space:nowrap; }
           .club-metrics--detail { grid-template-columns:repeat(2,minmax(0,1fr)); }

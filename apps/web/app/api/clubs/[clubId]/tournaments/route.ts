@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { mapTournamentError } from '@/lib/tournamentErrors'
+import { getTournamentCircuitContexts } from '@/features/competition/events/competition-events.repository'
 
 type TournamentRow = {
   id: string
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     }
 
     const rows = (tournaments ?? []) as TournamentRow[]
+    const circuitContexts = await getTournamentCircuitContexts(supabaseAdmin, clubId, rows.map((row) => row.id))
     const categoryIds = Array.from(new Set(rows.map((row) => row.category_id ?? row.category).filter((id): id is number => Number.isFinite(id))))
 
     let categories = new Map<number, string>()
@@ -126,6 +128,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
           max_pairs: row.max_pairs,
           price_per_player: row.price_per_player,
           rules_json: row.rules_json ?? {},
+          circuit: circuitContexts[row.id] ?? null,
           created_at: row.created_at,
           updated_at: row.updated_at,
         }
