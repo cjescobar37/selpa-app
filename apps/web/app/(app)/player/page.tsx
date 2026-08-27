@@ -125,8 +125,8 @@ type ClubContentNotice = {
 
 function normalizeGender(gender: string | null) {
   const value = String(gender ?? '').toUpperCase()
-  if (value === 'M' || value === 'MALE') return 'Masculino'
-  if (value === 'F' || value === 'FEMALE') return 'Femenino'
+  if (value === 'M' || value === 'MALE') return 'Caballeros'
+  if (value === 'F' || value === 'FEMALE') return 'Damas'
   if (value === 'MIXED' || value === 'MIXTO') return 'Mixto'
   return gender ?? 'Sin rama'
 }

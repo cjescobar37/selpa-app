@@ -27,8 +27,8 @@ type Tournament = {
 }
 
 const genderLabels: Record<string, string> = {
-  MALE: 'Masculino',
-  FEMALE: 'Femenino',
+  MALE: 'Caballeros',
+  FEMALE: 'Damas',
   MIXED: 'Mixto',
 }
 

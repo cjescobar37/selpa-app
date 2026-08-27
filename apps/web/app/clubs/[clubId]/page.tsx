@@ -65,8 +65,8 @@ const publicSponsorSlots = ['CLUB_HOME_HERO', 'CLUB_HOME_AFTER_TOURNAMENTS', 'CL
 
 function normalizeGender(value?: string | null) {
   const normalized = String(value ?? '').toUpperCase()
-  if (normalized === 'M' || normalized === 'MALE') return 'Masculino'
-  if (normalized === 'F' || normalized === 'FEMALE') return 'Femenino'
+  if (normalized === 'M' || normalized === 'MALE') return 'Caballeros'
+  if (normalized === 'F' || normalized === 'FEMALE') return 'Damas'
   if (normalized.includes('MIX')) return 'Mixto'
   return 'Rama abierta'
 }

@@ -209,8 +209,8 @@ function formatPlayerCategory(value?: number | null) {
 
 function formatPlayerGender(value?: string | null) {
   const cleanValue = (value ?? '').toUpperCase()
-  if (cleanValue === 'M' || cleanValue === 'MALE') return 'Masculino'
-  if (cleanValue === 'F' || cleanValue === 'FEMALE') return 'Femenino'
+  if (cleanValue === 'M' || cleanValue === 'MALE') return 'Caballeros'
+  if (cleanValue === 'F' || cleanValue === 'FEMALE') return 'Damas'
   if (cleanValue === 'MIXED') return 'Mixto'
   return value ?? 'Sin género'
 }

@@ -96,8 +96,8 @@ function formatDate(value: string | null) {
 
 function formatGender(value?: string | null) {
   const normalized = String(value ?? '').toUpperCase()
-  if (normalized === 'M' || normalized === 'MALE') return 'Masculino'
-  if (normalized === 'F' || normalized === 'FEMALE') return 'Femenino'
+  if (normalized === 'M' || normalized === 'MALE') return 'Caballeros'
+  if (normalized === 'F' || normalized === 'FEMALE') return 'Damas'
   if (normalized === 'MIXED' || normalized === 'MIXTO') return 'Mixto'
   return 'Sin rama'
 }

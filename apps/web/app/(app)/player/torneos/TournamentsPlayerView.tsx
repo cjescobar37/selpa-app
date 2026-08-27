@@ -54,8 +54,8 @@ type ClubRow = {
 const categories = ['all', '1', '2', '3', '4', '5', '6', '7']
 const genders = [
   { value: 'all', label: 'Todos' },
-  { value: 'M', label: 'Masculino' },
-  { value: 'F', label: 'Femenino' },
+  { value: 'M', label: 'Caballeros' },
+  { value: 'F', label: 'Damas' },
   { value: 'MIXED', label: 'Mixto' },
 ]
 
@@ -68,8 +68,8 @@ function normalizeGender(value?: string | null) {
 
 function formatGender(value?: string | null) {
   const normalized = normalizeGender(value)
-  if (normalized === 'M') return 'Masculino'
-  if (normalized === 'F') return 'Femenino'
+  if (normalized === 'M') return 'Caballeros'
+  if (normalized === 'F') return 'Damas'
   if (normalized === 'MIXED' || normalized === 'MIXTO') return 'Mixto'
   return 'Sin rama'
 }

@@ -238,8 +238,8 @@ export default function NuevoTorneoPage() {
           <label style={label}>
             Género
             <select style={input} value={gender} onChange={(e) => setGender(e.target.value)}>
-              <option value="MALE">Masculino</option>
-              <option value="FEMALE">Femenino</option>
+              <option value="MALE">Caballeros</option>
+              <option value="FEMALE">Damas</option>
               <option value="MIXED">Mixto</option>
             </select>
           </label>
