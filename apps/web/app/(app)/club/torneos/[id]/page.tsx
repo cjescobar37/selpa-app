@@ -929,6 +929,7 @@ export default function ClubTournamentDetailPage() {
   const [flyerConfig, setFlyerConfig] = useState<FlyerConfig>(defaultFlyerConfig)
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
+  const [finalizingTournament, setFinalizingTournament] = useState(false)
   const [deletingTournament, setDeletingTournament] = useState(false)
   const [pausingTournament, setPausingTournament] = useState(false)
   const [activeTab, setActiveTab] = useState<TournamentTab>('general')
@@ -1168,6 +1169,8 @@ export default function ClubTournamentDetailPage() {
   const isTournamentFinished =
     summary?.operationalStage === 'FINALIZADO' ||
     ['FINALIZADO', 'FINISHED'].includes(summary?.tournament.status?.toUpperCase() ?? '')
+  const canFinalizeTournament = Boolean(summary?.champion) && !isTournamentFinished &&
+    ['OPEN', 'RUNNING'].includes(String(summary?.tournament.status ?? '').toUpperCase())
   const canAddPair = Boolean(summary) && isTournamentOpen && !isTournamentFinished && !seedMeta.hasSeedSnapshot
   const sortedGroups = useMemo(
     () => [...groups].sort((left, right) => left.order - right.order || left.name.localeCompare(right.name)),
@@ -3207,7 +3210,7 @@ export default function ClubTournamentDetailPage() {
         UNAUTHORIZED: 'No tenés permisos para publicar este torneo.',
         TOURNAMENT_NOT_FOUND: 'Torneo no encontrado para este club.',
       }
-      setActionFeedback({ tone: 'error', title: 'No pudimos publicar el torneo', message: json.code ? messages[json.code] ?? 'No pudimos publicar el torneo. Intentá nuevamente.' : 'No pudimos publicar el torneo. Intentá nuevamente.' })
+      setActionFeedback({ tone: 'error', title: 'No pudimos publicar el torneo', message: json.code ? messages[json.code] ?? json.error ?? 'No pudimos publicar el torneo. Intentá nuevamente.' : json.error ?? 'No pudimos publicar el torneo. Intentá nuevamente.' })
       setPublishing(false)
       return
     }
@@ -3257,6 +3260,36 @@ export default function ClubTournamentDetailPage() {
     setActionFeedback({ tone: 'success', title: 'Torneo eliminado', message: 'Eliminamos el borrador y sus datos vinculados.' })
     setDeletingTournament(false)
     window.setTimeout(() => router.push('/club/torneos'), 900)
+  }
+
+  async function finalizeTournament() {
+    if (!activeClub?.id || !tournamentId || !summary) return
+    setFinalizingTournament(true)
+    setActionFeedback(null)
+    const token = await getToken()
+    if (!token) {
+      setActionFeedback({ tone: 'error', title: 'No pudimos finalizar el torneo', message: 'Tu sesión ya no es válida. Volvé a ingresar e intentá nuevamente.' })
+      setFinalizingTournament(false)
+      return
+    }
+    const res = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'finalize_tournament' }),
+    })
+    const json = await res.json().catch(() => ({})) as { error?: string; code?: string }
+    if (!res.ok) {
+      setActionFeedback({
+        tone: 'error',
+        title: 'No pudimos finalizar el torneo',
+        message: json.error ?? 'Revisá los partidos pendientes y el resultado de la final.',
+      })
+      setFinalizingTournament(false)
+      return
+    }
+    setActionFeedback({ tone: 'success', title: 'Torneo finalizado', message: 'El campeón y toda la historia deportiva quedaron guardados.' })
+    setFinalizingTournament(false)
+    await refreshTournamentExperience()
   }
 
   async function setTournamentPaused(paused: boolean) {
@@ -4160,6 +4193,21 @@ export default function ClubTournamentDetailPage() {
                             <span>2° · Subcampeón</span>
                             <strong>{runnerUp.name}</strong>
                           </div>
+                        ) : null}
+                        {canFinalizeTournament ? (
+                          <button
+                            type="button"
+                            className="club-nextAction"
+                            disabled={finalizingTournament}
+                            onClick={() => requestConfirmation({
+                              title: 'Finalizar torneo',
+                              body: 'Confirmá que todos los resultados están cargados. Se guardará el campeón y el torneo quedará finalizado.',
+                              confirmLabel: 'Finalizar torneo',
+                              onConfirm: finalizeTournament,
+                            })}
+                          >
+                            {finalizingTournament ? 'Finalizando…' : 'Finalizar torneo →'}
+                          </button>
                         ) : null}
                       </section>
                     ) : null}

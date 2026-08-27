@@ -278,7 +278,8 @@ export async function PATCH(
       action !== 'pause_tournament' &&
       action !== 'resume_tournament' &&
       action !== 'delete_tournament' &&
-      action !== 'cancel_tournament'
+      action !== 'cancel_tournament' &&
+      action !== 'finalize_tournament'
     ) {
       return NextResponse.json({ error: 'Acción inválida.', code: 'INVALID_ACTION' }, { status: 400 })
     }
@@ -292,6 +293,7 @@ export async function PATCH(
       resume_tournament: 'tournaments:update',
       delete_tournament: 'tournaments:delete',
       cancel_tournament: 'tournaments:cancel',
+      finalize_tournament: 'tournaments:update',
     }
     const canManage = await userHasClubCapability(user.id, clubId, capabilityByAction[action])
     if (!canManage) {
@@ -315,6 +317,30 @@ export async function PATCH(
     }
 
     const current = tournament as TournamentRow
+    if (action === 'publish' || action === 'finalize_tournament') {
+      const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (!url || !anonKey || !token) {
+        return NextResponse.json({ error: 'Sesión inválida.', code: 'UNAUTHORIZED' }, { status: 401 })
+      }
+      const userClient = createClient(url, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+      const { data, error } = await userClient.rpc(
+        action === 'publish' ? 'publish_tournament_atomic' : 'finalize_tournament_atomic',
+        { p_club_id: clubId, p_tournament_id: tournamentId }
+      )
+      if (error) {
+        const mapped = mapTournamentError(
+          error,
+          action === 'publish' ? 'No pudimos publicar el torneo.' : 'No pudimos finalizar el torneo.'
+        )
+        return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
+      }
+      return NextResponse.json({ ok: true, tournament: data })
+    }
     if (action === 'pause_tournament' || action === 'resume_tournament') {
       const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -468,7 +494,7 @@ export async function PATCH(
 
     if (String(current.status ?? '').toUpperCase() !== 'DRAFT') {
       return NextResponse.json({
-        error: action === 'publish' ? 'Solo se puede publicar un torneo en borrador.' : 'Solo se puede editar un torneo en borrador.',
+        error: 'Solo se puede editar un torneo en borrador.',
         code: 'INVALID_STATUS_TRANSITION',
       }, { status: 409 })
     }
@@ -535,22 +561,7 @@ export async function PATCH(
       return NextResponse.json({ ok: true, tournament: updated })
     }
 
-    const { data: updated, error: updateError } = await supabaseAdmin
-      .from('tournaments')
-      .update({
-        status: 'OPEN',
-        updated_at: updatedAt,
-      })
-      .eq('id', tournamentId)
-      .eq('club_id', clubId)
-      .select('id,club_id,name,status,updated_at')
-      .maybeSingle()
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ ok: true, tournament: updated })
+    return NextResponse.json({ error: 'Acción inválida.', code: 'INVALID_ACTION' }, { status: 400 })
   } catch (error: unknown) {
     const mapped = mapTournamentError(error, 'No pudimos actualizar el torneo. Intentá nuevamente.')
     return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
