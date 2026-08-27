@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
-  generateTournamentGroupsFromSeedSnapshot,
-  TournamentGroupGenerationError,
-} from '@/lib/tournamentGroupGeneration'
+  generateTournamentGroupsAndFixtureAtomic,
+  TournamentGroupsFixtureAtomicError,
+} from '@/lib/tournamentGroupsFixtureAtomic'
 
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
@@ -36,7 +36,8 @@ export async function POST(
       return NextResponse.json({ error: 'No autorizado para generar grupos.', code: 'UNAUTHORIZED' }, { status: 403 })
     }
 
-    const result = await generateTournamentGroupsFromSeedSnapshot({ clubId, tournamentId })
+    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const result = await generateTournamentGroupsAndFixtureAtomic({ token, clubId, tournamentId })
 
     return NextResponse.json(
       {
@@ -46,11 +47,13 @@ export async function POST(
         sizes: result.sizes,
         teamsAssigned: result.teamsAssigned,
         groups: result.groups,
+        matchesCreated: result.matchesCreated,
+        generationStatus: result.status,
       },
-      { status: 201 }
+      { status: result.status === 'ALREADY_GENERATED' ? 200 : 201 }
     )
   } catch (error: unknown) {
-    if (error instanceof TournamentGroupGenerationError) {
+    if (error instanceof TournamentGroupsFixtureAtomicError) {
       return NextResponse.json(
         {
           error: error.message,
@@ -60,9 +63,7 @@ export async function POST(
       )
     }
 
-    return NextResponse.json(
-      { error: getErrorMessage(error, 'Error generando grupos del torneo.') },
-      { status: 500 }
-    )
+    console.error('[groups/generate] unexpected error', getErrorMessage(error, 'unknown'))
+    return NextResponse.json({ error: 'No pudimos generar los grupos y partidos.', code: 'TOURNAMENT_GROUPS_GENERATION_FAILED' }, { status: 500 })
   }
 }

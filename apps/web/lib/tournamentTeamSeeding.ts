@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js'
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getTournamentRegistrationEligibilityGate } from '@/lib/tournamentRegistrationEligibility'
 
@@ -7,6 +8,7 @@ type SeedingErrorCode =
   | 'NO_ELIGIBLE_TEAMS'
   | 'INSUFFICIENT_ELIGIBLE_TEAMS_FOR_SEED'
   | 'TEAM_DATA_INCOMPLETE'
+  | 'COMPETITION_RANKING_UNAVAILABLE'
 
 type RegistrationRow = {
   id: string
@@ -25,9 +27,18 @@ type TeamRow = {
   player2_user_id: string
 }
 
-type ClubPlayerRankingRow = {
-  user_id: string
-  ranking_points: number | null
+type SeedSource = 'NO_RANKING' | 'COMPETITION_SERIES_RANKING'
+
+type CompetitionSeriesRankingRow = {
+  player_id: string | null
+  points: number | string | null
+}
+
+type CompetitionSeedScope = {
+  seedSource: SeedSource
+  sourceSeriesId: string | null
+  sourceEventDivisionId: string | null
+  pointsByUserId: Map<string, number>
 }
 
 type SeedCandidate = {
@@ -47,7 +58,9 @@ type SeedCandidate = {
 
 type SeedSnapshotInsert = Omit<SeedCandidate, 'registration_created_at'> & {
   seed: number
-  seed_source: 'NO_RANKING'
+  seed_source: SeedSource
+  source_series_id: string | null
+  source_event_division_id: string | null
   snapshot_at: string
   generated_by: string
 }
@@ -80,10 +93,106 @@ function compareSeedCandidates(a: SeedCandidate, b: SeedCandidate) {
   return a.team_id.localeCompare(b.team_id)
 }
 
+function rankingClient(accessToken: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) return null
+  return createClient(url, key, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}
+
+async function getCompetitionSeedScope(input: {
+  clubId: string
+  tournamentId: string
+  accessToken?: string
+}): Promise<CompetitionSeedScope> {
+  const { data: link, error: linkError } = await supabaseAdmin
+    .from('competition_series_event_tournament_links')
+    .select('event_division_id')
+    .eq('club_id', input.clubId)
+    .eq('tournament_id', input.tournamentId)
+    .eq('status', 'ACTIVE')
+    .maybeSingle()
+
+  if (linkError) throw new Error(`No pude validar el vínculo competitivo del torneo: ${linkError.message}`)
+  if (!link) {
+    return {
+      seedSource: 'NO_RANKING',
+      sourceSeriesId: null,
+      sourceEventDivisionId: null,
+      pointsByUserId: new Map(),
+    }
+  }
+
+  const { data: eventDivision, error: eventDivisionError } = await supabaseAdmin
+    .from('competition_series_event_divisions')
+    .select('event_id')
+    .eq('club_id', input.clubId)
+    .eq('id', link.event_division_id)
+    .maybeSingle()
+  if (eventDivisionError || !eventDivision) {
+    throw new TournamentSeedingError(
+      'COMPETITION_RANKING_UNAVAILABLE',
+      'No pude determinar el ranking del circuito para esta fecha.',
+      409
+    )
+  }
+
+  const { data: event, error: eventError } = await supabaseAdmin
+    .from('competition_series_events')
+    .select('series_id')
+    .eq('club_id', input.clubId)
+    .eq('id', eventDivision.event_id)
+    .maybeSingle()
+  if (eventError || !event?.series_id || !input.accessToken) {
+    throw new TournamentSeedingError(
+      'COMPETITION_RANKING_UNAVAILABLE',
+      'No pude leer el ranking vigente del circuito para esta fecha.',
+      409
+    )
+  }
+
+  const client = rankingClient(input.accessToken)
+  if (!client) {
+    throw new TournamentSeedingError(
+      'COMPETITION_RANKING_UNAVAILABLE',
+      'No pude leer el ranking vigente del circuito para esta fecha.',
+      409
+    )
+  }
+  const { data: rankingRows, error: rankingError } = await client.rpc('get_competition_series_ranking', {
+    p_club_id: input.clubId,
+    p_series_id: event.series_id,
+  })
+  if (rankingError) {
+    throw new TournamentSeedingError(
+      'COMPETITION_RANKING_UNAVAILABLE',
+      'No pude leer el ranking vigente del circuito para esta fecha.',
+      409
+    )
+  }
+
+  const pointsByUserId = new Map<string, number>()
+  for (const row of (rankingRows ?? []) as CompetitionSeriesRankingRow[]) {
+    if (!row.player_id) continue
+    const points = Number(row.points)
+    pointsByUserId.set(row.player_id, Number.isFinite(points) ? points : 0)
+  }
+  return {
+    seedSource: 'COMPETITION_SERIES_RANKING',
+    sourceSeriesId: event.series_id,
+    sourceEventDivisionId: link.event_division_id,
+    pointsByUserId,
+  }
+}
+
 export async function generateTournamentSeedSnapshot(input: {
   tournamentId: string
   clubId: string
   userId: string
+  accessToken?: string
 }) {
   assertServiceRole()
 
@@ -158,26 +267,7 @@ export async function generateTournamentSeedSnapshot(input: {
   if (teamsError) throw new Error(`No pude leer equipos del torneo: ${teamsError.message}`)
 
   const teamsById = new Map(((teams ?? []) as TeamRow[]).map((team) => [team.id, team]))
-  const playerIds = Array.from(
-    new Set(
-      ((teams ?? []) as TeamRow[]).flatMap((team) => [team.player1_user_id, team.player2_user_id]).filter(Boolean)
-    )
-  )
-
-  const { data: clubPlayers, error: clubPlayersError } = await supabaseAdmin
-    .from('club_players')
-    .select('user_id,ranking_points')
-    .eq('club_id', input.clubId)
-    .in('user_id', playerIds)
-
-  if (clubPlayersError) throw new Error(`No pude leer ranking de jugadores del club: ${clubPlayersError.message}`)
-
-  const rankingPointsByUserId = new Map(
-    ((clubPlayers ?? []) as ClubPlayerRankingRow[]).map((clubPlayer) => [
-      clubPlayer.user_id,
-      Number.isFinite(clubPlayer.ranking_points ?? NaN) ? Number(clubPlayer.ranking_points ?? 0) : 0,
-    ])
-  )
+  const competitionScope = await getCompetitionSeedScope(input)
 
   const candidates = eligibleRegistrations.map((registration) => {
     const team = teamsById.get(registration.team_id)
@@ -189,8 +279,8 @@ export async function generateTournamentSeedSnapshot(input: {
       )
     }
 
-    const player1Points = rankingPointsByUserId.get(team.player1_user_id) ?? 0
-    const player2Points = rankingPointsByUserId.get(team.player2_user_id) ?? 0
+    const player1Points = competitionScope.pointsByUserId.get(team.player1_user_id) ?? 0
+    const player2Points = competitionScope.pointsByUserId.get(team.player2_user_id) ?? 0
 
     return {
       tournament_id: input.tournamentId,
@@ -224,7 +314,9 @@ export async function generateTournamentSeedSnapshot(input: {
       best_individual_points: candidate.best_individual_points,
       worst_individual_points: candidate.worst_individual_points,
       seed: index + 1,
-      seed_source: 'NO_RANKING',
+      seed_source: competitionScope.seedSource,
+      source_series_id: competitionScope.sourceSeriesId,
+      source_event_division_id: competitionScope.sourceEventDivisionId,
       snapshot_at: snapshotAt,
       generated_by: input.userId,
     }))
@@ -239,7 +331,8 @@ export async function generateTournamentSeedSnapshot(input: {
   return {
     tournament,
     snapshotAt,
-    seedSource: 'NO_RANKING' as const,
+    seedSource: competitionScope.seedSource,
+    sourceSeriesId: competitionScope.sourceSeriesId,
     generatedCount: inserts.length,
     excludedNotEligibleCount: blockedRegistrationIds.size,
     snapshots: snapshots ?? [],

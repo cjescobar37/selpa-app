@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
-  generateGroupMatchesForTournament,
-  TournamentGroupMatchesGenerationError,
-} from '@/lib/tournamentGroupMatchesGeneration'
+  generateTournamentGroupsAndFixtureAtomic,
+  TournamentGroupsFixtureAtomicError,
+} from '@/lib/tournamentGroupsFixtureAtomic'
 
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
@@ -36,22 +36,23 @@ export async function POST(
       return NextResponse.json({ error: 'No autorizado para generar partidos de grupos.', code: 'UNAUTHORIZED' }, { status: 403 })
     }
 
-    const result = await generateGroupMatchesForTournament({ clubId, tournamentId })
+    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const result = await generateTournamentGroupsAndFixtureAtomic({ token, clubId, tournamentId })
 
     return NextResponse.json(
       {
         ok: true,
         tournamentId,
-        groupsCount: result.groupsCount,
+        groupsCount: result.groupCount,
         matchesCreated: result.matchesCreated,
-        perGroupCounts: result.perGroupCounts,
-        scheduleApplied: result.scheduleApplied,
-        scheduleCapacity: result.scheduleCapacity,
+        scheduleApplied: false,
+        scheduleCapacity: null,
+        generationStatus: result.status,
       },
-      { status: 201 }
+      { status: result.status === 'ALREADY_GENERATED' ? 200 : 201 }
     )
   } catch (error: unknown) {
-    if (error instanceof TournamentGroupMatchesGenerationError) {
+    if (error instanceof TournamentGroupsFixtureAtomicError) {
       return NextResponse.json(
         {
           error: error.message,
@@ -61,9 +62,7 @@ export async function POST(
       )
     }
 
-    return NextResponse.json(
-      { error: getErrorMessage(error, 'Error generando partidos de grupos.') },
-      { status: 500 }
-    )
+    console.error('[groups/generate-matches] unexpected error', getErrorMessage(error, 'unknown'))
+    return NextResponse.json({ error: 'No pudimos generar los grupos y partidos.', code: 'TOURNAMENT_GROUPS_GENERATION_FAILED' }, { status: 500 })
   }
 }

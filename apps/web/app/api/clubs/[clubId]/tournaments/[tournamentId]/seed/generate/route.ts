@@ -10,11 +10,7 @@ async function getTokenUser(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin.auth.getUser(token)
   if (error || !data?.user) return null
-  return data.user
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback
+  return { user: data.user, accessToken: token }
 }
 
 export async function POST(
@@ -28,7 +24,7 @@ export async function POST(
     }
 
     const { clubId, tournamentId } = await context.params
-    const canManage = await userHasClubCapability(user.id, clubId, 'groups:generate')
+    const canManage = await userHasClubCapability(user.user.id, clubId, 'groups:generate')
     if (!canManage) {
       return NextResponse.json({ error: 'No autorizado para generar seed.', code: 'UNAUTHORIZED' }, { status: 403 })
     }
@@ -36,7 +32,8 @@ export async function POST(
     const result = await generateTournamentSeedSnapshot({
       clubId,
       tournamentId,
-      userId: user.id,
+      userId: user.user.id,
+      accessToken: user.accessToken,
     })
 
     return NextResponse.json(
@@ -60,7 +57,7 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { error: getErrorMessage(error, 'Error generando seed del torneo.') },
+      { error: 'No pudimos generar el seed del torneo.', code: 'SEED_GENERATION_FAILED' },
       { status: 500 }
     )
   }
