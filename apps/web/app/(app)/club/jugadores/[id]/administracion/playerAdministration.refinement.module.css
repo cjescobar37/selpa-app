@@ -1,9 +1,20 @@
 .avatar {
+  aspect-ratio: 1;
   border-radius: 16px;
-  flex-basis: 88px;
+  flex: 0 0 88px;
   font-size: 20px;
   height: 88px;
+  min-height: 88px;
+  min-width: 88px;
+  overflow: hidden;
   width: 88px;
+}
+
+.avatar img {
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  width: 100%;
 }
 
 .messageTrigger {

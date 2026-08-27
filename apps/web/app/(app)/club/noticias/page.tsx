@@ -5,6 +5,7 @@ import { CalendarDays, Edit3, Eye, FileText, ImageIcon, MoreVertical, Plus, Send
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubTheme } from '@/lib/clubThemes'
+import ClubAdminHubNav from '@/components/club/ClubAdminHubNav'
 
 type NewsStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
 
@@ -334,6 +335,10 @@ export default function ClubNoticiasPage() {
 
   return (
     <div className="clubNewsShell" style={style}>
+      <ClubAdminHubNav label="Herramientas de contenido" items={[
+        { href:'/club/noticias', label:'Noticias', description:'Novedades del club', icon:'news', requiredAnyCapabilities:['news:manage'] },
+        { href:'/club/publicidad', label:'Sponsors y publicidad', description:'Marcas y campañas', icon:'sponsors', requiredAnyCapabilities:['sponsors:manage','ads:manage'] },
+      ]} />
       <section className="clubNewsHero">
         <div>
           <span className="clubNewsKicker">Contenido del club</span>
