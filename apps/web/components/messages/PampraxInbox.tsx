@@ -448,7 +448,7 @@ export default function PampraxInbox({
           className="px-newMessageBtn"
           onClick={openComposer}
           disabled={!canCreateMessage}
-          title={canCreateMessage ? 'Crear mensaje' : 'Nuevo mensaje platform próximamente'}
+          title={canCreateMessage ? 'Crear mensaje' : 'No tenés permisos para crear mensajes'}
         >
           <Plus size={17} />
           Nuevo mensaje
@@ -756,7 +756,7 @@ export default function PampraxInbox({
           .px-inboxGrid.is-empty .px-conversationPanel { display: none; }
         }
         @media (max-width: 560px) {
-          .px-inboxShell { gap: 10px; padding: 8px 8px 24px; }
+          .px-inboxShell { gap: 10px; padding: 8px 0 24px; }
           .px-inboxHero { border-radius: 16px; gap: 9px; padding: 13px; }
           .px-inboxHero::before { height: 2px; }
           .px-inboxHero__copy { gap: 4px; }

@@ -93,7 +93,7 @@ export default function UnirMiClubPage() {
           <div>
             <h1 className="px-h1">Unir mi club</h1>
             <p className="px-muted" style={{ marginTop: 6 }}>
-              Completá este formulario y dejamos lista la <b>solicitud de alta</b>. Luego conectamos la lógica con Supabase.
+              Completá este formulario para enviar la <b>solicitud de alta</b> de tu club.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -216,7 +216,7 @@ export default function UnirMiClubPage() {
               </div>
 
               <div className="px-help">
-                * Campos obligatorios. Próximo paso: conectar esto a una tabla de <b>solicitudes</b> y flujo de aprobación.
+                * Campos obligatorios. Revisaremos tu solicitud y nos comunicaremos con vos.
               </div>
 
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
