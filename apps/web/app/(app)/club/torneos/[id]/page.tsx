@@ -3209,8 +3209,11 @@ export default function ClubTournamentDetailPage() {
         INVALID_STATUS_TRANSITION: 'Solo podés publicar torneos en borrador.',
         UNAUTHORIZED: 'No tenés permisos para publicar este torneo.',
         TOURNAMENT_NOT_FOUND: 'Torneo no encontrado para este club.',
+        TOURNAMENT_SCHEMA_SYNC_PENDING: 'La publicación se está preparando. Actualizá la página e intentá nuevamente en unos segundos.',
       }
-      setActionFeedback({ tone: 'error', title: 'No pudimos publicar el torneo', message: json.code ? messages[json.code] ?? json.error ?? 'No pudimos publicar el torneo. Intentá nuevamente.' : json.error ?? 'No pudimos publicar el torneo. Intentá nuevamente.' })
+      const fallback = 'No pudimos publicar el torneo. Intentá nuevamente.'
+      const detail = json.code ? messages[json.code] ?? json.error : json.error
+      setActionFeedback({ tone: 'error', title: 'No pudimos publicar el torneo', message: detail && detail !== 'No pudimos publicar el torneo.' ? detail : fallback })
       setPublishing(false)
       return
     }
@@ -6592,7 +6595,7 @@ export default function ClubTournamentDetailPage() {
           .club-backMobile, .club-mobileActionMenu { display:flex; }
           .club-detailTopbar .club-backBtn { background:transparent; border:0; min-height:42px; padding:0 2px; }
           .club-topbarActions { align-items:center; flex-wrap:nowrap; justify-content:flex-end; }
-          .club-topbarActions .club-publishBtn { background:var(--club-admin-accent); min-height:42px; padding:8px 14px; }
+          .club-topbarActions .club-publishBtn { display:none; }
           .club-matchTableHead { display: none; }
           .club-matchTableRow { align-items: start; gap: 6px; grid-template-columns: 1fr; padding: 7px; }
           .club-matchInfoCell { background: #f8fafc; border-radius: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 7px; }

@@ -27,6 +27,7 @@ const messages: Record<string, Omit<TournamentError, 'code'>> = {
   TOURNAMENT_FINAL_RESULT_REQUIRED: { status: 409, message: 'Cargá el resultado de la final antes de finalizar el torneo.' },
   TOURNAMENT_FINAL_WINNER_INVALID: { status: 409, message: 'El ganador de la final no coincide con sus participantes.' },
   TOURNAMENT_FINALIZATION_SNAPSHOT_MISSING: { status: 409, message: 'El cierre anterior no tiene un campeón verificable. Revisá el torneo.' },
+  TOURNAMENT_SCHEMA_SYNC_PENDING: { status: 503, message: 'La publicación se está preparando. Actualizá la página e intentá nuevamente en unos segundos.' },
 }
 
 export function mapTournamentError(error: unknown, fallback = 'No pudimos completar la acción. Intentá nuevamente.'): TournamentError {
@@ -35,6 +36,7 @@ export function mapTournamentError(error: unknown, fallback = 'No pudimos comple
     : String(error ?? '')
   const code = Object.keys(messages).find((value) => candidate.includes(value))
   if (code) return { code, ...messages[code] }
+  if (candidate.includes('PGRST202')) return { code: 'TOURNAMENT_SCHEMA_SYNC_PENDING', ...messages.TOURNAMENT_SCHEMA_SYNC_PENDING }
   if (candidate.includes('42501')) return { code: 'TOURNAMENT_FORBIDDEN', ...messages.TOURNAMENT_FORBIDDEN }
   if (candidate.includes('28000')) return { code: 'UNAUTHORIZED', ...messages.UNAUTHORIZED }
   return { code: 'TOURNAMENT_OPERATION_FAILED', message: fallback, status: 500 }

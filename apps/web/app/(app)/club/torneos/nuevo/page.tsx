@@ -366,6 +366,25 @@ async function prepareFlyerConfigForSubmit(config: FlyerConfig, clubId: string, 
   }
 }
 
+function getEffectiveScheduleConfig(form: FormState) {
+  const isAutomatic = form.scheduleMode === 'AUTO'
+
+  return {
+    mode: form.scheduleMode,
+    match_duration_minutes: toInteger(form.matchDurationMinutes, 90),
+    groups: {
+      date: isAutomatic ? form.startDate : form.groupsDate || form.startDate,
+      start_time: isAutomatic ? '10:00' : form.groupsStartTime || '10:00',
+      end_time: isAutomatic ? '22:00' : form.groupsEndTime || '22:00',
+    },
+    playoff: {
+      date: isAutomatic ? form.endDate || form.startDate : form.playoffDate || form.endDate || form.startDate,
+      start_time: isAutomatic ? '10:00' : form.playoffStartTime || '10:00',
+      end_time: isAutomatic ? '22:00' : form.playoffEndTime || '22:00',
+    },
+  }
+}
+
 function buildTournamentConfigPayload(form: FormState) {
   return {
     segment_type: form.segmentType,
@@ -377,20 +396,7 @@ function buildTournamentConfigPayload(form: FormState) {
     },
     competition_system: form.competitionSystem,
     venue_name: form.venueName.trim() || null,
-    schedule_config: {
-      mode: form.scheduleMode,
-      match_duration_minutes: toInteger(form.matchDurationMinutes, 90),
-      groups: {
-        date: form.groupsDate || form.startDate,
-        start_time: form.groupsStartTime || '10:00',
-        end_time: form.groupsEndTime || '22:00',
-      },
-      playoff: {
-        date: form.playoffDate || form.endDate || form.startDate,
-        start_time: form.playoffStartTime || '10:00',
-        end_time: form.playoffEndTime || '22:00',
-      },
-    },
+    schedule_config: getEffectiveScheduleConfig(form),
     points_config: {
       enabled: form.pointsEnabled,
       editable: form.pointsEditable,
@@ -625,10 +631,12 @@ export default function ClubNuevoTorneoPage() {
     if (!Number.isInteger(matchDuration) || matchDuration < 30) next.push('La duración estimada debe ser de al menos 30 minutos.')
     if (form.endDate && form.startDate && form.endDate < form.startDate) next.push('La fecha fin no puede ser anterior al inicio.')
     if (form.registrationDeadline && form.startDate && form.registrationDeadline.slice(0, 10) > form.startDate) next.push('El cierre de inscripción no puede ser posterior al inicio.')
-    if (form.groupsDate && form.startDate && form.groupsDate < form.startDate) next.push('El día de grupos no puede ser anterior al inicio del torneo.')
-    if (form.playoffDate && form.endDate && form.playoffDate > form.endDate) next.push('El día de playoff no puede ser posterior al fin del torneo.')
-    if (form.groupsStartTime && form.groupsEndTime && form.groupsStartTime >= form.groupsEndTime) next.push('El horario de grupos debe cerrar después de la hora de inicio.')
-    if (form.playoffStartTime && form.playoffEndTime && form.playoffStartTime >= form.playoffEndTime) next.push('El horario de playoff debe cerrar después de la hora de inicio.')
+    if (form.scheduleMode === 'MANUAL') {
+      if (form.groupsDate && form.startDate && form.groupsDate < form.startDate) next.push('El día de grupos no puede ser anterior al inicio del torneo.')
+      if (form.playoffDate && form.endDate && form.playoffDate > form.endDate) next.push('El día de playoff no puede ser posterior al fin del torneo.')
+      if (form.groupsStartTime && form.groupsEndTime && form.groupsStartTime >= form.groupsEndTime) next.push('El horario de grupos debe cerrar después de la hora de inicio.')
+      if (form.playoffStartTime && form.playoffEndTime && form.playoffStartTime >= form.playoffEndTime) next.push('El horario de playoff debe cerrar después de la hora de inicio.')
+    }
 
     return next
   }, [activeClub?.id, competitionContext, competitionContextError, form, isCompetitionDate, selectedCompetitionDivision, selectedEventTierId])
@@ -659,6 +667,23 @@ export default function ClubNuevoTorneoPage() {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
+  function setScheduleMode(scheduleMode: ScheduleMode) {
+    setForm((current) => ({
+      ...current,
+      scheduleMode,
+      ...(scheduleMode === 'AUTO'
+        ? {
+            groupsDate: current.startDate,
+            groupsStartTime: '10:00',
+            groupsEndTime: '22:00',
+            playoffDate: current.endDate || current.startDate,
+            playoffStartTime: '10:00',
+            playoffEndTime: '22:00',
+          }
+        : {}),
+    }))
+  }
+
   function selectCompetitionDivision(division: CompetitionDateDivision) {
     setSelectedCompetitionDivisionId(division.series_division_id)
     setForm((current) => ({
@@ -683,8 +708,10 @@ export default function ClubNuevoTorneoPage() {
     setForm((current) => ({
       ...current,
       startDate: value,
-      groupsDate: current.groupsDate || value,
-      playoffDate: current.playoffDate || current.endDate || value,
+      groupsDate: current.scheduleMode === 'AUTO' ? value : current.groupsDate || value,
+      playoffDate: current.scheduleMode === 'AUTO'
+        ? current.endDate || value
+        : current.playoffDate || current.endDate || value,
     }))
   }
 
@@ -694,9 +721,11 @@ export default function ClubNuevoTorneoPage() {
       endDate: value,
       // La ventana de playoff acompaña al fin mientras sea la sugerida o quede fuera del rango.
       // No pisamos una fecha manual válida que el organizador haya elegido dentro del torneo.
-      playoffDate: !current.playoffDate || current.playoffDate === current.endDate || current.playoffDate > value
+      playoffDate: current.scheduleMode === 'AUTO'
         ? value || current.startDate
-        : current.playoffDate,
+        : !current.playoffDate || current.playoffDate === current.endDate || current.playoffDate > value
+          ? value || current.startDate
+          : current.playoffDate,
     }))
   }
 
@@ -792,11 +821,11 @@ export default function ClubNuevoTorneoPage() {
     }
     if (step === 5) {
       if (!Number.isInteger(matchDuration) || matchDuration < 30) return 'La duración estimada debe ser de al menos 30 minutos.'
-      if (form.competitionSystem !== 'SINGLE_ELIMINATION') {
+      if (form.scheduleMode === 'MANUAL' && form.competitionSystem !== 'SINGLE_ELIMINATION') {
         if (form.groupsDate && form.startDate && form.groupsDate < form.startDate) return 'El día de grupos no puede ser anterior al inicio.'
         if (form.groupsStartTime && form.groupsEndTime && form.groupsStartTime >= form.groupsEndTime) return 'El horario de grupos debe cerrar después de la hora de inicio.'
       }
-      if (form.competitionSystem !== 'ROUND_ROBIN') {
+      if (form.scheduleMode === 'MANUAL' && form.competitionSystem !== 'ROUND_ROBIN') {
         if (form.playoffDate && form.endDate && form.playoffDate > form.endDate) return 'El día de playoff no puede ser posterior al fin.'
         if (form.playoffStartTime && form.playoffEndTime && form.playoffStartTime >= form.playoffEndTime) return 'El horario de playoff debe cerrar después de la hora de inicio.'
       }
@@ -1451,8 +1480,8 @@ export default function ClubNuevoTorneoPage() {
                 <span className="club-organizationBlockLabel">Quién organiza el torneo</span>
                 <span className="club-organizationLabel">Planificación</span>
                 <div className="club-scheduleModeOptions" role="group" aria-label="Planificación">
-                  <button type="button" className={form.scheduleMode === 'AUTO' ? 'is-active' : ''} onClick={() => { updateField('scheduleMode', 'AUTO'); setManualScheduleExpanded(false) }}><Bot aria-hidden="true" /><span><strong>SELPA organiza</strong><small>Horarios y orden de juego.</small></span></button>
-                  <button type="button" className={form.scheduleMode === 'MANUAL' ? 'is-active' : ''} onClick={() => updateField('scheduleMode', 'MANUAL')}><UserRound aria-hidden="true" /><span><strong>Lo organizo yo</strong><small>Definís horarios y orden.</small></span></button>
+                  <button type="button" className={form.scheduleMode === 'AUTO' ? 'is-active' : ''} onClick={() => { setScheduleMode('AUTO'); setManualScheduleExpanded(false) }}><Bot aria-hidden="true" /><span><strong>SELPA organiza</strong><small>Horarios y orden de juego.</small></span></button>
+                  <button type="button" className={form.scheduleMode === 'MANUAL' ? 'is-active' : ''} onClick={() => setScheduleMode('MANUAL')}><UserRound aria-hidden="true" /><span><strong>Lo organizo yo</strong><small>Definís horarios y orden.</small></span></button>
                 </div>
               </div>
 
