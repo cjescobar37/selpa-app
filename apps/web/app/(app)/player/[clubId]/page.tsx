@@ -45,6 +45,7 @@ type TournamentRow = {
   starts_on: string | null
   start_date: string | null
   registration_deadline: string | null
+  signup_deadline: string | null
   category: number | null
   gender: string | null
 }
@@ -192,14 +193,18 @@ export default function PlayerClubHomePage() {
         const today = new Date().toISOString().slice(0, 10)
         const { data: tournamentData } = await supabase
           .from('tournaments')
-          .select('id,club_id,name,status,starts_on,start_date,registration_deadline,category,gender')
+          .select('id,club_id,name,status,starts_on,start_date,registration_deadline,signup_deadline,category,gender')
           .eq('club_id', clubId)
           .in('status', ['OPEN', 'PUBLISHED'])
+          .or(`starts_on.gte.${today},start_date.gte.${today},starts_on.is.null,start_date.is.null`)
           .order('starts_on', { ascending: true, nullsFirst: false })
           .limit(6)
 
         const openRows = ((tournamentData ?? []) as TournamentRow[])
-          .filter((tournament) => !tournament.registration_deadline || tournament.registration_deadline >= today)
+          .filter((tournament) => {
+            const deadline = tournament.registration_deadline ?? tournament.signup_deadline
+            return !deadline || deadline >= today
+          })
 
         let teamRows: TeamRow[] = []
         let matchRows: MatchRow[] = []
@@ -309,7 +314,7 @@ export default function PlayerClubHomePage() {
           {message ? <b>{message}</b> : null}
         </div>
         <div className="playerClubHeroActions">
-          <Link href="/player">Cambiar club</Link>
+          <Link href="/player">← Volver</Link>
           <button type="button" onClick={activateThisClub}>{session.activeClubId === clubId ? 'Club activo' : 'Activar club'}</button>
         </div>
       </section>

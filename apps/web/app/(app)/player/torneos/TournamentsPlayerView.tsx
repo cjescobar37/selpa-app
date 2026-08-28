@@ -11,6 +11,7 @@ import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import { BRAND } from '@/lib/branding'
+import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 
 type ViewMode = 'mine' | 'calendar' | 'explore' | 'rules'
 
@@ -21,6 +22,8 @@ type TournamentRow = {
   status: string | null
   starts_on: string | null
   start_date: string | null
+  ends_on: string | null
+  end_date: string | null
   registration_deadline: string | null
   category: number | null
   gender: string | null
@@ -46,6 +49,7 @@ type RegistrationRow = {
 type ClubRow = {
   id: string
   name: string
+  city?: string | null
   theme_key: string | null
   logo_url?: string | null
   rules_pdf_url?: string | null
@@ -78,13 +82,6 @@ function formatCategory(value?: number | null) {
   return value ? `${value}ta` : 'Sin categoría'
 }
 
-function isRegistrationOpen(tournament: TournamentRow) {
-  const status = String(tournament.status ?? '').toUpperCase()
-  if (!['OPEN', 'PUBLISHED', 'REGISTRATION_OPEN'].includes(status)) return false
-  if (!tournament.registration_deadline) return true
-  return tournament.registration_deadline >= new Date().toISOString().slice(0, 10)
-}
-
 function statusLabel(value?: string | null) {
   const status = String(value ?? '').toUpperCase()
   if (status === 'CONFIRMED') return 'Confirmado'
@@ -97,20 +94,11 @@ function statusLabel(value?: string | null) {
   return value || 'Por definirse'
 }
 
-type ExploreBucket = 'live' | 'open' | 'finished'
-
-function tournamentBucket(tournament: TournamentRow): ExploreBucket {
-  const status = String(tournament.status ?? '').toUpperCase()
-  if (['FINISHED', 'COMPLETED', 'CLOSED'].includes(status)) return 'finished'
-  if (['IN_PROGRESS', 'ACTIVE', 'LIVE', 'PLAYING', 'GROUPS', 'PLAYOFF', 'STARTED'].includes(status)) return 'live'
-  return 'open'
-}
-
 function statusTone(tournament: TournamentRow) {
-  const bucket = tournamentBucket(tournament)
-  if (bucket === 'live') return 'live'
-  if (bucket === 'finished') return 'finished'
-  if (isRegistrationOpen(tournament)) return 'open'
+  const displayStatus = getTournamentDisplayStatus(tournament)
+  if (displayStatus.key === 'live') return 'live'
+  if (displayStatus.key === 'finished') return 'finished'
+  if (displayStatus.key === 'registration_open') return 'open'
   return 'neutral'
 }
 
@@ -223,7 +211,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
               if (tournamentIds.length) {
                 const { data: tournamentData } = await supabase
                   .from('tournaments')
-                  .select('id,club_id,name,status,starts_on,start_date,registration_deadline,category,gender,price_per_player,max_pairs')
+                  .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs')
                   .in('id', tournamentIds)
                 tournamentRows = (tournamentData ?? []) as TournamentRow[]
               }
@@ -233,7 +221,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
           if (activeClubId) {
             const { data: tournamentData } = await supabase
               .from('tournaments')
-              .select('id,club_id,name,status,starts_on,start_date,registration_deadline,category,gender,price_per_player,max_pairs')
+              .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs')
               .eq('club_id', activeClubId)
               .order('starts_on', { ascending: true, nullsFirst: false })
               .limit(24)
@@ -242,7 +230,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         } else if (mode === 'explore') {
           const { data: tournamentData } = await supabase
             .from('tournaments')
-            .select('id,club_id,name,status,starts_on,start_date,registration_deadline,category,gender,price_per_player,max_pairs')
+            .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs')
             .not('status', 'in', '("DRAFT","CANCELLED","ARCHIVED")')
             .order('starts_on', { ascending: true, nullsFirst: false })
             .limit(72)
@@ -256,7 +244,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         const [activeClubResult, clubRowsResult] = await Promise.all([
           activeClubQuery,
           clubIds.length
-            ? supabase.from('clubs').select('id,name,theme_key,logo_url').in('id', clubIds)
+            ? supabase.from('clubs').select('id,name,city,theme_key,logo_url').in('id', clubIds)
             : Promise.resolve({ data: [], error: null }),
         ])
 
@@ -285,33 +273,45 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
 
   const visibleTournaments = useMemo(() => {
     const search = query.trim().toLowerCase()
+    const homeCity = String(session.globalProfile?.city ?? '').trim().toLocaleLowerCase('es-AR')
     return tournaments
       .filter((tournament) => category === 'all' || String(tournament.category ?? '') === category)
       .filter((tournament) => gender === 'all' || normalizeGender(tournament.gender) === gender)
       .filter((tournament) => !search || `${tournament.name} ${clubs[tournament.club_id]?.name ?? ''}`.toLowerCase().includes(search))
       .sort((a, b) => {
+        if (mode === 'explore' && homeCity) {
+          const aLocal = String(clubs[a.club_id]?.city ?? '').trim().toLocaleLowerCase('es-AR') === homeCity
+          const bLocal = String(clubs[b.club_id]?.city ?? '').trim().toLocaleLowerCase('es-AR') === homeCity
+          if (aLocal !== bLocal) return aLocal ? -1 : 1
+        }
         const left = new Date(a.starts_on ?? a.start_date ?? '2999-12-31').getTime()
         const right = new Date(b.starts_on ?? b.start_date ?? '2999-12-31').getTime()
         return left - right
       })
-  }, [category, clubs, gender, query, tournaments])
+  }, [category, clubs, gender, mode, query, session.globalProfile?.city, tournaments])
 
   const exploreSections = useMemo(() => {
     const live: TournamentRow[] = []
     const open: TournamentRow[] = []
+    const upcoming: TournamentRow[] = []
     const finished: TournamentRow[] = []
 
     for (const tournament of visibleTournaments) {
-      const bucket = tournamentBucket(tournament)
+      const bucket = getTournamentDisplayStatus(tournament).key
       if (bucket === 'live') live.push(tournament)
       else if (bucket === 'finished') finished.push(tournament)
-      else open.push(tournament)
+      else if (bucket === 'registration_open') open.push(tournament)
+      else upcoming.push(tournament)
     }
 
+    const dateValue = (item: TournamentRow) => new Date(item.starts_on ?? item.start_date ?? '2999-12-31').getTime()
+    const closestFirst = (items: TournamentRow[]) => items.sort((a, b) => dateValue(a) - dateValue(b))
+    const mostRecentFirst = (items: TournamentRow[]) => items.sort((a, b) => dateValue(b) - dateValue(a))
     return [
-      { key: 'live', title: 'En juego', subtitle: 'Torneos jugándose ahora', items: live },
-      { key: 'open', title: 'Inscripción abierta', subtitle: 'Próximos torneos disponibles', items: open },
-      { key: 'finished', title: 'Finalizados', subtitle: 'Historial público reciente', items: finished },
+      { key: 'live', title: 'En juego', subtitle: 'Torneos jugándose ahora', items: closestFirst(live) },
+      { key: 'open', title: 'Inscripción abierta', subtitle: 'Próximos torneos disponibles', items: closestFirst(open) },
+      { key: 'upcoming', title: 'Próximos', subtitle: 'Torneos por jugarse', items: closestFirst(upcoming) },
+      { key: 'finished', title: 'Finalizados', subtitle: 'Historial público reciente', items: mostRecentFirst(finished) },
     ] as const
   }, [visibleTournaments])
 
@@ -319,16 +319,16 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
     const club = clubs[tournament.club_id]
     const clubTheme = getClubTheme(club?.theme_key ?? null)
     const registration = registrationByTournament.get(tournament.id)
-    const canRegister = isRegistrationOpen(tournament)
     const parts = dateParts(tournament.starts_on ?? tournament.start_date)
     const money = formatMoney(tournament.price_per_player)
     const tone = statusTone(tournament)
     const logoUrl = buildAssetProxyUrl(club?.logo_url ?? null)
 
     return (
-      <article
+      <Link
         className="playerTournamentCard"
         key={tournament.id}
+        href={`/torneos/${tournament.id}`}
         style={{
           ['--card-accent' as string]: clubTheme.vars.accent,
           ['--card-accent-2' as string]: clubTheme.vars.accent2,
@@ -349,24 +349,26 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
             <b>{club?.name ?? `Club ${BRAND.name}`}</b>
           </div>
           <strong>{tournament.name}</strong>
-          <p>{formatCategory(tournament.category)} · {formatGender(tournament.gender)}</p>
+          <p>{formatCategory(tournament.category)} · {formatGender(tournament.gender)}{money ? ` · ${money}` : ''}</p>
           <div className="playerTournamentCard__meta">
             <span className={`playerTournamentStatus playerTournamentStatus--${tone}`}>{registration ? statusLabel(registration.status) : statusLabel(tournament.status)}</span>
-            {money ? <span>{money}</span> : null}
             {tournament.max_pairs ? <span><UsersRound size={12} /> Hasta {tournament.max_pairs} parejas</span> : null}
           </div>
         </div>
-        <div className="playerTournamentCard__actions">
-          <Link href={`/torneos/${tournament.id}`}>Ver torneo</Link>
-          {canRegister && !registration ? <Link href={`/torneos/${tournament.id}/inscripcion`}>Inscribirme</Link> : null}
-        </div>
-      </article>
+        <span className="playerTournamentCard__arrow" aria-hidden="true">→</span>
+      </Link>
     )
   }
 
   return (
     <PlayerSpaceLayout><main className="playerTournamentsShell">
-      <PlayerSectionHero badge={copy.kicker} title={copy.title} description={copy.body} icon={<Icon />} />
+      <PlayerSectionHero
+        badge={copy.kicker}
+        title={copy.title}
+        description={copy.body}
+        icon={<Icon />}
+        action={<Link className="playerTournamentsBack" href="/player">← Volver</Link>}
+      />
 
       {mode === 'rules' ? (
         <section className="playerRulesGrid">
@@ -442,6 +444,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         .playerTournamentsHero span, .playerTournamentFilters span, .playerRulesGrid span { color: var(--club-primary); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
         .playerTournamentsHero h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 4px 0 5px; }
         .playerTournamentsHero p { color: #64748b; font-size: 13px; font-weight: 800; margin: 0; }
+        .playerTournamentsBack { color:var(--club-primary); font-size:12px; font-weight:900; text-decoration:none; white-space:nowrap; }
         .playerTournamentsHero i { align-items: center; background: color-mix(in srgb, var(--club-primary) 12%, white); border: 1px solid color-mix(in srgb, var(--club-primary) 30%, white); border-radius: 16px; color: var(--club-primary); display: flex; flex: 0 0 auto; height: 48px; justify-content: center; width: 48px; }
         .playerTournamentFilters { display: grid; gap: 12px; grid-template-columns: 160px 160px minmax(0, 1fr); padding: 13px; }
         .playerTournamentFilters label { display: grid; gap: 6px; min-width: 0; }
@@ -455,14 +458,14 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         .playerExploreSection > header strong { color: #64748b; display: block; font-size: 12px; font-weight: 850; margin-top: 2px; }
         .playerExploreSection > header small { background: rgba(255,255,255,.86); border: 1px solid #e2e8f0; border-radius: 999px; color: #64748b; flex: 0 0 auto; font-size: 11px; font-weight: 950; padding: 6px 9px; }
         .playerTournamentList { display: grid; gap: 12px; }
-        .playerTournamentCard { align-items: stretch; background: radial-gradient(circle at 0% 0%, var(--card-soft), transparent 32%), rgba(255,255,255,.94); border-color: color-mix(in srgb, var(--card-accent) 20%, #e2e8f0); display: grid; gap: 15px; grid-template-columns: 108px minmax(0, 1fr) auto; overflow: hidden; padding: 14px; position: relative; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+        .playerTournamentCard { align-items: stretch; background: radial-gradient(circle at 0% 0%, var(--card-soft), transparent 32%), rgba(255,255,255,.94); border-color: color-mix(in srgb, var(--card-accent) 20%, #e2e8f0); color:inherit; display: grid; gap: 15px; grid-template-columns: 108px minmax(0, 1fr) 28px; overflow: hidden; padding: 14px; position: relative; text-decoration:none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
         .playerTournamentCard::before { background: linear-gradient(180deg, var(--card-accent), var(--card-accent-2)); bottom: 14px; content: ""; left: 0; position: absolute; top: 14px; width: 4px; }
         .playerTournamentCard:hover { border-color: color-mix(in srgb, var(--card-accent) 42%, #e2e8f0); box-shadow: 0 22px 58px rgba(15,23,42,.1), 0 0 0 5px var(--card-glow); transform: translateY(-1px); }
         .playerTournamentCard__date { align-content: center; background: linear-gradient(180deg, #fff, #f8fbff); border: 1px solid color-mix(in srgb, var(--card-accent) 24%, #e2e8f0); border-radius: 18px; color: #061b3a; display: grid; justify-items: center; min-height: 104px; padding: 10px; text-align: center; }
         .playerTournamentCard__date strong { font-size: 34px; font-weight: 950; letter-spacing: -.06em; line-height: .9; }
         .playerTournamentCard__date span { color: var(--card-accent); font-size: 13px; font-weight: 950; text-transform: uppercase; }
         .playerTournamentCard__date small { color: #64748b; font-size: 11px; font-weight: 900; }
-        .playerTournamentCard__main { min-width: 0; }
+        .playerTournamentCard__main { min-width: 0; padding-right:96px; }
         .playerTournamentCard__club { align-items: center; display: flex; gap: 8px; margin-bottom: 7px; min-width: 0; }
         .playerTournamentClubMark { align-items: center; background: #061b3a; border: 1px solid color-mix(in srgb, var(--card-accent) 34%, white); border-radius: 12px; color: #fff; display: inline-flex; flex: 0 0 auto; font-size: 10px; font-weight: 950; height: 34px; justify-content: center; overflow: hidden; width: 34px; }
         .playerTournamentClubMark img { height: 100%; object-fit: cover; width: 100%; }
@@ -475,9 +478,9 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         .playerTournamentStatus--open { background: color-mix(in srgb, var(--card-accent) 12%, white) !important; color: #075985 !important; }
         .playerTournamentStatus--finished { background: #f1f5f9 !important; border-color: #e2e8f0 !important; color: #64748b !important; }
         .playerTournamentStatus--neutral { background: #fff7ed !important; border-color: #fed7aa !important; color: #9a3412 !important; }
-        .playerTournamentCard__actions { align-content: center; display: grid; gap: 8px; justify-items: end; min-width: 126px; }
-        .playerTournamentCard__actions a, .playerRulesGrid a { background: linear-gradient(135deg, var(--card-accent, var(--club-primary)), var(--card-accent-2, var(--club-secondary))); border-radius: 999px; color: #fff; font-size: 12px; font-weight: 950; padding: 10px 13px; text-decoration: none; white-space: nowrap; }
-        .playerTournamentCard__actions a:first-child { background: #fff; border: 1px solid color-mix(in srgb, var(--card-accent, var(--club-primary)) 34%, #e2e8f0); color: #075985; }
+        .playerTournamentCard__meta .playerTournamentStatus { position:absolute; right:14px; top:14px; }
+        .playerTournamentCard__arrow { align-self:end; color:var(--card-accent); font-size:25px; font-weight:900; padding-bottom:4px; text-align:right; }
+        .playerRulesGrid a { background: linear-gradient(135deg, var(--card-accent, var(--club-primary)), var(--card-accent-2, var(--club-secondary))); border-radius: 999px; color: #fff; font-size: 12px; font-weight: 950; padding: 10px 13px; text-decoration: none; white-space: nowrap; }
         .playerTournamentEmpty { color: #64748b; display: grid; gap: 6px; justify-items: start; padding: 18px; }
         .playerTournamentEmpty--section { background: rgba(255,255,255,.64); border-style: dashed; box-shadow: none; }
         .playerTournamentEmpty strong { color: #061b3a; font-weight: 950; }
@@ -497,7 +500,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
           .playerTournamentsHero i { border-radius:13px; height:40px; width:40px; }
           .playerTournamentsHero i svg { height:21px; width:21px; }
           .playerTournamentFilters, .playerRulesGrid { display:grid; grid-template-columns:1fr; }
-          .playerTournamentCard { align-items:start; border-radius:16px; gap:9px; grid-template-columns:62px minmax(0,1fr); min-height:126px; padding:10px; }
+          .playerTournamentCard { align-items:start; border-radius:16px; gap:9px; grid-template-columns:62px minmax(0,1fr) 21px; min-height:126px; padding:10px; }
           .playerTournamentCard::before { bottom:10px; top:10px; width:3px; }
           .playerTournamentCard__date { border-radius:13px; min-height:66px; padding:6px; }
           .playerTournamentCard__date strong { font-size:27px; }
@@ -507,20 +510,21 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
           .playerTournamentClubMark { border-radius:9px; height:24px; width:24px; }
           .playerTournamentCard__club b { font-size:10px; }
           .playerTournamentCard__main > strong { font-size:18px; letter-spacing:0; line-height:1.08; }
+          .playerTournamentCard__main { padding-right:84px; }
           .playerTournamentCard__main p { font-size:11px; margin:4px 0 7px; }
           .playerTournamentCard__meta { gap:5px; }
           .playerTournamentCard__meta span { font-size:10px; padding:4px 7px; }
-          .playerTournamentCard__actions { align-items:center; display:flex; gap:7px; grid-column:2; justify-content:flex-end; justify-items:initial; min-width:0; }
-          .playerTournamentCard__actions a, .playerRulesGrid a { border-radius:10px; font-size:11px; padding:8px 10px; }
+          .playerTournamentCard__meta .playerTournamentStatus { right:10px; top:10px; }
+          .playerTournamentCard__arrow { font-size:22px; }
+          .playerRulesGrid a { border-radius:10px; font-size:11px; padding:8px 10px; }
           .playerTournamentCard__main strong { white-space:normal; }
         }
         @media (max-width: 390px) {
           .playerTournamentsHero h1 { font-size:23px; }
           .playerTournamentsHero p { font-size:11px; }
-          .playerTournamentCard { grid-template-columns:58px minmax(0,1fr); padding:9px; }
+          .playerTournamentCard { grid-template-columns:58px minmax(0,1fr) 20px; padding:9px; }
           .playerTournamentCard__date { min-height:62px; }
           .playerTournamentCard__main > strong { font-size:17px; }
-          .playerTournamentCard__actions a:first-child { padding-inline:9px; }
         }
       `}</style>
     </main></PlayerSpaceLayout>

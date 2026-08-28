@@ -243,7 +243,9 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
     type: 'registration_created',
     title: 'Nueva inscripción',
     body: 'Una pareja se inscribió al torneo.',
-    href: `/club/torneos/${tournament.id}`,
+    href: registrationId
+      ? `/club/torneos/${tournament.id}?tab=inscriptos&registrationId=${encodeURIComponent(String(registrationId))}`
+      : `/club/torneos/${tournament.id}?tab=inscriptos`,
     metadata: {
       registration_id: registrationId,
       team_id: row?.team_id ?? null,

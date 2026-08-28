@@ -193,6 +193,9 @@ export default function TournamentPublicCard({
           </div>
         ) : null}
         <h3>{tournament.name}</h3>
+        {!flyer ? <p className="TournamentPublicCard__compactMeta">
+          {[categoryLabel, genderLabel, price].filter(Boolean).join(' · ')}
+        </p> : null}
         {compactAgenda ? (
           <div className="TournamentPublicCard__agendaDates">
             <CalendarDays size={14} aria-hidden="true" />
@@ -211,9 +214,6 @@ export default function TournamentPublicCard({
                 </p>
               </div>
               {tournament.registrationDeadline ? <p className="TournamentPublicCard__deadline"><CalendarDays size={13} /><span><small>Cierre</small><strong>{formatCompactDate(tournament.registrationDeadline)}</strong></span></p> : null}
-            </div>
-            <div className="TournamentPublicCard__actions">
-              <Link href={`/torneos/${tournament.id}`}>ENTRAR <ArrowRight className="TournamentPublicCard__actionIcon" size={14} /></Link>
             </div>
           </>
         )}

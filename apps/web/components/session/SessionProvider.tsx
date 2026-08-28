@@ -83,7 +83,10 @@ function mapClubRows(rows: ClubRow[]) {
 }
 
 function getNameFromUser(u: AuthUserLike, profile: GlobalProfile | null) {
-  const profileName = profile?.display_name?.trim() || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
+  // El nombre del perfil es la identidad visible canónica. `display_name` puede
+  // conservar un valor legado de Auth y no debe ganar frente al nombre y apellido
+  // que el usuario acaba de completar.
+  const profileName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() || profile?.display_name?.trim()
   const metadataName = u?.user_metadata?.display_name?.trim() || [u?.user_metadata?.first_name, u?.user_metadata?.last_name].filter(Boolean).join(' ').trim()
   return (
     profileName ||

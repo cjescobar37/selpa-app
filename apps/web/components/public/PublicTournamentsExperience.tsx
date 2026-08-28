@@ -78,18 +78,24 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
 
   const sections = useMemo(() => {
     const live: PublicTournamentItem[] = []
+    const registrationOpen: PublicTournamentItem[] = []
     const upcoming: PublicTournamentItem[] = []
     const finished: PublicTournamentItem[] = []
     for (const item of visible) {
       const bucket = tournamentBucket(item)
       if (bucket === 'live') live.push(item)
+      else if (bucket === 'registration_open') registrationOpen.push(item)
       else if (bucket === 'finished') finished.push(item)
       else upcoming.push(item)
     }
+    const dateValue = (item: PublicTournamentItem) => new Date(item.startDate ?? '2999-12-31').getTime()
+    const closestFirst = (items: PublicTournamentItem[]) => items.sort((a, b) => dateValue(a) - dateValue(b))
+    const mostRecentFirst = (items: PublicTournamentItem[]) => items.sort((a, b) => dateValue(b) - dateValue(a))
     return [
-      { key: 'live', title: 'En juego', subtitle: 'Torneos jugándose ahora', items: live },
-      { key: 'upcoming', title: 'Próximos', subtitle: 'Agenda deportiva que se viene', items: upcoming },
-      { key: 'finished', title: 'Finalizados', subtitle: 'Historial reciente compacto', items: finished },
+      { key: 'live', title: 'En juego', subtitle: 'Torneos jugándose ahora', items: closestFirst(live) },
+      { key: 'registration-open', title: 'Inscripción abierta', subtitle: 'Torneos disponibles para anotarte', items: closestFirst(registrationOpen) },
+      { key: 'upcoming', title: 'Próximos', subtitle: 'Agenda deportiva que se viene', items: closestFirst(upcoming) },
+      { key: 'finished', title: 'Finalizados', subtitle: 'Historial reciente compacto', items: mostRecentFirst(finished) },
     ] as const
   }, [visible])
 

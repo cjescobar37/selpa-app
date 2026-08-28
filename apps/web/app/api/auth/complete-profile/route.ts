@@ -55,6 +55,12 @@ function text(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : ''
 }
 
+function splitFullName(value?: string | null) {
+  const parts = text(value ?? null).split(' ').filter(Boolean)
+  if (parts.length < 2 || parts.some((part) => part.length < 2)) return null
+  return { firstName: parts.slice(0, -1).join(' '), lastName: parts.at(-1) ?? '', displayName: parts.join(' ') }
+}
+
 function fileName(value: string, fallback: string) {
   return value
     .normalize('NFD')
@@ -170,20 +176,28 @@ export async function POST(request: Request) {
       const location = countryCode === 'AR' ? findArgentinaLocation(provinceId, cityId) : null
       const { data: identity, error: identityError } = await supabaseAdmin
         .from('profiles')
-        .select('first_name,last_name')
+        .select('first_name,last_name,display_name')
         .eq('user_id', user.id)
         .maybeSingle()
 
       if (identityError) throw new CompleteProfileError('PROFILE_LOOKUP_FAILED', 'No pudimos validar tu perfil. Intentá nuevamente.')
-      if (text(identity?.first_name ?? null).length < 2 || text(identity?.last_name ?? null).length < 2) {
-        throw new CompleteProfileError('MISSING_IDENTITY', 'Tu cuenta no tiene nombre completo. Completalo desde tu perfil.')
-      }
+      const storedName = splitFullName([identity?.first_name, identity?.last_name].filter(Boolean).join(' '))
+      const profileName = splitFullName(identity?.display_name)
+      const metadataName = splitFullName(String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.user_metadata?.display_name ?? ''))
+      const submittedName = splitFullName(text(form.get('fullName')))
+      const fullName = storedName ?? profileName ?? metadataName ?? submittedName
+      if (!fullName) throw new CompleteProfileError('MISSING_IDENTITY', 'Ingresá tu nombre y apellido para continuar.')
       if (!isValidBirthDate(birthDate)) throw new CompleteProfileError('INVALID_BIRTH_DATE', 'Seleccioná una fecha de nacimiento válida.')
       if (gender !== 'FEMALE' && gender !== 'MALE') throw new CompleteProfileError('INVALID_GENDER', 'Elegí Dama o Caballero.')
       if (!country || !location) throw new CompleteProfileError('INVALID_LOCATION', 'Elegí una provincia y localidad válidas.')
       if (!phone) throw new CompleteProfileError('INVALID_PHONE', 'Ingresá un celular válido.')
 
       const profile = await upsertProfile(user.id, user.email, {
+        ...(storedName ? {} : {
+          first_name: fullName.firstName,
+          last_name: fullName.lastName,
+          ...(text(identity?.display_name ?? null) ? {} : { display_name: fullName.displayName }),
+        }),
         birth_date: birthDate,
         gender,
         country_code: country.code,

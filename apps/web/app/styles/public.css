@@ -4750,10 +4750,10 @@
 
 .TournamentPublicCard__top{
   align-items:start;
-  display:grid;
-  row-gap:7px;
-  grid-template-columns:1fr;
-  justify-content:stretch;
+  display:flex;
+  gap:8px;
+  justify-content:space-between;
+  min-width:0;
   min-height:36px;
   position:relative;
   z-index:2;
@@ -4785,7 +4785,7 @@
 
 .TournamentPublicCard__poster img{
   height:100%;
-  object-fit:cover;
+  object-fit:contain;
   opacity:.9;
   transition:transform .34s ease, opacity .18s ease;
   width:100%;
@@ -4806,7 +4806,7 @@
 
 .TournamentPublicCard.is-manual-flyer .TournamentPublicCard__poster img{
   height:100%;
-  object-fit:cover;
+  object-fit:contain;
   opacity:1;
   width:100%;
 }
@@ -5028,9 +5028,21 @@
   min-width:0;
   order:1;
   padding:4px 7px;
+  flex:0 0 auto;
   text-align:center;
-  width:100%;
-  white-space:normal;
+  white-space:nowrap;
+}
+
+.TournamentPublicCard__compactMeta{
+  color:#64748b;
+  font-size:12px;
+  font-weight:750;
+  line-height:1.2;
+  margin:5px 0 0;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 
 .TournamentPublicCard__status::before{
@@ -5147,9 +5159,7 @@
 
 .TournamentPublicCard__agendaDates span{
   min-width:0;
-  overflow:hidden;
   text-align:center;
-  text-overflow:ellipsis;
   white-space:nowrap;
 }
 
@@ -6451,7 +6461,7 @@
 
   .TournamentPublicCard__top{
     min-height:30px;
-    row-gap:4px;
+    gap:5px;
   }
 
   .TournamentPublicCard__date{
@@ -6502,6 +6512,12 @@
     max-height:none;
     overflow:visible;
     -webkit-line-clamp:unset;
+  }
+
+  .TournamentPublicCard__compactMeta{
+    font-size:10px;
+    line-height:1.15;
+    margin:3px 0 0;
   }
 
   .TournamentPublicCard__circuit{
@@ -6647,6 +6663,10 @@
     line-height:1.05;
     margin:12px 0 0;
     padding:0;
+  }
+
+  .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact .TournamentPublicCard__compactMeta{
+    display:none;
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact:not(.has-circuit) h3{

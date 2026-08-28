@@ -98,6 +98,16 @@ function parseTournamentDate(value?: string | null) {
   return parsed
 }
 
+function parseTournamentEndDate(value?: string | null) {
+  if (!value) return null
+  const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch
+    return new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999)
+  }
+  return parseTournamentDate(value)
+}
+
 function isLegacyDisplayInput(value: unknown): value is DisplayStatusInput {
   return Boolean(value && typeof value === 'object' && 'operationalStage' in value)
 }
@@ -134,7 +144,9 @@ function getTournamentDisplayStatusInfo(tournament: unknown, now = new Date()): 
   const status = asStatus(item.status)
   const phase = asStatus(getField(item, 'phase', 'current_phase') ?? getField(rules, 'phase', 'current_phase') ?? legacyStage)
   const startedAt = parseTournamentDate(String(getField(item, 'starts_on', 'startDate', 'start_date') ?? '') || null)
-  const endedAt = parseTournamentDate(String(getField(item, 'ends_on', 'endDate', 'end_date') ?? '') || null)
+  // A date-only end date is inclusive for the full sporting day. Treating it as
+  // midnight incorrectly moves a tournament to "Finalizado" on its final day.
+  const endedAt = parseTournamentEndDate(String(getField(item, 'ends_on', 'endDate', 'end_date') ?? '') || null)
   const registrationDeadline = parseTournamentDate(String(getField(item, 'registrationDeadline', 'registration_deadline', 'signup_deadline') ?? '') || null)
   const time = now.getTime()
 

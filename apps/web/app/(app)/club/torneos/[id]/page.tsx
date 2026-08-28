@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, MoreVertical, Repeat2 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
@@ -922,6 +922,7 @@ function isOpenCompatibleTournament(summary?: TournamentSummary | null) {
 export default function ClubTournamentDetailPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const tournamentId = params?.id
   const { activeClub } = useSession()
   const [summary, setSummary] = useState<TournamentSummary | null>(null)
@@ -1017,6 +1018,17 @@ export default function ClubTournamentDetailPage() {
   })
   const [message, setMessage] = useState('')
   const [actionMessage, setActionMessage] = useState('')
+  const requestedTab = searchParams.get('tab')
+  const highlightedRegistrationId = searchParams.get('registrationId')
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (requestedTab === 'inscriptos' || highlightedRegistrationId) setActiveTab('inscriptos')
+      if (!highlightedRegistrationId) return
+      document.getElementById(`registration-${highlightedRegistrationId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [highlightedRegistrationId, requestedTab])
 
   const stageIndex = useMemo(
     () => (summary ? stageOrder.indexOf(summary.operationalStage) : -1),
@@ -3478,7 +3490,13 @@ export default function ClubTournamentDetailPage() {
       return
     }
 
-    setActionMessage(status === 'APPROVED' ? 'Pago aprobado y notificado.' : 'Pago rechazado y notificado.')
+    setActionFeedback({
+      tone: status === 'APPROVED' ? 'success' : 'warning',
+      title: status === 'APPROVED' ? 'Pago aprobado' : 'Pago rechazado',
+      message: status === 'APPROVED'
+        ? 'La pareja ya está confirmada.'
+        : 'La pareja fue notificada para revisar el pago.',
+    })
     await refreshTournamentExperience()
   }
 
@@ -4533,7 +4551,11 @@ export default function ClubTournamentDetailPage() {
                             <span>Acciones</span>
                           </div>
                           {sortedRegistrations.map((registration) => (
-                            <article key={registration.id} className="club-registrationMiniRow">
+                            <article
+                              key={registration.id}
+                              id={`registration-${registration.id}`}
+                              className={`club-registrationMiniRow ${highlightedRegistrationId === registration.id ? 'is-highlighted' : ''}`}
+                            >
                               <div className="club-teamMini">
                                 <div className="club-teamLinks">
                                   {(registration.team?.players ?? []).map((player, index) => (
@@ -6182,6 +6204,7 @@ export default function ClubTournamentDetailPage() {
         .club-registrationMiniHead { align-items: center; background: linear-gradient(180deg, #f8fbfd 0%, #f2f7fa 100%); border-bottom: 1px solid rgba(15,23,42,.07); color: #64748b; display: grid; font-size: 10px; font-weight: 950; gap: 10px; grid-template-columns: minmax(240px, 1.45fr) minmax(116px, .52fr) minmax(94px, .42fr) minmax(94px, .42fr) minmax(78px, .3fr) minmax(88px, .34fr) minmax(152px, .62fr); letter-spacing: .02em; min-width: 0; padding: 6px 10px; text-transform: uppercase; }
         .club-registrationMiniHead span:nth-child(5), .club-registrationMiniHead span:nth-child(6), .club-registrationMiniHead span:nth-child(7) { justify-self: end; }
         .club-registrationMiniRow { align-items: center; background: rgba(41,170,225,.04); border: 1px solid rgba(15,23,42,.05); border-radius: 9px; display: grid; gap: 10px; grid-template-columns: minmax(240px, 1.45fr) minmax(116px, .52fr) minmax(94px, .42fr) minmax(94px, .42fr) minmax(78px, .3fr) minmax(88px, .34fr) minmax(152px, .62fr); min-width: 0; padding: 2px 10px; }
+        .club-registrationMiniRow.is-highlighted { border-color: color-mix(in srgb, var(--club-admin-accent) 62%, #38bdf8); box-shadow: 0 0 0 3px color-mix(in srgb, var(--club-admin-accent) 16%, transparent); }
         .club-registrationMiniRow:nth-of-type(even) { background: rgba(148,163,184,.08); }
         .club-teamMini { display: grid; gap: 0; min-width: 0; }
         .club-teamLinks { display: grid; min-width: 0; }
@@ -6534,15 +6557,19 @@ export default function ClubTournamentDetailPage() {
           .club-dangerGhostBtn,.club-deleteBtn { flex:0 0 auto; font-size:11px; min-height:34px; padding:7px 8px; }
           .club-dangerZoneGrid { grid-template-columns: 1fr; }
           .club-seedStatus { align-items: flex-start; flex-direction: column; }
+          .club-seedActions { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); justify-content:stretch; width:100%; }
+          .club-seedActions > * { min-width:0; padding-inline:7px; white-space:normal; }
           .club-manualGrid { grid-template-columns: 1fr; }
           .club-operationalCenterGrid { grid-template-columns: 1fr; }
           .club-operationalQueueItem { grid-template-columns: 1fr; }
           .club-operationalQueueActions { justify-content: flex-start; }
           .club-registrationMiniHead { display: none; }
-          .club-registrationMiniRow { grid-template-columns: minmax(0, 1fr) repeat(3, auto); }
-          .club-dateMini { justify-items: start; }
-          .club-seedMini, .club-scoreMini { justify-items: start; }
-          .club-registrationActions { justify-self: start; }
+          .club-registrationMiniRow { align-items:center; display:flex; flex-wrap:wrap; gap:6px 8px; padding:9px; }
+          .club-teamMini { flex:1 1 100%; }
+          .club-dateMini { flex:1 1 auto; justify-items:start; }
+          .club-statusBadge, .club-paymentBadge { flex:0 0 auto; }
+          .club-seedMini, .club-scoreMini { flex:0 1 auto; justify-items:start; }
+          .club-registrationActions { flex:0 0 auto; justify-self:auto; margin-left:auto; }
           .club-registrationDetailGrid { grid-template-columns: 1fr; }
           .club-paymentActionsGrid { grid-template-columns: 1fr; }
           .club-courtDraftCard { grid-template-columns: minmax(0, 1fr) auto; }

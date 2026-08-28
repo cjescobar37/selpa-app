@@ -185,7 +185,9 @@ export default function PlayerHomePage() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const stored = window.localStorage.getItem('selpa.player.homeMode')
-    if (stored === 'space' || stored === 'community') setHomeMode(stored)
+    if (stored !== 'space' && stored !== 'community') return
+    const frame = window.requestAnimationFrame(() => setHomeMode(stored))
+    return () => window.cancelAnimationFrame(frame)
   }, [])
 
   function changeHomeMode(mode: HomeMode) {
@@ -234,6 +236,14 @@ export default function PlayerHomePage() {
       })
       .slice(0, 8)
   }, [tournaments])
+
+  const canonicalPlayerName = useMemo(() => {
+    const profileName = [session.globalProfile?.first_name, session.globalProfile?.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+    return profileName || session.user?.name || 'Jugador'
+  }, [session.globalProfile?.first_name, session.globalProfile?.last_name, session.user?.name])
 
   const tournamentById = useMemo(() => new Map(tournaments.map((tournament) => [tournament.id, tournament])), [tournaments])
   const teamIds = useMemo(() => myTeams.map((team) => team.id), [myTeams])
@@ -316,10 +326,13 @@ export default function PlayerHomePage() {
         let registrationRows: RegistrationRow[] = []
         let matchRows: MatchRow[] = []
         if (clubIds.length) {
+          const today = new Date().toISOString().slice(0, 10)
           const { data: tournamentData, error: tournamentError } = await supabase
             .from('tournaments')
             .select('id,club_id,name,starts_on,start_date,ends_on,end_date,status,type,tournament_type,category,category_id,gender,segment,registration_deadline,signup_deadline,price_per_player,max_pairs,rules_json')
             .in('club_id', clubIds)
+            .in('status', ['OPEN', 'PUBLISHED'])
+            .or(`starts_on.gte.${today},start_date.gte.${today},starts_on.is.null,start_date.is.null`)
             .order('starts_on', { ascending: true, nullsFirst: false })
             .limit(12)
 
@@ -465,13 +478,13 @@ export default function PlayerHomePage() {
       <ModeSegmentedControl value={homeMode} onChange={changeHomeMode} />
       <div className={`homeModePane${homeMode === 'community' ? ' is-community' : ''}`}>
       {homeMode === 'community' ? (
-        <PublicHomeEmbed userName={session.user.name} />
+        <PublicHomeEmbed userName={canonicalPlayerName} />
       ) : (
       <>
       <section className="playerHomeHero">
         <div>
           <span className="playerHomeKicker">Inicio jugador</span>
-          <h1>Hola, {session.user.name}</h1>
+          <h1>Hola, {canonicalPlayerName}</h1>
           {activeClub ? (
             <Link href={`/clubs/${activeClub.id}`} className="playerHomeActiveClub">
               <span className="playerHomeActiveClub__logo" aria-hidden="true">
@@ -611,7 +624,7 @@ export default function PlayerHomePage() {
                     {isActive ? <em>Activo</em> : null}
                   </div>
                   <div className="playerClubActions">
-                    <Link href={`/player/${club.id}`}>Entrar al club</Link>
+                    <Link href={`/player/${club.id}`}>Entrar al club <ChevronRight size={14} aria-hidden="true" /></Link>
                     {!isActive ? (
                       <button type="button" onClick={() => activateClub(club.id)}>
                         Activar
@@ -634,9 +647,12 @@ export default function PlayerHomePage() {
 
       <section className="playerDashboardGrid">
         <article className="playerSection playerSection--flat">
-          <header>
-            <span className="playerHomeKicker">Todos tus clubes</span>
-            <h2>Agenda competitiva</h2>
+          <header className="playerAgendaHeader">
+            <div>
+              <span className="playerHomeKicker">Todos tus clubes</span>
+              <h2>Agenda competitiva</h2>
+            </div>
+            <Link href="/player/torneos" className="playerAgendaHeader__all">Ver todos <span aria-hidden="true">→</span></Link>
           </header>
           <div className="playerTournamentCards">
             {upcomingTournaments.length ? upcomingTournaments.slice(0, 3).map((tournament) => {
@@ -1032,6 +1048,9 @@ export default function PlayerHomePage() {
         .playerSection { display: grid; gap: 13px; padding: 18px; }
         .playerSection--flat { align-content: start; box-shadow: 0 14px 36px rgba(15,23,42,.06); }
         .playerSectionHeader { align-items: end; display: flex; gap: 12px; justify-content: space-between; }
+        .playerAgendaHeader { align-items: end; display: flex; gap: 12px; justify-content: space-between; }
+        .playerAgendaHeader__all { color: #0e7490; flex: 0 0 auto; font-size: 12px; font-weight: 900; padding: 6px 0; text-decoration: none; white-space: nowrap; }
+        .playerAgendaHeader__all:hover { color: #061b3a; text-decoration: underline; text-underline-offset: 3px; }
         .playerSection header h2 { font-size: 22px; font-weight: 950; letter-spacing: -.02em; margin: 3px 0 0; }
         .playerClubSwitchHint { border: 1px solid color-mix(in srgb, var(--club-primary, #06b6d4) 28%, #dbeafe); border-radius: 999px; color: color-mix(in srgb, var(--club-primary, #0891b2) 72%, #061b3a); flex: 0 0 auto; font-size: 11px; font-weight: 950; padding: 7px 10px; }
         .playerClubGrid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1317,6 +1336,8 @@ export default function PlayerHomePage() {
           .playerSectionHeader {
             align-items: center;
           }
+          .playerAgendaHeader { align-items: center; }
+          .playerAgendaHeader__all { font-size: 11px; padding: 5px 0; }
           .playerSection header h2 {
             font-size: 19px;
             font-weight: 850;
@@ -1339,7 +1360,7 @@ export default function PlayerHomePage() {
           .playerClubCard {
             border-radius: 14px;
             gap: 9px;
-            grid-template-columns: 38px minmax(0, 1fr);
+            grid-template-columns: 38px minmax(0, 1fr) auto;
             padding: 10px;
           }
           .playerClubCard:not(.is-active) {
@@ -1363,7 +1384,9 @@ export default function PlayerHomePage() {
             font-weight: 650;
             margin-top: 2px;
           }
-          .playerClubActions { grid-column: 1 / -1; grid-template-columns: auto auto; justify-content: start; justify-items: start; }
+          .playerClubActions { grid-column: 3; grid-row: 1; gap: 5px; justify-content: end; justify-items: end; }
+          .playerClubActions a { font-size: 11px; padding: 7px 9px; }
+          .playerClubActions button { font-size: 10px; padding: 6px 8px; }
           .playerMyTournamentCard {
             align-items: center;
             border-radius: 13px;

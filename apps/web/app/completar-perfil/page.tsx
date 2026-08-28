@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, typ
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, ChevronRight, ImagePlus, MapPin, Search, Upload, UserRound, X } from 'lucide-react'
-import AuthAlert from '@/components/AuthAlert'
+import { ActionFeedbackNotice } from '@/components/ui/ActionFeedbackNotice'
 import SelpaLoader from '@/components/SelpaLoader'
 import { useSession } from '@/components/session/SessionProvider'
 import { argentinaLocations, countries, findArgentinaLocation } from '@/lib/argentinaLocations'
@@ -14,7 +14,7 @@ import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 
 type Step = 1 | 2 | 3
-type PersonalField = 'phone' | 'birthDate' | 'gender' | 'countryCode' | 'provinceId' | 'cityId'
+type PersonalField = 'fullName' | 'phone' | 'birthDate' | 'gender' | 'countryCode' | 'provinceId' | 'cityId'
 type SportsField = 'heightCm' | 'dominantHand' | 'preferredPosition' | 'avatar' | 'cover'
 type FieldName = PersonalField | SportsField
 type FieldErrors = Partial<Record<FieldName, string>>
@@ -37,6 +37,12 @@ function safeNextPath(value: string | null) {
 
 function initials(firstName: string, lastName: string) {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.trim().toUpperCase() || 'SP'
+}
+
+function splitFullName(value?: string | null) {
+  const parts = String(value ?? '').trim().replace(/\s+/g, ' ').split(' ').filter(Boolean)
+  if (parts.length < 2 || parts.some((part) => part.length < 2)) return null
+  return { firstName: parts.slice(0, -1).join(' '), lastName: parts.at(-1) ?? '' }
 }
 
 function clubInitials(name: string) {
@@ -65,6 +71,8 @@ function CompleteProfilePageClient() {
   const [step, setStep] = useState<Step>(1)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [needsFullName, setNeedsFullName] = useState(false)
   const [phoneAreaCode, setPhoneAreaCode] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [birthDay, setBirthDay] = useState('')
@@ -104,9 +112,16 @@ function CompleteProfilePageClient() {
   }, [editSection])
 
   useEffect(() => {
-    if (!profile) return
-    setFirstName((value) => value || profile.first_name || '')
-    setLastName((value) => value || profile.last_name || '')
+    const profileName = splitFullName([profile?.first_name, profile?.last_name].filter(Boolean).join(' '))
+      ?? splitFullName(profile?.display_name)
+      ?? splitFullName(session.user?.name)
+    const nameHydrationTimer = window.setTimeout(() => {
+      setFirstName((value) => value || profileName?.firstName || '')
+      setLastName((value) => value || profileName?.lastName || '')
+      setFullName((value) => value || [profileName?.firstName, profileName?.lastName].filter(Boolean).join(' '))
+      setNeedsFullName(!profileName)
+    }, 0)
+    if (!profile) return () => window.clearTimeout(nameHydrationTimer)
     setPhoneAreaCode((value) => value || profile.phone_area_code || '')
     setPhoneNumber((value) => value || profile.phone_number || '')
     if (profile.birth_date) {
@@ -122,7 +137,8 @@ function CompleteProfilePageClient() {
     setHeightCm((value) => value || (profile.height_cm ? String(profile.height_cm) : ''))
     setDominantHand((value) => value || profile.dominant_hand || '')
     setPreferredPosition((value) => value || profile.preferred_position || '')
-  }, [profile])
+    return () => window.clearTimeout(nameHydrationTimer)
+  }, [profile, session.user?.name])
 
   useObjectPreview(avatarFile, setAvatarPreview)
   useObjectPreview(coverFile, setCoverPreview)
@@ -161,13 +177,15 @@ function CompleteProfilePageClient() {
     const cleanAreaCode = phoneAreaCode.replace(/\D/g, '')
     const cleanPhoneNumber = phoneNumber.replace(/\D/g, '')
     const phoneDigits = `${cleanAreaCode}${cleanPhoneNumber}`
+    const parsedFullName = splitFullName(needsFullName ? fullName : [firstName, lastName].filter(Boolean).join(' '))
+    if (!parsedFullName) errors.fullName = 'Ingresá tu nombre y apellido para continuar.'
     if (!/^\d{2,5}$/.test(cleanAreaCode) || !/^\d{6,8}$/.test(cleanPhoneNumber) || phoneDigits.length < 8 || phoneDigits.length > 13) errors.phone = 'Ingresá un celular válido.'
     if (!birthDate) errors.birthDate = 'Seleccioná una fecha de nacimiento válida.'
     if (gender !== 'FEMALE' && gender !== 'MALE') errors.gender = 'Elegí Dama o Caballero.'
     if (!countries.some((country) => country.code === countryCode)) errors.countryCode = 'Elegí un país válido.'
     if (!selectedProvince) errors.provinceId = 'Elegí una provincia.'
     if (!selectedCity || !findArgentinaLocation(provinceId, cityId)) errors.cityId = 'Elegí una localidad.'
-    return { errors, birthDate, cleanAreaCode, cleanPhoneNumber }
+    return { errors, birthDate, cleanAreaCode, cleanPhoneNumber, parsedFullName }
   }
 
   function validateSports() {
@@ -185,6 +203,7 @@ function CompleteProfilePageClient() {
 
   function focusFirstPersonalError(errors: FieldErrors) {
     const ids: Record<PersonalField, string> = {
+      fullName: 'complete-full-name',
       gender: 'complete-gender',
       phone: 'complete-phone-area',
       birthDate: 'complete-birth-day',
@@ -212,6 +231,7 @@ function CompleteProfilePageClient() {
 
     const form = new FormData()
     form.set('step', 'personal')
+    form.set('fullName', [personal.parsedFullName?.firstName, personal.parsedFullName?.lastName].filter(Boolean).join(' '))
     form.set('phoneAreaCode', personal.cleanAreaCode)
     form.set('phoneNumber', personal.cleanPhoneNumber)
     form.set('birthDate', personal.birthDate ?? '')
@@ -365,6 +385,7 @@ function CompleteProfilePageClient() {
 
         <div className="px-authBody px-onboardingBody">
           {step === 1 ? <form className="px-onboardingPersonalForm" onSubmit={(event) => void savePersonal(event)}>
+            {needsFullName ? <Field label="Nombre completo" error={fieldErrors.fullName}><input id="complete-full-name" className="px-input" type="text" autoComplete="name" value={fullName} onChange={(event) => { setFullName(event.target.value); clearFieldError('fullName') }} placeholder="Ej.: Juan Pérez" aria-invalid={Boolean(fieldErrors.fullName)} /></Field> : null}
             <Field label="Género" error={fieldErrors.gender}><select id="complete-gender" className="px-input" value={gender} onChange={(event) => { setGender(event.target.value); clearFieldError('gender') }} aria-invalid={Boolean(fieldErrors.gender)}><option value="">Seleccionar...</option><option value="FEMALE">Dama</option><option value="MALE">Caballero</option></select></Field>
             <Field label="Celular">
               <div className="px-phoneField" role="group" aria-label="Celular">
@@ -437,7 +458,7 @@ function CompleteProfilePageClient() {
             <div className="px-onboardingActions"><button className="px-btn px-btn--ghost" type="button" onClick={() => setStep(2)}><ArrowLeft /> Atrás</button><button className="px-btn" type="button" onClick={finish}>Ir a SELPA <ArrowRight /></button></div>
             <button className="px-onboardingSkip" type="button" onClick={finish}>Explorar después</button>
           </> : null}
-          {alert ? <div className={`px-registerAlert ${alert.variant === 'success' ? 'is-success' : ''}`}><AuthAlert variant={alert.variant ?? 'error'} title={alert.title} message={alert.message} /></div> : null}
+          {alert ? <ActionFeedbackNotice tone={alert.variant === 'success' ? 'success' : 'error'} title={alert.title} message={alert.message ?? ''} onDismiss={() => setAlert(null)} autoDismissMs={alert.variant === 'success' ? 4000 : undefined} /> : null}
         </div>
       </div>
     </div>

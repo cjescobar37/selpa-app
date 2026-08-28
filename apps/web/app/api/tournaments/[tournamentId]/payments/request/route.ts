@@ -152,7 +152,7 @@ export async function POST(req: NextRequest, context: PaymentRequestContext) {
     type: 'payment_requested',
     title: 'Pago en club solicitado',
     body: 'Una pareja solicitó pagar la inscripción en el club.',
-    href: `/club/torneos/${tournamentId}`,
+    href: `/club/torneos/${tournamentId}?tab=inscriptos&registrationId=${encodeURIComponent(String(registration.id))}`,
     metadata: {
       payment_id: payment.id,
       registration_id: registration.id,

@@ -113,10 +113,8 @@ function pointValue(sources: Array<Record<string, unknown>>, ...keys: string[]) 
 }
 
 function getFullName(profile?: Record<string, any> | null, fallback?: string | null) {
-  const displayName = asText(profile?.display_name)
-  if (displayName) return displayName
   const fullName = [profile?.first_name, profile?.last_name].map(asText).filter(Boolean).join(' ')
-  return fullName || fallback || 'Jugador'
+  return fullName || asText(profile?.display_name) || fallback || 'Jugador'
 }
 
 function buildRulesSummary(primaryRulesInput: unknown, secondaryRulesInput?: unknown) {

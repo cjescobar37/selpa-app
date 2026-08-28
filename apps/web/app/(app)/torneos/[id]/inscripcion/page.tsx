@@ -7,6 +7,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Banknote, CalendarDays, CheckCircle2, Clock, CreditCard, Search, ShieldCheck, Users } from 'lucide-react'
 import SelpaLoader from '@/components/SelpaLoader'
 import PampraxHero from '@/components/ui/PampraxHero'
+import { ActionFeedbackNotice } from '@/components/ui/ActionFeedbackNotice'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -275,6 +276,7 @@ export default function TorneoInscripcionPage() {
   const [detail, setDetail] = useState<PublicTournamentDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [actionFeedback, setActionFeedback] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(null)
   const [search, setSearch] = useState('')
   const [searching, setSearching] = useState(false)
   const [partners, setPartners] = useState<PartnerOption[]>([])
@@ -349,7 +351,9 @@ export default function TorneoInscripcionPage() {
         if (alive) setPartners(payload.partners ?? [])
       } catch (error) {
         if (alive && !(error instanceof DOMException && error.name === 'AbortError')) {
-          setPartnerSearchError(error instanceof Error ? error.message : 'No pude buscar jugadores.')
+          const nextError = error instanceof Error ? error.message : 'No pude buscar jugadores.'
+          setPartnerSearchError(nextError)
+          setActionFeedback({ tone: 'error', title: 'No pudimos buscar compañeros', message: nextError })
         }
       } finally {
         if (alive) setSearching(false)
@@ -455,7 +459,7 @@ export default function TorneoInscripcionPage() {
   async function submitRegistration() {
     if (!detail || !selectedPartner?.userId || !paymentMethod || !availabilityReady) return
     if (isRegistrationClosed(detail.tournament.registrationDeadline)) {
-      setMessage('La inscripción para este torneo ya finalizó.')
+      setActionFeedback({ tone: 'error', title: 'Inscripción cerrada', message: 'La inscripción para este torneo ya finalizó.' })
       return
     }
     setSaving(true)
@@ -495,16 +499,19 @@ export default function TorneoInscripcionPage() {
         throw new Error(paymentPayload?.error ?? 'La inscripción se creó, pero no pude registrar la solicitud de pago.')
       }
 
-      setMessage(
-        paymentMethod === 'CASH_ON_SITE_REQUEST'
-          ? 'Solicitud enviada. El club debe aprobar el pago para confirmar tu inscripción.'
-          : 'Solicitud creada correctamente.'
-      )
+      setMessage('')
+      setActionFeedback({
+        tone: 'success',
+        title: 'Inscripción enviada correctamente',
+        message: paymentMethod === 'CASH_ON_SITE_REQUEST'
+          ? 'El club debe aprobar el pago para confirmar tu lugar.'
+          : 'Tu solicitud quedó registrada correctamente.',
+      })
       const draftKey = getDraftKey(detail.tournament.id, detail.viewer.clubPlayer?.userId)
       if (draftKey) window.localStorage.removeItem(draftKey)
-      router.replace(`/torneos/${detail.tournament.id}`)
+      window.setTimeout(() => router.replace(`/torneos/${detail.tournament.id}`), 1500)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'No se pudo confirmar la inscripción.')
+      setActionFeedback({ tone: 'error', title: 'No pudimos confirmar la inscripción', message: error instanceof Error ? error.message : 'Intentá nuevamente en unos instantes.' })
     } finally {
       setSaving(false)
     }
@@ -537,7 +544,7 @@ export default function TorneoInscripcionPage() {
       )
       router.replace(`/torneos/${detail.tournament.id}`)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'No pude registrar la solicitud de pago.')
+      setActionFeedback({ tone: 'error', title: 'No pudimos registrar el pago', message: error instanceof Error ? error.message : 'Intentá nuevamente en unos instantes.' })
     } finally {
       setSaving(false)
     }
@@ -743,6 +750,15 @@ export default function TorneoInscripcionPage() {
         variant="player-tournament"
       />
 
+      {actionFeedback ? (
+        <ActionFeedbackNotice
+          tone={actionFeedback.tone}
+          title={actionFeedback.title}
+          message={actionFeedback.message}
+          autoDismissMs={actionFeedback.tone === 'success' ? 4000 : undefined}
+          onDismiss={() => setActionFeedback(null)}
+        />
+      ) : null}
       {message ? <div className="tournamentSignupPage__message">{message}</div> : null}
 
       {!detail.viewer.isAuthenticated ? (
@@ -880,23 +896,28 @@ export default function TorneoInscripcionPage() {
               <p>{postPayment.text}</p>
               <small>Inscripción: {registrationStatusLabel(detail.viewer.myTeam?.registrationStatus)}</small>
 
-              {postPayment.action === 'message' ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setClubMessageError('')
-                    setClubMessageToast('')
-                    setClubMessageModalOpen(true)
-                  }}
-                >
-                  Enviar mensaje al club
-                </button>
-              ) : null}
               {postPayment.action === 'pay' ? (
                 <Link href={`/torneos/${detail.tournament.id}/inscripcion`} className="tournamentSignupPage__statusAction">
                   Elegir otro método de pago
                 </Link>
               ) : null}
+              <div className="tournamentSignupPage__pendingActions">
+                {postPayment.action === 'message' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClubMessageError('')
+                      setClubMessageToast('')
+                      setClubMessageModalOpen(true)
+                    }}
+                  >
+                    Enviar mensaje
+                  </button>
+                ) : null}
+                <button type="button" onClick={() => setWithdrawalModalOpen(true)}>
+                  {detail.viewer.myTeam?.registrationChangeRequest?.status === 'PENDING' ? 'Baja solicitada' : 'Solicitar baja'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -905,12 +926,6 @@ export default function TorneoInscripcionPage() {
               VER MI ZONA
             </button>
             <span>La zona aparecerá cuando la organización publique el cuadro.</span>
-          </div>
-
-          <div className="tournamentSignupPage__withdrawalInline">
-            <button type="button" onClick={() => setWithdrawalModalOpen(true)}>
-              {detail.viewer.myTeam?.registrationChangeRequest?.status === 'PENDING' ? 'Baja solicitada' : 'Solicitar baja del torneo'}
-            </button>
           </div>
 
           {detail.viewer.myTeam?.registrationChangeRequest?.status === 'PENDING' ? (
@@ -952,37 +967,20 @@ export default function TorneoInscripcionPage() {
                 <Users size={22} />
               </div>
 
-              <div className="tournamentSignupPage__partnerGrid">
-                <div className="tournamentSignupPage__subPanel">
-                  <div className="tournamentSignupPage__header">
-                    <span>Tu jugador</span>
-                    <ShieldCheck size={18} />
-                  </div>
-                  {detail.viewer.clubPlayer ? (
-                    <div className="tournamentSignupPage__player">
-                      <div className="tournamentSignupPage__avatar">{initials(detail.viewer.clubPlayer.name)}</div>
-                      <div>
-                        <strong>{detail.viewer.clubPlayer.name}</strong>
-                        <span>
-                          {detail.viewer.clubPlayer.category ?? '—'}ta · {genderLabel(detail.viewer.clubPlayer.gender)}
-                        </span>
-                        <em>{detail.viewer.clubPlayer.approved ? 'Jugador aprobado' : 'Pendiente de aprobación'}</em>
-                      </div>
-                    </div>
-                  ) : (
-                    <p>No tenés perfil de jugador en este club. Pedí aprobación al club para poder inscribirte.</p>
-                  )}
-                </div>
+              <div className="tournamentSignupPage__selfSummary">
+                {detail.viewer.clubPlayer ? (
+                  <>Te inscribís como <strong>{detail.viewer.clubPlayer.name}</strong> · {detail.viewer.clubPlayer.category ?? '—'}ta · {genderLabel(detail.viewer.clubPlayer.gender)}</>
+                ) : 'No tenés perfil de jugador habilitado en este club.'}
+              </div>
 
-                <div className="tournamentSignupPage__subPanel">
+              <div className="tournamentSignupPage__partnerChoice">
                   <div className="tournamentSignupPage__header">
-                    <span>Buscar compañero</span>
+                    <span>Elegí tu compañero</span>
                     <Search size={18} />
                   </div>
 
                   {selectedPartner ? (
                     <div className="tournamentSignupPage__partnerSummary">
-                      <CheckCircle2 size={22} />
                       <div className="tournamentSignupPage__avatar">
                         {selectedPartner.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -1026,9 +1024,6 @@ export default function TorneoInscripcionPage() {
 
                       <div className="tournamentSignupPage__results">
                         {searching ? <div className="tournamentSignupPage__emptyPartner">Buscando jugadores...</div> : null}
-                        {partnerSearchError ? (
-                          <div className="tournamentSignupPage__emptyPartner is-error">{partnerSearchError}</div>
-                        ) : null}
                         {!searching && !partnerSearchError && search.trim().length >= 1 && !partners.length ? (
                           <div className="tournamentSignupPage__emptyPartner">No se encontraron jugadores.</div>
                         ) : null}
@@ -1057,12 +1052,11 @@ export default function TorneoInscripcionPage() {
                       </div>
                     </>
                   )}
-                </div>
               </div>
 
               {selectedPartner ? (
                 <div className="tournamentSignupPage__continueBox">
-                  <span>Ya tenés compañero. Continuá al siguiente paso.</span>
+                  <span>Compañero elegido. Continuá con la disponibilidad.</span>
                   <button type="button" onClick={() => setCurrentStep(2)}>Continuar →</button>
                 </div>
               ) : null}
@@ -1095,18 +1089,20 @@ export default function TorneoInscripcionPage() {
                   <span>Todos los turnos</span>
                   <strong>Sin restricciones horarias</strong>
                 </label>
-                {availabilitySlots.map((slot) => (
-                  <label key={slot.id} className={`${availability.includes(slot.id) ? 'is-selected' : ''} ${allTurnsSelected ? 'is-disabled' : ''}`}>
-                    <input
-                      type="checkbox"
-                      checked={availability.includes(slot.id)}
-                      disabled={allTurnsSelected}
-                      onChange={() => toggleAvailability(slot.id)}
-                    />
-                    <span>{slot.title}</span>
-                    <strong>{slot.time}</strong>
-                  </label>
-                ))}
+                <div className="tournamentSignupPage__slotGrid">
+                  {availabilitySlots.map((slot) => (
+                    <label key={slot.id} className={`${availability.includes(slot.id) ? 'is-selected' : ''} ${allTurnsSelected ? 'is-disabled' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={availability.includes(slot.id)}
+                        disabled={allTurnsSelected}
+                        onChange={() => toggleAvailability(slot.id)}
+                      />
+                      <strong>{slot.title}</strong>
+                      <span>{slot.time}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div className={`tournamentSignupPage__availabilityState ${
@@ -1228,35 +1224,22 @@ export default function TorneoInscripcionPage() {
                 <CheckCircle2 size={22} />
               </div>
 
-              <div className="tournamentSignupPage__summaryGrid">
-                <div>
-                  <span>Jugador</span>
-                  <strong>{detail.viewer.clubPlayer?.name ?? 'Tu jugador'}</strong>
-                </div>
-                <div>
-                  <span>Compañero</span>
-                  <strong>{selectedPartner?.name}</strong>
-                </div>
-                <div>
-                  <span>Disponibilidad</span>
-                  <strong>{allTurnsSelected ? 'Todos los turnos' : availabilitySlots.filter((slot) => availability.includes(slot.id)).map((slot) => slot.title).join(' · ')}</strong>
-                  <em>Flexibilidad {availabilityPayload.flexibility_level}/4</em>
-                </div>
-                <div>
-                  <span>Pago</span>
-                  <strong>{paymentMethods.find((method) => method.key === paymentMethod)?.title ?? 'Seleccioná un método'}</strong>
-                </div>
+              <div className="tournamentSignupPage__summaryRows">
+                <div><span>Jugador</span><strong>{detail.viewer.clubPlayer?.name ?? 'Tu jugador'}</strong></div>
+                <div><span>Compañero</span><strong>{selectedPartner?.name}</strong></div>
+                <div><span>Disponibilidad</span><strong>{allTurnsSelected ? 'Todos los turnos' : availabilitySlots.filter((slot) => availability.includes(slot.id)).map((slot) => slot.title).join(' · ')}</strong></div>
+                <div><span>Pago</span><strong>{paymentMethods.find((method) => method.key === paymentMethod)?.title ?? 'Seleccioná un método'}</strong></div>
               </div>
 
               <div className="tournamentSignupPage__confirmNote">
                 La inscripción quedará pendiente hasta que el club apruebe el pago.
               </div>
 
-              <div className="tournamentSignupPage__actions">
-                <button type="button" className="is-secondary" onClick={() => setCurrentStep(3)}>← Volver</button>
+              <div className="tournamentSignupPage__confirmActions">
                 <button type="button" disabled={!canSubmit} onClick={submitRegistration}>
                   {saving ? 'Enviando...' : 'CONFIRMAR INSCRIPCIÓN'}
                 </button>
+                <button type="button" className="is-secondary" onClick={() => setCurrentStep(3)}>← Volver</button>
               </div>
             </article>
           ) : null}
@@ -1285,9 +1268,6 @@ export default function TorneoInscripcionPage() {
 
               <div className="tournamentSignupPage__modalResults">
                 {searching ? <div className="tournamentSignupPage__emptyPartner">Buscando jugadores...</div> : null}
-                {partnerSearchError ? (
-                  <div className="tournamentSignupPage__emptyPartner is-error">{partnerSearchError}</div>
-                ) : null}
                 {!searching && !partnerSearchError && search.trim().length >= 1 && !partners.length ? (
                   <div className="tournamentSignupPage__emptyPartner">No se encontraron jugadores.</div>
                 ) : null}
@@ -1570,6 +1550,22 @@ export default function TorneoInscripcionPage() {
           padding: 18px;
         }
 
+        .tournamentSignupPage__selfSummary {
+          color: #475569;
+          font-size: 14px;
+          font-weight: 750;
+          line-height: 1.35;
+        }
+
+        .tournamentSignupPage__selfSummary strong { color: #061a3f; font-weight: 950; }
+
+        .tournamentSignupPage__partnerChoice {
+          border-top: 1px solid rgba(15,23,42,.08);
+          display: grid;
+          gap: 12px;
+          padding-top: 14px;
+        }
+
         .tournamentSignupPage__panel--wide {
           grid-row: span 2;
         }
@@ -1660,6 +1656,12 @@ export default function TorneoInscripcionPage() {
           background: linear-gradient(135deg, rgba(14,165,233,.08), rgba(236,72,153,.04));
           border-radius: 18px;
           padding: 12px;
+        }
+
+        .tournamentSignupPage__partnerGrid > .tournamentSignupPage__subPanel:first-child {
+          background: transparent;
+          border-color: rgba(15,23,42,.06);
+          padding: 11px 12px;
         }
 
         .tournamentSignupPage__avatar {
@@ -1766,7 +1768,8 @@ export default function TorneoInscripcionPage() {
         .tournamentSignupPage__actions button.is-secondary,
         .tournamentSignupPage__actions a.is-secondary {
           background: rgba(255,255,255,.86);
-          color: #0b2554;
+          border-color: rgba(11,37,84,.24);
+          color: #0b2554 !important;
           box-shadow: none;
         }
 
@@ -1794,8 +1797,8 @@ export default function TorneoInscripcionPage() {
           border-radius: 20px;
           display: grid;
           gap: 12px;
-          grid-template-columns: 28px 52px minmax(0, 1fr) auto;
-          padding: 14px;
+          grid-template-columns: 52px minmax(0, 1fr) auto;
+          padding: 10px 12px;
           animation: tournamentSignupStepIn .22s ease both;
         }
 
@@ -1849,9 +1852,9 @@ export default function TorneoInscripcionPage() {
 
         .tournamentSignupPage__continueBox {
           align-items: center;
-          border: 1px solid rgba(16,185,129,.22);
-          background: rgba(16,185,129,.08);
-          border-radius: 20px;
+          border: 0;
+          background: transparent;
+          border-radius: 0;
           color: #047857;
           display: flex;
           flex-wrap: wrap;
@@ -1863,37 +1866,42 @@ export default function TorneoInscripcionPage() {
 
         .tournamentSignupPage__slots {
           display: grid;
-          gap: 12px;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 10px;
+          grid-template-columns: minmax(0, 1fr);
         }
 
-        .tournamentSignupPage__slots label {
+        .tournamentSignupPage__slots label,
+        .tournamentSignupPage__slotGrid label {
           border: 1px solid rgba(15,23,42,.10);
           background: rgba(255,255,255,.88);
           border-radius: 20px;
           cursor: pointer;
           display: grid;
           gap: 8px;
-          min-height: 128px;
-          padding: 14px;
+          min-height: 72px;
+          padding: 10px 12px;
           transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
         }
 
         .tournamentSignupPage__slots label:hover,
-        .tournamentSignupPage__slots label.is-selected {
+        .tournamentSignupPage__slots label.is-selected,
+        .tournamentSignupPage__slotGrid label:hover,
+        .tournamentSignupPage__slotGrid label.is-selected {
           border-color: rgba(14,165,233,.42);
           background: linear-gradient(135deg, rgba(14,165,233,.10), rgba(255,255,255,.92));
           box-shadow: 0 18px 36px rgba(14,165,233,.12);
           transform: translateY(-2px);
         }
 
-        .tournamentSignupPage__slots label.is-disabled {
+        .tournamentSignupPage__slots label.is-disabled,
+        .tournamentSignupPage__slotGrid label.is-disabled {
           cursor: not-allowed;
           opacity: .72;
           transform: none;
         }
 
-        .tournamentSignupPage__slots label.is-disabled:hover {
+        .tournamentSignupPage__slots label.is-disabled:hover,
+        .tournamentSignupPage__slotGrid label.is-disabled:hover {
           box-shadow: none;
         }
 
@@ -1909,15 +1917,15 @@ export default function TorneoInscripcionPage() {
         }
 
         .tournamentSignupPage__slots span {
-          color: #061a3f;
-          font-size: 16px;
-          font-weight: 950;
+          color: #64748b;
+          font-size: 13px;
+          font-weight: 850;
         }
 
         .tournamentSignupPage__slots strong {
-          color: #64748b;
-          font-size: 14px;
-          font-weight: 900;
+          color: #061a3f;
+          font-size: 16px;
+          font-weight: 950;
         }
 
         .tournamentSignupPage__availabilityState,
@@ -1985,8 +1993,58 @@ export default function TorneoInscripcionPage() {
           border: 1px solid rgba(15,23,42,.08);
           background: rgba(255,255,255,.86);
           border-radius: 18px;
-          padding: 14px;
+          padding: 0;
         }
+
+        .tournamentSignupPage__summaryRows {
+          border-bottom: 1px solid rgba(15,23,42,.08);
+          border-top: 1px solid rgba(15,23,42,.08);
+          display: grid;
+        }
+
+        .tournamentSignupPage__summaryRows > div {
+          align-items: baseline;
+          display: grid;
+          gap: 12px;
+          grid-template-columns: minmax(104px, .72fr) minmax(0, 1.28fr);
+          padding: 10px 0;
+        }
+
+        .tournamentSignupPage__summaryRows > div + div { border-top: 1px solid rgba(15,23,42,.08); }
+        .tournamentSignupPage__summaryRows span { color: #64748b; font-size: 12px; font-weight: 850; }
+        .tournamentSignupPage__summaryRows strong { color: #061a3f; font-size: 14px; font-weight: 900; text-align: right; }
+
+        .tournamentSignupPage__confirmActions {
+          display: grid;
+          gap: 9px;
+          margin-top: 2px;
+        }
+
+        .tournamentSignupPage__confirmActions > button {
+          align-items: center;
+          border: 1px solid rgba(14, 165, 233, .28);
+          border-radius: 999px;
+          background: #061a3f;
+          color: #fff;
+          cursor: pointer;
+          display: inline-flex;
+          font-weight: 950;
+          justify-content: center;
+          min-height: 46px;
+          padding: 0 16px;
+        }
+
+        .tournamentSignupPage__confirmActions > button.is-secondary {
+          background: transparent;
+          border-color: transparent;
+          color: #475569;
+          font-size: 13px;
+          min-height: 36px;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+
+        .tournamentSignupPage__confirmActions > button:disabled { cursor: not-allowed; opacity: .45; }
 
         .tournamentSignupPage__confirmNote {
           border: 1px solid rgba(14,165,233,.18);
@@ -1996,6 +2054,23 @@ export default function TorneoInscripcionPage() {
           font-weight: 900;
           padding: 14px;
           text-align: center;
+        }
+
+        .tournamentSignupPage__slotGrid {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .tournamentSignupPage__slotGrid label {
+          align-content: center;
+          gap: 3px;
+          grid-template-columns: auto minmax(0, 1fr);
+          min-height: 78px;
+        }
+
+        .tournamentSignupPage__slotGrid label strong {
+          grid-column: 2;
         }
 
         .tournamentSignupPage__emptyPartner.is-error {
@@ -2691,6 +2766,24 @@ export default function TorneoInscripcionPage() {
           width: fit-content;
         }
 
+        .tournamentSignupPage__pendingActions {
+          display: grid;
+          gap: 8px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          margin-top: 2px;
+        }
+
+        .tournamentSignupPage__pendingActions button {
+          justify-content: center;
+          min-width: 0;
+          width: 100%;
+        }
+
+        .tournamentSignupPage__pendingActions button:last-child {
+          border-color: rgba(244,63,94,.42);
+          color: #fecdd3;
+        }
+
         .tournamentSignupPage__paymentStatusCard button:hover,
         .tournamentSignupPage__statusAction:hover {
           box-shadow: 0 16px 34px rgba(14,165,233,.24);
@@ -2827,16 +2920,14 @@ export default function TorneoInscripcionPage() {
           }
 
           .tournamentSignupPage__partnerSummary {
-            grid-template-columns: 28px 48px minmax(0, 1fr);
-          }
-
-          .tournamentSignupPage__partnerSummary button {
-            grid-column: 1 / -1;
+            grid-template-columns: 42px minmax(0, 1fr) auto;
           }
 
           .tournamentSignupPage__actions {
             justify-content: stretch;
           }
+
+          .tournamentSignupPage__actions button:not(.is-secondary) { order: -1; }
 
           .tournamentSignupPage__actions .is-secondary {
             margin-right: 0;
@@ -2970,6 +3061,35 @@ export default function TorneoInscripcionPage() {
           .tournamentSignupPage__checkoutSummary dd {
             text-align: left;
           }
+
+          .tournamentSignupPage__panel { padding: 14px; }
+          .tournamentSignupPage__stepPanel { gap: 12px; }
+          .tournamentSignupPage__partnerGrid { gap: 10px; }
+          .tournamentSignupPage__subPanel { border-radius: 14px; padding: 11px; }
+          .tournamentSignupPage__partnerSummary { gap: 8px; padding: 8px; }
+          .tournamentSignupPage__slots { gap: 8px; }
+          .tournamentSignupPage__allSlots { align-items: center; display: grid !important; gap: 3px !important; grid-template-columns: auto minmax(0, 1fr); min-height: 48px !important; }
+          .tournamentSignupPage__allSlots strong { grid-column: 2; }
+          .tournamentSignupPage__slotGrid { gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .tournamentSignupPage__slotGrid label { border-radius: 14px; min-height: 72px; padding: 9px; }
+          .tournamentSignupPage__slotGrid label span { font-size: 11px; }
+          .tournamentSignupPage__slotGrid label strong { font-size: 14px; }
+          .tournamentSignupPage__availabilityHint, .tournamentSignupPage__availabilityState { border-radius: 12px; font-size: 12px; padding: 9px 10px; }
+          .tournamentSignupPage__checkoutSummary, .tournamentSignupPage__checkoutMethods { border-radius: 14px; padding: 11px; }
+          .tournamentSignupPage__checkoutSummary dl { gap: 6px; }
+          .tournamentSignupPage__checkoutTotal { border-radius: 14px; margin-top: 8px; padding: 10px; }
+          .tournamentSignupPage__checkoutTotal strong { font-size: 26px; }
+          .tournamentSignupPage__summaryRows > div { gap: 8px; grid-template-columns: minmax(94px, .72fr) minmax(0, 1.28fr); padding: 8px 0; }
+          .tournamentSignupPage__summaryRows strong { font-size: 13px; }
+          .tournamentSignupPage__paymentMethods { gap: 7px; }
+          .tournamentSignupPage__paymentMethods button { border-radius: 14px; gap: 8px; min-height: 56px; padding: 9px 10px; }
+          .tournamentSignupPage__paymentMethods button.is-recommended { min-height: 56px; }
+          .tournamentSignupPage__paymentMethods button p { display: none; }
+          .tournamentSignupPage__paymentMethods button strong { font-size: 13px; margin: 0; }
+          .tournamentSignupPage__paymentMethods i { height: 30px; width: 30px; }
+          .tournamentSignupPage__paymentCheck { font-size: 9px !important; padding: 3px 6px !important; right: 8px; top: 8px; }
+          .tournamentSignupPage__pendingActions { gap: 6px; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
+          .tournamentSignupPage__pendingActions button { font-size: 10.5px; min-height: 42px; padding: 0 6px; white-space: nowrap; }
         }
       `}</style>
     </main>

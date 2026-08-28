@@ -1260,10 +1260,9 @@ export default function TorneoDetallePage() {
           background: transparent;
           border: 0;
           border-radius: 0;
-          display: flex;
-          flex-wrap: wrap;
+          display: grid;
           gap: 8px;
-          justify-content: space-between;
+          grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
           padding: 2px 0 0;
         }
 
@@ -1278,9 +1277,11 @@ export default function TorneoDetallePage() {
           font-size: 12px;
           font-weight: 950;
           justify-content: center;
-          min-height: 32px;
-          padding: 0 12px;
+          min-height: 44px;
+          min-width: 0;
+          padding: 0 9px;
           transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+          white-space: nowrap;
         }
 
         .tournamentPublicDetail__registeredActions a {
@@ -1312,7 +1313,7 @@ export default function TorneoDetallePage() {
         }
 
         .tournamentPublicDetail__registeredActions button.is-danger {
-          margin-left: auto;
+          margin-left: 0;
           border-color: rgba(244,63,94,.22);
           background: rgba(255,255,255,.72);
           color: #be123c;
