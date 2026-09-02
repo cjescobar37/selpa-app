@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { BRAND } from '@/lib/branding'
@@ -303,6 +303,7 @@ export default function PublicHomeExperience({
   metrics,
   clubs = [],
   hideHero = false,
+  afterTournaments,
 }: {
   slides: NewsItem[]
   newsArchive: NewsItem[]
@@ -312,6 +313,7 @@ export default function PublicHomeExperience({
   metrics?: PublicMetrics
   clubs?: ClubItem[]
   hideHero?: boolean
+  afterTournaments?: ReactNode
 }) {
   const router = useRouter()
   const session = useSession()
@@ -458,9 +460,9 @@ export default function PublicHomeExperience({
             </div>
             <Link href="/torneos" className="px-homePillButton">Ver más</Link>
           </div>
-          <div className="px-homeTournamentCards">
+          <div className="px-homeTournamentCards clubPublicTournamentGrid">
             {activeTournaments.map((item) => (
-              <TournamentPublicCard key={item.id} tournament={item} showClub />
+              <TournamentPublicCard key={item.id} compactAgenda tournament={item} showClub />
             ))}
           </div>
         </section>
@@ -475,13 +477,15 @@ export default function PublicHomeExperience({
             </div>
             <Link href="/torneos" className="px-homePillButton">Ver más</Link>
           </div>
-          <div className="px-homeTournamentCards">
+          <div className="px-homeTournamentCards clubPublicTournamentGrid">
             {upcomingTournaments.map((item) => (
-              <TournamentPublicCard key={item.id} tournament={item} showClub />
+              <TournamentPublicCard key={item.id} compactAgenda tournament={item} showClub />
             ))}
           </div>
         </section>
       ) : null}
+
+      {afterTournaments}
 
       <section className="px-homeRankingsExplore">
         <div className="px-homeSectionHead is-row">

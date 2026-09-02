@@ -1,5 +1,5 @@
-import ClubJugadoresPage from '../jugadores/page'
+import ClubRequestsPage from './ClubRequestsPage'
 
 export default function ClubSolicitudesAliasPage() {
-  return <ClubJugadoresPage />
+  return <ClubRequestsPage />
 }

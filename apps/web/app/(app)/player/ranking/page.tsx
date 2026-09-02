@@ -193,7 +193,7 @@ export default function PlayerMyRankingPage() {
                     key={player.player_id}
                   >
                     <strong className="playerRankContextPlace">#{player.contextualPosition}</strong>
-                    <RankingPlayerAvatar className="playerRankAvatar" name={player.full_name} src={player.avatar_url} sizes="50px" />
+                    <RankingPlayerAvatar className="playerRankAvatar" name={player.full_name} src={player.avatar_url} sizes="40px" />
                     <div>
                       <b>{player.full_name}</b>
                       <span>{formatRankingCategory(player.category)} · {formatRankingGender(player.gender)}</span>
@@ -307,9 +307,9 @@ export default function PlayerMyRankingPage() {
           .playerRankContextLabels span:nth-child(2) { grid-column:2; }
           .playerRankContextLabels span:nth-child(3) { display:none; }
           .playerRankContextLabels span:nth-child(4) { grid-column:3; text-align:right; }
-          .playerRankContextRow { border-radius:12px; gap:7px; grid-template-columns:30px 34px minmax(0,1fr) 68px; min-height:58px; padding:7px 8px; }
+          .playerRankContextRow { border-radius:12px; gap:7px; grid-template-columns:30px 40px minmax(0,1fr) 68px; min-height:58px; padding:7px 8px; }
           .playerRankContextPlace { font-size:15px; }
-          .playerRankContextRow .playerRankAvatar { height:34px; width:34px; }
+          .playerRankContextRow .playerRankAvatar { height:40px; width:40px; }
           .playerRankContextRow b { overflow: visible; text-overflow: clip; white-space: normal; }
           .playerRankContextRow span { font-size:10px; line-height:1.15; }
           .playerRankContextRow em { display: none; }

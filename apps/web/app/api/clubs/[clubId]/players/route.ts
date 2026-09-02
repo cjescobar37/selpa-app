@@ -47,9 +47,9 @@ async function getTokenUser(req: NextRequest) {
 
 function getFullName(profile?: ProfileRow | null, fallback?: string | null) {
   return (
-    fallback ||
-    profile?.display_name ||
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
+    profile?.display_name ||
+    fallback ||
     profile?.email ||
     'Jugador'
   )

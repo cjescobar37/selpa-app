@@ -38,13 +38,15 @@ export default function ModeSegmentedControl({
           border: 1px solid rgba(226,232,240,.95);
           border-radius: 999px;
           box-shadow: 0 18px 42px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.75);
-          display: inline-grid;
+          display: grid;
+          box-sizing: border-box;
           gap: 5px;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          justify-self: center;
-          max-width: 420px;
+          justify-self: stretch;
+          max-width: none;
           padding: 6px;
-          width: min(100%, 400px);
+          width: 100%;
+          min-width: 100%;
         }
         .homeModeSwitch button {
           background: transparent;

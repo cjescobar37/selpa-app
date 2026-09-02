@@ -399,10 +399,24 @@
     margin-top:2px;
   }
 
+  .pampraxHero.is-player-tournament .pampraxHero__stats--mobile{
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    width:100%;
+  }
+
   .pampraxHero.is-player-tournament .pampraxHero__stats em{
     background:rgba(2,6,23,.38);
     min-height:27px;
     padding:6px 8px;
+  }
+
+  .pampraxHero.is-player-tournament .pampraxHero__stats--mobile em{
+    font-size:9px;
+    gap:4px;
+    justify-content:center;
+    min-width:0;
+    padding:6px 5px;
   }
 
   .pampraxHero.is-player-tournament .pampraxHero__actions{
@@ -410,6 +424,7 @@
     display:flex;
     flex-wrap:wrap;
     gap:6px;
+    position:static;
   }
 
   .pampraxHero.is-player-tournament .pampraxHero__statusBadge{
@@ -418,8 +433,30 @@
     padding:7px 10px;
   }
 
+  .pampraxHero.is-player-tournament.has-mobile-status .pampraxHero__statusBadge--default{
+    display:none;
+  }
+
+  .pampraxHero.is-player-tournament.has-mobile-status .pampraxHero__statusBadge.pampraxHero__onlyMobile{
+    display:inline-flex;
+    position:absolute;
+    right:12px;
+    top:12px;
+    z-index:3;
+    font-size:8.5px;
+    min-height:24px;
+    padding:4px 7px;
+  }
+
   .pampraxHero.is-player-tournament .pampraxHero__action{
     flex:1 1 120px;
     min-height:36px;
+  }
+
+  .pampraxHero.is-player-tournament .pampraxHero__action--mobileOnly{
+    flex:0 0 auto;
+    font-size:10px;
+    min-height:34px;
+    padding:7px 10px;
   }
 }

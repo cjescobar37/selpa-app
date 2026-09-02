@@ -1020,15 +1020,21 @@ export default function ClubTournamentDetailPage() {
   const [actionMessage, setActionMessage] = useState('')
   const requestedTab = searchParams.get('tab')
   const highlightedRegistrationId = searchParams.get('registrationId')
+  const highlightedChangeRequestId = searchParams.get('requestId')
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      if (requestedTab === 'inscriptos' || highlightedRegistrationId) setActiveTab('inscriptos')
-      if (!highlightedRegistrationId) return
-      document.getElementById(`registration-${highlightedRegistrationId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (requestedTab === 'inscriptos' || highlightedRegistrationId || highlightedChangeRequestId) setActiveTab('inscriptos')
+      const targetId = highlightedChangeRequestId
+        ? `change-request-${highlightedChangeRequestId}`
+        : highlightedRegistrationId
+          ? `registration-${highlightedRegistrationId}`
+          : null
+      if (!targetId) return
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [highlightedRegistrationId, requestedTab])
+  }, [highlightedChangeRequestId, highlightedRegistrationId, requestedTab])
 
   const stageIndex = useMemo(
     () => (summary ? stageOrder.indexOf(summary.operationalStage) : -1),
@@ -2403,7 +2409,11 @@ export default function ClubTournamentDetailPage() {
 
     const validation = getResultValidation(match)
     if (!validation?.ok) {
-      setMessage(validation?.error ?? 'Cargá un resultado válido.')
+      setActionFeedback({
+        tone: 'warning',
+        title: 'Revisá el resultado',
+        message: validation?.error ?? 'Cargá un resultado válido.',
+      })
       return
     }
 
@@ -2413,7 +2423,7 @@ export default function ClubTournamentDetailPage() {
 
     const token = await getToken()
     if (!token) {
-      setActionFeedback({ tone: 'error', title: 'No pudimos publicar el torneo', message: 'Tu sesión ya no es válida. Volvé a ingresar e intentá nuevamente.' })
+      setActionFeedback({ tone: 'error', title: 'No pudimos guardar el resultado', message: 'Tu sesión ya no es válida. Volvé a ingresar e intentá nuevamente.' })
       setSavingResult(false)
       return
     }
@@ -2431,14 +2441,22 @@ export default function ClubTournamentDetailPage() {
     const json = await res.json().catch(() => ({})) as { error?: string }
 
     if (!res.ok) {
-      setMessage(json.error ?? 'No pude cargar el resultado.')
+      setActionFeedback({
+        tone: 'error',
+        title: 'No pudimos guardar el resultado',
+        message: json.error ?? 'Revisá los sets e intentá nuevamente.',
+      })
       setSavingResult(false)
       return
     }
 
     setResultForm(null)
     setSavingResult(false)
-    setActionMessage('Resultado cargado correctamente.')
+    setActionFeedback({
+      tone: 'success',
+      title: 'Resultado guardado',
+      message: 'La tabla y los cruces se actualizaron con este resultado.',
+    })
     await refreshTournamentExperience()
   }
 
@@ -4342,8 +4360,12 @@ export default function ClubTournamentDetailPage() {
                     <section className="club-inscriptionsOps">
                       <div className="club-readinessGrid">
                         <div className={`club-readinessItem ${registrationStats.eligible > 0 ? 'club-readinessItem--ready' : ''}`}>
-                          <span>Listas para competir</span>
+                          <span>Listas para seed</span>
                           <b>{registrationStats.eligible}</b>
+                        </div>
+                        <div className={`club-readinessItem ${summary.counts.registrations.confirmed > 0 ? 'club-readinessItem--ready' : ''}`}>
+                          <span>Confirmadas</span>
+                          <b>{summary.counts.registrations.confirmed}</b>
                         </div>
                         <div className={`club-readinessItem ${registrationStats.withoutPayment > 0 ? 'club-readinessItem--attention' : ''}`}>
                           <span>Sin pago</span>
@@ -4356,6 +4378,10 @@ export default function ClubTournamentDetailPage() {
                         <div className={`club-readinessItem ${registrationStats.blocked > 0 ? 'club-readinessItem--blocked' : ''}`}>
                           <span>Bloqueadas</span>
                           <b>{registrationStats.blocked}</b>
+                        </div>
+                        <div className="club-readinessItem">
+                          <span>Cupo</span>
+                          <b>{summary.counts.registrations.confirmed}{summary.tournament.max_pairs ? `/${summary.tournament.max_pairs}` : ''}</b>
                         </div>
                       </div>
 
@@ -4446,90 +4472,12 @@ export default function ClubTournamentDetailPage() {
                       </div>
                     </section>
 
-                    {(pendingOperationalPayments.length + pendingChangeRequests.length) > 0 ? <section className="club-registrationsPanel club-operationalCenter">
-                      <div className="club-sectionHead">
-                        <div>
-                          <span className="club-kicker">Centro operativo</span>
-                          <h2>Pendientes del torneo</h2>
-                        </div>
-                        <span className="club-miniHint">{pendingOperationalPayments.length + pendingChangeRequests.length} pendientes</span>
-                      </div>
-                      <div className="club-operationalCenterGrid">
-                        {pendingOperationalPayments.length > 0 ? <article className="club-operationalQueue">
-                          <div className="club-operationalQueueHead">
-                            <strong>Pagos pendientes</strong>
-                            <span>{pendingOperationalPayments.length}</span>
-                          </div>
-                          <div className="club-operationalQueueList">
-                              {pendingOperationalPayments.map((registration) => (
-                                <div key={`payment-${registration.id}`} className="club-operationalQueueItem">
-                                  <div>
-                                    <b>{teamName(registration)}</b>
-                                    <span>{paymentMethodLabel(registration.operational_payment?.method)} · {formatMoney(registration.operational_payment?.amount)}</span>
-                                    <small>{formatDateTime(registration.operational_payment?.requested_at ?? registration.operational_payment?.created_at)}</small>
-                                  </div>
-                                  <div className="club-operationalQueueActions">
-                                    <button
-                                      type="button"
-                                      className="club-operationalApprove"
-                                      disabled={savingRegistrationId === registration.id}
-                                      onClick={() => resolveOperationalPayment(registration, 'APPROVED')}
-                                    >
-                                      Aprobar
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="club-operationalReject"
-                                      disabled={savingRegistrationId === registration.id}
-                                      onClick={() => resolveOperationalPayment(registration, 'REJECTED')}
-                                    >
-                                      Rechazar
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                        </article> : null}
-                        {pendingChangeRequests.length > 0 ? <article className="club-operationalQueue">
-                          <div className="club-operationalQueueHead">
-                            <strong>Bajas pendientes</strong>
-                            <span>{pendingChangeRequests.length}</span>
-                          </div>
-                          <div className="club-operationalQueueList">
-                              {pendingChangeRequests.map((registration) => (
-                                <div key={`change-${registration.id}`} className="club-operationalQueueItem">
-                                  <div>
-                                    <b>{teamName(registration)}</b>
-                                    <span>
-                                      Reintegro estimado: {registration.registration_change_request?.refund_percent ?? 'A definir'}%
-                                      {registration.registration_change_request?.refund_policy_label ? ` · ${registration.registration_change_request.refund_policy_label}` : ''}
-                                    </span>
-                                    <small>{formatDateTime(registration.registration_change_request?.created_at)}</small>
-                                  </div>
-                                  <div className="club-operationalQueueActions">
-                                    <button
-                                      type="button"
-                                      className="club-operationalApprove"
-                                      disabled={savingRegistrationId === registration.id}
-                                      onClick={() => resolveChangeRequest(registration, 'APPROVED')}
-                                    >
-                                      Aprobar
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="club-operationalReject"
-                                      disabled={savingRegistrationId === registration.id}
-                                      onClick={() => resolveChangeRequest(registration, 'REJECTED')}
-                                    >
-                                      Rechazar
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                        </article> : null}
-                      </div>
-                    </section> : null}
+                    {(pendingChangeRequests.length + pendingOperationalPayments.length) > 0 ? <Link href="/club/solicitudes" className="club-pendingRequestsLink">
+                      <span className="club-kicker">Solicitudes</span>
+                      <strong>{pendingChangeRequests.length + pendingOperationalPayments.length} pendiente{pendingChangeRequests.length + pendingOperationalPayments.length === 1 ? '' : 's'} por resolver</strong>
+                      <small>{pendingChangeRequests.length ? `${pendingChangeRequests.length} baja${pendingChangeRequests.length === 1 ? '' : 's'}` : ''}{pendingChangeRequests.length && pendingOperationalPayments.length ? ' · ' : ''}{pendingOperationalPayments.length ? `${pendingOperationalPayments.length} pago${pendingOperationalPayments.length === 1 ? '' : 's'}` : ''}</small>
+                      <b>Ver solicitudes →</b>
+                    </Link> : null}
 
                     <section className="club-registrationsPanel">
                       <div className="club-sectionHead">
@@ -4556,9 +4504,13 @@ export default function ClubTournamentDetailPage() {
                               id={`registration-${registration.id}`}
                               className={`club-registrationMiniRow ${highlightedRegistrationId === registration.id ? 'is-highlighted' : ''}`}
                             >
+                              <div className="club-teamCompactMobile" aria-label={`Pareja: ${teamName(registration)}`}>
+                                <strong>{teamName(registration)}</strong>
+                                <span>{formatDate(registration.created_at)}</span>
+                              </div>
                               <div className="club-teamMini">
                                 <div className="club-teamLinks">
-                                  {(registration.team?.players ?? []).map((player, index) => (
+                                  {(registration.team?.players ?? []).map((player) => (
                                     <div key={player.user_id} className="club-teamPlayerRow">
                                       <Link href={`/club/jugadores/${player.user_id}`} className="club-teamLink">
                                         {player.full_name}
@@ -4568,22 +4520,24 @@ export default function ClubTournamentDetailPage() {
                                   ))}
                                 </div>
                               </div>
-                              <div className="club-dateMini">
-                                <strong>{formatDate(registration.created_at)}</strong>
-                                <span>Inscripción</span>
-                              </div>
-                              <span className={`club-statusBadge club-statusBadge--${statusTone(registration.status)}`}>
-                                {statusLabels[registration.status] ?? registration.status}
-                              </span>
-                              <span className={`club-paymentBadge club-paymentBadge--${paymentTone(registration.payment_status)}`}>
-                                {paymentLabel(registration)}
-                              </span>
-                              {registration.registration_change_request?.status === 'PENDING' ? (
-                                <span className="club-statusBadge club-statusBadge--pending">
-                                  Baja solicitada
-                                  {registration.registration_change_request.refund_percent !== null ? ` · ${registration.registration_change_request.refund_percent}%` : ''}
+                              <div className="club-registrationMeta">
+                                <div className="club-dateMini">
+                                  <strong>{formatDate(registration.created_at)}</strong>
+                                  <span>Inscripción</span>
+                                </div>
+                                <span className={`club-statusBadge club-statusBadge--${statusTone(registration.status)}`}>
+                                  {statusLabels[registration.status] ?? registration.status}
                                 </span>
-                              ) : null}
+                                <span className={`club-paymentBadge club-paymentBadge--${paymentTone(registration.payment_status)}`}>
+                                  {paymentLabel(registration)}
+                                </span>
+                                {registration.registration_change_request?.status === 'PENDING' ? (
+                                  <span className="club-statusBadge club-statusBadge--pending">
+                                    Baja solicitada
+                                    {registration.registration_change_request.refund_percent !== null ? ` · ${registration.registration_change_request.refund_percent}%` : ''}
+                                  </span>
+                                ) : null}
+                              </div>
                               <div className="club-seedMini">
                                 <strong title="El seed define el orden inicial de las parejas para armar grupos equilibrados">
                                   {registration.seed_snapshot ? `#${registration.seed_snapshot.seed}` : 'Sin seed'}
@@ -4594,14 +4548,6 @@ export default function ClubTournamentDetailPage() {
                                 <span>{getRegistrationScoreLabel(registration)}</span>
                               </div>
                               <div className="club-registrationActions">
-                                <button
-                                  type="button"
-                                  className="club-editBtn club-viewBtn"
-                                  disabled={savingRegistrationId === registration.id}
-                                  onClick={() => setRegistrationPaymentModal({ registration })}
-                                >
-                                  Pago
-                                </button>
                                 <button
                                   type="button"
                                   className="club-editBtn club-viewBtn"
@@ -6063,9 +6009,9 @@ export default function ClubTournamentDetailPage() {
         .club-operationalNoticeBody p { color: inherit; flex: 1 1 260px; font-size: 11px; font-weight: 780; line-height: 1.25; margin: 0; opacity: .86; overflow-wrap: anywhere; }
         .club-inscriptionsOps { display: grid; gap: 10px; }
         .club-readinessGrid { display: grid; gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        .club-readinessItem { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 13px; display: grid; gap: 4px; min-width: 0; padding: 10px; }
-        .club-readinessItem span { color: #64748b; font-size: 11px; font-weight: 900; }
-        .club-readinessItem b { color: #17253f; font-size: 20px; font-weight: 950; line-height: 1; }
+        .club-readinessItem { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 11px; display: grid; gap: 2px; min-width: 0; padding: 8px 9px; }
+        .club-readinessItem span { color: #64748b; font-size: 10px; font-weight: 800; }
+        .club-readinessItem b { color: #17253f; font-size: 18px; font-weight: 850; line-height: 1; }
         .club-readinessItem--ready { background: #f0fdf4; border-color: rgba(22,163,74,.18); }
         .club-readinessItem--attention { background:#fff7df; border-color:rgba(217,119,6,.20); }
         .club-readinessItem--blocked { background: #fff1f2; border-color: rgba(190,18,60,.12); }
@@ -6118,6 +6064,29 @@ export default function ClubTournamentDetailPage() {
           -webkit-text-fill-color: #fff;
         }
         .club-registrationsPanel, .club-placeholderPanel { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 16px; display: grid; gap: 10px; min-width: 0; padding: 12px; }
+        .club-pendingRequestsLink { align-items:center; background:linear-gradient(135deg,#fff,#f7fffb); border:1px solid color-mix(in srgb,var(--club-admin-accent) 24%,transparent); border-radius:13px; display:grid; gap:2px 10px; grid-template-columns:minmax(0,1fr) auto; min-width:0; padding:10px 11px; text-decoration:none; transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease; }
+        .club-pendingRequestsLink:hover { border-color:color-mix(in srgb,var(--club-admin-accent) 52%,transparent); box-shadow:0 10px 22px rgba(15,23,42,.08); transform:translateY(-1px); }
+        .club-pendingRequestsLink .club-kicker { grid-column:1 / 2; }
+        .club-pendingRequestsLink strong { color:#102340; font-size:14px; font-weight:850; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .club-pendingRequestsLink small { color:#64748b; font-size:11px; font-weight:700; grid-column:1 / 2; }
+        .club-pendingRequestsLink > b { align-self:center; color:var(--club-admin-accent); font-size:11px; font-weight:850; grid-column:2; grid-row:1 / span 3; white-space:nowrap; }
+        .club-cancellationRequests { background: linear-gradient(135deg, #fff 0%, #fff9fb 100%); border-color: rgba(236,72,153,.24); box-shadow: 0 14px 30px rgba(190,24,93,.08); scroll-margin-top: 96px; }
+        .club-cancellationIntro { color: #52657f; font-size: 12px; font-weight: 650; line-height: 1.4; margin: -2px 0 0; }
+        .club-cancellationRequestList { display: grid; gap: 9px; }
+        .club-cancellationRequest { align-items: center; background: rgba(255,255,255,.92); border: 1px solid rgba(236,72,153,.18); border-radius: 13px; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) auto; min-width: 0; padding: 11px; transition: background .2s ease, box-shadow .2s ease, border-color .2s ease; }
+        .club-cancellationRequest.is-highlighted { background: #fff7fb; border-color: rgba(236,72,153,.62); box-shadow: 0 0 0 4px rgba(236,72,153,.10); }
+        .club-cancellationRequestCopy { display: grid; gap: 6px; min-width: 0; }
+        .club-cancellationRequestTopline { align-items: baseline; display: flex; flex-wrap: wrap; gap: 5px 10px; }
+        .club-cancellationRequestTopline strong { color: #061b3a; font-size: 14px; font-weight: 850; line-height: 1.2; overflow-wrap: anywhere; }
+        .club-cancellationRequestTopline span { color: #64748b; font-size: 10px; font-weight: 700; }
+        .club-cancellationRequestCopy p { color: #52657f; font-size: 12px; line-height: 1.35; margin: 0; overflow-wrap: anywhere; }
+        .club-cancellationRequestCopy p b { color: #263b58; font-weight: 800; }
+        .club-cancellationMeta { display: flex; flex-wrap: wrap; gap: 5px 10px; }
+        .club-cancellationMeta span { color: #6b7280; font-size: 10px; font-weight: 700; }
+        .club-cancellationMeta b { color: #9d174d; font-weight: 850; }
+        .club-cancellationActions { display: flex; gap: 7px; justify-content: flex-end; }
+        .club-cancellationActions button { border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 800; min-height: 38px; padding: 8px 11px; white-space: nowrap; }
+        .club-cancellationActions button:disabled { cursor: wait; opacity: .58; }
         .club-operationalCenter { background: linear-gradient(135deg, rgba(255,255,255,.98), color-mix(in srgb, var(--club-admin-accent) 8%, white)); border-color: color-mix(in srgb, var(--club-admin-accent) 18%, transparent); box-shadow: 0 16px 36px rgba(15,23,42,.06); }
         .club-operationalCenterGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
         .club-operationalQueue { background: rgba(255,255,255,.86); border: 1px solid rgba(15,23,42,.08); border-radius: 14px; display: grid; gap: 9px; min-width: 0; padding: 10px; }
@@ -6200,20 +6169,22 @@ export default function ClubTournamentDetailPage() {
         .club-scoreBoard .club-scoreSet--won { background: #f8fafc; border-color: #dbe3ea; color: #64748b; font-weight: 800; }
         .club-scoreBoard .club-scoreSet--lost { color: #64748b; font-weight: 600; }
         .club-miniHint { color: #64748b; font-size: 12px; font-weight: 850; white-space: nowrap; }
-        .club-registrationList { border: 1px solid rgba(15,23,42,.07); border-radius: 13px; display: grid; gap: 4px; overflow: hidden; padding: 4px; }
+        .club-registrationList { border: 1px solid rgba(15,23,42,.07); border-radius: 12px; display: grid; gap: 3px; overflow: hidden; padding: 3px; }
         .club-registrationMiniHead { align-items: center; background: linear-gradient(180deg, #f8fbfd 0%, #f2f7fa 100%); border-bottom: 1px solid rgba(15,23,42,.07); color: #64748b; display: grid; font-size: 10px; font-weight: 950; gap: 10px; grid-template-columns: minmax(240px, 1.45fr) minmax(116px, .52fr) minmax(94px, .42fr) minmax(94px, .42fr) minmax(78px, .3fr) minmax(88px, .34fr) minmax(152px, .62fr); letter-spacing: .02em; min-width: 0; padding: 6px 10px; text-transform: uppercase; }
         .club-registrationMiniHead span:nth-child(5), .club-registrationMiniHead span:nth-child(6), .club-registrationMiniHead span:nth-child(7) { justify-self: end; }
-        .club-registrationMiniRow { align-items: center; background: rgba(41,170,225,.04); border: 1px solid rgba(15,23,42,.05); border-radius: 9px; display: grid; gap: 10px; grid-template-columns: minmax(240px, 1.45fr) minmax(116px, .52fr) minmax(94px, .42fr) minmax(94px, .42fr) minmax(78px, .3fr) minmax(88px, .34fr) minmax(152px, .62fr); min-width: 0; padding: 2px 10px; }
+        .club-registrationMiniRow { align-items: center; background: rgba(41,170,225,.04); border: 1px solid rgba(15,23,42,.05); border-radius: 9px; display: grid; gap: 8px; grid-template-columns: minmax(240px, 1.45fr) minmax(116px, .52fr) minmax(94px, .42fr) minmax(94px, .42fr) minmax(78px, .3fr) minmax(88px, .34fr) minmax(152px, .62fr); min-width: 0; padding: 2px 8px; }
         .club-registrationMiniRow.is-highlighted { border-color: color-mix(in srgb, var(--club-admin-accent) 62%, #38bdf8); box-shadow: 0 0 0 3px color-mix(in srgb, var(--club-admin-accent) 16%, transparent); }
         .club-registrationMiniRow:nth-of-type(even) { background: rgba(148,163,184,.08); }
+        .club-teamCompactMobile { display: none; }
         .club-teamMini { display: grid; gap: 0; min-width: 0; }
         .club-teamLinks { display: grid; min-width: 0; }
         .club-teamPlayerRow { align-items: center; display: inline-flex; gap: 3px; min-width: 0; padding: 0; }
         .club-teamPlayerRow + .club-teamPlayerRow { border-top: 1px solid rgba(100,116,139,.16); margin-top: 2px; padding-top: 2px; }
-        .club-teamLink { background: color-mix(in srgb, var(--club-admin-accent) 8%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 18%, transparent); border-radius: 999px; color: #061b3a; cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 950; line-height: 1.1; max-width: max-content; overflow: hidden; padding: 1px 7px; text-decoration: none; text-overflow: ellipsis; transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease; white-space: nowrap; }
+        .club-teamLink { background: color-mix(in srgb, var(--club-admin-accent) 8%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 18%, transparent); border-radius: 999px; color: #061b3a; cursor: pointer; display: inline-flex; font-size: 11px; font-weight: 800; line-height: 1.1; max-width: max-content; overflow: hidden; padding: 1px 6px; text-decoration: none; text-overflow: ellipsis; transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease; white-space: nowrap; }
         .club-teamLink:hover { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); border-color: color-mix(in srgb, var(--club-admin-accent) 34%, transparent); box-shadow: 0 0 0 1px var(--club-admin-glow); color: #061b3a; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
         .club-teamPlayerRow small { color: #526277; font-size: 11px; font-weight: 900; margin-left: -1px; white-space: nowrap; }
         .club-teamMini span, .club-seedMini span, .club-scoreMini span { color: #64748b; font-size: 11px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .club-registrationMeta { display: contents; }
         .club-dateMini { display: grid; gap: 0; min-width: 0; }
         .club-dateMini strong { color: #17253f; font-size: 12px; font-weight: 900; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-dateMini span { color: #64748b; font-size: 10px; font-weight: 800; text-transform: uppercase; }
@@ -6531,7 +6502,10 @@ export default function ClubTournamentDetailPage() {
           .club-summaryGrid { grid-template-columns: 1fr; }
           .club-metrics--detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .club-sportConfigGrid { grid-template-columns: 1fr; }
-          .club-readinessGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .club-readinessGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap:6px; }
+          .club-readinessItem { min-height:50px; padding:7px; }
+          .club-readinessItem span { font-size:9px; line-height:1.1; }
+          .club-readinessItem b { font-size:17px; }
           .club-groupSummaryGrid { grid-template-columns: 1fr; }
           .club-planningSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .club-playoffPodium { grid-template-columns: 1fr; }
@@ -6556,20 +6530,39 @@ export default function ClubTournamentDetailPage() {
           .club-dangerCardBody strong { font-size:12px; }
           .club-dangerGhostBtn,.club-deleteBtn { flex:0 0 auto; font-size:11px; min-height:34px; padding:7px 8px; }
           .club-dangerZoneGrid { grid-template-columns: 1fr; }
-          .club-seedStatus { align-items: flex-start; flex-direction: column; }
+          .club-seedStatus { align-items:center; display:grid; gap:8px; grid-template-columns:1fr; padding:9px; }
+          .club-seedStatus div:first-child { gap:0; }
+          .club-seedStatus strong { font-size:13px; line-height:1.2; }
+          .club-seedStatus span { display:none; }
           .club-seedActions { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); justify-content:stretch; width:100%; }
-          .club-seedActions > * { min-width:0; padding-inline:7px; white-space:normal; }
+          .club-seedActions > * { font-size:10px; min-height:32px; min-width:0; padding:5px 4px; white-space:nowrap; }
           .club-manualGrid { grid-template-columns: 1fr; }
           .club-operationalCenterGrid { grid-template-columns: 1fr; }
           .club-operationalQueueItem { grid-template-columns: 1fr; }
           .club-operationalQueueActions { justify-content: flex-start; }
+          .club-cancellationRequest { grid-template-columns: 1fr; }
+          .club-cancellationActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .club-cancellationActions button { padding-inline: 8px; }
           .club-registrationMiniHead { display: none; }
-          .club-registrationMiniRow { align-items:center; display:flex; flex-wrap:wrap; gap:6px 8px; padding:9px; }
-          .club-teamMini { flex:1 1 100%; }
-          .club-dateMini { flex:1 1 auto; justify-items:start; }
-          .club-statusBadge, .club-paymentBadge { flex:0 0 auto; }
-          .club-seedMini, .club-scoreMini { flex:0 1 auto; justify-items:start; }
-          .club-registrationActions { flex:0 0 auto; justify-self:auto; margin-left:auto; }
+          .club-registrationMiniRow { align-items:center; display:grid; gap:3px 7px; grid-template-columns:minmax(0, 1fr) auto; min-height:52px; padding:6px 7px; }
+          .club-teamCompactMobile { display:grid; gap:2px; grid-column:1 / 2; min-width:0; }
+          .club-teamCompactMobile strong { color:#061b3a; font-size:12px; font-weight:800; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+          .club-teamCompactMobile span { color:#64748b; font-size:9px; font-weight:700; line-height:1; }
+          .club-teamMini { display:none; }
+          .club-teamLinks { display:flex; flex-wrap:wrap; gap:3px 5px; }
+          .club-teamPlayerRow { max-width:100%; }
+          .club-teamPlayerRow + .club-teamPlayerRow { border-top:0; margin-top:0; padding-top:0; }
+          .club-teamLink { max-width:clamp(112px, 38vw, 154px); }
+          .club-teamPlayerRow small { font-size:10px; }
+          .club-registrationMeta { align-items:center; display:flex; flex-wrap:wrap; gap:3px 4px; grid-column:1 / 2; min-width:0; }
+          .club-dateMini { display:none; }
+          .club-dateMini strong { font-size:10px; }
+          .club-dateMini span { display:none; }
+          .club-statusBadge, .club-paymentBadge { font-size:9px; line-height:1; padding:4px 6px; }
+          .club-statusBadge { justify-self:start; }
+          .club-seedMini, .club-scoreMini { display:none; }
+          .club-registrationActions { align-self:center; display:flex; flex:0 0 auto; gap:4px; grid-column:2; grid-row:1 / span 2; justify-self:end; margin:0; }
+          .club-viewBtn { font-size:9px; min-height:27px; padding:4px 8px; }
           .club-registrationDetailGrid { grid-template-columns: 1fr; }
           .club-paymentActionsGrid { grid-template-columns: 1fr; }
           .club-courtDraftCard { grid-template-columns: minmax(0, 1fr) auto; }
@@ -6592,7 +6585,7 @@ export default function ClubTournamentDetailPage() {
           .club-step span { height:18px; width:18px; }
           .club-tournamentDetail { overflow:visible; }
           .club-tournamentDetail::before { border-radius:16px 16px 0 0; }
-          .club-detailTopbar { background:rgba(255,255,255,.94); border-bottom:1px solid color-mix(in srgb,var(--club-admin-accent) 18%,transparent); box-shadow:0 10px 24px rgba(15,23,42,.08); margin:0 -22px 8px; padding:7px 16px; position:sticky; top:calc(46px + env(safe-area-inset-top)); z-index:40; }
+          .club-detailTopbar { background:rgba(255,255,255,.94); border-bottom:1px solid color-mix(in srgb,var(--club-admin-accent) 18%,transparent); box-shadow:0 10px 24px rgba(15,23,42,.08); margin:0 -22px 8px; padding:7px 16px; position:sticky; top:calc(58px + env(safe-area-inset-top)); z-index:40; }
           .club-backMobile { align-items:center; display:inline-flex; font-size:12px; gap:1px; }
           .club-detailTopbar .club-backBtn { max-width:min(52vw,240px); overflow:hidden; }
           .club-detailTopbar .club-backMobile { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -6630,17 +6623,25 @@ export default function ClubTournamentDetailPage() {
           .club-matchTeams strong, .club-result { white-space: normal; }
           .club-matchResultCell, .club-matchActionCell { justify-items: center; }
           .club-groupStandings { width: 100%; }
-          .club-groupStandingRow { gap: 2px; grid-template-columns: 20px minmax(112px, 1fr) repeat(6, 23px); padding: 6px 5px; }
+          .club-groupStandingRow { gap: 3px; grid-template-columns: 20px minmax(0, 1fr) repeat(3, 28px); padding: 7px 6px; }
           .club-groupStandingRow span { font-size: 11px; }
-          .club-groupStandingTeam b { display: none; }
+          .club-groupStandingRow > span:nth-child(5), .club-groupStandingRow > span:nth-child(7), .club-groupStandingRow > span:nth-child(8) { display: none; }
+          .club-groupStandingTeam { align-items: center; display: flex; gap: 5px; min-width: 0; }
+          .club-groupStandingTeam > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .club-groupStandingTeam b { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 28%, transparent); border-radius: 999px; color: #0f766e; display: inline-flex; flex: 0 0 auto; font-size: 8px; font-weight: 950; line-height: 1; padding: 4px 5px; text-transform: uppercase; }
           .club-playoffSummaryGrid { grid-template-columns: 1fr; }
           .club-playoffToolbarLeft { width: 100%; }
           .club-playoffViewChip { flex: 1 1 0; justify-content: center; }
           .club-playoffZoomControls { flex: 1 1 auto; justify-content: center; }
           .club-playoffLegend { gap: 8px; }
           .club-playoffLegend span { font-size: 10px; }
-          .club-playoffBracketViewport { margin-inline: -6px; }
-          .club-playoffBracketScroll { padding-inline: 6px; }
+          .club-playoffToolbarLeft, .club-playoffLegend, .club-playoffToolbarActions { display: none; }
+          .club-playoffBracketViewport, .club-playoffCompactLayout { display: none !important; }
+          .club-playoffMobileBracket { display: grid; }
+          .club-playoffRoundTabs { flex-wrap: wrap; overflow: visible; }
+          .club-playoffRoundTab { flex: 1 1 calc(50% - 4px); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+          .club-playoffBracketViewport { margin-inline: 0; }
+          .club-playoffBracketScroll { padding-inline: 0; }
           .club-playoffBracketNav { height: 132px; width: 30px; }
           .club-playoffBracketNav svg { height: 24px; width: 24px; }
           .club-playoffBracketNav::before { width: 38px; }

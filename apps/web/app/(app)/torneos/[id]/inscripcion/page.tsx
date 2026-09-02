@@ -8,8 +8,10 @@ import { Banknote, CalendarDays, CheckCircle2, Clock, CreditCard, Search, Shield
 import SelpaLoader from '@/components/SelpaLoader'
 import PampraxHero from '@/components/ui/PampraxHero'
 import { ActionFeedbackNotice } from '@/components/ui/ActionFeedbackNotice'
+import { CreationSuccess } from '@/components/ui/CreationSuccess'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
+import { isTournamentRegistrationClosed } from '@/lib/tournamentDisplayStatus'
 
 type PublicTournamentDetail = {
   tournament: {
@@ -115,13 +117,6 @@ function formatDate(value?: string | null) {
 function formatMoney(value?: number | null) {
   if (!value) return 'Sin cargo informado'
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value)
-}
-
-function isRegistrationClosed(value?: string | null) {
-  if (!value) return false
-  const deadline = new Date(value)
-  if (Number.isNaN(deadline.getTime())) return false
-  return deadline.getTime() <= Date.now()
 }
 
 function getRefundEstimate(startDate?: string | null, totalAmount?: number | null) {
@@ -281,6 +276,7 @@ export default function TorneoInscripcionPage() {
   const [searching, setSearching] = useState(false)
   const [partners, setPartners] = useState<PartnerOption[]>([])
   const [partnerSearchError, setPartnerSearchError] = useState('')
+  const [partnerEmptyMessage, setPartnerEmptyMessage] = useState('No encontramos jugadores habilitados para este torneo.')
   const [selectedPartner, setSelectedPartner] = useState<PartnerOption | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
   const [currentStep, setCurrentStep] = useState<WizardStep>(1)
@@ -288,6 +284,7 @@ export default function TorneoInscripcionPage() {
   const [partnerModalOpen, setPartnerModalOpen] = useState(false)
   const [modalPartner, setModalPartner] = useState<PartnerOption | null>(null)
   const [withdrawalModalOpen, setWithdrawalModalOpen] = useState(false)
+  const [registrationSuccess, setRegistrationSuccess] = useState(false)
   const [withdrawalReason, setWithdrawalReason] = useState('')
   const [withdrawalFeedback, setWithdrawalFeedback] = useState('')
   const [withdrawalSaving, setWithdrawalSaving] = useState(false)
@@ -336,6 +333,7 @@ export default function TorneoInscripcionPage() {
     async function runSearch() {
       setPartners([])
       setPartnerSearchError('')
+      setPartnerEmptyMessage('No encontramos jugadores habilitados para este torneo.')
       if (!detail || q.length < 1) return
       setSearching(true)
       try {
@@ -348,7 +346,10 @@ export default function TorneoInscripcionPage() {
         })
         const payload = await response.json()
         if (!response.ok) throw new Error(payload?.error ?? 'No pude buscar jugadores.')
-        if (alive) setPartners(payload.partners ?? [])
+        if (alive) {
+          setPartners(payload.partners ?? [])
+          setPartnerEmptyMessage(String(payload.emptyMessage ?? 'No encontramos jugadores habilitados para este torneo.'))
+        }
       } catch (error) {
         if (alive && !(error instanceof DOMException && error.name === 'AbortError')) {
           const nextError = error instanceof Error ? error.message : 'No pude buscar jugadores.'
@@ -393,7 +394,7 @@ export default function TorneoInscripcionPage() {
   }), [availability])
   const alreadyRegistered = Boolean(detail?.viewer.isRegisteredInTournament)
   const forcePaymentStep = requestedStep === 'pago'
-  const registrationClosed = isRegistrationClosed(detail?.tournament.registrationDeadline)
+  const registrationClosed = isTournamentRegistrationClosed({ registrationDeadline: detail?.tournament.registrationDeadline })
   const tournamentPaused = String(detail?.tournament.status ?? '').toUpperCase() === 'PAUSED'
 
   useEffect(() => {
@@ -456,9 +457,15 @@ export default function TorneoInscripcionPage() {
     return () => window.clearTimeout(timer)
   }, [clubMessageToast])
 
+  useEffect(() => {
+    if (!registrationSuccess || !detail) return
+    const timer = window.setTimeout(() => router.replace(`/torneos/${detail.tournament.id}`), 5000)
+    return () => window.clearTimeout(timer)
+  }, [detail, registrationSuccess, router])
+
   async function submitRegistration() {
     if (!detail || !selectedPartner?.userId || !paymentMethod || !availabilityReady) return
-    if (isRegistrationClosed(detail.tournament.registrationDeadline)) {
+    if (isTournamentRegistrationClosed({ registrationDeadline: detail.tournament.registrationDeadline })) {
       setActionFeedback({ tone: 'error', title: 'Inscripción cerrada', message: 'La inscripción para este torneo ya finalizó.' })
       return
     }
@@ -500,16 +507,9 @@ export default function TorneoInscripcionPage() {
       }
 
       setMessage('')
-      setActionFeedback({
-        tone: 'success',
-        title: 'Inscripción enviada correctamente',
-        message: paymentMethod === 'CASH_ON_SITE_REQUEST'
-          ? 'El club debe aprobar el pago para confirmar tu lugar.'
-          : 'Tu solicitud quedó registrada correctamente.',
-      })
+      setRegistrationSuccess(true)
       const draftKey = getDraftKey(detail.tournament.id, detail.viewer.clubPlayer?.userId)
       if (draftKey) window.localStorage.removeItem(draftKey)
-      window.setTimeout(() => router.replace(`/torneos/${detail.tournament.id}`), 1500)
     } catch (error) {
       setActionFeedback({ tone: 'error', title: 'No pudimos confirmar la inscripción', message: error instanceof Error ? error.message : 'Intentá nuevamente en unos instantes.' })
     } finally {
@@ -724,6 +724,23 @@ export default function TorneoInscripcionPage() {
     ['--tournament-signup-accent' as string]: theme.vars.accent,
     ['--tournament-signup-accent-2' as string]: theme.vars.accent2,
   } as CSSProperties
+
+  if (registrationSuccess) {
+    return (
+      <main className="tournamentSignupPage" style={themeStyle}>
+        <CreationSuccess
+          kicker="Inscripción enviada"
+          title="¡Te inscribiste correctamente!"
+          message="Tu solicitud fue enviada al club. Te avisaremos cuando quede confirmada."
+          nextStep="El torneo conserva el estado de tu inscripción y pago."
+          actionLabel="Ir al torneo"
+          onAction={() => router.replace(`/torneos/${detail.tournament.id}`)}
+          redirectLabel="Volviendo al torneo en 5 s"
+          accent={theme.vars.accent}
+        />
+      </main>
+    )
+  }
 
   return (
     <main className={`tournamentSignupPage ${!detail.viewer.isAuthenticated ? 'is-guest-signup' : ''}`} style={themeStyle}>
@@ -1025,7 +1042,7 @@ export default function TorneoInscripcionPage() {
                       <div className="tournamentSignupPage__results">
                         {searching ? <div className="tournamentSignupPage__emptyPartner">Buscando jugadores...</div> : null}
                         {!searching && !partnerSearchError && search.trim().length >= 1 && !partners.length ? (
-                          <div className="tournamentSignupPage__emptyPartner">No se encontraron jugadores.</div>
+                          <div className="tournamentSignupPage__emptyPartner">{partnerEmptyMessage}</div>
                         ) : null}
                         {partners.map((partner) => (
                           <button
@@ -1269,7 +1286,7 @@ export default function TorneoInscripcionPage() {
               <div className="tournamentSignupPage__modalResults">
                 {searching ? <div className="tournamentSignupPage__emptyPartner">Buscando jugadores...</div> : null}
                 {!searching && !partnerSearchError && search.trim().length >= 1 && !partners.length ? (
-                  <div className="tournamentSignupPage__emptyPartner">No se encontraron jugadores.</div>
+                  <div className="tournamentSignupPage__emptyPartner">{partnerEmptyMessage}</div>
                 ) : null}
                 {!searching && search.trim().length < 1 ? (
                   <div className="tournamentSignupPage__emptyPartner">Empezá a escribir para buscar.</div>
@@ -2035,13 +2052,12 @@ export default function TorneoInscripcionPage() {
         }
 
         .tournamentSignupPage__confirmActions > button.is-secondary {
-          background: transparent;
-          border-color: transparent;
-          color: #475569;
+          background: rgba(255,255,255,.86);
+          border-color: rgba(11,37,84,.24);
+          color: #0b2554;
           font-size: 13px;
-          min-height: 36px;
-          text-decoration: underline;
-          text-underline-offset: 3px;
+          min-height: 44px;
+          text-decoration: none;
         }
 
         .tournamentSignupPage__confirmActions > button:disabled { cursor: not-allowed; opacity: .45; }

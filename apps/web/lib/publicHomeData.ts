@@ -37,7 +37,9 @@ export async function getPublicHomeData() {
     .not('status', 'in', '("DRAFT","CANCELLED","CANCELED","CANCELADO","ARCHIVED","FINISHED","COMPLETED","FINALIZADO","CLOSED")')
     .order('starts_on', { ascending: true, nullsFirst: false })
     .order('start_date', { ascending: true, nullsFirst: false })
-    .limit(12)
+    // La comunidad prioriza torneos vigentes y próximos. Un límite corto ordenado
+    // desde las fechas antiguas terminaba ocultándolos detrás de eventos históricos.
+    .limit(72)
 
   const tournamentViewsRaw = (tournamentRows ?? []).map((row: any) => toTournamentView(row)).filter(Boolean)
   const featuredTournamentIds = tournamentViewsRaw.map((item: any) => item.id).filter(Boolean)

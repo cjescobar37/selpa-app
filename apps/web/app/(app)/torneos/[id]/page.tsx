@@ -10,6 +10,7 @@ import PampraxHero from '@/components/ui/PampraxHero'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import { BRAND } from '@/lib/branding'
+import { isTournamentRegistrationClosed } from '@/lib/tournamentDisplayStatus'
 
 type PublicTournamentDetail = {
   tournament: {
@@ -215,13 +216,6 @@ function getPostRegistrationPaymentView(status?: string | null, method?: string 
   }
 }
 
-function isRegistrationClosed(value?: string | null) {
-  if (!value) return false
-  const deadline = new Date(value)
-  if (Number.isNaN(deadline.getTime())) return false
-  return deadline.getTime() <= Date.now()
-}
-
 function getRefundEstimate(startDate?: string | null, totalAmount?: number | null) {
   if (!startDate) return { percent: 0, amount: 0, label: 'Sujeto a aprobación del club' }
   const startsAt = new Date(startDate.includes('T') ? startDate : `${startDate}T00:00:00`)
@@ -356,7 +350,7 @@ export default function TorneoDetallePage() {
   const [clubMessageOpen, setClubMessageOpen] = useState(false)
   const [clubMessage, setClubMessage] = useState('')
   const [clubMessageFeedback, setClubMessageFeedback] = useState('')
-  const [clubMessageNotice, setClubMessageNotice] = useState('')
+  const [actionNotice, setActionNotice] = useState('')
   const [clubMessageSaving, setClubMessageSaving] = useState(false)
   const [withdrawalOpen, setWithdrawalOpen] = useState(false)
   const [withdrawalReason, setWithdrawalReason] = useState('')
@@ -397,10 +391,10 @@ export default function TorneoDetallePage() {
   }, [tournamentId])
 
   useEffect(() => {
-    if (!clubMessageNotice) return
-    const timer = window.setTimeout(() => setClubMessageNotice(''), 3000)
+    if (!actionNotice) return
+    const timer = window.setTimeout(() => setActionNotice(''), 3000)
     return () => window.clearTimeout(timer)
-  }, [clubMessageNotice])
+  }, [actionNotice])
 
   if (loading) {
     return (
@@ -433,7 +427,6 @@ export default function TorneoDetallePage() {
       : 'A definir'
   const tiebreakerSteps = getTiebreakerSteps(detail.tournament.rulesSummary.tiebreaker)
   const subtitle = [
-    detail.club?.name,
     detail.labels.category,
     detail.labels.gender,
     detail.labels.segment,
@@ -446,7 +439,7 @@ export default function TorneoDetallePage() {
   const progressMax = detail.capacity.maxPairs ?? 0
   const progressPercent = progressMax > 0 ? Math.min(100, Math.max(0, (detail.capacity.registeredTeamsCount / progressMax) * 100)) : 0
   const countdown = getCountdownParts(detail.dates.registrationDeadline)
-  const registrationClosed = isRegistrationClosed(detail.dates.registrationDeadline)
+  const registrationClosed = isTournamentRegistrationClosed({ registrationDeadline: detail.dates.registrationDeadline })
   const tournamentPaused = String(detail.tournament.status ?? '').toUpperCase() === 'PAUSED'
   const theme = getClubTheme(detail.club?.themeKey)
   const themeStyle = {
@@ -492,6 +485,7 @@ export default function TorneoDetallePage() {
       setWithdrawalSubmitted(true)
       setWithdrawalReason('')
       setWithdrawalOpen(false)
+      setActionNotice('Solicitud de baja enviada. El club la revisará a la brevedad.')
     } catch (error) {
       setWithdrawalFeedback(error instanceof Error ? error.message : 'No pude enviar la solicitud de baja.')
     } finally {
@@ -504,7 +498,7 @@ export default function TorneoDetallePage() {
 
     setClubMessageSaving(true)
     setClubMessageFeedback('')
-    setClubMessageNotice('')
+    setActionNotice('')
 
     try {
       const { data: sessionData } = await supabase.auth.getSession()
@@ -530,7 +524,7 @@ export default function TorneoDetallePage() {
       setClubMessage('')
       setClubMessageFeedback('')
       setClubMessageOpen(false)
-      setClubMessageNotice('Mensaje enviado al club correctamente.')
+      setActionNotice('Mensaje enviado al club correctamente.')
     } catch (err) {
       setClubMessageFeedback(err instanceof Error ? err.message : 'No se pudo enviar el mensaje.')
     } finally {
@@ -539,7 +533,7 @@ export default function TorneoDetallePage() {
   }
 
   return (
-    <main className="tournamentPublicDetail" style={themeStyle}>
+    <main className={`tournamentPublicDetail${registrationClosed ? ' is-registrationClosed' : ''}`} style={themeStyle}>
       <PampraxHero
         kicker={clubLocation || detail.club?.name || `Torneo ${BRAND.name}`}
         mobileKicker={detail.club?.name || `Torneo ${BRAND.name}`}
@@ -547,7 +541,8 @@ export default function TorneoDetallePage() {
         subtitle={subtitle}
         mobileSubtitle={`${subtitle} · ${formatSystem(detail.tournament.rulesSummary.competitionSystem ?? detail.tournament.format)}`}
         statusBadge={tournamentPaused ? { label: 'Torneo pausado', tone: 'info' } : registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : detail.status.key === 'registration_open' ? { label: 'Inscripción abierta', tone: 'success' } : { label: detail.status.label, tone: 'info' }}
-        mobilePrimaryAction={{ label: 'Volver a torneos', href: '/torneos' }}
+        mobileStatusBadge={tournamentPaused ? { label: 'Torneo pausado', tone: 'info' } : registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : detail.status.key === 'registration_open' ? { label: 'Inscripción abierta', tone: 'success' } : { label: detail.status.label, tone: 'info' }}
+        mobilePrimaryAction={{ label: '← Volver', href: '/torneos' }}
         secondaryAction={detail.club ? { label: 'Ver club', href: `/clubs/${detail.club.id}` } : { label: 'Calendario', href: '/torneos' }}
         logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'SE' }}
         mobileStats={[
@@ -559,7 +554,7 @@ export default function TorneoDetallePage() {
         variant={detail.viewer.isAuthenticated ? 'player-tournament' : 'default'}
       />
 
-      <section id="estado-jugador" className="tournamentPublicDetail__landingPitch">
+      <section id="estado-jugador" className={`tournamentPublicDetail__landingPitch${registrationClosed ? ' is-registrationClosed' : ''}`}>
         {detail.viewer.isRegisteredInTournament && detail.viewer.myTeam ? (
           <div className="tournamentPublicDetail__registeredBlock">
             <div className="tournamentPublicDetail__registeredIntro">
@@ -579,7 +574,7 @@ export default function TorneoDetallePage() {
                     type="button"
                     onClick={() => {
                       setClubMessageFeedback('')
-                      setClubMessageNotice('')
+                      setActionNotice('')
                       setClubMessageOpen(true)
                     }}
                   >
@@ -593,7 +588,7 @@ export default function TorneoDetallePage() {
                 ) : null}
                 {withdrawalPending ? (
                   <div className="tournamentPublicDetail__withdrawPending">
-                    <b>Baja solicitada</b>
+                    <b>Baja enviada</b>
                     <small>
                       {detail.viewer.myTeam?.registrationChangeRequest?.refundPercent !== null &&
                       detail.viewer.myTeam?.registrationChangeRequest?.refundPercent !== undefined
@@ -623,7 +618,7 @@ export default function TorneoDetallePage() {
               <h2>{tournamentPaused ? 'Torneo pausado' : registrationClosed ? 'Inscripción cerrada' : 'No te quedes afuera'}</h2>
               <p>{tournamentPaused ? 'El club pausó temporalmente las inscripciones.' : registrationClosed ? 'La inscripción para este torneo ya finalizó.' : 'Asegurá tu lugar y llegá listo para competir.'}</p>
             </div>
-            <div className="tournamentPublicDetail__signupCard">
+            <div className={`tournamentPublicDetail__signupCard${registrationClosed ? ' is-registrationClosed' : ''}`}>
               {tournamentPaused ? (
                 <div className="tournamentPublicDetail__closedBox">
                   <strong>TORNEO PAUSADO</strong>
@@ -859,10 +854,10 @@ export default function TorneoDetallePage() {
         </div>
       ) : null}
 
-      {clubMessageNotice ? (
+      {actionNotice ? (
         <div className="tournamentPublicDetail__toast" role="status" aria-live="polite">
           <span aria-hidden="true"><CheckCircle2 size={16} /></span>
-          <p>{clubMessageNotice}</p>
+          <p>{actionNotice}</p>
         </div>
       ) : null}
 
@@ -1261,12 +1256,13 @@ export default function TorneoDetallePage() {
           border: 0;
           border-radius: 0;
           display: grid;
-          gap: 8px;
-          grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+          gap: 6px;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
           padding: 2px 0 0;
         }
 
-        .tournamentPublicDetail__registeredActions button {
+        .tournamentPublicDetail__registeredActions button,
+        .tournamentPublicDetail__registeredActions a {
           align-items: center;
           border: 1px solid color-mix(in srgb, var(--pamprax-hero-accent, #22d3ee) 26%, rgba(15,23,42,.10));
           border-radius: 999px;
@@ -1277,27 +1273,11 @@ export default function TorneoDetallePage() {
           font-size: 12px;
           font-weight: 950;
           justify-content: center;
-          min-height: 44px;
+          min-height: 46px;
           min-width: 0;
           padding: 0 9px;
           transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
           white-space: nowrap;
-        }
-
-        .tournamentPublicDetail__registeredActions a {
-          align-items: center;
-          border: 1px solid color-mix(in srgb, var(--pamprax-hero-accent, #22d3ee) 26%, rgba(15,23,42,.10));
-          border-radius: 999px;
-          background: rgba(255,255,255,.9);
-          color: #061a3f;
-          display: inline-flex;
-          font-size: 12px;
-          font-weight: 950;
-          justify-content: center;
-          min-height: 32px;
-          padding: 0 12px;
-          text-decoration: none;
-          transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
         }
 
         .tournamentPublicDetail__registeredActions button:not(:disabled):hover,
@@ -1320,14 +1300,26 @@ export default function TorneoDetallePage() {
           font-size: 12px;
         }
 
+        @media (max-width: 430px) {
+          .tournamentPublicDetail__registeredActions button,
+          .tournamentPublicDetail__registeredActions a,
+          .tournamentPublicDetail__registeredActions button.is-danger {
+            font-size: 10.5px;
+            letter-spacing: -.018em;
+            min-height: 46px;
+            padding-inline: 6px;
+          }
+        }
+
         .tournamentPublicDetail__withdrawPending {
           background: rgba(245,158,11,.13);
           border: 1px solid rgba(253,230,138,.34);
           border-radius: 13px;
           display: grid;
-          gap: 2px;
-          min-height: 44px;
-          padding: 7px 11px;
+          align-content: center;
+          gap: 1px;
+          min-height: 46px;
+          padding: 6px 9px;
           width: 100%;
         }
 
@@ -1413,8 +1405,74 @@ export default function TorneoDetallePage() {
 
         .tournamentPublicDetail__registeredStatus .tournamentPublicDetail__registeredStatusNote {
           color: rgba(255,255,255,.66);
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 800;
+        }
+
+        .tournamentPublicDetail__landingPitch.is-registrationClosed {
+          border-color: rgba(239,68,68,.32);
+          background:
+            radial-gradient(circle at 8% 0%, rgba(254,226,226,.7), transparent 34%),
+            rgba(255,255,255,.96);
+        }
+
+        .tournamentPublicDetail.is-registrationClosed .pampraxHero__statusBadge {
+          background: rgba(254,226,226,.9);
+          border-color: rgba(239,68,68,.28);
+          color: #b91c1c;
+        }
+
+        .tournamentPublicDetail__landingPitch.is-registrationClosed::before {
+          background: linear-gradient(180deg,#ef4444,#fb7185);
+        }
+
+        .tournamentPublicDetail__landingPitch.is-registrationClosed .tournamentPublicDetail__eyebrow,
+        .tournamentPublicDetail__landingPitch.is-registrationClosed .tournamentPublicDetail__pitchCopy > strong {
+          color: #b91c1c;
+        }
+
+        .tournamentPublicDetail__landingPitch.is-registrationClosed .tournamentPublicDetail__pitchCopy {
+          background: linear-gradient(135deg,rgba(254,242,242,.9),rgba(255,255,255,.9));
+          border-color: rgba(239,68,68,.22);
+        }
+
+        .tournamentPublicDetail__signupCard.is-registrationClosed {
+          background: linear-gradient(145deg,#fff,#fff7f7 62%,#fff1f2);
+          border-color: rgba(239,68,68,.3);
+          box-shadow: 0 20px 42px rgba(239,68,68,.1);
+          color: #0f172a;
+        }
+
+        .tournamentPublicDetail__signupCard.is-registrationClosed .tournamentPublicDetail__closedBox {
+          background: rgba(254,226,226,.58);
+          border-color: rgba(239,68,68,.28);
+          color: #991b1b;
+        }
+
+        .tournamentPublicDetail__signupCard.is-registrationClosed .tournamentPublicDetail__closedBox strong {
+          color: #b91c1c;
+        }
+
+        .tournamentPublicDetail__signupCard.is-registrationClosed .tournamentPublicDetail__closedBox span,
+        .tournamentPublicDetail__signupCard.is-registrationClosed .tournamentPublicDetail__pitchFacts span {
+          color: #475569;
+        }
+
+        .tournamentPublicDetail__signupCard.is-registrationClosed a:first-of-type {
+          animation: none;
+          background: #fff;
+          border-color: rgba(239,68,68,.28);
+          box-shadow: none;
+          color: #b91c1c;
+        }
+
+        .tournamentPublicDetail__signupCard.is-registrationClosed .tournamentPublicDetail__pitchFacts span {
+          background: rgba(254,242,242,.72);
+          border-color: rgba(239,68,68,.16);
+        }
+
+        .tournamentPublicDetail__signupCard.is-registrationClosed .tournamentPublicDetail__pitchFacts b {
+          color: #b91c1c;
         }
 
         .tournamentPublicDetail__registeredStatus small {
@@ -1423,7 +1481,7 @@ export default function TorneoDetallePage() {
           border-radius: 999px;
           color: rgba(255,255,255,.84);
           display: inline-flex;
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 900;
           letter-spacing: 0;
           padding: 5px 8px;
@@ -1455,7 +1513,7 @@ export default function TorneoDetallePage() {
           min-height: 34px;
           padding: 0 11px;
           text-decoration: none;
-          width: fit-content;
+          width: 100%;
           box-shadow: 0 14px 34px rgba(2,8,23,.16);
           transition: transform .18s ease, box-shadow .18s ease;
         }

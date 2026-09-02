@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import SelpaLoader from '@/components/SelpaLoader'
+import CommunityTournamentCalendar from '@/components/public/CommunityTournamentCalendar'
 import PublicHomeExperience from '@/components/public/PublicHomeExperience'
 
 type PublicHomeData = {
@@ -95,6 +96,7 @@ export default function PublicHomeEmbed({ userName }: { userName?: string | null
         metrics={data.metrics}
         clubs={data.clubs}
         hideHero
+        afterTournaments={<CommunityTournamentCalendar tournaments={data.tournaments} />}
       />
       <style>{`
         .modeCommunityHero {

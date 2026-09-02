@@ -124,7 +124,7 @@ function queryMatches(currentSearch: string, href: string) {
   return true
 }
 
-function isActiveHref(pathname: string | null, currentSearch: string, href: string, exact?: boolean) {
+function isActiveHref(pathname: string | null, currentSearch: string, href: string, exact = true) {
   const p = normalizePath(pathname)
   const h = normalizePath(href)
   if (exact) {
@@ -144,7 +144,7 @@ function isActiveChild(pathname: string | null, currentSearch: string, child: Na
 
 function isActiveItem(pathname: string | null, currentSearch: string, item: NavItem) {
   if (isActiveHref(pathname, currentSearch, item.href, item.exact)) return true
-  if (item.activePrefixes?.some((prefix) => isActiveHref(pathname, currentSearch, prefix))) return true
+  if (item.activePrefixes?.some((prefix) => isActiveHref(pathname, currentSearch, prefix, false))) return true
   if (item.children?.length) {
     return item.children.some((c) => isActiveChild(pathname, currentSearch, c))
   }
@@ -194,6 +194,19 @@ function notificationIconLabel(type: string) {
   if (key.includes('cancel') || key.includes('baja')) return 'B'
   if (key.includes('club')) return 'C'
   return 'P'
+}
+
+function cancellationRequestDestination(item: PreviewNotification) {
+  if (item.type !== 'registration_cancel_requested') return null
+
+  if (item.href?.startsWith('/club/solicitudes')) return item.href
+  const registrationId = typeof item.metadata?.registration_id === 'string' ? item.metadata.registration_id : null
+  const requestId = typeof item.metadata?.request_id === 'string' ? item.metadata.request_id : null
+  const query = new URLSearchParams({ tab: 'inscriptos' })
+  query.set('tab', 'bajas')
+  if (registrationId) query.set('registrationId', registrationId)
+  if (requestId) query.set('requestId', requestId)
+  return `/club/solicitudes?${query.toString()}`
 }
 
 function notificationGroup(type: string) {
@@ -311,8 +324,6 @@ export default function AppNavbarClient() {
   const [previewModal, setPreviewModal] = useState<PreviewNotification | null>(null)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
-  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null)
-  const [profileDisplayName, setProfileDisplayName] = useState('')
   const [playerCategory, setPlayerCategory] = useState<number | null>(null)
 
   const isAuthed = (role || 'guest') !== 'guest'
@@ -324,7 +335,7 @@ export default function AppNavbarClient() {
   const displayClub = activeClub ?? clubs?.[0] ?? null
   const isGlobalPublicNav = !isAuthed && !displayClub?.id
   const displayClubName = displayClub?.name?.trim() ? displayClub.name : 'Sin club'
-  const visibleUserName = profileDisplayName || user?.name?.trim() || user?.email?.trim() || (role === 'club' ? 'Administrador' : 'Usuario')
+  const visibleUserName = user?.name?.trim() || user?.email?.trim() || (role === 'club' ? 'Administrador' : 'Usuario')
   const formattedVisibleUserName = visibleUserName.includes('@') ? visibleUserName : toTitleCaseName(visibleUserName)
   const clubPublicHomeHref = displayClub?.id ? `/clubs/${displayClub.id}` : '/club'
   const nav = useMemo(() => {
@@ -358,36 +369,6 @@ export default function AppNavbarClient() {
     setMobileMenuOpen(false)
     setSearchOpen(false)
   }
-
-  useEffect(() => {
-    let alive = true
-
-    ;(async () => {
-      if (!user?.id) {
-        setProfileAvatarUrl(null)
-        setProfileDisplayName('')
-        return
-      }
-
-      const { data } = await supabase
-        .from('profiles')
-        .select('avatar_url,display_name,first_name,last_name')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (alive) {
-        setProfileAvatarUrl((data?.avatar_url as string | null) ?? null)
-        setProfileDisplayName(
-          String(data?.display_name ?? '').trim()
-          || [data?.first_name, data?.last_name].filter(Boolean).join(' ').trim()
-        )
-      }
-    })()
-
-    return () => {
-      alive = false
-    }
-  }, [user?.id])
 
   useEffect(() => {
     let alive = true
@@ -572,7 +553,10 @@ export default function AppNavbarClient() {
     return () => {
       alive = false
     }
-  }, [isAuthed, pathname, role, user?.id])
+  // Los contadores no dependen de la ruta. Recargarlos en cada navegación hacía
+  // tres consultas extra y volvía más lenta toda la app; se actualizan al abrir
+  // el panel y cuando el usuario o rol cambian.
+  }, [isAuthed, role, user?.id])
 
   function closeAllMenus() {
     setNavOpenIndex(null)
@@ -705,7 +689,7 @@ export default function AppNavbarClient() {
 
     const destination = item.type === 'club_membership_requested'
       ? '/club/solicitudes'
-      : item.href || item.link
+      : cancellationRequestDestination(item) || item.href || item.link
     if (destination) {
       router.push(destination)
       return
@@ -724,7 +708,7 @@ export default function AppNavbarClient() {
 
   function UserAvatar() {
     const [broken, setBroken] = useState(false)
-    const avatarSrc = profileAvatarUrl || user?.avatarUrl || null
+    const avatarSrc = user?.avatarUrl || null
 
     useEffect(() => {
       setBroken(false)
@@ -752,7 +736,7 @@ export default function AppNavbarClient() {
           <div className="px-playerUserMenu__identity">
             <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
             <div>
-              <strong>{toTitleCaseName(user?.name)}</strong>
+              <strong>{formattedVisibleUserName}</strong>
               {user?.email ? <small>{user.email}</small> : null}
               {playerIdentityMeta ? <em>{playerIdentityMeta}</em> : null}
             </div>
@@ -1222,7 +1206,7 @@ export default function AppNavbarClient() {
             aria-controls="player-navbar-player-popover"
           >
             <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
-            <span className="px-mobileUserName">{role === 'player' ? getFirstVisibleName(visibleUserName) : formattedVisibleUserName}</span>
+            <span className="px-mobileUserName">{getFirstVisibleName(visibleUserName)}</span>
             <ChevronDown size={14} className="px-caret" />
           </button>
           {renderUserMenu(true)}

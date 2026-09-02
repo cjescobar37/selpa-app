@@ -37,10 +37,16 @@ export type TournamentPublicCardData = {
   } | null
 }
 
+function parseTournamentDate(value?: string | null) {
+  if (!value) return null
+  const date = new Date(`${value.slice(0, 10)}T12:00:00`)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 function dateParts(value?: string | null) {
   if (!value) return { day: '--', month: 'Fecha', year: 'A definir' }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return { day: '--', month: 'Fecha', year: 'A definir' }
+  const date = parseTournamentDate(value)
+  if (!date) return { day: '--', month: 'Fecha', year: 'A definir' }
   return {
     day: new Intl.DateTimeFormat('es-AR', { day: '2-digit' }).format(date),
     month: new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(date).replace('.', ''),
@@ -68,31 +74,43 @@ function getTournamentType(value: TournamentPublicCardData) {
 
 function formatCompactDate(value?: string | null) {
   if (!value) return 'A definir'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'A definir'
+  const date = parseTournamentDate(value)
+  if (!date) return 'A definir'
   return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short', year: '2-digit' }).format(date).replace('.', '')
 }
 
 function formatAgendaDay(value?: string | null) {
   if (!value) return 'A definir'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'A definir'
+  const date = parseTournamentDate(value)
+  if (!date) return 'A definir'
   return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short' }).format(date).replace('.', '')
 }
 
 function formatAgendaDayWithPreposition(value?: string | null) {
   if (!value) return 'A definir'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'A definir'
+  const date = parseTournamentDate(value)
+  if (!date) return 'A definir'
   const month = new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(date).replace('.', '')
   return `${date.getDate()} de ${month}`
 }
 
+function formatAgendaDeadline(value?: string | null) {
+  if (!value) return 'A definir'
+  const date = value.includes('T') ? new Date(value) : parseTournamentDate(value)
+  if (!date || Number.isNaN(date.getTime())) return formatAgendaDayWithPreposition(value)
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `El ${day}/${month}/${year} a las ${hours}:${minutes}`
+}
+
 function formatAgendaRange(start?: string | null, end?: string | null) {
   if (!start) return 'Fecha a definir'
-  const startDate = new Date(start)
-  const endDate = end ? new Date(end) : null
-  if (Number.isNaN(startDate.getTime()) || (endDate && Number.isNaN(endDate.getTime()))) return formatAgendaDay(start)
+  const startDate = parseTournamentDate(start)
+  const endDate = end ? parseTournamentDate(end) : null
+  if (!startDate || (end && !endDate)) return formatAgendaDay(start)
   if (!endDate || startDate.toDateString() === endDate.toDateString()) return `El ${formatAgendaDayWithPreposition(start)}`
   const sameMonth = startDate.getMonth() === endDate.getMonth() && startDate.getFullYear() === endDate.getFullYear()
   if (sameMonth) {
@@ -155,7 +173,7 @@ export default function TournamentPublicCard({
   } as CSSProperties
 
   return (
-    <article className={`TournamentPublicCard ${flyer ? 'has-flyer' : ''}${manualFlyer ? ' is-manual-flyer' : ''}${circuitPosition ? ' has-circuit' : ''}${compactAgenda ? ' is-agendaCompact' : ''}`} style={style}>
+    <article className={`TournamentPublicCard ${flyer ? 'has-flyer' : ''}${manualFlyer ? ' is-manual-flyer' : ''}${circuitPosition ? ' has-circuit' : ''}${compactAgenda ? ' is-agendaCompact' : ''}${displayStatus.key === 'finished' ? ' is-finished' : ''}`} style={style}>
       <Link className="TournamentPublicCard__hitArea" href={`/torneos/${tournament.id}`} aria-label={`Entrar al torneo ${tournament.name}`} />
       <div className="TournamentPublicCard__poster">
         {flyer ? <img src={flyer} alt="" /> : null}
@@ -199,7 +217,10 @@ export default function TournamentPublicCard({
         {compactAgenda ? (
           <div className="TournamentPublicCard__agendaDates">
             <CalendarDays size={14} aria-hidden="true" />
-            <span>{formatAgendaRange(tournament.startDate, endDate ?? tournament.endDate ?? tournament.startDate)}{tournament.registrationDeadline ? ` · Cierre ${formatAgendaDayWithPreposition(tournament.registrationDeadline)}` : ''}</span>
+            <div>
+              <span>{formatAgendaRange(tournament.startDate, endDate ?? tournament.endDate ?? tournament.startDate)}</span>
+              {tournament.registrationDeadline ? <small>Cierra el {formatAgendaDeadline(tournament.registrationDeadline).replace(/^El /, '')}</small> : null}
+            </div>
             <ArrowRight aria-hidden="true" size={21} />
           </div>
         ) : (

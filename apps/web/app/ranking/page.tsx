@@ -31,7 +31,7 @@ type ProfileRow = {
 
 function displayName(player: ClubPlayerRow, profile?: ProfileRow | null) {
   const fullName = `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim()
-  return player.display_name || profile?.display_name || fullName || `Jugador ${BRAND.name}`
+  return fullName || profile?.display_name || player.display_name || `Jugador ${BRAND.name}`
 }
 
 export default async function RankingPublicPage({

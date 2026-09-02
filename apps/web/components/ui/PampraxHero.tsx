@@ -97,7 +97,7 @@ export default function PampraxHero({
   } as CSSProperties
 
   return (
-    <section className={`pampraxHero ${cover ? 'has-cover' : ''} ${logo ? 'has-identity-logo' : ''} ${mobileKicker ? 'has-mobile-kicker' : ''} ${mobileSubtitle ? 'has-mobile-subtitle' : ''} ${mobileStats?.length ? 'has-mobile-stats' : ''} ${variant === 'player-tournament' ? 'is-player-tournament' : ''}`} style={style}>
+    <section className={`pampraxHero ${cover ? 'has-cover' : ''} ${logo ? 'has-identity-logo' : ''} ${mobileKicker ? 'has-mobile-kicker' : ''} ${mobileSubtitle ? 'has-mobile-subtitle' : ''} ${mobileStats?.length ? 'has-mobile-stats' : ''} ${mobileStatusBadge ? 'has-mobile-status' : ''} ${variant === 'player-tournament' ? 'is-player-tournament' : ''}`} style={style}>
       <div className="pampraxHero__texture" aria-hidden="true" />
       <div className={`pampraxHero__body ${logo ? 'has-logo' : ''}`}>
         {logo ? (
@@ -138,7 +138,7 @@ export default function PampraxHero({
       {hasActions ? (
         <div className="pampraxHero__actions">
           {statusBadge ? (
-            <div className={`pampraxHero__statusBadge is-${statusBadge.tone ?? 'info'}`}>
+            <div className={`pampraxHero__statusBadge pampraxHero__statusBadge--default is-${statusBadge.tone ?? 'info'}`}>
               <span />
               {statusBadge.label}
             </div>

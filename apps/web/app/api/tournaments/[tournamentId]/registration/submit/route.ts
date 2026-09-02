@@ -5,6 +5,7 @@ import { notifyClubAdmins } from '@/lib/operationalNotifications'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
+import { getTournamentRegistrationIneligibility } from '@/lib/tournamentRegistrationEligibility'
 
 type RegistrationSubmitContext = {
   params: Promise<{ tournamentId: string }>
@@ -21,22 +22,6 @@ async function getTokenUser(req: NextRequest) {
   const { data, error } = await supabaseAdmin.auth.getUser(token)
   if (error || !data?.user) return null
   return data.user
-}
-
-function normalizeGender(value?: string | null) {
-  const normalized = String(value ?? '').trim().toUpperCase()
-  if (normalized === 'M' || normalized === 'MALE' || normalized === 'MASCULINO') return 'MALE'
-  if (normalized === 'F' || normalized === 'FEMALE' || normalized === 'FEMENINO' || normalized === 'MUJERES') return 'FEMALE'
-  if (normalized.includes('MIX')) return 'MIXED'
-  return normalized || null
-}
-
-function ageAtDate(birthDate: string, referenceDate: string) {
-  const birth = new Date(`${birthDate.slice(0, 10)}T00:00:00Z`)
-  const reference = new Date(`${referenceDate.slice(0, 10)}T00:00:00Z`)
-  let age = reference.getUTCFullYear() - birth.getUTCFullYear()
-  if (reference.getUTCMonth() < birth.getUTCMonth() || (reference.getUTCMonth() === birth.getUTCMonth() && reference.getUTCDate() < birth.getUTCDate())) age -= 1
-  return age
 }
 
 const allowedPaymentMethods = new Set(['MERCADO_PAGO', 'CASH_ON_SITE_REQUEST', 'BANK_TRANSFER'])
@@ -110,17 +95,13 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
   if (!tournament) return NextResponse.json({ error: 'Torneo no encontrado.' }, { status: 404 })
 
   const displayStatus = getTournamentDisplayStatus(tournament)
-  if (displayStatus.key === 'finished' || displayStatus.key === 'cancelled' || displayStatus.key === 'draft') {
+  if (displayStatus.key === 'finished' || displayStatus.key === 'cancelled' || displayStatus.key === 'draft' || displayStatus.key === 'paused' || displayStatus.key === 'registration_closed') {
     return NextResponse.json({ error: 'Este torneo no está abierto para inscripciones.' }, { status: 409 })
-  }
-
-  if (tournament.registrationDeadline && new Date() > new Date(tournament.registrationDeadline)) {
-    return NextResponse.json({ error: 'La inscripción ya cerró.' }, { status: 409 })
   }
 
   const { data: players, error: playersError } = await supabaseAdmin
     .from('club_players')
-    .select('id,user_id,category,gender,approved_at')
+    .select('id,user_id,category,gender,approved_at,operational_status')
     .eq('club_id', tournament.club_id)
     .in('user_id', [user.id, partnerUserId])
 
@@ -133,22 +114,10 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
   const partner = (players ?? []).find((player) => String(player.user_id) === partnerUserId)
   if (!me?.id) return NextResponse.json({ error: 'No tenés perfil de jugador en este club.' }, { status: 403 })
   if (!partner?.id) return NextResponse.json({ error: 'El compañero no pertenece a este club.' }, { status: 400 })
-  if (!me.approved_at || !partner.approved_at) {
-    return NextResponse.json({ error: 'Ambos jugadores deben estar aprobados en el club.' }, { status: 403 })
-  }
 
-  const tournamentCategory = Number(tournament.category ?? 0)
-  if (tournamentCategory > 0) {
-    if (Number(me.category ?? 0) < tournamentCategory) {
-      return NextResponse.json({ error: `Tu categoría no habilita este torneo (${tournamentCategory}).` }, { status: 409 })
-    }
-    if (Number(partner.category ?? 0) < tournamentCategory) {
-      return NextResponse.json({ error: `La categoría de tu compañero no habilita este torneo (${tournamentCategory}).` }, { status: 409 })
-    }
-  }
-
+  let ageCategory: { minAge: number | null; maxAge: number | null; referenceRule: string | null; referenceConfig: Record<string, unknown> | null } | null = null
   if (tournament.ageCategoryId) {
-    const { data: ageCategory, error: ageCategoryError } = await supabaseAdmin
+    const { data: ageCategoryRow, error: ageCategoryError } = await supabaseAdmin
       .from('competition_age_categories')
       .select('id,club_id,min_age,max_age,age_reference_rule,age_reference_config')
       .eq('id', tournament.ageCategoryId).eq('club_id', tournament.club_id).maybeSingle()
@@ -156,36 +125,41 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
       const mapped = mapTournamentError(ageCategoryError, 'No pudimos validar la categoría de edad. Intentá nuevamente.')
       return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
     }
-    if (!ageCategory) return NextResponse.json({ error: 'La categoría de edad del torneo ya no está disponible.' }, { status: 409 })
-    const { data: profiles, error: profilesError } = await supabaseAdmin.from('profiles').select('user_id,birth_date').in('user_id', [user.id, partnerUserId])
-    if (profilesError) {
-      const mapped = mapTournamentError(profilesError, 'No pudimos validar los perfiles de los jugadores. Intentá nuevamente.')
-      return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status })
-    }
-    const referenceRule = String(ageCategory.age_reference_rule)
-    const config = ageCategory.age_reference_config && typeof ageCategory.age_reference_config === 'object' ? ageCategory.age_reference_config as Record<string, unknown> : {}
-    const referenceDate = referenceRule === 'CALENDAR_YEAR_END'
-      ? `${new Date(`${tournament.startDate ?? tournament.endDate}T00:00:00Z`).getUTCFullYear()}-12-31`
-      : referenceRule === 'FIXED_DATE' ? String(config.date ?? '') : String(tournament.startDate ?? '')
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(referenceDate)) return NextResponse.json({ error: 'La regla de edad del torneo no tiene una fecha válida.' }, { status: 409 })
-    for (const player of [{ id: user.id, label: 'Tu perfil' }, { id: partnerUserId, label: 'El perfil de tu compañero' }]) {
-      const birthDate = String((profiles ?? []).find(profile => String(profile.user_id) === player.id)?.birth_date ?? '')
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return NextResponse.json({ error: `${player.label} no tiene fecha de nacimiento completa.` }, { status: 409 })
-      const age = ageAtDate(birthDate, referenceDate)
-      if ((ageCategory.min_age !== null && age < Number(ageCategory.min_age)) || (ageCategory.max_age !== null && age > Number(ageCategory.max_age))) {
-        return NextResponse.json({ error: `${player.label} no cumple la edad requerida para este torneo.` }, { status: 409 })
-      }
+    if (!ageCategoryRow) return NextResponse.json({ error: 'La categoría de edad del torneo ya no está disponible.' }, { status: 409 })
+    ageCategory = {
+      minAge: ageCategoryRow.min_age,
+      maxAge: ageCategoryRow.max_age,
+      referenceRule: ageCategoryRow.age_reference_rule,
+      referenceConfig: ageCategoryRow.age_reference_config && typeof ageCategoryRow.age_reference_config === 'object' ? ageCategoryRow.age_reference_config as Record<string, unknown> : null,
     }
   }
 
-  if (tournament.gender !== 'MIXED') {
-    const tournamentGender = normalizeGender(tournament.gender)
-    if (normalizeGender(me.gender) && normalizeGender(me.gender) !== tournamentGender) {
-      return NextResponse.json({ error: 'Tu rama no coincide con la del torneo.' }, { status: 409 })
-    }
-    if (normalizeGender(partner.gender) && normalizeGender(partner.gender) !== tournamentGender) {
-      return NextResponse.json({ error: 'La rama de tu compañero no coincide con la del torneo.' }, { status: 409 })
-    }
+  const [{ data: memberships, error: membershipsError }, { data: profiles, error: profilesError }] = await Promise.all([
+    supabaseAdmin.from('club_memberships').select('user_id,status,approved_at').eq('club_id', tournament.club_id).in('user_id', [user.id, partnerUserId]),
+    supabaseAdmin.from('profiles').select('user_id,status,birth_date').in('user_id', [user.id, partnerUserId]),
+  ])
+  if (membershipsError || profilesError) return NextResponse.json({ error: 'No pudimos validar la elegibilidad de la pareja. Intentá nuevamente.' }, { status: 500 })
+  const membershipByUserId = new Map((memberships ?? []).map((membership) => [String(membership.user_id), membership]))
+  const profileByUserId = new Map((profiles ?? []).map((profile) => [String(profile.user_id), profile]))
+  for (const [player, label] of [[me, 'Tu perfil'], [partner, 'La categoría de tu compañero']] as const) {
+    const membership = membershipByUserId.get(String(player.user_id))
+    const profile = profileByUserId.get(String(player.user_id))
+    const ineligibility = getTournamentRegistrationIneligibility(
+      { category: tournament.category, gender: tournament.gender, startDate: tournament.startDate, endDate: tournament.endDate },
+      {
+        userId: player.user_id,
+        category: player.category,
+        gender: player.gender,
+        approvedAt: player.approved_at,
+        operationalStatus: player.operational_status,
+        membershipStatus: membership?.status,
+        membershipApprovedAt: membership?.approved_at,
+        profileStatus: profile?.status,
+        birthDate: profile?.birth_date,
+      },
+      ageCategory,
+    )
+    if (ineligibility) return NextResponse.json({ error: `${label}: ${ineligibility}` }, { status: 409 })
   }
 
   if (tournament.maxPairs) {

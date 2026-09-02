@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
+import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
+import { getTournamentRegistrationIneligibility } from '@/lib/tournamentRegistrationEligibility'
 
 type PartnerSearchContext = {
   params: Promise<{ tournamentId: string }>
@@ -13,6 +15,7 @@ type ProfileRow = {
   last_name: string | null
   avatar_url: string | null
   status: string | null
+  birth_date?: string | null
 }
 
 function getBearerToken(req: NextRequest) {
@@ -52,6 +55,16 @@ export async function GET(req: NextRequest, context: PartnerSearchContext) {
   const tournament = toTournamentView(tournamentRow as Parameters<typeof toTournamentView>[0])
   if (!tournament) return NextResponse.json({ error: 'Torneo no encontrado.' }, { status: 404 })
 
+  const displayStatus = getTournamentDisplayStatus({
+    status: tournament.status,
+    startDate: tournament.startDate,
+    endDate: tournament.endDate,
+    registrationDeadline: tournament.registrationDeadline,
+  })
+  if (['registration_closed', 'live', 'finished', 'paused', 'cancelled', 'draft'].includes(displayStatus.key)) {
+    return NextResponse.json({ partners: [], emptyMessage: 'No hay inscripciones disponibles para este torneo.' })
+  }
+
   const { data: me } = await supabaseAdmin
     .from('club_players')
     .select('id,user_id,approved_at,operational_status')
@@ -79,6 +92,17 @@ export async function GET(req: NextRequest, context: PartnerSearchContext) {
   const query = String(req.nextUrl.searchParams.get('q') ?? '').trim()
   if (query.length < 1) return NextResponse.json({ partners: [] })
 
+  const ageCategoryResult = tournament.ageCategoryId
+    ? await supabaseAdmin
+        .from('competition_age_categories')
+        .select('min_age,max_age,age_reference_rule,age_reference_config')
+        .eq('id', tournament.ageCategoryId)
+        .eq('club_id', tournament.club_id)
+        .maybeSingle()
+    : { data: null, error: null }
+
+  if (ageCategoryResult.error) return NextResponse.json({ error: 'No pudimos validar la categoría de edad del torneo.' }, { status: 500 })
+
   const { data: players, error: playersError } = await supabaseAdmin
     .from('club_players')
     .select('id,user_id,display_name,category,gender,approved_at,operational_status')
@@ -95,7 +119,7 @@ export async function GET(req: NextRequest, context: PartnerSearchContext) {
   const profilesResult = userIds.length
     ? await supabaseAdmin
         .from('profiles')
-        .select('user_id,display_name,first_name,last_name,avatar_url,status')
+        .select('user_id,display_name,first_name,last_name,avatar_url,status,birth_date')
         .in('user_id', userIds)
     : { data: [] as ProfileRow[], error: null }
   const membershipsResult = userIds.length
@@ -134,6 +158,15 @@ export async function GET(req: NextRequest, context: PartnerSearchContext) {
     (teams ?? []).flatMap((team) => [team.player1_user_id, team.player2_user_id]).filter(Boolean).map(String),
   )
   const q = query.toLowerCase()
+  const ageCategory = ageCategoryResult.data
+    ? {
+        minAge: ageCategoryResult.data.min_age,
+        maxAge: ageCategoryResult.data.max_age,
+        referenceRule: ageCategoryResult.data.age_reference_rule,
+        referenceConfig: ageCategoryResult.data.age_reference_config as Record<string, unknown> | null,
+      }
+    : null
+  const membershipsByUserId = new Map((memberships ?? []).map((membership) => [String(membership.user_id), membership]))
   const partners = (players ?? [])
     .map((player) => {
       const profile = profilesByUserId.get(String(player.user_id))
@@ -150,12 +183,30 @@ export async function GET(req: NextRequest, context: PartnerSearchContext) {
     })
     .filter((partner) => {
       const profile = profilesByUserId.get(String(partner.userId))
-      return (
-        eligibleMemberships.has(String(partner.userId)) &&
-        String(profile?.status ?? '').toUpperCase() !== 'SUSPENDED' &&
-        !enrolledUserIds.has(String(partner.userId)) &&
-        partner.name.toLowerCase().includes(q)
+      const membership = membershipsByUserId.get(String(partner.userId))
+      const source = (players ?? []).find((player) => String(player.user_id) === String(partner.userId))
+      const ineligibility = getTournamentRegistrationIneligibility(
+        {
+          category: tournament.category,
+          gender: tournament.gender,
+          startDate: tournament.startDate,
+          endDate: tournament.endDate,
+        },
+        {
+          userId: partner.userId,
+          category: partner.category,
+          gender: partner.gender,
+          approvedAt: source?.approved_at ?? null,
+          operationalStatus: source?.operational_status ?? null,
+          membershipStatus: membership?.status ?? null,
+          membershipApprovedAt: membership?.approved_at ?? null,
+          profileStatus: profile?.status ?? null,
+          birthDate: profile?.birth_date ?? null,
+          alreadyRegistered: enrolledUserIds.has(String(partner.userId)),
+        },
+        ageCategory,
       )
+      return !ineligibility && eligibleMemberships.has(String(partner.userId)) && partner.name.toLowerCase().includes(q)
     })
     .slice(0, 12)
 

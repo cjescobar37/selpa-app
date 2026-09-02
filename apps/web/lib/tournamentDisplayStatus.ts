@@ -1,6 +1,7 @@
 export type TournamentDisplayStatusKey =
   | 'live'
   | 'registration_open'
+  | 'registration_closed'
   | 'upcoming'
   | 'finished'
   | 'draft'
@@ -83,14 +84,17 @@ function parseTournamentDate(value?: string | null) {
 
   if (localDateTimeMatch) {
     const [, year, month, day, hours = '00', minutes = '00', seconds = '00'] = localDateTimeMatch
-    return new Date(
+    // Los valores sin offset que guarda SELPA representan hora local argentina.
+    // El runtime del servidor puede estar en UTC, por eso no usamos el huso
+    // implícito de Node para decidir si una inscripción ya venció.
+    return new Date(Date.UTC(
       Number(year),
       Number(month) - 1,
       Number(day),
-      Number(hours),
+      Number(hours) + 3,
       Number(minutes),
       Number(seconds)
-    )
+    ))
   }
 
   const parsed = new Date(value)
@@ -103,7 +107,7 @@ function parseTournamentEndDate(value?: string | null) {
   const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (dateOnlyMatch) {
     const [, year, month, day] = dateOnlyMatch
-    return new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999)
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 26, 59, 59, 999))
   }
   return parseTournamentDate(value)
 }
@@ -180,6 +184,10 @@ function getTournamentDisplayStatusInfo(tournament: unknown, now = new Date()): 
     (!registrationDeadline || registrationDeadline.getTime() >= time)
   ) {
     return { key: 'registration_open', label: 'Inscripción abierta', priority: 10, className: 'is-open' }
+  }
+
+  if (openStatusValues.has(status) && registrationDeadline && registrationDeadline.getTime() < time) {
+    return { key: 'registration_closed', label: 'Inscripción cerrada', priority: 12, className: 'is-registration-closed' }
   }
 
   return { key: 'upcoming', label: 'Próximo', priority: 20, className: 'is-upcoming' }

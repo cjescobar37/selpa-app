@@ -103,6 +103,15 @@ function getFullName(profile?: ProfileRow | null, fallback?: string | null) {
   )
 }
 
+function getIndividualPlayerName(profile?: ProfileRow | null, fallback?: string | null) {
+  return (
+    [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
+    profile?.display_name ||
+    fallback ||
+    'Jugador'
+  )
+}
+
 function normalizePoints(value: number | null | undefined) {
   return Number.isFinite(value ?? NaN) ? Number(value ?? 0) : 0
 }
@@ -340,7 +349,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         return {
           player_id: player.id,
           user_id: player.user_id,
-          full_name: getFullName(profile, player.display_name),
+          full_name: getIndividualPlayerName(profile, player.display_name),
           avatar_url: profile?.avatar_url ?? null,
           category: player.category,
           gender: player.gender,

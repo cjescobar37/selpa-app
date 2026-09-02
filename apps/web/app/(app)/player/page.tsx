@@ -660,6 +660,7 @@ export default function PlayerHomePage() {
               return (
                 <TournamentPublicCard
                   key={tournament.id}
+                  compactAgenda
                   tournament={{
                     id: tournament.id,
                     name: tournament.name,
@@ -1140,6 +1141,12 @@ export default function PlayerHomePage() {
           .playerClubGrid, .playerNewsGrid { grid-template-columns: 1fr; }
         }
         @media (max-width: 560px) {
+          .playerHomeShell > .homeModeSwitch {
+            margin-inline: -8px;
+            max-width: none;
+            justify-self: stretch;
+            width: calc(100% + 16px);
+          }
           .playerHomeShell {
             gap: 10px;
             padding: 8px;

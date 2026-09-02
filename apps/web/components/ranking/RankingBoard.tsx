@@ -290,7 +290,7 @@ function RankingCard({ row, showMetadata }: { row: RankingBoardRow; showMetadata
   const content = (
     <>
       <strong className="rankingCardPosition">#{row.position}</strong>
-      <RankingPlayerAvatar className="rankingCardAvatar" name={row.name} src={row.avatarUrl} sizes={isFeatured ? '74px' : '48px'} />
+      <RankingPlayerAvatar className="rankingCardAvatar" name={row.name} src={row.avatarUrl} sizes={isFeatured ? '44px' : '42px'} />
       <div className="rankingCardBody">
         <b>{row.name}</b>
         {showMetadata ? <span>{formatRankingCategory(row.category)} · {formatRankingGender(row.gender)}{row.isTied ? ' · Empate' : ''}</span> : null}
@@ -492,7 +492,7 @@ function RankingCardStyles() {
         .rankingCard {
           border-radius: 13px;
           gap: 9px;
-          grid-template-columns: 28px 48px minmax(0, 1fr) 70px;
+          grid-template-columns: 28px 42px minmax(0, 1fr) 70px;
           min-height: 72px;
           padding: 8px;
         }
@@ -501,11 +501,12 @@ function RankingCardStyles() {
           font-size: 17px;
         }
 
-        .rankingCardAvatar {
+        .rankingCardAvatar,
+        .rankingCard.is-compact .rankingCardAvatar {
           border-width: 2px;
           font-size: 12px;
-          height: 48px;
-          width: 48px;
+          height: 42px;
+          width: 42px;
         }
 
         .rankingCardBody b {

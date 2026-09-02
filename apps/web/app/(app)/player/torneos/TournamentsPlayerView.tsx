@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Compass, FileText, Search, Trophy, UsersRound } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Compass, FileText, Search, Trophy, UsersRound } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import PlayerSectionHero from '@/components/player/PlayerSectionHero'
 import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
+import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
@@ -29,6 +30,11 @@ type TournamentRow = {
   gender: string | null
   price_per_player: number | null
   max_pairs: number | null
+  type: string | null
+  tournament_type: string | null
+  segment: string | null
+  rules: Record<string, unknown> | null
+  rules_json: Record<string, unknown> | null
 }
 
 type TeamRow = {
@@ -118,11 +124,29 @@ function dateParts(value?: string | null) {
   }
 }
 
+function parseCalendarDate(value?: string | null) {
+  if (!value) return null
+  const date = new Date(`${value.slice(0, 10)}T12:00:00`)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function calendarKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function tournamentCalendarDate(tournament: TournamentRow) {
+  return parseCalendarDate(tournament.starts_on ?? tournament.start_date)
+}
+
+function formatCalendarMonth(date: Date) {
+  return new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric' }).format(date)
+}
+
 function pageCopy(mode: ViewMode) {
   if (mode === 'calendar') {
     return {
       kicker: 'Calendario del club',
-      title: 'Torneos del club activo',
+      title: 'Calendario del club',
       body: 'Agenda deportiva del club seleccionado, ordenada por fecha.',
       icon: CalendarDays,
     }
@@ -162,6 +186,8 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [gender, setGender] = useState('all')
+  const [calendarMonthOverride, setCalendarMonth] = useState<Date | null>(null)
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null)
 
   const copy = pageCopy(mode)
   const Icon = copy.icon
@@ -211,7 +237,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
               if (tournamentIds.length) {
                 const { data: tournamentData } = await supabase
                   .from('tournaments')
-                  .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs')
+                  .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs,type,tournament_type,segment,rules,rules_json')
                   .in('id', tournamentIds)
                 tournamentRows = (tournamentData ?? []) as TournamentRow[]
               }
@@ -221,16 +247,15 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
           if (activeClubId) {
             const { data: tournamentData } = await supabase
               .from('tournaments')
-              .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs')
+              .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs,type,tournament_type,segment,rules,rules_json')
               .eq('club_id', activeClubId)
               .order('starts_on', { ascending: true, nullsFirst: false })
-              .limit(24)
             tournamentRows = (tournamentData ?? []) as TournamentRow[]
           }
         } else if (mode === 'explore') {
           const { data: tournamentData } = await supabase
             .from('tournaments')
-            .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs')
+            .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs,type,tournament_type,segment,rules,rules_json')
             .not('status', 'in', '("DRAFT","CANCELLED","ARCHIVED")')
             .order('starts_on', { ascending: true, nullsFirst: false })
             .limit(72)
@@ -315,8 +340,73 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
     ] as const
   }, [visibleTournaments])
 
+  const calendarEvents = useMemo(() => tournaments
+    .map((tournament) => ({ tournament, date: tournamentCalendarDate(tournament) }))
+    .filter((item): item is { tournament: TournamentRow; date: Date } => Boolean(item.date))
+    .sort((a, b) => a.date.getTime() - b.date.getTime()), [tournaments])
+
+  const calendarEventsByDay = useMemo(() => {
+    const next = new Map<string, TournamentRow[]>()
+    for (const item of calendarEvents) {
+      const key = calendarKey(item.date)
+      next.set(key, [...(next.get(key) ?? []), item.tournament])
+    }
+    return next
+  }, [calendarEvents])
+
+  const calendarMonth = useMemo(() => {
+    if (calendarMonthOverride) return calendarMonthOverride
+    const today = new Date()
+    const nextEvent = calendarEvents.find((item) => item.date >= new Date(today.getFullYear(), today.getMonth(), today.getDate())) ?? calendarEvents[0]
+    return nextEvent
+      ? new Date(nextEvent.date.getFullYear(), nextEvent.date.getMonth(), 1)
+      : new Date(today.getFullYear(), today.getMonth(), 1)
+  }, [calendarEvents, calendarMonthOverride])
+
+  const monthCalendarDays = useMemo(() => {
+    const firstDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1)
+    const firstWeekday = (firstDay.getDay() + 6) % 7
+    const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate()
+    return Array.from({ length: firstWeekday + daysInMonth }, (_, index) => index < firstWeekday ? null : new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), index - firstWeekday + 1))
+  }, [calendarMonth])
+
+  const selectedCalendarEvents = useMemo(() => {
+    const firstAvailable = calendarEvents.find((item) => item.date.getFullYear() === calendarMonth.getFullYear() && item.date.getMonth() === calendarMonth.getMonth())
+    return calendarEventsByDay.get(selectedCalendarDay ?? (firstAvailable ? calendarKey(firstAvailable.date) : '')) ?? []
+  }, [calendarEvents, calendarEventsByDay, calendarMonth, selectedCalendarDay])
+
   function renderTournamentCard(tournament: TournamentRow) {
     const club = clubs[tournament.club_id]
+
+    if (mode === 'explore' || mode === 'calendar') {
+      return (
+        <TournamentPublicCard
+          key={tournament.id}
+          compactAgenda
+          showClub
+          tournament={{
+            id: tournament.id,
+            name: tournament.name,
+            status: tournament.status ?? 'DRAFT',
+            type: tournament.type,
+            tournament_type: tournament.tournament_type,
+            gender: tournament.gender ?? 'UNKNOWN',
+            segment: tournament.segment,
+            category: tournament.category,
+            startDate: tournament.starts_on ?? tournament.start_date,
+            endDate: tournament.ends_on ?? tournament.end_date,
+            registrationDeadline: tournament.registration_deadline,
+            pricePerPlayer: tournament.price_per_player,
+            maxPairs: tournament.max_pairs,
+            clubName: club?.name ?? `Club ${BRAND.name}`,
+            clubLogoUrl: club?.logo_url ?? null,
+            clubThemeKey: club?.theme_key ?? null,
+            rules: tournament.rules ?? tournament.rules_json,
+          }}
+        />
+      )
+    }
+
     const clubTheme = getClubTheme(club?.theme_key ?? null)
     const registration = registrationByTournament.get(tournament.id)
     const parts = dateParts(tournament.starts_on ?? tournament.start_date)
@@ -410,7 +500,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
                       <small>{section.items.length} {section.items.length === 1 ? 'torneo' : 'torneos'}</small>
                     </header>
                     {section.items.length ? (
-                      <div className="playerTournamentList">{section.items.map(renderTournamentCard)}</div>
+                      <div className="playerTournamentList clubPublicTournamentGrid">{section.items.map(renderTournamentCard)}</div>
                     ) : (
                       <div className="playerTournamentEmpty playerTournamentEmpty--section">
                         <Trophy size={18} />
@@ -420,6 +510,28 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
                     )}
                   </div>
                 ))}
+              </section>
+            ) : mode === 'calendar' ? (
+              <section className="playerClubCalendar" aria-label="Calendario del club">
+                <header className="playerClubCalendar__head">
+                  <div><span>Agenda del club</span><strong>{formatCalendarMonth(calendarMonth)}</strong></div>
+                  <div className="playerClubCalendar__controls"><button type="button" onClick={() => { setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1)); setSelectedCalendarDay(null) }} aria-label="Mes anterior"><ChevronLeft /></button><button type="button" onClick={() => { setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1)); setSelectedCalendarDay(null) }} aria-label="Mes siguiente"><ChevronRight /></button></div>
+                </header>
+                <div className="playerClubCalendar__body">
+                  <div className="playerClubCalendar__grid" role="grid" aria-label={formatCalendarMonth(calendarMonth)}>
+                    {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((day) => <span key={day}>{day}</span>)}
+                    {monthCalendarDays.map((date, index) => date ? (() => {
+                      const key = calendarKey(date)
+                      const events = calendarEventsByDay.get(key) ?? []
+                      const selected = (selectedCalendarDay ?? '') === key || (!selectedCalendarDay && selectedCalendarEvents.some((event) => calendarKey(tournamentCalendarDate(event)!) === key))
+                      return <button key={key} type="button" className={`${events.length ? 'has-events' : ''}${selected ? ' is-selected' : ''}`} onClick={() => events.length ? setSelectedCalendarDay(key) : undefined} disabled={!events.length} aria-label={`${date.getDate()} de ${formatCalendarMonth(calendarMonth)}${events.length ? `, ${events.length} torneo${events.length === 1 ? '' : 's'}` : ''}`}><b>{date.getDate()}</b>{events.length ? <i>{events.length}</i> : null}</button>
+                    })() : <span className="playerClubCalendar__blank" key={`blank-${index}`} aria-hidden="true" />)}
+                  </div>
+                  <div className="playerClubCalendar__agenda">
+                    <div className="playerClubCalendar__agendaHead"><strong>{selectedCalendarEvents.length ? 'Actividades del día' : 'Sin actividades este día'}</strong><span>{selectedCalendarEvents.length ? `${selectedCalendarEvents.length} torneo${selectedCalendarEvents.length === 1 ? '' : 's'}` : 'Elegí otro día'}</span></div>
+                    {selectedCalendarEvents.length ? <div className="clubPublicTournamentGrid">{selectedCalendarEvents.map(renderTournamentCard)}</div> : <div className="playerTournamentEmpty playerTournamentEmpty--section"><CalendarDays size={18} /><strong>No hay torneos programados</strong><p>Usá las flechas para recorrer los meses del club.</p></div>}
+                  </div>
+                </div>
               </section>
             ) : (
               <section className="playerTournamentList">
@@ -458,6 +570,30 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         .playerExploreSection > header strong { color: #64748b; display: block; font-size: 12px; font-weight: 850; margin-top: 2px; }
         .playerExploreSection > header small { background: rgba(255,255,255,.86); border: 1px solid #e2e8f0; border-radius: 999px; color: #64748b; flex: 0 0 auto; font-size: 11px; font-weight: 950; padding: 6px 9px; }
         .playerTournamentList { display: grid; gap: 12px; }
+        .playerExploreSection .clubPublicTournamentGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .playerClubCalendar { background:rgba(255,255,255,.9); border:1px solid var(--player-card-border); border-radius:var(--player-card-radius); box-shadow:var(--player-card-shadow); display:grid; gap:12px; padding:14px; }
+        .playerClubCalendar__head { align-items:center; display:flex; gap:12px; justify-content:space-between; }
+        .playerClubCalendar__head span { color:var(--club-primary); display:block; font-size:10px; font-weight:950; letter-spacing:.06em; text-transform:uppercase; }
+        .playerClubCalendar__head strong { color:#061b3a; display:block; font-size:20px; font-weight:950; letter-spacing:-.035em; margin-top:2px; text-transform:capitalize; }
+        .playerClubCalendar__controls { display:flex; gap:6px; }
+        .playerClubCalendar__controls button { align-items:center; background:#fff; border:1px solid color-mix(in srgb,var(--club-primary) 23%,#dbe6f0); border-radius:10px; color:var(--club-primary); cursor:pointer; display:flex; height:40px; justify-content:center; width:40px; }
+        .playerClubCalendar__controls button:hover { background:var(--club-soft); }
+        .playerClubCalendar__body { display:grid; gap:14px; grid-template-columns:minmax(0,1fr) minmax(280px,.85fr); }
+        .playerClubCalendar__grid { align-items:stretch; display:grid; gap:5px; grid-template-columns:repeat(7,minmax(0,1fr)); }
+        .playerClubCalendar__grid > span { color:#64748b; font-size:10px; font-weight:900; padding-bottom:2px; text-align:center; text-transform:uppercase; }
+        .playerClubCalendar__grid > button, .playerClubCalendar__blank { aspect-ratio:1; min-height:42px; }
+        .playerClubCalendar__grid > button { background:#f8fafc; border:1px solid #e2e8f0; border-radius:11px; color:#64748b; display:grid; font:inherit; justify-items:center; padding:5px 2px; position:relative; }
+        .playerClubCalendar__grid > button:disabled { cursor:default; }
+        .playerClubCalendar__grid > button.has-events { background:color-mix(in srgb,var(--club-primary) 10%,white); border-color:color-mix(in srgb,var(--club-primary) 34%,#dbe6f0); color:#061b3a; cursor:pointer; }
+        .playerClubCalendar__grid > button.is-selected { background:var(--club-gradient); border-color:transparent; color:#fff; box-shadow:0 8px 18px var(--club-glow); }
+        .playerClubCalendar__grid b { font-size:14px; line-height:1; }
+        .playerClubCalendar__grid > button i { align-items:center; background:var(--club-secondary); border-radius:999px; color:#fff; display:flex; font-size:9px; font-style:normal; font-weight:950; height:16px; justify-content:center; min-width:16px; position:absolute; right:3px; top:3px; }
+        .playerClubCalendar__agenda { display:grid; gap:8px; min-width:0; }
+        .playerClubCalendar__agendaHead { align-items:end; border-bottom:1px solid #e8eef5; display:flex; gap:8px; justify-content:space-between; padding-bottom:7px; }
+        .playerClubCalendar__agendaHead strong { font-size:14px; }
+        .playerClubCalendar__agendaHead span { color:#64748b; font-size:11px; font-weight:800; }
+        .playerClubCalendar__agenda .clubPublicTournamentGrid { display:grid; gap:8px; grid-template-columns:1fr; }
+        .playerClubCalendar__agenda .TournamentPublicCard { height:180px; min-height:180px; }
         .playerTournamentCard { align-items: stretch; background: radial-gradient(circle at 0% 0%, var(--card-soft), transparent 32%), rgba(255,255,255,.94); border-color: color-mix(in srgb, var(--card-accent) 20%, #e2e8f0); color:inherit; display: grid; gap: 15px; grid-template-columns: 108px minmax(0, 1fr) 28px; overflow: hidden; padding: 14px; position: relative; text-decoration:none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
         .playerTournamentCard::before { background: linear-gradient(180deg, var(--card-accent), var(--card-accent-2)); bottom: 14px; content: ""; left: 0; position: absolute; top: 14px; width: 4px; }
         .playerTournamentCard:hover { border-color: color-mix(in srgb, var(--card-accent) 42%, #e2e8f0); box-shadow: 0 22px 58px rgba(15,23,42,.1), 0 0 0 5px var(--card-glow); transform: translateY(-1px); }
@@ -500,6 +636,16 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
           .playerTournamentsHero i { border-radius:13px; height:40px; width:40px; }
           .playerTournamentsHero i svg { height:21px; width:21px; }
           .playerTournamentFilters, .playerRulesGrid { display:grid; grid-template-columns:1fr; }
+          .playerExploreSection .clubPublicTournamentGrid { grid-template-columns:1fr; }
+          .playerClubCalendar { border-radius:16px; gap:10px; padding:10px; }
+          .playerClubCalendar__head strong { font-size:18px; }
+          .playerClubCalendar__controls button { height:36px; width:36px; }
+          .playerClubCalendar__body { grid-template-columns:1fr; }
+          .playerClubCalendar__grid { gap:4px; }
+          .playerClubCalendar__grid > span { font-size:9px; }
+          .playerClubCalendar__grid > button, .playerClubCalendar__blank { min-height:40px; }
+          .playerClubCalendar__grid > button { border-radius:9px; }
+          .playerClubCalendar__agenda .TournamentPublicCard { height:154px !important; min-height:154px !important; }
           .playerTournamentCard { align-items:start; border-radius:16px; gap:9px; grid-template-columns:62px minmax(0,1fr) 21px; min-height:126px; padding:10px; }
           .playerTournamentCard::before { bottom:10px; top:10px; width:3px; }
           .playerTournamentCard__date { border-radius:13px; min-height:66px; padding:6px; }

@@ -216,7 +216,7 @@ export async function POST(req: NextRequest, context: RegistrationChangeRequestC
     type: 'registration_cancel_requested',
     title: 'Baja solicitada',
     body: 'Una pareja solicitó la baja del torneo.',
-    href: `/club/torneos/${tournamentId}`,
+    href: `/club/solicitudes?tab=bajas&requestId=${requestRow.id}`,
     metadata: {
       request_id: requestRow.id,
       registration_id: registration.id,

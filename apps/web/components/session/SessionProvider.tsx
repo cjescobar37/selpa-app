@@ -138,32 +138,15 @@ async function resolveContext() {
 
   const userId = user.id
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select(globalProfileFields)
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  const { data: pa } = await supabase
-    .from('platform_admins')
-    .select('user_id')
-    .eq('user_id', userId)
-    .maybeSingle()
+  const [{ data: profile }, { data: pa }, { data: us }, { data: memberships }] = await Promise.all([
+    supabase.from('profiles').select(globalProfileFields).eq('user_id', userId).maybeSingle(),
+    supabase.from('platform_admins').select('user_id').eq('user_id', userId).maybeSingle(),
+    supabase.from('user_settings').select('active_club_id').eq('user_id', userId).maybeSingle(),
+    supabase.from('club_memberships').select('club_id,role,status,approved_at').eq('user_id', userId),
+  ])
 
   const isPlatformAdmin = !!pa?.user_id
-
-  const { data: us } = await supabase
-    .from('user_settings')
-    .select('active_club_id')
-    .eq('user_id', userId)
-    .maybeSingle()
-
   const configuredActiveClubId = (us?.active_club_id as string | null) ?? null
-
-  const { data: memberships } = await supabase
-    .from('club_memberships')
-    .select('club_id,role,status,approved_at')
-    .eq('user_id', userId)
 
   const membershipRows = ((memberships ?? []) as Partial<MembershipRow>[]).map((m) => ({
     club_id: m.club_id as string,
@@ -248,30 +231,6 @@ async function resolveContext() {
     effectiveActiveClubId = clubs[0].id
   }
 
-  if (effectiveActiveClubId && configuredActiveClubId !== effectiveActiveClubId) {
-    await supabase
-      .from('user_settings')
-      .upsert(
-        {
-          user_id: userId,
-          active_club_id: effectiveActiveClubId,
-        },
-        { onConflict: 'user_id' }
-      )
-  }
-
-  if (configuredActiveClubId && !effectiveActiveClubId) {
-    await supabase
-      .from('user_settings')
-      .upsert(
-        {
-          user_id: userId,
-          active_club_id: null,
-        },
-        { onConflict: 'user_id' }
-      )
-  }
-
   const activeClub =
     effectiveActiveClubId ? clubs.find((c) => c.id === effectiveActiveClubId) ?? null : null
 
@@ -323,6 +282,7 @@ async function resolveContext() {
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const hasResolvedContextRef = useRef(false)
   const refreshPromiseRef = useRef<Promise<void> | null>(null)
+  const lastAuthRefreshRef = useRef<{ event: string; at: number } | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready'>('loading')
   const [role, setRole] = useState<AppRole>('guest')
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
@@ -382,7 +342,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
       const { data: membership } = await supabase
         .from('club_memberships')
-        .select('club_id,status,approved_at')
+        .select('club_id,role,status,approved_at')
         .eq('user_id', u.id)
         .eq('club_id', clubId)
         .maybeSingle()
@@ -395,12 +355,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         .from('user_settings')
         .upsert({ user_id: u.id, active_club_id: clubId }, { onConflict: 'user_id' })
 
-      // The provider can repaint immediately while the canonical context refreshes silently.
       setActiveClubState(nextClub)
       setActiveClubId(clubId)
-      await refresh({ silent: true })
+      setClubRole(membership.role as ClubRole)
+      setMembershipStatus(membership.status as MembershipStatus)
+      setMembershipApprovedAt(membership.approved_at ?? null)
+      setIsApprovedMember(true)
+      setRole(isPlatformAdmin ? 'platform' : isClubStaffRole(membership.role as ClubRole) ? 'club' : 'player')
     },
-    [clubs, refresh]
+    [clubs, isPlatformAdmin]
   )
 
   const signOut = useCallback(async () => {
@@ -440,14 +403,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'INITIAL_SESSION') return
-      if (
-        event === 'SIGNED_IN' ||
-        event === 'TOKEN_REFRESHED' ||
-        event === 'USER_UPDATED'
-      ) {
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const now = Date.now()
+        const last = lastAuthRefreshRef.current
+        if (last?.event === event && now - last.at < 1000) return
+        lastAuthRefreshRef.current = { event, at: now }
         void refresh({ silent: true })
         return
       }
+
+      // Volver a una pestaña puede renovar silenciosamente el access token.
+      // No cambia el perfil, club activo ni permisos locales; resolver todo el
+      // contexto en ese evento remonta las vistas y vuelve a cargar sus datos.
+      if (event === 'TOKEN_REFRESHED') return
 
       void refresh()
     })

@@ -176,7 +176,7 @@ export async function POST(request: Request) {
       const location = countryCode === 'AR' ? findArgentinaLocation(provinceId, cityId) : null
       const { data: identity, error: identityError } = await supabaseAdmin
         .from('profiles')
-        .select('first_name,last_name,display_name')
+        .select('first_name,last_name,display_name,birth_date,gender')
         .eq('user_id', user.id)
         .maybeSingle()
 
@@ -189,6 +189,12 @@ export async function POST(request: Request) {
       if (!fullName) throw new CompleteProfileError('MISSING_IDENTITY', 'Ingresá tu nombre y apellido para continuar.')
       if (!isValidBirthDate(birthDate)) throw new CompleteProfileError('INVALID_BIRTH_DATE', 'Seleccioná una fecha de nacimiento válida.')
       if (gender !== 'FEMALE' && gender !== 'MALE') throw new CompleteProfileError('INVALID_GENDER', 'Elegí Dama o Caballero.')
+      if (identity?.birth_date && identity.birth_date !== birthDate) {
+        throw new CompleteProfileError('BIRTH_DATE_LOCKED', 'La fecha de nacimiento ya fue verificada y no se puede modificar desde tu cuenta.')
+      }
+      if (identity?.gender && identity.gender !== gender) {
+        throw new CompleteProfileError('GENDER_LOCKED', 'El género ya fue verificado y no se puede modificar desde tu cuenta.')
+      }
       if (!country || !location) throw new CompleteProfileError('INVALID_LOCATION', 'Elegí una provincia y localidad válidas.')
       if (!phone) throw new CompleteProfileError('INVALID_PHONE', 'Ingresá un celular válido.')
 
