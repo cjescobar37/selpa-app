@@ -83,7 +83,7 @@ export default function ClubJugadoresPage() {
   const [rejectionReason, setRejectionReason] = useState('')
   const [playerSearch, setPlayerSearch] = useState(searchParams.get('buscar') ?? '')
   const [categoryFilter, setCategoryFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('active')
   const [accountFilter, setAccountFilter] = useState('all')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
@@ -109,7 +109,7 @@ export default function ClubJugadoresPage() {
 
   const categories = useMemo(() => {
     return Array.from(
-      new Set(players.map((player) => player.category).filter((category): category is number => typeof category === 'number'))
+      new Set(players.filter((player) => player.operational_status === 'ACTIVE').map((player) => player.category).filter((category): category is number => typeof category === 'number'))
     ).sort((a, b) => a - b)
   }, [players])
 
@@ -121,7 +121,9 @@ export default function ClubJugadoresPage() {
         || emailOf(player.profile).toLowerCase().includes(query)
       const matchesCategory = categoryFilter === 'all' || String(player.category ?? '') === categoryFilter
       const status = player.operational_status === 'BLOCKED' ? 'blocked' : player.operational_status === 'LEFT' ? 'left' : player.approved_at ? 'approved' : 'pending'
-      const matchesStatus = statusFilter === 'all' || statusFilter === status
+      const matchesStatus = statusFilter === 'all'
+        || (statusFilter === 'active' && player.operational_status === 'ACTIVE')
+        || statusFilter === status
       const account = hasPlayerAccount(player) ? 'account' : 'manual'
       const matchesAccount = accountFilter === 'all' || accountFilter === account
 
@@ -142,16 +144,16 @@ export default function ClubJugadoresPage() {
   const playerStats = useMemo(() => {
     return {
       active: players.filter((player) => player.approved_at && player.operational_status === 'ACTIVE').length,
-      manual: players.filter((player) => !hasPlayerAccount(player)).length,
-      pending: players.filter((player) => !player.approved_at).length + requests.length,
-      categories: new Set(players.map((player) => player.category).filter(Boolean)).size,
+      manual: players.filter((player) => player.operational_status === 'ACTIVE' && !hasPlayerAccount(player)).length,
+      pending: players.filter((player) => player.operational_status === 'ACTIVE' && !player.approved_at).length + requests.length,
+      categories: new Set(players.filter((player) => player.operational_status === 'ACTIVE').map((player) => player.category).filter(Boolean)).size,
     }
   }, [players, requests.length])
-  const activeFilterCount = [categoryFilter !== 'all', statusFilter !== 'all', accountFilter !== 'all'].filter(Boolean).length
+  const activeFilterCount = [categoryFilter !== 'all', statusFilter !== 'active', accountFilter !== 'all'].filter(Boolean).length
 
   function resetPlayerFilters() {
     setCategoryFilter('all')
-    setStatusFilter('all')
+    setStatusFilter('active')
     setAccountFilter('all')
     setPage(1)
   }
@@ -363,6 +365,7 @@ export default function ClubJugadoresPage() {
                 <label>
                   <span>Estado</span>
                   <select className="px-input" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1) }}>
+                    <option value="active">Activos</option>
                     <option value="all">Todos</option>
                     <option value="approved">Aprobados</option>
                     <option value="pending">Pendientes</option>
@@ -395,7 +398,7 @@ export default function ClubJugadoresPage() {
                     <div className="club-playerFilterSheetHead"><h2 id="player-filter-title">Filtros</h2><button type="button" onClick={() => setFiltersOpen(false)} aria-label="Cerrar filtros">×</button></div>
                     <div className="club-playerFilterSheetGrid">
                       <label><span>Categoría</span><select className="px-input" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1) }}><option value="all">Todas</option>{categories.map((category) => <option key={category} value={String(category)}>{category}ta</option>)}</select></label>
-                      <label><span>Estado</span><select className="px-input" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1) }}><option value="all">Todos</option><option value="approved">Aprobados</option><option value="pending">Pendientes</option><option value="blocked">Bloqueo temporal</option><option value="left">Baja del club</option></select></label>
+                      <label><span>Estado</span><select className="px-input" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1) }}><option value="active">Activos</option><option value="all">Todos</option><option value="approved">Aprobados</option><option value="pending">Pendientes</option><option value="blocked">Bloqueo temporal</option><option value="left">Baja del club</option></select></label>
                       <label><span>Tipo</span><select className="px-input" value={accountFilter} onChange={(event) => { setAccountFilter(event.target.value); setPage(1) }}><option value="all">Todos</option><option value="account">Con cuenta</option><option value="manual">Manual / sin cuenta</option></select></label>
                     </div>
                     <div className="club-playerFilterSheetActions"><button type="button" className="club-btn club-btn--ghost" onClick={resetPlayerFilters}>Limpiar</button><button type="button" className="club-btn club-btn--ok" onClick={() => setFiltersOpen(false)}>Ver jugadores</button></div>
@@ -576,8 +579,8 @@ export default function ClubJugadoresPage() {
         .club-requestRow:hover { border-color: color-mix(in srgb, var(--club-admin-accent) 28%, transparent); box-shadow: 0 12px 30px var(--club-admin-glow); transform: translateY(-1px); }
         .club-person { align-items: center; display: flex; gap: 10px; min-width: 0; }
         .club-person--compact { gap: 8px; }
-        .club-avatar { align-items: center; background: rgba(15,23,42,.08); border-radius: 12px; color: #17253f; display: inline-flex; flex: 0 0 auto; font-weight: 950; height: 42px; justify-content: center; overflow: hidden; width: 42px; }
-        .club-avatar--sm { border-radius: 10px; height: 34px; width: 34px; }
+        .club-avatar { align-items: center; background: rgba(15,23,42,.08); border-radius: 999px; color: #17253f; display: inline-flex; flex: 0 0 auto; font-weight: 950; height: 42px; justify-content: center; overflow: hidden; width: 42px; }
+        .club-avatar--sm { border-radius: 999px; height: 34px; width: 34px; }
         .club-avatar img { height: 100%; object-fit: cover; width: 100%; }
         .club-personMain { display: grid; gap: 2px; min-width: 0; }
         .club-personMain strong, .club-personMain span, .club-personMain small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
