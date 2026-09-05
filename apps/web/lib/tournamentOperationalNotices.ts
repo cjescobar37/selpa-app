@@ -68,13 +68,13 @@ export type BuildTournamentOperationalNoticesInput = {
 
 const tiebreakerLabels: Record<string, string> = {
   POINTS: 'puntos',
-  HEAD_TO_HEAD: 'resultado entre empatados / mini-tabla',
+  HEAD_TO_HEAD: 'resultados de los partidos entre las parejas empatadas',
   SET_DIFF: 'diferencia de sets',
   GAME_DIFF: 'diferencia de games',
   SEED: 'seed/preclasificación',
   DRAW: 'sorteo/manual',
   match_points: 'puntos',
-  head_to_head: 'resultado entre empatados / mini-tabla',
+  head_to_head: 'resultados de los partidos entre las parejas empatadas',
   set_difference: 'diferencia de sets',
   game_difference: 'diferencia de games',
   seed: 'seed/preclasificación',
@@ -82,13 +82,13 @@ const tiebreakerLabels: Record<string, string> = {
 
 const tiebreakerCompactLabels: Record<string, string> = {
   POINTS: 'puntos',
-  HEAD_TO_HEAD: 'mini-tabla',
+  HEAD_TO_HEAD: 'partidos entre las parejas empatadas',
   SET_DIFF: 'sets',
   GAME_DIFF: 'games',
   SEED: 'seed',
   DRAW: 'sorteo/manual',
   match_points: 'puntos',
-  head_to_head: 'mini-tabla',
+  head_to_head: 'partidos entre las parejas empatadas',
   set_difference: 'sets',
   game_difference: 'games',
   seed: 'seed',
@@ -96,13 +96,13 @@ const tiebreakerCompactLabels: Record<string, string> = {
 
 const tiebreakerResolvedLabels: Record<string, string> = {
   POINTS: 'puntos',
-  HEAD_TO_HEAD: 'mini-tabla',
+  HEAD_TO_HEAD: 'los resultados de los partidos entre las parejas empatadas',
   SET_DIFF: 'diferencia de sets',
   GAME_DIFF: 'diferencia de games',
   SEED: 'seed',
   DRAW: 'sorteo/manual',
   match_points: 'puntos',
-  head_to_head: 'mini-tabla',
+  head_to_head: 'los resultados de los partidos entre las parejas empatadas',
   set_difference: 'diferencia de sets',
   game_difference: 'diferencia de games',
   seed: 'seed',

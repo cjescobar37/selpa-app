@@ -74,7 +74,12 @@ export async function PATCH(
       winnerTeamId: derivedWinnerTeamId,
     })
 
-    return NextResponse.json({ ok: true, match: result.match })
+    return NextResponse.json({
+      ok: true,
+      match: result.match,
+      groupDependency: result.groupDependency,
+      groupDependencyWarning: result.groupDependencyWarning,
+    })
   } catch (error: unknown) {
     if (error instanceof MatchResultUpdateError) {
       return NextResponse.json({ code: error.code, error: error.message }, { status: error.status })

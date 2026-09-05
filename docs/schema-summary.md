@@ -31,7 +31,7 @@ Funciones `public` relevantes:
 
 Propósito funcional: entidad principal de clubes/sedes. Guarda datos comerciales, contacto, ubicación, branding, dueño y archivos asociados.
 
-Columnas principales: `id`, `name`, `slug`, `city`, `address`, `phone`, `is_active`, `brand_name`, `legal_name`, `cuit`, `contact_email`, `website`, `instagram`, `province`, `country`, `opening_hours`, `courts_count`, `courts_surface`, `logo_url`, `rules_pdf_url`, `owner_name`, `owner_email`, `owner_phone`, `owner_user_id`, `notes`, `created_at`, `updated_at`.
+Columnas principales: `id`, `name`, `slug`, `city`, `address`, `phone`, `mobile_phone`, `is_active`, `status`, `brand_name`, `legal_name`, `cuit`, `contact_email`, `website`, `instagram`, `province`, `country`, `description`, `opening_hours`, `opening_hours_json`, `courts_count`, `courts_surface`, `court_surfaces`, `logo_url`, `rules_pdf_url`, `theme_key`, `theme_locked`, `owner_name`, `owner_email`, `owner_phone`, `owner_user_id`, `notes`, `created_at`, `updated_at`.
 
 Claves:
 
@@ -64,6 +64,44 @@ Observaciones/deuda:
 - Dos triggers de `updated_at` sobre la misma tabla son redundantes.
 - `owner_user_id` no tiene FK, mientras que otras relaciones a usuarios si usan `auth.users`.
 - `clubs` replica campos presentes en `club_requests`, lo cual es razonable si `club_requests` es staging, pero conviene formalizar ese flujo.
+
+### `club_public_profiles`
+
+Propósito funcional: contenido institucional público del club sin duplicar identidad, ubicación ni contacto ya canónicos en `clubs`.
+
+Columnas: `club_id`, `tagline`, `story`, `publication_status`, `published_at`, `created_at`, `updated_at`.
+
+- PK/FK: `club_id` -> `clubs(id)` con `ON DELETE CASCADE`.
+- `publication_status`: `DRAFT` o `PUBLISHED`; publicar exige `published_at`.
+- Lectura pública únicamente para perfiles publicados cuyo club esté activo.
+- Gestión mediante la capability `club:profile_manage` (OWNER y ADMIN).
+
+### `club_media`
+
+Propósito funcional: portada, imagen de historia y galería reutilizable del perfil público.
+
+Columnas: `id`, `club_id`, `kind`, `storage_path`, `public_url`, `alt_text`, `caption`, `sort_order`, `is_visible`, `created_by`, `created_at`, `updated_at`.
+
+- `kind`: `COVER`, `STORY` o `GALLERY`.
+- Una sola portada y una sola imagen de historia por club; galería ordenable.
+- FK: `club_id` -> `clubs(id)`; `created_by` -> `auth.users(id)`.
+- Lectura pública solo para medios visibles de perfiles publicados.
+- Assets en bucket público `club-profile-assets`, paths `covers/{clubId}`, `history/{clubId}` y `gallery/{clubId}`.
+
+### `club_facilities`
+
+Propósito funcional: instalaciones y servicios públicos estructurados.
+
+Columnas: `id`, `club_id`, `facility_key`, `label`, `description`, `is_available`, `sort_order`, `created_at`, `updated_at`.
+
+- Unique por `(club_id, facility_key)`.
+- FK: `club_id` -> `clubs(id)` con `ON DELETE CASCADE`.
+- Lectura pública solo para servicios disponibles de perfiles publicados.
+- Gestión mediante `club:profile_manage`.
+
+### DTO público del perfil del club
+
+`get_public_club_profile(uuid)` devuelve exclusivamente identidad, ubicación, contacto público, infraestructura declarada, perfil institucional, medios visibles y facilities. No expone campos legales, owner, revisión, suspensión ni notas internas de `clubs`.
 
 ### `club_memberships`
 
@@ -670,6 +708,53 @@ Observaciones/deuda:
 
 - Sin RLS/policies, puede depender de grants globales.
 - `is_enabled` permite conservar historico/configuracion sin borrar la fila.
+
+### Motor competitivo configurable (Etapa 1)
+
+La estructura deportiva canónica del club se modela de forma aditiva y todavía no reemplaza los campos legacy de jugadores, categorías o torneos.
+
+#### `competition_seasons`
+
+Temporadas por club. Contiene `id`, `club_id`, `name`, `starts_on`, `ends_on`, `status`, `is_public`, `sort_order`, `created_by` y timestamps. Admite `DRAFT`, `ACTIVE`, `CLOSED` y `ARCHIVED`; un índice parcial garantiza una sola temporada `ACTIVE` por club.
+
+#### `competition_branches`
+
+Ramas configurables por club. Contiene nombre, slug, orden, activación, visibilidad y `accent_kind`. El acento es presentación y no una regla deportiva.
+
+#### `competition_segments`
+
+Segmentos opcionales y configurables por club. No dependen de `tournaments.segment`.
+
+#### `competition_categories`
+
+Categorías configurables por club, con nombre, etiqueta breve, slug, orden y vínculo legacy opcional a `categories.id`.
+
+#### `competition_divisions`
+
+Combinación válida de temporada, modalidad, rama, segmento opcional y categoría opcional. Foreign keys compuestas garantizan que todas las entidades pertenezcan al mismo club. Un índice `NULLS NOT DISTINCT` evita combinaciones duplicadas incluso cuando segmento o categoría son `NULL`.
+
+Todas las tablas tienen RLS: `ranking:view` permite lectura administrativa y `ranking:manage` permite gestión; platform admin conserva acceso. No existe lectura pública directa en esta etapa.
+
+`create_default_competition_structure(uuid, text)` soporta inicialmente `PADEL_TRADITIONAL`, crea catálogos editables y una temporada `DRAFT` del año actual cuando corresponde, pero no crea divisiones.
+
+#### `competition_player_entries`
+
+Historial de asignaciones de `club_players` a divisiones `INDIVIDUAL`. Contiene `club_id`, `division_id`, `club_player_id`, estado, vigencia, actor, tipo de asignación, entrada anterior, motivo, metadata y timestamps.
+
+Admite `ACTIVE`, `SUSPENDED`, `WITHDRAWN` y `TRANSFERRED`. Las entradas terminales requieren `valid_until`; una entrada activa no puede tener fecha de cierre. Foreign keys compuestas impiden mezclar club, jugador y división. La FK a `club_players` usa `ON DELETE RESTRICT` para preservar historial.
+
+El recorrido competitivo se define por club, temporada, jugador, rama y segmento opcional. Un trigger con advisory lock transaccional impide dos entradas vigentes en el mismo recorrido, tratando `segment_id NULL` como valor real. Los cambios de categoría cierran la entrada anterior y crean una nueva mediante `previous_entry_id`.
+
+RLS permite lectura administrativa con `ranking:view`. Los usuarios autenticados no tienen escritura directa: `assign_player_to_competition_division(...)` y `set_competition_player_entry_status(...)` son las RPCs canónicas y requieren `ranking:manage` o platform admin.
+
+#### Backfill competitivo controlado
+
+- `competition_backfill_batches`: lote por club y temporada, con estados `DRAFT`, `REVIEWED`, `APPROVED`, `EXECUTED`, `CANCELLED` y `FAILED`.
+- `competition_backfill_batch_items`: decisión por `club_player_id`, división propuesta, diagnóstico y entrada finalmente ejecutada. No contiene puntos.
+
+`initialize_club_competition_season(...)` inicializa temporada y catálogos sin activarlos ni crear combinaciones innecesarias. `ensure_competition_division(club_id, season_id, modality, branch_id, segment_id, category_id, name)` crea divisiones explícitas e idempotentes; no maneja slug porque la tabla no posee esa columna. El diagnóstico V2 alimenta `create_competition_backfill_batch(...)`; revisión, aprobación y ejecución quedan separadas. La ejecución usa exclusivamente `assign_player_to_competition_division(..., 'LEGACY_BACKFILL', ...)` y revierte todo el lote ante cualquier error.
+
+Ambas tablas tienen RLS de lectura mediante `ranking:view`; no conceden escritura directa a `authenticated`.
 
 ### `user_roles`
 

@@ -3,6 +3,7 @@ import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createMatch } from '@/lib/tournamentMatches'
 import {
   calculateTournamentGroupStandings,
+  resolveTournamentClassificationRules,
   type GroupStandings,
   type TournamentClassificationRules,
   type TournamentGroup,
@@ -20,6 +21,7 @@ import {
 } from '@/lib/tournamentOpen/generalEngine'
 import { buildOpenFirstRoundMatchInputs } from '@/lib/tournamentOpen/persistence'
 import { buildOpenQualificationPlan } from '@/lib/tournamentOpen/qualification'
+import { buildOpenGroupDependentFixture, buildOpenGroupInitialFixture } from '@/lib/tournamentOpen/groupFixtures'
 import { OpenTournamentEngineError, type OpenBracketPlan, type OpenPersistableMatchInput, type OpenQualificationPlan } from '@/lib/tournamentOpen/types'
 import { getTournamentRegistrationEligibilityGate } from '@/lib/tournamentRegistrationEligibility'
 import { evaluatePlayoffSchedulingPlan } from '@/lib/tournamentPlayoffSchedulingDiagnostics'
@@ -61,6 +63,7 @@ type MatchRow = TournamentStandingMatch & {
   status: string | null
   score: Record<string, unknown> | null
   winner_team_id: string | null
+  round: number | null
 }
 
 const OPEN_GENERAL_QUALIFICATION_CONFIG = {
@@ -85,18 +88,6 @@ export class OpenPlayoffGenerationError extends Error {
     this.status = status
     this.details = details
   }
-}
-
-function normalizeClassificationRules(value: unknown, tournamentRules?: unknown): TournamentClassificationRules | null {
-  const base = value && typeof value === 'object' && !Array.isArray(value) ? value as TournamentClassificationRules : {}
-  const safeRules = normalizeObject(tournamentRules)
-  if (safeRules.group_tiebreakers) {
-    return {
-      ...base,
-      group_tiebreakers: safeRules.group_tiebreakers as TournamentClassificationRules['group_tiebreakers'],
-    }
-  }
-  return Object.keys(base).length > 0 ? base : null
 }
 
 function toGeneralOpenStandings(standings: GroupStandings[]): OpenGeneralGroupStandings[] {
@@ -329,46 +320,7 @@ function getPairKey(team1Id: string, team2Id: string) {
   return [team1Id, team2Id].sort().join(':')
 }
 
-function getExpectedPairKeys(groupTeams: TournamentGroupTeam[]) {
-  const expectedPairs = new Set<string>()
-
-  if (groupTeams.length === 4) {
-    const sortedBySeed = [...groupTeams].sort((left, right) => {
-      if (left.seed !== right.seed) return left.seed - right.seed
-      if ((left.position ?? Number.MAX_SAFE_INTEGER) !== (right.position ?? Number.MAX_SAFE_INTEGER)) {
-        return (left.position ?? Number.MAX_SAFE_INTEGER) - (right.position ?? Number.MAX_SAFE_INTEGER)
-      }
-      return left.team_id.localeCompare(right.team_id)
-    })
-
-    const reducedPairs: Array<[number, number]> = [
-      [0, 2], // 1 vs 3
-      [1, 3], // 2 vs 4
-      [0, 3], // 1 vs 4
-      [2, 1], // 3 vs 2
-    ]
-
-    reducedPairs.forEach(([firstIndex, secondIndex]) => {
-      const firstTeam = sortedBySeed[firstIndex]
-      const secondTeam = sortedBySeed[secondIndex]
-      if (firstTeam && secondTeam) {
-        expectedPairs.add(getPairKey(firstTeam.team_id, secondTeam.team_id))
-      }
-    })
-
-    return expectedPairs
-  }
-
-  for (let firstIndex = 0; firstIndex < groupTeams.length; firstIndex += 1) {
-    for (let secondIndex = firstIndex + 1; secondIndex < groupTeams.length; secondIndex += 1) {
-      expectedPairs.add(getPairKey(groupTeams[firstIndex].team_id, groupTeams[secondIndex].team_id))
-    }
-  }
-
-  return expectedPairs
-}
-
-function assertGroupsComplete(input: {
+export function assertOpenGroupsComplete(input: {
   groups: TournamentGroup[]
   groupTeams: TournamentGroupTeam[]
   matches: MatchRow[]
@@ -392,31 +344,52 @@ function assertGroupsComplete(input: {
     }
 
     const groupTeamIds = new Set(groupTeams.map((team) => team.team_id))
-    const expectedPairs = getExpectedPairKeys(groupTeams)
-    const playedPairs = new Map<string, number>()
-    const invalidPairs: string[] = []
+    const initialFixture = buildOpenGroupInitialFixture(groupTeams.map((team) => ({ teamId: team.team_id, seed: team.seed })))
+    const groupMatches = input.matches.filter((match) => match.group_id === group.id && String(match.phase ?? '').toUpperCase() === 'GROUP')
+    const expectedMatches = [...initialFixture.initialMatches]
+    const initialMatches = initialFixture.initialMatches.map((expected) =>
+      groupMatches.find((match) =>
+        Number(match.round) === expected.round &&
+        getPairKey(match.team1_id, match.team2_id) === getPairKey(expected.team1Id, expected.team2Id)
+      ) ?? null
+    )
 
-    for (const match of input.matches) {
-      if (match.group_id !== group.id || String(match.phase ?? '').toUpperCase() !== 'GROUP') continue
-      if (match.status !== 'PLAYED' || !match.winner_team_id) continue
-      const pairKey = getPairKey(match.team1_id, match.team2_id)
-      if (!groupTeamIds.has(match.team1_id) || !groupTeamIds.has(match.team2_id) || !expectedPairs.has(pairKey)) {
-        invalidPairs.push(pairKey)
-        continue
-      }
-      playedPairs.set(pairKey, (playedPairs.get(pairKey) ?? 0) + 1)
+    if (group.size === 4 && initialMatches.every((match) =>
+      Boolean(match) && String(match?.status ?? '').toUpperCase() === 'PLAYED' && Boolean(match?.winner_team_id)
+    )) {
+      const dependentFixture = buildOpenGroupDependentFixture({
+        initialMatches: initialMatches.map((match) => ({
+          team1Id: match!.team1_id,
+          team2Id: match!.team2_id,
+          winnerTeamId: match!.winner_team_id,
+        })),
+      })
+      if (dependentFixture) expectedMatches.push(...dependentFixture)
     }
 
-    const missingPairs = Array.from(expectedPairs).filter((pairKey) => !playedPairs.has(pairKey))
-    const duplicatePairs = Array.from(playedPairs.entries())
-      .filter(([, count]) => count > 1)
-      .map(([pairKey]) => pairKey)
+    const expectedKeys = new Set(expectedMatches.map((match) => `${match.round}:${getPairKey(match.team1Id, match.team2Id)}`))
+    const observed = new Map<string, MatchRow[]>()
+    const invalidMatches: MatchRow[] = []
+    for (const match of groupMatches) {
+      const key = `${Number(match.round ?? 0)}:${getPairKey(match.team1_id, match.team2_id)}`
+      if (!groupTeamIds.has(match.team1_id) || !groupTeamIds.has(match.team2_id) || !expectedKeys.has(key)) {
+        invalidMatches.push(match)
+        continue
+      }
+      observed.set(key, [...(observed.get(key) ?? []), match])
+    }
 
-    if (missingPairs.length > 0 || duplicatePairs.length > 0 || invalidPairs.length > 0) {
+    const missingPairs = expectedMatches.filter((expected) => {
+      const matches = observed.get(`${expected.round}:${getPairKey(expected.team1Id, expected.team2Id)}`) ?? []
+      return !matches.some((match) => String(match.status ?? '').toUpperCase() === 'PLAYED' && Boolean(match.winner_team_id))
+    })
+    const duplicatePairs = Array.from(observed.values()).filter((matches) => matches.length > 1)
+
+    if (missingPairs.length > 0 || duplicatePairs.length > 0 || invalidMatches.length > 0) {
       const details = [
         missingPairs.length ? `faltantes: ${missingPairs.length}` : null,
         duplicatePairs.length ? `duplicados: ${duplicatePairs.length}` : null,
-        invalidPairs.length ? `inválidos: ${invalidPairs.length}` : null,
+        invalidMatches.length ? `inválidos: ${invalidMatches.length}` : null,
       ].filter(Boolean).join(', ')
 
       throw new OpenPlayoffGenerationError(
@@ -732,7 +705,7 @@ export async function generateOpenFirstRoundPlayoff(input: {
 
   const { data: matches, error: matchesError } = await supabaseAdmin
     .from('tournament_matches')
-    .select('id,tournament_id,club_id,group_id,phase,status,team1_id,team2_id,winner_team_id,score')
+    .select('id,tournament_id,club_id,group_id,phase,status,team1_id,team2_id,winner_team_id,score,round')
     .eq('tournament_id', input.tournamentId)
     .eq('club_id', input.clubId)
 
@@ -749,10 +722,10 @@ export async function generateOpenFirstRoundPlayoff(input: {
   }
 
   const groupTeamRows = (groupTeams ?? []) as TournamentGroupTeam[]
-  assertGroupsComplete({ groups: groupRows, groupTeams: groupTeamRows, matches: matchRows })
+  assertOpenGroupsComplete({ groups: groupRows, groupTeams: groupTeamRows, matches: matchRows })
 
   const currentRules = normalizeObject(tournamentRow.rules_json ?? tournamentRow.rules ?? {})
-  const classificationRules = normalizeClassificationRules(tournamentRow.classification_rules, currentRules)
+  const classificationRules = resolveTournamentClassificationRules(tournamentRow.classification_rules, currentRules)
   let standings
   try {
     standings = calculateTournamentGroupStandings({

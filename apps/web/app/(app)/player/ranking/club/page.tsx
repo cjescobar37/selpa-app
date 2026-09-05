@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { ChevronRight, Search } from 'lucide-react'
 import RankingBoard, { type RankingBoardRow } from '@/components/ranking/RankingBoard'
+import PairRankingBoard, { type PairRankingRow } from '@/components/ranking/PairRankingBoard'
 import RankingPlayerAvatar from '@/components/ranking/RankingPlayerAvatar'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { useSession } from '@/components/session/SessionProvider'
@@ -31,6 +32,7 @@ type RankingRow = {
 
 type RankingResponse = {
   individual?: RankingRow[]
+  pairs?: PairRankingRow[]
   meta?: { generatedAt?: string }
   error?: string
 }
@@ -62,6 +64,7 @@ export default function PlayerClubRankingPage() {
   const [category, setCategory] = useState('all')
   const [gender, setGender] = useState('all')
   const [query, setQuery] = useState('')
+  const [rankingMode, setRankingMode] = useState<'individual' | 'pairs'>(() => searchParams.get('view') === 'pairs' ? 'pairs' : 'individual')
   const [data, setData] = useState<RankingResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -113,6 +116,15 @@ export default function PlayerClubRankingPage() {
   const filtered = useMemo(() => {
     return sortRankingRows(filterRankingRows(data?.individual ?? [], { category: activeCategory ?? category, gender, query }))
   }, [activeCategory, category, data?.individual, gender, query])
+
+  const filteredPairs = useMemo(() => {
+    const search = query.trim().toLocaleLowerCase('es')
+    return (data?.pairs ?? []).filter((pair) => {
+      if ((activeCategory ?? category) !== 'all' && String(pair.category ?? '') !== (activeCategory ?? category)) return false
+      if (gender !== 'all' && String(pair.gender ?? '').toUpperCase() !== gender) return false
+      return !search || `${pair.player1_name} ${pair.player2_name}`.toLocaleLowerCase('es').includes(search)
+    })
+  }, [activeCategory, category, data?.pairs, gender, query])
 
   const columns = useMemo(() => {
     if (gender === 'M') return ['M'] as const
@@ -236,6 +248,10 @@ export default function PlayerClubRankingPage() {
           ) : null}
 
           {showFullRanking ? <section className="playerClubRankFilters" id="ranking-completo">
+            <div className="playerClubRankMode" role="tablist" aria-label="Tipo de ranking">
+              <button type="button" role="tab" aria-selected={rankingMode === 'individual'} className={rankingMode === 'individual' ? 'is-active' : ''} onClick={() => setRankingMode('individual')}>Individual</button>
+              <button type="button" role="tab" aria-selected={rankingMode === 'pairs'} className={rankingMode === 'pairs' ? 'is-active' : ''} onClick={() => setRankingMode('pairs')}>Parejas</button>
+            </div>
             <label>
               <span>Categoría</span>
               <select value={activeCategory ?? category} onChange={(event) => {
@@ -260,12 +276,14 @@ export default function PlayerClubRankingPage() {
           {loading ? <PlayerStatePanel kind="loading" title="Cargando ranking" message="Ordenando posiciones y categorías" compact /> : null}
           {message ? <PlayerStatePanel kind="error" title="No pudimos cargar el ranking" message={message} onRetry={() => setReloadKey((value) => value + 1)} compact /> : null}
 
-          {!loading && !message && showFullRanking && filtered.length ? (
+          {!loading && !message && showFullRanking && rankingMode === 'individual' && filtered.length ? (
             <RankingBoard columns={rankingBoardColumns} />
           ) : null}
-          {!loading && !message && showFullRanking && !filtered.length ? (
+          {!loading && !message && showFullRanking && rankingMode === 'pairs' && filteredPairs.length ? <PairRankingBoard rows={filteredPairs} /> : null}
+          {!loading && !message && showFullRanking && rankingMode === 'individual' && !filtered.length ? (
             <PlayerStatePanel kind="empty" title="Sin posiciones para mostrar" message="Probá con otra categoría, rama o búsqueda." compact />
           ) : null}
+          {!loading && !message && showFullRanking && rankingMode === 'pairs' && !filteredPairs.length ? <PlayerStatePanel kind="empty" title="No hay parejas rankeadas todavía." message="Las posiciones aparecerán cuando se publiquen resultados puntuables." compact /> : null}
         </>
       )}
 
@@ -302,6 +320,9 @@ export default function PlayerClubRankingPage() {
         .playerClubRankLeader__score b { color: var(--rank-accent); font-size: 14px; }
         .playerClubRankLeader__score span { color: #475569; font-size: 11px; font-weight: 850; white-space: nowrap; }
         .playerClubRankFilters { display: grid; gap: 12px; grid-template-columns: 160px 160px minmax(0, 1fr); padding: 13px; }
+        .playerClubRankMode { background:#f8fafc; border:1px solid #dbe6f0; border-radius:999px; display:grid; gap:4px; grid-column:1 / -1; grid-template-columns:repeat(2,minmax(0,1fr)); padding:4px; }
+        .playerClubRankMode button { background:transparent; border:0; border-radius:999px; color:#64748b; cursor:pointer; font:inherit; font-size:12px; font-weight:850; min-height:34px; }
+        .playerClubRankMode button.is-active { background:#061b3a; color:#fff; }
         .playerClubRankFilters label { display: grid; gap: 6px; }
         .playerClubRankFilters select, .playerClubRankFilters input { background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; color: #061b3a; font: inherit; font-weight: 850; min-width: 0; padding: 10px 11px; }
         .playerClubRankSearch div { align-items: center; background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; display: flex; gap: 8px; padding-left: 10px; }
@@ -355,7 +376,7 @@ export default function PlayerClubRankingPage() {
           .playerClubRankLeaderGrid { grid-template-columns: 1fr; }
         }
         @media (max-width: 520px) {
-          .playerClubRankShell { gap: 12px; padding: 10px; }
+          .playerClubRankShell { gap: 12px; padding: 0; }
           .playerClubRankLeaders { gap: 9px; }
           .playerClubRankLeaders > header h2 { font-size: 22px; }
           .playerClubRankLeaders > header p { font-size: 12px; }

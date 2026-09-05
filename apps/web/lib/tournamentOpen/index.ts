@@ -1,5 +1,6 @@
 export * from './bracket'
 export * from './groups'
+export * from './groupFixtures'
 export * from './phases'
 export * from './persistence'
 export * from './qualification'

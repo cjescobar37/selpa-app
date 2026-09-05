@@ -455,8 +455,8 @@ export default function PublicHomeExperience({
         <section className="px-homeTournaments">
           <div className="px-homeSectionHead is-row">
             <div>
-              <span>En juego</span>
-              <h2>Torneos activos de la comunidad</h2>
+              <span>Competencia activa</span>
+              <h2>Torneos en juego</h2>
             </div>
             <Link href="/torneos" className="px-homePillButton">Ver más</Link>
           </div>
@@ -822,6 +822,12 @@ export default function PublicHomeExperience({
           .px-homeSponsors { grid-template-columns: minmax(220px,.36fr) minmax(0,.64fr); }
         }
         @media (max-width: 720px) {
+          /* Prevent wide tournament/ranking internals from expanding the page grid past the mobile viewport. */
+          .px-publicHome { contain: layout paint; }
+          .px-homeTournaments, .px-homeRankingsExplore, .px-homeClubsFeatured, .px-homeNewsPortal { min-width: 0; width: 100%; }
+          .px-homeSectionHead.is-row, .px-homeTournamentCards, .px-homeRankingClubGrid, .px-homeClubCards, .px-homeNewsPortalGrid { max-width: 100%; min-width: 0; width: 100%; }
+          .px-homeTournamentCards :global(.TournamentPublicCard) { max-width: 100%; min-width: 0; width: 100%; }
+          :global(.px-homeAdBanners) { contain: paint; overflow-x: clip; width: 100%; }
           .px-homeHeroCompact { border-radius: 22px; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(116px, 34%); min-height: 132px; padding: 12px 16px; }
           .px-homeHeroCompact h1 { font-size: clamp(28px, 8vw, 36px); font-weight: 850; letter-spacing: -.03em; line-height: .96; }
           .px-homeHeroCompact p { font-size: 15px; }
@@ -837,7 +843,7 @@ export default function PublicHomeExperience({
           .px-homeCtaBanners em { grid-column: 2; justify-self: start; margin-right: 0; }
           .px-homeSectionHead.is-row { align-items: flex-start; flex-direction: row; flex-wrap: nowrap; padding-right: 0; position: relative; }
           .px-homeSectionHead.is-row > div { max-width: calc(100% - 74px); min-width: 0; }
-          .px-homeSectionHead h2 { font-size: clamp(23px, 7.2vw, 29px); letter-spacing: -.035em; white-space: nowrap; }
+          .px-homeSectionHead h2 { font-size: clamp(23px, 7.2vw, 29px); letter-spacing: -.035em; white-space: normal; }
           .px-homeSectionHead.is-row .px-homePillButton, .px-homeSectionHead.is-row .px-homeNewsButton { display: inline-flex; flex-shrink: 0; font-size: 9px; letter-spacing: .02em; line-height: 1; min-height: 28px; padding: 6px 8px; position: absolute; right: 0; text-align: center; text-transform: uppercase; top: 0; white-space: nowrap; width: max-content; }
           .px-homeNewsPortalGrid, .px-homeMoreNews { grid-template-columns: 1fr; }
           .px-homeRankingsExplore > .px-homeRankingClubGrid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }

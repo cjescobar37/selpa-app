@@ -101,7 +101,7 @@ export default function PerfilPage() {
       .publicPlayerProfile__requests{margin:0 28px 14px}
       .publicPlayerProfile__activity{margin:0 28px 28px}
       @media(max-width:600px){
-        .publicPlayerProfile{border-radius:0;min-height:100vh}
+        .publicPlayerProfile{border:0;border-radius:0;box-shadow:none;margin-inline:calc(50% - 50vw);min-height:100vh;width:100vw}
         .publicPlayerProfile__cover{height:185px}
         .publicPlayerProfile__identity{grid-template-columns:1fr;justify-items:center;margin-top:-64px;padding:0 16px 18px;text-align:center}
         .publicPlayerProfile__avatar{height:132px;width:132px}

@@ -4,7 +4,9 @@
 */
 
 :root{
-  --app-mobile-gutter: 12px;
+  --selpa-mobile-gutter: 8px;
+  --selpa-mobile-gutter-compact: 6px;
+  --app-mobile-gutter: var(--selpa-mobile-gutter);
   --navy: #2e5493;
   --navy-2: #273965;
   --cyan: #53c7d9;
@@ -193,8 +195,15 @@ a{ color: inherit; }
   .px-main > .px-wrap{
     box-sizing:border-box;
     max-width:none;
-    padding-left:var(--app-mobile-gutter);
-    padding-right:var(--app-mobile-gutter);
+    padding-left:var(--selpa-mobile-gutter);
+    padding-right:var(--selpa-mobile-gutter);
+    width:100%;
+  }
+  .px-main > .px-wrap > .px-wrap{
+    box-sizing:border-box;
+    margin:0;
+    max-width:none;
+    padding-inline:0;
     width:100%;
   }
   .app-page{
@@ -218,6 +227,12 @@ a{ color: inherit; }
   .px-publicFrame{
     padding-bottom:24px !important;
     width:calc(100% - 16px) !important;
+  }
+}
+
+@media (max-width:430px){
+  .px-publicFrame{
+    width:100% !important;
   }
 }
 

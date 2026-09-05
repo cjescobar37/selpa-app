@@ -1,4 +1,5 @@
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
+import { materializeOpenGroupDependentMatches } from '@/lib/tournamentOpenGroupDependencies'
 
 export type MatchStatus = 'PENDING' | 'PLAYED' | 'CANCELLED'
 export type MatchPhase =
@@ -55,6 +56,7 @@ type PlayoffMatchRow = {
   id: string
   tournament_id: string
   club_id: string
+  group_id: string | null
   team1_id: string
   team2_id: string
   phase: string | null
@@ -405,7 +407,7 @@ function assertCanPropagatePlayoffWinner(input: {
 async function readPlayoffMatches(input: { tournamentId: string; clubId: string }) {
   const { data, error } = await supabaseAdmin
     .from('tournament_matches')
-    .select('id,tournament_id,club_id,team1_id,team2_id,phase,status,score,winner_team_id,round,match_order,created_at')
+    .select('id,tournament_id,club_id,group_id,team1_id,team2_id,phase,status,score,winner_team_id,round,match_order,created_at')
     .eq('tournament_id', input.tournamentId)
     .eq('club_id', input.clubId)
     .in('phase', playoffPhaseOrder)
@@ -703,7 +705,7 @@ export async function updateMatchResult(input: UpdateMatchResultInput) {
 
   const { data: match, error: matchError } = await supabaseAdmin
     .from('tournament_matches')
-    .select('id,tournament_id,club_id,team1_id,team2_id,phase,status,score,winner_team_id,round,match_order,created_at')
+    .select('id,tournament_id,club_id,group_id,team1_id,team2_id,phase,status,score,winner_team_id,round,match_order,created_at')
     .eq('id', input.matchId)
     .maybeSingle()
 
@@ -766,7 +768,28 @@ export async function updateMatchResult(input: UpdateMatchResultInput) {
     })
     : null
 
-  return { match: data, propagation }
+  // La carga del resultado ya fue persistida. Los cruces dependientes son un
+  // paso posterior y opcional: un fallo allí nunca puede convertir un guardado
+  // exitoso en un error para quien cargó el partido.
+  let groupDependency: Awaited<ReturnType<typeof materializeOpenGroupDependentMatches>> | null = null
+  let groupDependencyWarning: string | null = null
+  const isInitialOpenGroupMatch = String(currentMatch.phase ?? '').toUpperCase() === 'GROUP'
+    && Number(currentMatch.round) === 1
+
+  if (isInitialOpenGroupMatch) {
+    try {
+      groupDependency = await materializeOpenGroupDependentMatches({
+        tournamentId: currentMatch.tournament_id,
+        clubId: currentMatch.club_id,
+        groupId: currentMatch.group_id,
+      })
+    } catch (error) {
+      console.error('No se pudieron materializar los cruces dependientes luego de guardar el resultado.', error)
+      groupDependencyWarning = 'El resultado se guardó, pero no pudimos actualizar los cruces siguientes.'
+    }
+  }
+
+  return { match: data, propagation, groupDependency, groupDependencyWarning }
 }
 
 export async function listMatchesByTournament(input: ListMatchesByTournamentInput) {

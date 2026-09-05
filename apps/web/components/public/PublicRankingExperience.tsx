@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeft, Search } from 'lucide-react'
 import RankingBoard, { type RankingBoardRow } from '@/components/ranking/RankingBoard'
+import PairRankingBoard, { type PairRankingRow } from '@/components/ranking/PairRankingBoard'
 import PublicRankingClubCard from '@/components/public/PublicRankingClubCard'
 import { buildAssetProxyUrl } from '@/lib/clubAssets'
 import { BRAND } from '@/lib/branding'
@@ -27,6 +28,8 @@ export type PublicRankingPlayer = {
   points: number
 }
 
+export type PublicRankingPair = PairRankingRow & { clubId: string }
+
 type PublicRankingRow = PublicRankingPlayer & {
   full_name: string
   ranking_points: number
@@ -44,11 +47,13 @@ const PAMP_GLOW = 'rgba(6, 182, 212, 0.18)'
 
 export default function PublicRankingExperience({
   players,
+  pairs,
   clubs,
   initialClubId,
   initialCategory,
 }: {
   players: PublicRankingPlayer[]
+  pairs: PublicRankingPair[]
   clubs: string[]
   initialClubId?: string | null
   initialCategory?: string | null
@@ -59,12 +64,14 @@ export default function PublicRankingExperience({
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState(normalizedInitialCategory)
   const [gender, setGender] = useState('all')
+  const [rankingMode, setRankingMode] = useState<'individual' | 'pairs'>('individual')
 
   const clubCards = useMemo(() => {
     return clubs.map((clubName) => {
       const clubPlayers = players.filter((player) => player.clubName === clubName)
       const first = clubPlayers[0]
       return {
+        clubId: first?.clubId ?? '',
         clubName,
         categories: Array.from(new Set(clubPlayers.map((player) => player.category).filter((item): item is number => item !== null))).sort((a, b) => a - b),
         count: clubPlayers.length,
@@ -111,6 +118,16 @@ export default function PublicRankingExperience({
     }))
   }, [filtered, gender])
 
+  const filteredPairs = useMemo(() => {
+    const search = query.trim().toLocaleLowerCase('es')
+    return pairs.filter((pair) => {
+      if (!selectedClub || pair.clubId !== selectedClubCard?.clubId) return false
+      if (category !== 'all' && String(pair.category ?? '') !== category) return false
+      if (gender !== 'all' && String(pair.gender ?? '').toUpperCase() !== gender) return false
+      return !search || `${pair.player1_name} ${pair.player2_name}`.toLocaleLowerCase('es').includes(search)
+    })
+  }, [category, gender, pairs, query, selectedClub, selectedClubCard?.clubId])
+
   function renderClubCard(card: (typeof clubCards)[number]) {
     return (
       <PublicRankingClubCard
@@ -154,12 +171,13 @@ export default function PublicRankingExperience({
           </section>
 
           <section className="publicRankingFilters">
+            <div className="publicRankingMode" role="tablist" aria-label="Tipo de ranking"><button type="button" role="tab" aria-selected={rankingMode === 'individual'} className={rankingMode === 'individual' ? 'is-active' : ''} onClick={() => setRankingMode('individual')}>Individual</button><button type="button" role="tab" aria-selected={rankingMode === 'pairs'} className={rankingMode === 'pairs' ? 'is-active' : ''} onClick={() => setRankingMode('pairs')}>Parejas</button></div>
             <label><span>Categoría</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : formatRankingCategory(Number(item))}</option>)}</select></label>
             <label><span>Género</span><select value={gender} onChange={(event) => setGender(event.target.value)}>{genders.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
             <label className="publicRankingSearch"><span>Buscar</span><div><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Jugador" /></div></label>
           </section>
 
-          <RankingBoard columns={rankingBoardColumns} />
+          {rankingMode === 'individual' ? <RankingBoard columns={rankingBoardColumns} /> : filteredPairs.length ? <PairRankingBoard rows={filteredPairs} /> : <div className="publicRankingEmpty"><strong>No hay parejas rankeadas todavía.</strong><p>Las posiciones aparecerán cuando se publiquen resultados puntuables.</p></div>}
         </>
       )}
 
@@ -178,6 +196,9 @@ export default function PublicRankingExperience({
         .publicRankingSelected button { align-items: center; background: #fff; border: 1px solid #dbe6f0; color: #075985; display: inline-flex; gap: 7px; }
         .publicRankingSelected strong { display: block; font-size: 24px; font-weight: 950; letter-spacing: -.04em; }
         .publicRankingFilters { background: rgba(255,255,255,.9); border: 1px solid #e2e8f0; border-radius: 22px; box-shadow: 0 18px 48px rgba(15,23,42,.07); display: grid; gap: 12px; grid-template-columns: 140px 150px minmax(0,1fr); padding: 13px; }
+        .publicRankingMode { background:#f8fafc; border:1px solid #dbe6f0; border-radius:999px; display:grid; gap:4px; grid-column:1 / -1; grid-template-columns:repeat(2,minmax(0,1fr)); padding:4px; }
+        .publicRankingMode button { background:transparent; border:0; border-radius:999px; color:#64748b; cursor:pointer; font:inherit; font-size:12px; font-weight:850; min-height:34px; }
+        .publicRankingMode button.is-active { background:#061b3a; color:#fff; }
         .publicRankingFilters label { display: grid; gap: 6px; min-width: 0; }
         .publicRankingFilters label > span { color: #0284c7; font-size: 11px; font-weight: 950; text-transform: uppercase; }
         .publicRankingFilters select, .publicRankingFilters input { background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; color: #061b3a; font: inherit; font-weight: 850; min-width: 0; padding: 10px 11px; }

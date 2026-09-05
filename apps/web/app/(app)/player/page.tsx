@@ -1142,20 +1142,20 @@ export default function PlayerHomePage() {
         }
         @media (max-width: 560px) {
           .playerHomeShell > .homeModeSwitch {
-            margin-inline: -8px;
+            margin-inline: 0;
             max-width: none;
             justify-self: stretch;
-            width: calc(100% + 16px);
+            width: 100%;
           }
           .playerHomeShell {
             gap: 10px;
-            padding: 8px;
+            padding: 0;
           }
           .homeModePane {
             gap: 10px;
           }
           .modePublicHomeEmbed {
-            margin: 0 -8px;
+            margin: 0;
           }
           .playerHomePanel, .playerHomeHero, .playerSection, .playerQuickGrid {
             border-radius: 16px;

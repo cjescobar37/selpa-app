@@ -4,7 +4,7 @@ import Link from 'next/link'
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { ChevronLeft, ChevronRight, MoreVertical, Repeat2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Maximize2, MoreVertical, Repeat2, RotateCcw, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
@@ -18,8 +18,8 @@ import {
 } from '@/lib/tournamentSchedule'
 import { TournamentFlyerPreviewCard, defaultFlyerConfig, readFlyerConfigFromRules, type FlyerConfig } from '../_components/TournamentFlyerConfigurator'
 import { TournamentLiveAgendaTab } from '../_components/TournamentLiveAgendaTab'
-import { calculateTournamentGroupStandings } from '@/lib/tournamentStandings'
-import { normalizeGroupTiebreakerConfig } from '@/lib/tournamentTiebreakers'
+import { calculateTournamentGroupStandings, resolveTournamentClassificationRules } from '@/lib/tournamentStandings'
+import { getOpenGroupMatchDisplayCode } from '@/lib/tournamentOpen/groupFixtures'
 import { isValidNormalSet, isValidSuperTiebreak, validateStructuredMatchScore, type ScoreValidationResult, type StructuredMatchScore } from '@/lib/tournamentScore'
 import { buildTournamentOperationalNotices, type TournamentOperationalNotice, type TournamentOperationalNoticeScope } from '@/lib/tournamentOperationalNotices'
 import {
@@ -989,6 +989,10 @@ export default function ClubTournamentDetailPage() {
   const [expandedGroupMatches, setExpandedGroupMatches] = useState<string[]>([])
   const [selectedPlayoffRound, setSelectedPlayoffRound] = useState('')
   const [bracketView, setBracketView] = useState<'tree' | 'compact'>('tree')
+  const [mobilePlayoffView, setMobilePlayoffView] = useState<'round' | 'bracket'>('round')
+  const [mobilePlayoffFullscreen, setMobilePlayoffFullscreen] = useState(false)
+  const [mobilePlayoffHintVisible, setMobilePlayoffHintVisible] = useState(true)
+  const [selectedMobilePlayoffMatch, setSelectedMobilePlayoffMatch] = useState<TournamentMatch | null>(null)
   const [manualModalOpen, setManualModalOpen] = useState(false)
   const [courtConfigModalOpen, setCourtConfigModalOpen] = useState(false)
   const [savingCourtConfig, setSavingCourtConfig] = useState(false)
@@ -1192,14 +1196,6 @@ export default function ClubTournamentDetailPage() {
   const canAddPair = Boolean(summary) && isTournamentOpen && !isTournamentFinished && !seedMeta.hasSeedSnapshot
   const sortedGroups = useMemo(
     () => [...groups].sort((left, right) => left.order - right.order || left.name.localeCompare(right.name)),
-    [groups]
-  )
-  const assignedGroupTeamsCount = useMemo(
-    () => groups.reduce((acc, group) => acc + group.teams.length, 0),
-    [groups]
-  )
-  const groupsReadyCount = useMemo(
-    () => groups.filter((group) => group.teams.length === group.size).length,
     [groups]
   )
   const groupMatchesByGroup = useMemo(
@@ -1865,9 +1861,7 @@ export default function ClubTournamentDetailPage() {
         winner_team_id: match.winner_team_id,
         score: match.score,
       })),
-      classificationRules: {
-        group_tiebreakers: normalizeGroupTiebreakerConfig(tournamentRules?.group_tiebreakers),
-      },
+      classificationRules: resolveTournamentClassificationRules(null, tournamentRules),
     })
   }, [groupMatches, sortedGroups, tournamentId, tournamentRules])
   const standingsByGroupId = useMemo(
@@ -1940,6 +1934,7 @@ export default function ClubTournamentDetailPage() {
       sortedGroups.reduce((total, group) => total + (group.size === 4 ? 4 : group.size === 3 ? 3 : 0), 0),
     [sortedGroups]
   )
+  const projectedGroupMatchesCount = Math.max(groupMatches.length, expectedGroupMatchesCount)
   const groupsPlanningCapacity = useMemo(
     () =>
       calculateScheduleCapacity({
@@ -1947,9 +1942,9 @@ export default function ClubTournamentDetailPage() {
         startTime: tournamentRuleSchedule.scheduleConfig.groups.start_time,
         endTime: tournamentRuleSchedule.scheduleConfig.groups.end_time,
         matchDurationMinutes: tournamentRuleSchedule.scheduleConfig.match_duration_minutes,
-        totalMatches: groupMatches.length || expectedGroupMatchesCount,
+        totalMatches: projectedGroupMatchesCount,
       }),
-    [expectedGroupMatchesCount, groupMatches.length, tournamentRuleSchedule]
+    [projectedGroupMatchesCount, tournamentRuleSchedule]
   )
   const selectedComplex = useMemo(
     () => complexOptions.find((option) => option.id === courtDraft.complexId) ?? null,
@@ -1959,6 +1954,15 @@ export default function ClubTournamentDetailPage() {
     const count = selectedComplex?.courtsCount ?? 0
     return Array.from({ length: Math.max(0, count) }, (_, index) => `Cancha ${index + 1}`)
   }, [selectedComplex])
+  const availableSelectedComplexCourts = useMemo(() => {
+    if (!selectedComplex) return []
+    const selectedNames = new Set(
+      tournamentCourtsDraft
+        .filter((court) => (court.complex_name ?? '').trim().toLowerCase() === selectedComplex.name.trim().toLowerCase())
+        .map((court) => court.name.trim().toLowerCase())
+    )
+    return selectedComplexCourts.filter((courtName) => !selectedNames.has(courtName.toLowerCase()))
+  }, [selectedComplex, selectedComplexCourts, tournamentCourtsDraft])
   const draftPlanningCapacity = useMemo(
     () =>
       calculateScheduleCapacity({
@@ -1966,9 +1970,9 @@ export default function ClubTournamentDetailPage() {
         startTime: tournamentRuleSchedule.scheduleConfig.groups.start_time,
         endTime: tournamentRuleSchedule.scheduleConfig.groups.end_time,
         matchDurationMinutes: tournamentRuleSchedule.scheduleConfig.match_duration_minutes,
-        totalMatches: groupMatches.length || expectedGroupMatchesCount,
+        totalMatches: projectedGroupMatchesCount,
       }),
-    [expectedGroupMatchesCount, groupMatches.length, tournamentCourtsDraft.length, tournamentRuleSchedule]
+    [projectedGroupMatchesCount, tournamentCourtsDraft.length, tournamentRuleSchedule]
   )
   const groupPlanningStatus = tournamentRuleSchedule.scheduleConfig.mode === 'MANUAL'
     ? 'Manual'
@@ -2126,6 +2130,14 @@ export default function ClubTournamentDetailPage() {
 
   async function refreshTournamentExperience() {
     await Promise.all([loadSummary(), loadRegistrations()])
+  }
+
+  function scrollToTournamentMatch(matchId: string) {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById(`group-match-${matchId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    })
   }
 
   async function loadComplexOptions() {
@@ -2359,17 +2371,27 @@ export default function ClubTournamentDetailPage() {
       return (
         <>
           <strong>Sin fecha</strong>
-          <span>Hora sin asignar</span>
-          <span>{match.court_name ?? 'Cancha sin asignar'}</span>
+          <span>Cancha: sin asignar</span>
         </>
       )
     }
 
+    const scheduledAt = parseTournamentDate(match.scheduled_at)
+    const scheduleLabel = scheduledAt
+      ? new Intl.DateTimeFormat('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(scheduledAt).replace(',', ' a las')
+      : formatDateTime(match.scheduled_at)
+
     return (
       <>
-        <strong>{formatDate(match.scheduled_at)}</strong>
-        <span>{formatDateTime(match.scheduled_at).split(' · ')[1] ?? 'Hora sin asignar'}</span>
-        <span>{match.court_name ?? 'Cancha sin asignar'}</span>
+        <strong>{scheduleLabel}</strong>
+        <span>Cancha: {match.court_name ?? 'sin asignar'}</span>
       </>
     )
   }
@@ -2438,7 +2460,12 @@ export default function ClubTournamentDetailPage() {
         score: validation.score,
       }),
     })
-    const json = await res.json().catch(() => ({})) as { error?: string }
+    const json = await res.json().catch(() => ({})) as {
+      error?: string
+      match?: Pick<TournamentMatch, 'id' | 'status' | 'score' | 'winner_team_id'>
+      groupDependency?: { status?: string }
+      groupDependencyWarning?: string
+    }
 
     if (!res.ok) {
       setActionFeedback({
@@ -2452,12 +2479,26 @@ export default function ClubTournamentDetailPage() {
 
     setResultForm(null)
     setSavingResult(false)
+    const winnerTeamId = validation.winnerSide === 'team1' ? match.team1_id : match.team2_id
+    setGroupMatches((current) => current.map((item) => item.id === match.id
+      ? {
+        ...item,
+        status: json.match?.status ?? 'PLAYED',
+        score: json.match?.score ?? validation.score,
+        winner_team_id: json.match?.winner_team_id ?? winnerTeamId,
+      }
+      : item
+    ))
     setActionFeedback({
-      tone: 'success',
+      tone: json.groupDependencyWarning ? 'warning' : 'success',
       title: 'Resultado guardado',
-      message: 'La tabla y los cruces se actualizaron con este resultado.',
+      message: json.groupDependencyWarning
+        ?? (json.groupDependency?.status === 'GENERATED'
+        ? 'La tabla se actualizó y ya se definieron Ganadores vs Ganadores y Perdedores vs Perdedores.'
+        : 'La tabla y los cruces se actualizaron con este resultado.'),
     })
     await refreshTournamentExperience()
+    scrollToTournamentMatch(match.id)
   }
 
   function renderTournamentGroupStandings(group: TournamentGroup, standingBlock?: (typeof groupStandings)[number]) {
@@ -2480,10 +2521,12 @@ export default function ClubTournamentDetailPage() {
           <span role="columnheader">DG</span>
         </div>
         {standingBlock.standings.map((row, index) => (
-          <div key={row.team_id} className="club-groupStandingRow" role="row">
-            <span role="cell">{index + 1}</span>
+          <div key={row.team_id} className={`club-groupStandingRow ${qualifierIds.has(row.team_id) ? 'club-groupStandingRow--qualified' : ''}`} role="row">
+            <span className="club-groupStandingPosition" role="cell">{qualifierIds.has(row.team_id) ? <i aria-hidden="true">✓</i> : null}{index + 1}</span>
             <span className="club-groupStandingTeam" role="cell">
-              <span>{teamNameById(group, row.team_id)}</span>
+              <span className="club-groupStandingPlayerNames">
+                {splitTeamPlayerNames(teamNameById(group, row.team_id)).map((playerName) => <span key={playerName}>{playerName}</span>)}
+              </span>
               {qualifierIds.has(row.team_id) ? <b>Clasifica</b> : null}
             </span>
             <span role="cell">{row.played}</span>
@@ -2510,7 +2553,21 @@ export default function ClubTournamentDetailPage() {
 
   function renderTournamentGroupMatchResult(match: TournamentMatch) {
     if (String(match.status ?? '').toUpperCase() !== 'PLAYED') {
-      return <strong className="club-result club-result--muted">Sin resultado</strong>
+      return (
+        <>
+          <strong className="club-result club-result--muted">Sin resultado</strong>
+          <div className="club-scoreBoard club-scoreBoard--pending" aria-label="Resultado pendiente">
+            <div className="club-scoreBoardLabels">
+              {['S1', 'S2', 'TB'].map((label) => <span className="club-scoreLabel" key={`${match.id}-${label}`}>{label}</span>)}
+            </div>
+            {[0, 1].map((teamIndex) => (
+              <div className="club-scoreBoardRow" key={`${match.id}-pending-${teamIndex}`}>
+                {[0, 1, 2].map((setIndex) => <span className="club-scoreSet club-scoreSet--pending" key={`${match.id}-pending-${teamIndex}-${setIndex}`}>—</span>)}
+              </div>
+            ))}
+          </div>
+        </>
+      )
     }
 
     const sets = Array.isArray(match.score?.sets) ? match.score.sets : []
@@ -2708,7 +2765,7 @@ export default function ClubTournamentDetailPage() {
             className="club-primaryBtn"
             disabled={savingResult || !validation?.ok}
           >
-            {savingResult ? 'Guardando...' : 'Guardar'}
+            {savingResult ? 'Guardando...' : 'Guardar resultado'}
           </button>
           <button
             type="button"
@@ -2733,8 +2790,17 @@ export default function ClubTournamentDetailPage() {
           <article key={notice.id} className={`club-operationalNotice club-operationalNotice--${notice.type}`}>
             <span className="club-operationalNoticeIcon" aria-hidden="true">i</span>
             <div className="club-operationalNoticeBody">
-              <strong>{notice.title}</strong>
-              <p>{notice.message}</p>
+              {notice.title === 'Desempate aplicado' ? (
+                <details className="club-operationalNoticeDisclosure">
+                  <summary><strong>{notice.title}</strong></summary>
+                  <p>{notice.message}</p>
+                </details>
+              ) : (
+                <>
+                  <strong>{notice.title}</strong>
+                  <p>{notice.message}</p>
+                </>
+              )}
             </div>
           </article>
         ))}
@@ -2752,8 +2818,17 @@ export default function ClubTournamentDetailPage() {
           <article key={notice.id} className={`club-operationalNotice club-operationalNotice--${notice.type}`}>
             <span className="club-operationalNoticeIcon" aria-hidden="true">i</span>
             <div className="club-operationalNoticeBody">
-              <strong>{notice.title}</strong>
-              <p>{notice.message}</p>
+              {notice.title === 'Desempate aplicado' ? (
+                <details className="club-operationalNoticeDisclosure">
+                  <summary><strong>{notice.title}</strong></summary>
+                  <p>{notice.message}</p>
+                </details>
+              ) : (
+                <>
+                  <strong>{notice.title}</strong>
+                  <p>{notice.message}</p>
+                </>
+              )}
             </div>
           </article>
         ))}
@@ -2762,6 +2837,11 @@ export default function ClubTournamentDetailPage() {
   }
 
   function renderTournamentGroupMatchTable(group: TournamentGroup, matches: TournamentMatch[]) {
+    const orderedMatches = [...matches].sort((left, right) =>
+      (left.round ?? 0) - (right.round ?? 0) ||
+      (left.match_order ?? 0) - (right.match_order ?? 0) ||
+      left.id.localeCompare(right.id)
+    )
     return (
       <div className="club-matchTable" role="table" aria-label={`Partidos del Grupo ${group.name}`}>
         <div className="club-matchTableHead" role="row">
@@ -2772,19 +2852,26 @@ export default function ClubTournamentDetailPage() {
           <span role="columnheader">Estado</span>
           <span role="columnheader">Acciones</span>
         </div>
-        {matches.map((match) => {
+        {orderedMatches.map((match, matchIndex) => {
           const played = String(match.status ?? '').toUpperCase() === 'PLAYED'
           const team1Winner = played && match.winner_team_id === match.team1_id
           const team2Winner = played && match.winner_team_id === match.team2_id
           const scheduleSwapOpenDisabledReason = getScheduleSwapOpenDisabledReason(match)
+          const mobileScoreSets = extractStructuredScoreSets(match.score).slice(0, 3)
+          const team1Name = match.team1_name ?? teamNameById(group, match.team1_id)
+          const team2Name = match.team2_name ?? teamNameById(group, match.team2_id)
+          const dependentMatchIndex = orderedMatches.filter((item) => Number(item.round) === 2).findIndex((item) => item.id === match.id)
+          const dependentLabel = group.size === 4 && Number(match.round) === 2
+            ? dependentMatchIndex === 0 ? 'Ganadores vs Ganadores' : 'Perdedores vs Perdedores'
+            : null
           return (
-            <div key={match.id} className="club-matchTableRow" role="row">
+            <div id={`group-match-${match.id}`} key={match.id} className={`club-matchTableRow ${played ? 'club-matchTableRow--played' : 'club-matchTableRow--pending'}`} role="row">
               <div className="club-matchScheduleActionCell" role="cell">
                 <button
                   type="button"
                   className="club-scheduleSwapBtn"
-                  title={scheduleSwapOpenDisabledReason || 'Cambiar horario/cancha'}
-                  aria-label={`Cambiar horario/cancha de ${getMatchTeamsLabel(match)}`}
+                  title={scheduleSwapOpenDisabledReason || 'Cambiar fecha, hora o cancha'}
+                  aria-label="Cambiar fecha, hora o cancha"
                   disabled={Boolean(scheduleSwapOpenDisabledReason)}
                   onClick={() => openScheduleSwapModal(match)}
                 >
@@ -2795,6 +2882,7 @@ export default function ClubTournamentDetailPage() {
                 {renderGroupMatchSchedule(match)}
               </div>
               <div className="club-matchPairCell" role="cell">
+                <span className="club-groupMatchCode">{getOpenGroupMatchDisplayCode(group.order, matchIndex + 1)}{dependentLabel ? ` · ${dependentLabel}` : ''}</span>
                 <div className="club-matchTeams" title={`${match.team1_name ?? 'Equipo 1'} vs ${match.team2_name ?? 'Equipo 2'}`}>
                   <strong className={team1Winner ? 'club-matchTeamWinner' : undefined}>
                     {match.team1_name ?? teamNameById(group, match.team1_id)}
@@ -2803,6 +2891,21 @@ export default function ClubTournamentDetailPage() {
                   <strong className={team2Winner ? 'club-matchTeamWinner' : undefined}>
                     {match.team2_name ?? teamNameById(group, match.team2_id)}
                   </strong>
+                </div>
+                <div className="club-mobileMatchScoreGrid" aria-label={`Resultado ${team1Name} versus ${team2Name}`}>
+                  <span className="club-mobileScoreSpacer" aria-hidden="true" />
+                  {['S1', 'S2', 'TB'].map((label) => <span className="club-mobileScoreLabel" key={`${match.id}-${label}`}>{label}</span>)}
+                  <strong className={team1Winner ? 'club-mobileMatchTeam club-mobileMatchTeam--winner' : 'club-mobileMatchTeam'}>{team1Name}</strong>
+                  {[0, 1, 2].map((index) => {
+                    const set = mobileScoreSets[index]
+                    return <span className={`club-mobileScoreValue ${set && set.team1 > set.team2 ? 'club-mobileScoreValue--winner' : ''}`} key={`${match.id}-team1-${index}`}>{set?.team1 ?? '—'}</span>
+                  })}
+                  <span className="club-mobileMatchDivider" aria-hidden="true" />
+                  <strong className={team2Winner ? 'club-mobileMatchTeam club-mobileMatchTeam--winner' : 'club-mobileMatchTeam'}>{team2Name}</strong>
+                  {[0, 1, 2].map((index) => {
+                    const set = mobileScoreSets[index]
+                    return <span className={`club-mobileScoreValue ${set && set.team2 > set.team1 ? 'club-mobileScoreValue--winner' : ''}`} key={`${match.id}-team2-${index}`}>{set?.team2 ?? '—'}</span>
+                  })}
                 </div>
               </div>
               <div className="club-matchResultCell" role="cell">
@@ -3630,6 +3733,82 @@ export default function ClubTournamentDetailPage() {
     await refreshTournamentExperience()
   }
 
+  function renderMobilePlayoffMatch(match: TournamentMatch, roundLabel: string) {
+    const played = String(match.status ?? '').toUpperCase() === 'PLAYED'
+    const team1Winner = played && match.winner_team_id === match.team1_id
+    const team2Winner = played && match.winner_team_id === match.team2_id
+    const team1Name = match.team1_name ?? teamNameLookup.get(match.team1_id) ?? 'Equipo 1'
+    const team2Name = match.team2_name ?? teamNameLookup.get(match.team2_id) ?? 'Equipo 2'
+    const scoreSets = extractStructuredScoreSets(match.score)
+    const scores = scoreSets.length > 0 ? scoreSets : [{ team1: '—', team2: '—' }, { team1: '—', team2: '—' }]
+
+    const renderTeam = (team: 1 | 2, name: string, winner: boolean) => (
+      <button
+        type="button"
+        className={`club-mobilePlayoffTeam ${winner ? 'club-mobilePlayoffTeam--winner' : played ? 'club-mobilePlayoffTeam--loser' : ''}`}
+        onClick={(event) => {
+          event.stopPropagation()
+          setActivePlayoffTeamId(team === 1 ? match.team1_id : match.team2_id)
+        }}
+      >
+        <span className="club-mobilePlayoffSeed">{teamSeedLookup.get(team === 1 ? match.team1_id : match.team2_id) ?? '—'}</span>
+        <strong title={name}>{name}</strong>
+        <span className="club-mobilePlayoffScore" aria-label={played ? 'Resultado' : 'Sin resultado'}>
+          {scores.map((set, index) => {
+            const value = team === 1 ? set.team1 : set.team2
+            const opposite = team === 1 ? set.team2 : set.team1
+            const setWon = typeof value === 'number' && typeof opposite === 'number' && value > opposite
+            return <span className={setWon ? 'club-mobilePlayoffScore--won' : ''} key={`${match.id}-${team}-${index}`}>{value}</span>
+          })}
+        </span>
+      </button>
+    )
+
+    return (
+      <article className={`club-mobilePlayoffMatch ${isPlayoffMatchInActivePath(match) ? 'club-mobilePlayoffMatch--path' : ''}`} onClick={() => setSelectedMobilePlayoffMatch(match)}>
+        <header>
+          <div>
+            <b>{roundLabel} · M{match.match_order || match.round}</b>
+            <span>{getMatchScheduleLabel(match)}</span>
+          </div>
+          <span className={`club-statusBadge club-statusBadge--${played ? 'played' : 'pending'}`}>{matchStatusLabel(match.status)}</span>
+        </header>
+        <div className="club-mobilePlayoffScoreLabels" aria-hidden="true"><span>S1</span><span>S2</span></div>
+        {renderTeam(1, team1Name, team1Winner)}
+        {renderTeam(2, team2Name, team2Winner)}
+        <footer>
+          <span>{played ? 'Tocá para ver el resultado' : 'Tocá para gestionar el partido'}</span>
+          <button type="button" className="club-groupResultBtn club-groupResultBtn--mini" onClick={(event) => { event.stopPropagation(); openResultForm(match) }}>
+            {played ? 'Editar' : 'Cargar'}
+          </button>
+        </footer>
+      </article>
+    )
+  }
+
+  function renderMobilePlayoffSlot(slot: PlayoffVisualSlot, roundLabel: string) {
+    if (slot.kind === 'match' && slot.match) return renderMobilePlayoffMatch(slot.match, roundLabel)
+    if (slot.kind === 'bye') return (
+      <div className="club-mobilePlayoffBye" key={`mobile-${slot.id}`}>
+        <b>Pasa directo</b><span>{slot.byeTeam?.teamName ?? 'Pareja por definir'}</span>
+      </div>
+    )
+    return (
+      <div className="club-mobilePlayoffFuture" key={`mobile-${slot.id}`}>
+        <b>{slot.label}</b><span>{slot.placeholderTeams?.[0]?.teamName ?? 'Ganador por definir'}</span><span>{slot.placeholderTeams?.[1]?.teamName ?? 'Ganador por definir'}</span>
+      </div>
+    )
+  }
+
+  function requestGenerateGroups() {
+    requestConfirmation({
+      title: 'Generar grupos',
+      body: 'Se van a asignar las parejas a grupos usando el seed congelado del torneo.',
+      confirmLabel: 'Generar grupos',
+      onConfirm: generateGroups,
+    })
+  }
+
   async function generateGroupMatches() {
     if (!activeClub?.id || !tournamentId || !canGenerateGroupMatches) return
 
@@ -3702,7 +3881,7 @@ export default function ClubTournamentDetailPage() {
 
     if (!res.ok) {
       const messages: Record<string, string> = {
-        GROUP_NOT_COMPLETE: 'Completá todos los partidos de grupos antes de generar el playoff OPEN.',
+        GROUP_NOT_COMPLETE: json.error ?? 'Completá todos los partidos de grupos antes de generar el playoff OPEN.',
         PLAYOFF_ALREADY_EXISTS_OR_STARTED: 'El playoff ya fue generado o ya tiene partidos iniciados.',
         OPEN_REQUIRES_MANUAL_RESOLUTION: 'El playoff OPEN requiere una resolución manual antes de generar partidos.',
         REGISTRATION_ELIGIBILITY_BLOCKED: `Hay ${json.count ?? json.blockedCount ?? 0} parejas que no pueden competir todavía. Revisá inscripciones para resolver pagos, excepciones o bloqueos.`,
@@ -3728,6 +3907,15 @@ export default function ClubTournamentDetailPage() {
     )
     setGeneratingOpenPlayoff(false)
     await refreshTournamentExperience()
+  }
+
+  function requestGenerateOpenPlayoff() {
+    requestConfirmation({
+      title: 'Generar playoff OPEN',
+      body: 'Se generará la primera ronda real del playoff OPEN con los standings actuales.',
+      confirmLabel: 'Generar playoff OPEN',
+      onConfirm: generateOpenPlayoff,
+    })
   }
 
   async function generatePlayoffFinal() {
@@ -4439,12 +4627,7 @@ export default function ClubTournamentDetailPage() {
                               type="button"
                               className="club-generateGroupsBtn"
                               disabled={!canGenerateGroups || generatingGroups || loadingRegistrations}
-                              onClick={() => requestConfirmation({
-                                title: 'Generar grupos',
-                                body: 'Se van a asignar las parejas a grupos usando el seed congelado del torneo.',
-                                confirmLabel: 'Generar grupos',
-                                onConfirm: generateGroups,
-                              })}
+                              onClick={requestGenerateGroups}
                             >
                               {generatingGroups ? 'Generando...' : 'Generar grupos'}
                             </button>
@@ -4597,88 +4780,49 @@ export default function ClubTournamentDetailPage() {
                           {generatingSeed ? 'Generando...' : 'Generar seed'}
                         </button>
                       </section>
-                    ) : !seedMeta.hasGroups || sortedGroups.length === 0 ? (
-                      <section className="club-placeholderPanel">
-                        <span className="club-kicker">Seed</span>
-                        <h2>Todavía no se generaron grupos</h2>
-                        <p>Cuando armes los grupos desde Inscriptos, vas a ver acá el reparto completo de parejas y seeds.</p>
-                        <button
-                          type="button"
-                          className="club-generateGroupsBtn"
-                          disabled={!canGenerateGroups || generatingGroups || loadingRegistrations}
-                          onClick={() => requestConfirmation({
-                            title: 'Generar grupos',
-                            body: 'Se van a asignar las parejas a grupos usando el seed congelado del torneo.',
-                            confirmLabel: 'Generar grupos',
-                            onConfirm: generateGroups,
-                          })}
-                        >
-                          {generatingGroups ? 'Generando...' : 'Generar grupos'}
-                        </button>
-                      </section>
                     ) : (
-                      <>
-                        <section className="club-registrationsPanel">
+                      <section className="club-registrationsPanel">
                           <div className="club-sectionHead">
                             <div>
-                              <span className="club-kicker">Resumen</span>
-                              <h2>Armado de grupos</h2>
+                              <span className="club-kicker">Orden competitivo congelado</span>
+                              <h2>Parejas sembradas</h2>
                             </div>
+                            <span className="club-groupCapacity">{seedMeta.seededTeamsCount}</span>
                           </div>
-                          <div className="club-groupSummaryGrid">
-                            <div className="club-groupSummaryCard">
-                              <span>Grupos</span>
-                              <strong>{sortedGroups.length}</strong>
+                          {!seedMeta.hasGroups ? (
+                            <div className="club-nextSeedStep">
+                              <div>
+                                <span>Siguiente paso</span>
+                                <p>Ya tenés {seedMeta.seededTeamsCount} parejas sembradas. Generá los grupos para continuar.</p>
+                              </div>
+                              <button
+                                type="button"
+                                className="club-generateGroupsBtn"
+                                disabled={!canGenerateGroups || generatingGroups || loadingRegistrations}
+                                onClick={requestGenerateGroups}
+                              >
+                                {generatingGroups ? 'Generando...' : 'Generar grupos'}
+                              </button>
                             </div>
-                            <div className="club-groupSummaryCard">
-                              <span>Parejas asignadas</span>
-                              <strong>{assignedGroupTeamsCount}</strong>
-                            </div>
-                            <div className={`club-groupSummaryCard ${groupsReadyCount === sortedGroups.length ? 'club-groupSummaryCard--ready' : ''}`}>
-                              <span>Estado del armado</span>
-                              <strong>{groupsReadyCount === sortedGroups.length ? 'Completo' : `${groupsReadyCount}/${sortedGroups.length} completos`}</strong>
-                            </div>
+                          ) : null}
+                          <div className="club-seededTeamsList">
+                            {sortedRegistrations.filter((registration) => registration.seed_snapshot).map((registration) => (
+                              <article key={registration.id} className="club-seededTeamItem">
+                                <span className="club-seededTeamPosition">#{registration.seed_snapshot?.seed}</span>
+                                <strong>{registration.team?.players?.map((player) => player.full_name).join(' / ') || 'Pareja sin datos'}</strong>
+                                <span className="club-groupMetaPill club-groupMetaPill--neutral">
+                                  {registration.seed_snapshot?.team_score ?? 0} pts
+                                </span>
+                              </article>
+                            ))}
                           </div>
-                        </section>
-
-                        <div className="club-groupsCardsGrid">
-                          {sortedGroups.map((group) => (
-                            <section key={group.id} className="club-groupCardDetailed">
-                              <div className="club-groupCardHead">
-                                <div>
-                                  <span className="club-kicker">Grupo</span>
-                                  <h2>{group.name}</h2>
-                                </div>
-                                <span className="club-groupCapacity">{group.teams.length}/{group.size}</span>
-                              </div>
-
-                              <div className="club-groupTeamsList">
-                                {group.teams.map((entry) => (
-                                  <article key={entry.id} className="club-groupTeamItem">
-                                    <div className="club-groupTeamMain">
-                                      <strong>
-                                        {entry.team?.players?.map((player) => player.full_name).join(' / ') || 'Pareja sin datos'}
-                                      </strong>
-                                    </div>
-                                    <div className="club-groupTeamMeta">
-                                      <span className="club-groupMetaPill">Seed #{entry.seed}</span>
-                                      <span className="club-groupMetaPill club-groupMetaPill--neutral">
-                                        {entry.team_score !== null ? `${entry.team_score} pts` : 'Sin score'}
-                                      </span>
-                                    </div>
-                                  </article>
-                                ))}
-                              </div>
-                            </section>
-                          ))}
-                        </div>
-                      </>
+                      </section>
                     )}
                   </div>
                 ) : null}
 
                 {activeTab === 'grupos' ? (
-                  <div className="club-tabContent">
+                  <div className="club-tabContent club-groupsTabContent">
                     {renderOperationalNotices('groups')}
                     {!seedMeta.hasGroups || sortedGroups.length === 0 ? (
                       <section className="club-placeholderPanel">
@@ -4694,41 +4838,61 @@ export default function ClubTournamentDetailPage() {
                                 <span className="club-kicker">Planificación</span>
                                 <h2>Ventana operativa de grupos</h2>
                               </div>
-                              {tournamentRuleSchedule.tournamentCourts.length === 0 || autoPlanningBlocked ? (
-                                <button
-                                  type="button"
-                                  className="club-secondaryBtn club-secondaryBtn--compact"
-                                  onClick={openCourtConfigModal}
-                                >
-                                  {tournamentRuleSchedule.tournamentCourts.length === 0 ? 'Agregar canchas' : 'Configurar canchas'}
-                                </button>
-                              ) : null}
+                              <button
+                                type="button"
+                                className="club-secondaryBtn club-secondaryBtn--compact"
+                                onClick={openCourtConfigModal}
+                              >
+                                {tournamentRuleSchedule.tournamentCourts.length === 0 ? 'Agregar canchas' : 'Configurar canchas'}
+                              </button>
                             </div>
-                            <div className="club-planningSummary">
-                              <div className="club-planningMetric">
-                                <span>Partidos de grupos</span>
-                                <strong>{groupMatches.length || expectedGroupMatchesCount}</strong>
+                            <div className="club-planningMobileLayout">
+                              <div className="club-planningSummary">
+                                <div className="club-planningMetric">
+                                  <span>Partidos de grupos</span>
+                                  <strong>{projectedGroupMatchesCount}</strong>
+                                </div>
+                                <div className="club-planningMetric">
+                                  <span>Canchas seleccionadas</span>
+                                  <strong>{tournamentRuleSchedule.tournamentCourts.length}</strong>
+                                </div>
+                                <div className="club-planningMetric">
+                                  <span>Duración estimada</span>
+                                  <strong>{tournamentRuleSchedule.scheduleConfig.match_duration_minutes} min</strong>
+                                </div>
+                                <div className="club-planningMetric">
+                                  <span>Capacidad disponible</span>
+                                  <strong>{groupsPlanningCapacity.totalCapacity} partidos</strong>
+                                </div>
                               </div>
-                              <div className="club-planningMetric">
-                                <span>Canchas seleccionadas</span>
-                                <strong>{tournamentRuleSchedule.tournamentCourts.length}</strong>
-                              </div>
-                              <div className="club-planningMetric">
-                                <span>Duración estimada</span>
-                                <strong>{tournamentRuleSchedule.scheduleConfig.match_duration_minutes} min</strong>
-                              </div>
-                              <div className="club-planningMetric">
-                                <span>Capacidad disponible</span>
-                                <strong>{groupsPlanningCapacity.totalCapacity} partidos</strong>
-                              </div>
-                              <div className="club-planningMetric">
+                              <div className={`club-planningStatus ${groupPlanningStatus === 'Insuficiente' ? 'club-planningStatus--danger' : groupPlanningStatus === 'Suficiente' ? 'club-planningStatus--success' : ''}`}>
                                 <span>Estado</span>
-                                <strong className={groupPlanningStatus === 'Insuficiente' ? 'club-dangerText' : groupPlanningStatus === 'Suficiente' ? 'club-successText' : undefined}>
-                                  {groupPlanningStatus}
-                                </strong>
+                                <strong>{groupPlanningStatus}</strong>
+                                {tournamentRuleSchedule.scheduleConfig.mode === 'AUTO' ? (
+                                  <small>{groupsPlanningCapacity.isEnough
+                                    ? `Entran los ${projectedGroupMatchesCount} partidos.`
+                                    : `Con ${tournamentRuleSchedule.tournamentCourts.length} canchas entran ${groupsPlanningCapacity.totalCapacity} de ${projectedGroupMatchesCount} partidos. Faltan ${groupsPlanningCapacity.overflowMatches}.`}</small>
+                                ) : null}
                               </div>
                             </div>
                           </section>
+                          {canGenerateOpenPlayoff ? (
+                            <section className="club-nextGroupStep">
+                              <div>
+                                <span>Siguiente paso</span>
+                                <h2>Los grupos están completos</h2>
+                                <p>Ya cargaste todos los resultados. Generá el playoff para continuar el torneo.</p>
+                              </div>
+                              <button
+                                type="button"
+                                className="club-generateSeedBtn"
+                                disabled={generatingOpenPlayoff}
+                                onClick={requestGenerateOpenPlayoff}
+                              >
+                                {generatingOpenPlayoff ? 'Generando...' : 'Generar playoff'}
+                              </button>
+                            </section>
+                          ) : null}
                           {!seedMeta.hasGroupMatches || groupMatches.length === 0 ? (
                             <section className="club-registrationsPanel">
                               <div className="club-sectionHead">
@@ -4768,6 +4932,8 @@ export default function ClubTournamentDetailPage() {
                           {sortedGroups.map((group) => {
                             const standingBlock = standingsByGroupId[group.id]
                             const matches = groupMatchesByGroup[group.id] ?? []
+                            const projectedMatches = group.size === 4 ? 4 : group.size === 3 ? 3 : matches.length
+                            const secondRoundDefined = group.size === 4 && matches.filter((match) => Number(match.round) === 2).length === 2
                             const sectionKey = group.id
                             const isExpanded = expandedGroupMatches.includes(group.id)
 
@@ -4776,18 +4942,25 @@ export default function ClubTournamentDetailPage() {
                                 <div className="club-matchSectionHead">
                                   <div>
                                     <strong>{`Grupo ${group.name}`}</strong>
-                                    <span>{matches.length} partido{matches.length === 1 ? '' : 's'}</span>
+                                    <span>{matches.length === projectedMatches ? `${projectedMatches} partidos` : `${matches.length} de ${projectedMatches} partidos`}</span>
                                   </div>
                                   <button
                                     type="button"
                                     className="club-showMatchesBtn"
                                     onClick={() => toggleGroupMatches(sectionKey)}
                                   >
-                                    {isExpanded ? 'Ocultar partidos' : 'Mostrar partidos'}
+                                    {isExpanded ? 'Ocultar partidos' : `Ver ${matches.length} partidos`}
                                   </button>
                                 </div>
 
                                 {renderTournamentGroupStandings(group, standingBlock)}
+                                {group.size === 4 ? (
+                                  <div className="club-groupFixtureHint">
+                                    {secondRoundDefined
+                                      ? 'Cruces Ganadores vs Ganadores y Perdedores vs Perdedores definidos.'
+                                      : 'Se definirán 2 cruces después de completar los partidos iniciales.'}
+                                  </div>
+                                ) : null}
                                 {renderGroupOperationalNotices(group.id)}
 
                                 {!seedMeta.hasGroupMatches || matches.length === 0 ? (
@@ -4840,12 +5013,7 @@ export default function ClubTournamentDetailPage() {
                             type="button"
                             className="club-generateSeedBtn"
                             disabled={!canGenerateOpenPlayoff || generatingOpenPlayoff}
-                            onClick={() => requestConfirmation({
-                              title: 'Generar playoff OPEN',
-                              body: 'Se generará la primera ronda real del playoff OPEN con los standings actuales.',
-                              confirmLabel: 'Generar playoff OPEN',
-                              onConfirm: generateOpenPlayoff,
-                            })}
+                            onClick={requestGenerateOpenPlayoff}
                           >
                             {generatingOpenPlayoff ? 'Generando...' : 'Generar playoff OPEN'}
                           </button>
@@ -5093,6 +5261,10 @@ export default function ClubTournamentDetailPage() {
                               )}
 
                               <div className="club-playoffMobileBracket">
+                                <div className="club-mobilePlayoffSegmented" role="tablist" aria-label="Vista de playoff">
+                                  <button type="button" role="tab" aria-selected={mobilePlayoffView === 'round'} className={mobilePlayoffView === 'round' ? 'is-active' : ''} onClick={() => setMobilePlayoffView('round')}>Ronda</button>
+                                  <button type="button" role="tab" aria-selected={mobilePlayoffView === 'bracket'} className={mobilePlayoffView === 'bracket' ? 'is-active' : ''} onClick={() => setMobilePlayoffView('bracket')}>Cuadro</button>
+                                </div>
                                 <div className="club-playoffRoundTabs">
                                   {playoffRounds.map((round) => (
                                     <button
@@ -5106,12 +5278,27 @@ export default function ClubTournamentDetailPage() {
                                   ))}
                                 </div>
 
-                                {selectedPlayoffRoundData ? (
-                                  <div className="club-playoffRoundMatches club-playoffRoundMatches--mobile">
-                                    {selectedPlayoffRoundData.slots.map((slot, slotIndex) => renderPlayoffVisualSlot(slot, selectedPlayoffRoundData.label, slotIndex, {
-                                      finalColumn: selectedPlayoffRoundData.phase === 'FINAL',
-                                    }))}
+                                {mobilePlayoffView === 'round' && selectedPlayoffRoundData ? (
+                                  <div className="club-mobilePlayoffRound">
+                                    {selectedPlayoffRoundData.slots.map((slot) => renderMobilePlayoffSlot(slot, selectedPlayoffRoundData.label))}
                                   </div>
+                                ) : null}
+
+                                {mobilePlayoffView === 'bracket' ? (
+                                  <>
+                                    <div className="club-mobilePlayoffBracketHead">
+                                      <span>Deslizá para recorrer las llaves</span>
+                                      <button type="button" onClick={() => setMobilePlayoffFullscreen(true)}><Maximize2 size={14} /> Cuadro completo</button>
+                                    </div>
+                                    <div className="club-mobilePlayoffCanvas" onPointerDown={() => setMobilePlayoffHintVisible(false)}>
+                                      {playoffRounds.map((round) => (
+                                        <section className="club-mobilePlayoffCanvasRound" key={`mobile-tree-${round.phase}`}>
+                                          <b>{round.label}</b>
+                                          <div>{round.slots.map((slot) => renderMobilePlayoffSlot(slot, round.label))}</div>
+                                        </section>
+                                      ))}
+                                    </div>
+                                  </>
                                 ) : null}
                               </div>
                             </>
@@ -5121,6 +5308,34 @@ export default function ClubTournamentDetailPage() {
                             </div>
                           )}
                         </section>
+
+                        {selectedMobilePlayoffMatch ? (
+                          <div className="club-mobilePlayoffSheetBackdrop" role="presentation" onClick={() => setSelectedMobilePlayoffMatch(null)}>
+                            <section className="club-mobilePlayoffSheet" role="dialog" aria-modal="true" aria-label="Detalle del partido" onClick={(event) => event.stopPropagation()}>
+                              <div className="club-mobilePlayoffSheetHandle" />
+                              <header><div><span>{formatPlayoffPhaseLabel(selectedMobilePlayoffMatch.phase)} · M{selectedMobilePlayoffMatch.match_order || selectedMobilePlayoffMatch.round}</span><h3>{matchStatusLabel(selectedMobilePlayoffMatch.status)}</h3></div><button type="button" aria-label="Cerrar detalle" onClick={() => setSelectedMobilePlayoffMatch(null)}><X size={20} /></button></header>
+                              <p>{getMatchScheduleLabel(selectedMobilePlayoffMatch)}</p>
+                              <div className="club-mobilePlayoffSheetTeams">
+                                <strong>({teamSeedLookup.get(selectedMobilePlayoffMatch.team1_id) ?? '—'}) {selectedMobilePlayoffMatch.team1_name ?? teamNameLookup.get(selectedMobilePlayoffMatch.team1_id) ?? 'Equipo 1'}</strong>
+                                <strong>({teamSeedLookup.get(selectedMobilePlayoffMatch.team2_id) ?? '—'}) {selectedMobilePlayoffMatch.team2_name ?? teamNameLookup.get(selectedMobilePlayoffMatch.team2_id) ?? 'Equipo 2'}</strong>
+                              </div>
+                              <div className="club-mobilePlayoffSheetActions">
+                                <button type="button" className="club-groupResultBtn" onClick={() => { const current = selectedMobilePlayoffMatch; setSelectedMobilePlayoffMatch(null); openResultForm(current) }}>{String(selectedMobilePlayoffMatch.status ?? '').toUpperCase() === 'PLAYED' ? 'Editar resultado' : 'Cargar resultado'}</button>
+                                <button type="button" className="club-secondaryBtn club-secondaryBtn--compact" disabled={Boolean(getScheduleSwapOpenDisabledReason(selectedMobilePlayoffMatch))} onClick={() => { const current = selectedMobilePlayoffMatch; setSelectedMobilePlayoffMatch(null); openScheduleSwapModal(current) }}>Cambiar horario/cancha</button>
+                              </div>
+                            </section>
+                          </div>
+                        ) : null}
+
+                        {mobilePlayoffFullscreen ? (
+                          <div className="club-mobilePlayoffFullscreen" role="dialog" aria-modal="true" aria-label="Cuadro completo">
+                            <header><b>Cuadro completo</b><div><button type="button" onClick={() => setActivePlayoffTeamId(null)} aria-label="Restablecer recorrido"><RotateCcw size={17} /></button><button type="button" onClick={() => setMobilePlayoffFullscreen(false)} aria-label="Cerrar cuadro"><X size={20} /></button></div></header>
+                            {mobilePlayoffHintVisible ? <p className="club-mobilePlayoffHint">☝ Deslizá para recorrer las llaves</p> : null}
+                            <div className="club-mobilePlayoffCanvas club-mobilePlayoffCanvas--fullscreen" onPointerDown={() => setMobilePlayoffHintVisible(false)}>
+                              {playoffRounds.map((round) => <section className="club-mobilePlayoffCanvasRound" key={`fullscreen-${round.phase}`}><b>{round.label}</b><div>{round.slots.map((slot) => renderMobilePlayoffSlot(slot, round.label))}</div></section>)}
+                            </div>
+                          </div>
+                        ) : null}
 
                         {pendingPlayoffMatches.length > 0 ? (
                           <section className="club-playoffUpcomingSection" id="playoff-upcoming">
@@ -5369,16 +5584,16 @@ export default function ClubTournamentDetailPage() {
                 <select
                   value={courtDraft.courtName}
                   onChange={(event) => setCourtDraft((current) => ({ ...current, courtName: event.target.value }))}
-                  disabled={!courtDraft.complexId || !selectedComplexCourts.length}
+                  disabled={!courtDraft.complexId || !availableSelectedComplexCourts.length}
                 >
                   <option value="">
                     {!courtDraft.complexId
                       ? 'Elegí un complejo primero'
-                      : selectedComplexCourts.length
+                      : availableSelectedComplexCourts.length
                         ? 'Seleccioná una cancha'
-                        : 'Sin canchas cargadas'}
+                        : 'No hay más canchas disponibles'}
                   </option>
-                  {selectedComplexCourts.map((courtName) => (
+                  {availableSelectedComplexCourts.map((courtName) => (
                     <option key={courtName} value={courtName}>{courtName}</option>
                   ))}
                 </select>
@@ -5386,14 +5601,19 @@ export default function ClubTournamentDetailPage() {
             </div>
 
             <div className="club-courtComposerRow">
-              <button type="button" className="club-secondaryBtn club-secondaryBtn--compact" onClick={addTournamentCourt}>
-                Agregar cancha
+              <button type="button" className="club-secondaryBtn club-secondaryBtn--compact" disabled={!courtDraft.courtName} onClick={addTournamentCourt}>
+                + Agregar
               </button>
             </div>
 
             {courtDraft.complexId && !selectedComplexCourts.length ? (
               <div className="club-emptyInline">
                 Este complejo todavía no tiene canchas cargadas.
+              </div>
+            ) : null}
+            {courtDraft.complexId && selectedComplexCourts.length > 0 && !availableSelectedComplexCourts.length ? (
+              <div className="club-emptyInline">
+                No hay más canchas disponibles en este club.
               </div>
             ) : null}
 
@@ -5420,8 +5640,8 @@ export default function ClubTournamentDetailPage() {
               </strong>
               <small>
                 {draftPlanningCapacity.isEnough
-                  ? `Capacidad suficiente para ${groupMatches.length || expectedGroupMatchesCount} partido${(groupMatches.length || expectedGroupMatchesCount) === 1 ? '' : 's'} de grupos.`
-                  : `Capacidad insuficiente: se necesitan ${draftPlanningCapacity.requiredCourts} canchas o una ventana horaria más amplia.`}
+                  ? `Capacidad suficiente para ${projectedGroupMatchesCount} partido${projectedGroupMatchesCount === 1 ? '' : 's'} de grupos.`
+                  : `Faltan ${draftPlanningCapacity.overflowMatches} partido${draftPlanningCapacity.overflowMatches === 1 ? '' : 's'} por ubicar. Agregá ${Math.max(0, draftPlanningCapacity.requiredCourts - tournamentCourtsDraft.length)} cancha${Math.max(0, draftPlanningCapacity.requiredCourts - tournamentCourtsDraft.length) === 1 ? '' : 's'} o ampliá la ventana horaria.`}
               </small>
             </div>
 
@@ -6007,6 +6227,12 @@ export default function ClubTournamentDetailPage() {
         .club-operationalNoticeBody { align-items: baseline; display: flex; flex-wrap: wrap; gap: 3px 6px; min-width: 0; }
         .club-operationalNoticeBody strong { color: inherit; flex: 0 0 auto; font-size: 11px; font-weight: 950; line-height: 1.2; overflow-wrap: anywhere; }
         .club-operationalNoticeBody p { color: inherit; flex: 1 1 260px; font-size: 11px; font-weight: 780; line-height: 1.25; margin: 0; opacity: .86; overflow-wrap: anywhere; }
+        .club-operationalNoticeDisclosure { min-width: 0; width: 100%; }
+        .club-operationalNoticeDisclosure summary { align-items: center; cursor: pointer; display: flex; gap: 7px; justify-content: space-between; list-style: none; min-height: 20px; }
+        .club-operationalNoticeDisclosure summary::-webkit-details-marker { display: none; }
+        .club-operationalNoticeDisclosure summary::after { color: #0f3f57; content: '⌄'; font-size: 15px; font-weight: 950; line-height: 1; transition: transform .16s ease; }
+        .club-operationalNoticeDisclosure[open] summary::after { transform: rotate(180deg); }
+        .club-operationalNoticeDisclosure p { display: block; margin-top: 4px; }
         .club-inscriptionsOps { display: grid; gap: 10px; }
         .club-readinessGrid { display: grid; gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .club-readinessItem { background: #fff; border: 1px solid rgba(15,23,42,.08); border-radius: 11px; display: grid; gap: 2px; min-width: 0; padding: 8px 9px; }
@@ -6112,7 +6338,7 @@ export default function ClubTournamentDetailPage() {
         .club-matchList { display: grid; gap: 12px; min-width: 0; }
         .club-matchSection { background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 12px; display: grid; gap: 9px; min-width: 0; padding: 10px; }
         .club-matchSectionHead { align-items: center; display: flex; gap: 8px; justify-content: space-between; min-width: 0; }
-        .club-matchSectionHead > div { display: grid; gap: 2px; min-width: 0; }
+        .club-matchSectionHead > div { display: grid; flex: 1 1 auto; gap: 2px; min-width: 0; }
         .club-matchSectionHead strong { color: #17253f; font-size: 14px; font-weight: 950; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-matchSectionHead span { color: #64748b; font-size: 12px; font-weight: 850; }
         .club-showMatchesBtn { background: #ecfeff; border: 1px solid rgba(6,182,212,.28); border-radius: 8px; color: #0e7490; cursor: pointer; flex: 0 0 auto; font-size: 12px; font-weight: 950; min-height: 32px; padding: 7px 10px; white-space: nowrap; }
@@ -6127,6 +6353,9 @@ export default function ClubTournamentDetailPage() {
         .club-groupStandingRow--head span { color: #64748b; font-size: 11px; font-weight: 950; text-transform: uppercase; }
         .club-groupStandingTeam { align-items: center; display: flex; gap: 4px; }
         .club-groupStandingTeam > span { text-align: left; }
+        .club-groupStandingPlayerNames > span + span::before { content: ' / '; }
+        .club-groupStandingRow--qualified { background: #f3fcf5; box-shadow: inset 3px 0 0 #22c55e; }
+        .club-groupStandingPosition i { color: #15803d; display: none; font-size: 10px; font-style: normal; font-weight: 950; margin-right: 2px; }
         .club-groupStandingTeam b { background: #ecfdf3; border-radius: 999px; color: #166534; flex: 0 0 auto; font-size: 10px; font-weight: 950; padding: 3px 6px; white-space: nowrap; }
         .club-inlineNote { background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 9px; color: #64748b; font-size: 12px; font-weight: 850; padding: 8px 9px; }
         .club-inlineNote--warning { background: #fff7df; border-color: rgba(217,119,6,.24); color: #854d0e; }
@@ -6145,6 +6374,9 @@ export default function ClubTournamentDetailPage() {
         .club-matchInfoCell strong { color: #17253f; font-size: 12px; font-weight: 950; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-matchInfoCell span { color: #64748b; font-size: 11px; font-weight: 850; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-matchPairCell { display: grid; gap: 2px; justify-items: center; text-align: center; }
+        .club-groupMatchCode { color: #64748b; font-size: 9px; font-weight: 900; line-height: 1.1; min-height: 10px; text-transform: uppercase; }
+        .club-groupFixtureHint { color: #0f766e; font-size: 11px; font-weight: 800; line-height: 1.3; margin-top: 7px; }
+        .club-mobileMatchScoreGrid { display: none; }
         .club-matchTeams { align-items: center; display: grid; gap: 2px; grid-template-rows: 10px 24px 1px 24px; justify-items: center; min-width: 0; width: 100%; }
         .club-matchTeams::before { content: ''; display: block; height: 10px; }
         .club-matchTeams strong { align-items: center; color: #17253f; display: inline-flex; font-size: 12px; font-weight: 950; gap: 5px; justify-content: center; line-height: 1.15; max-width: 100%; min-width: 0; overflow: hidden; padding: 3px 7px; text-overflow: ellipsis; white-space: nowrap; }
@@ -6163,11 +6395,13 @@ export default function ClubTournamentDetailPage() {
         .club-groupResultBtn--secondary:hover { background: rgba(41,170,225,.07); border-color: #2499cb; box-shadow: 0 4px 10px rgba(41,170,225,.08); color: #157eae; transform: translateY(-1px); }
         .club-groupResultBtn:disabled { cursor: not-allowed; opacity: .58; transform: none; }
         .club-scoreBoard { color: #17253f; display: grid; gap: 3px; grid-template-rows: auto auto auto; justify-items: center; line-height: 1; min-width: 148px; width: max-content; }
+        .club-scoreBoard--pending { display: none; }
         .club-scoreBoardLabels, .club-scoreBoardRow { align-items: center; display: flex; flex-wrap: nowrap; gap: 6px; justify-content: center; overflow: visible; white-space: nowrap; }
         .club-scoreLabel { color: #94a3b8; display: inline-flex; font-size: 9px; font-weight: 950; justify-content: center; letter-spacing: .02em; min-width: 30px; text-transform: uppercase; }
         .club-scoreBoard .club-scoreSet { align-items: center; background: #f8fafc; border: 1px solid #dbe3ea; border-radius: 6px; color: #64748b; display: inline-flex; font-size: 13px; font-weight: 600; height: 28px; justify-content: center; min-width: 30px; width: 30px; }
         .club-scoreBoard .club-scoreSet--won { background: #f8fafc; border-color: #dbe3ea; color: #64748b; font-weight: 800; }
         .club-scoreBoard .club-scoreSet--lost { color: #64748b; font-weight: 600; }
+        .club-scoreBoard .club-scoreSet--pending { background: #fff; border-color: rgba(148,163,184,.28); color: #94a3b8; font-weight: 700; }
         .club-miniHint { color: #64748b; font-size: 12px; font-weight: 850; white-space: nowrap; }
         .club-registrationList { border: 1px solid rgba(15,23,42,.07); border-radius: 12px; display: grid; gap: 3px; overflow: hidden; padding: 3px; }
         .club-registrationMiniHead { align-items: center; background: linear-gradient(180deg, #f8fbfd 0%, #f2f7fa 100%); border-bottom: 1px solid rgba(15,23,42,.07); color: #64748b; display: grid; font-size: 10px; font-weight: 950; gap: 10px; grid-template-columns: minmax(240px, 1.45fr) minmax(116px, .52fr) minmax(94px, .42fr) minmax(94px, .42fr) minmax(78px, .3fr) minmax(88px, .34fr) minmax(152px, .62fr); letter-spacing: .02em; min-width: 0; padding: 6px 10px; text-transform: uppercase; }
@@ -6210,10 +6444,20 @@ export default function ClubTournamentDetailPage() {
         .club-groupSummaryCard span { color: #64748b; font-size: 11px; font-weight: 900; text-transform: uppercase; }
         .club-groupSummaryCard strong { color: #17253f; font-size: 20px; font-weight: 950; line-height: 1.1; }
         .club-groupSummaryCard--ready { background: #ecfdf3; border-color: rgba(22,163,74,.16); }
-        .club-planningSummary { display: grid; gap: 10px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        .club-planningMobileLayout { display: contents; }
+        .club-planningSummary { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .club-planningMetric { background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 14px; display: grid; gap: 4px; min-width: 0; padding: 12px; }
         .club-planningMetric span { color: #64748b; font-size: 11px; font-weight: 900; text-transform: uppercase; }
         .club-planningMetric strong { color: #17253f; font-size: 18px; font-weight: 950; line-height: 1.1; }
+        .club-planningMetric small { color: #64748b; display: none; font-size: 10px; font-weight: 780; line-height: 1.25; }
+        .club-planningStatus { align-items: center; background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 11px; display: grid; gap: 8px; grid-template-columns: auto auto minmax(0, 1fr); margin-top: 9px; min-width: 0; padding: 8px 10px; }
+        .club-planningStatus > span { color: #64748b; font-size: 10px; font-weight: 950; text-transform: uppercase; }
+        .club-planningStatus > strong { color: #17253f; font-size: 14px; font-weight: 950; }
+        .club-planningStatus > small { color: #64748b; font-size: 11px; font-weight: 800; line-height: 1.25; min-width: 0; }
+        .club-planningStatus--danger { background: #fff8f8; border-color: rgba(185,28,28,.16); }
+        .club-planningStatus--danger > strong { color: #b91c1c; }
+        .club-planningStatus--success { background: #f0fdf4; border-color: rgba(22,163,74,.18); }
+        .club-planningStatus--success > strong { color: #15803d; }
         .club-successText { color: #15803d !important; }
         .club-dangerText { color: #b91c1c !important; }
         .club-groupsCardsGrid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
@@ -6228,6 +6472,19 @@ export default function ClubTournamentDetailPage() {
         .club-groupTeamMeta { display: flex; flex-wrap: wrap; gap: 6px; }
         .club-groupMetaPill { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 22%, transparent); border-radius: 999px; color: #061b3a; font-size: 11px; font-weight: 900; padding: 5px 8px; }
         .club-groupMetaPill--neutral { background: #fff; border-color: rgba(15,23,42,.08); color: #475569; }
+        .club-seededTeamsList { display: grid; gap: 7px; margin-top: 10px; }
+        .club-seededTeamItem { align-items: center; background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 11px; display: grid; gap: 8px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; padding: 8px 9px; }
+        .club-seededTeamPosition { align-items: center; background: color-mix(in srgb, var(--club-admin-accent) 13%, white); border-radius: 8px; color: #061b3a; display: inline-flex; font-size: 12px; font-weight: 950; justify-content: center; min-height: 30px; min-width: 34px; padding: 0 6px; }
+        .club-seededTeamItem strong { color: #17253f; font-size: 13px; font-weight: 900; line-height: 1.25; min-width: 0; overflow-wrap: anywhere; }
+        .club-nextSeedStep { align-items: center; background: color-mix(in srgb, var(--club-admin-accent) 7%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 18%, transparent); border-radius: 12px; display: flex; gap: 10px; justify-content: space-between; margin-top: 10px; min-width: 0; padding: 9px 10px; }
+        .club-nextSeedStep > div { display: grid; gap: 2px; min-width: 0; }
+        .club-nextSeedStep span { color: var(--club-admin-accent); font-size: 10px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+        .club-nextSeedStep p { color: #475569; font-size: 12px; font-weight: 780; line-height: 1.3; margin: 0; }
+        .club-nextGroupStep { align-items: center; background: #f0fdf4; border: 1px solid rgba(22,163,74,.22); border-radius: 12px; display: flex; gap: 10px; justify-content: space-between; min-width: 0; padding: 10px 11px; }
+        .club-nextGroupStep > div { display: grid; gap: 2px; min-width: 0; }
+        .club-nextGroupStep > div > span { color: #15803d; font-size: 10px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+        .club-nextGroupStep h2 { color: #14532d; font-size: 16px; line-height: 1.15; margin: 0; }
+        .club-nextGroupStep p { color: #166534; font-size: 12px; font-weight: 780; line-height: 1.3; margin: 0; }
         .club-playoffSummaryGrid { display: grid; gap: 10px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
         .club-playoffPodium { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .club-playoffPodiumCard { background: #f8fafc; border: 1px solid rgba(15,23,42,.08); border-radius: 14px; display: grid; gap: 4px; min-width: 0; padding: 12px; }
@@ -6253,6 +6510,23 @@ export default function ClubTournamentDetailPage() {
         .club-playoffLegendDot--winner { background: #22c55e; }
         .club-playoffLegendDot--pending { background: #94a3b8; }
         .club-playoffLegendDot--walkover { background: #facc15; }
+        .club-mobilePlayoffSegmented, .club-mobilePlayoffBracketHead, .club-mobilePlayoffMatch header, .club-mobilePlayoffMatch footer, .club-mobilePlayoffSheet header, .club-mobilePlayoffFullscreen > header { align-items: center; display: flex; justify-content: space-between; }
+        .club-mobilePlayoffSegmented { background: #eef2f7; border-radius: 12px; gap: 3px; margin-bottom: 10px; padding: 3px; }
+        .club-mobilePlayoffSegmented button { background: transparent; border: 0; border-radius: 9px; color: #63738c; flex: 1; font-size: 12px; font-weight: 900; min-height: 36px; }
+        .club-mobilePlayoffSegmented button.is-active { background: #fff; box-shadow: 0 2px 8px rgba(15,23,42,.12); color: #061b3a; }
+        .club-mobilePlayoffRound { display: grid; gap: 8px; }
+        .club-mobilePlayoffMatch { background: linear-gradient(135deg,#fff,#f8fbfd); border: 1px solid rgba(15,23,42,.14); border-radius: 14px; box-shadow: 0 6px 15px rgba(15,23,42,.05); cursor: pointer; display: grid; gap: 4px; padding: 9px; }
+        .club-mobilePlayoffMatch--path { border-color: rgba(6,182,212,.72); box-shadow: 0 7px 18px rgba(6,182,212,.14); }
+        .club-mobilePlayoffMatch header > div { display: grid; gap: 2px; min-width: 0; }.club-mobilePlayoffMatch header b { color:#071d3d; font-size:11px; }.club-mobilePlayoffMatch header span { color:#64748b; font-size:10px; font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .club-mobilePlayoffScoreLabels { color:#7b8ba3; display:grid; font-size:9px; font-weight:900; gap:5px; grid-template-columns:22px 22px; justify-content:end; margin-right:3px; }.club-mobilePlayoffScoreLabels span { text-align:center; }
+        .club-mobilePlayoffTeam { align-items:center; background:transparent; border:0; border-top:1px solid rgba(15,23,42,.07); display:grid; gap:6px; grid-template-columns:22px minmax(0,1fr) 49px; min-height:32px; padding:5px 0; text-align:left; width:100%; }.club-mobilePlayoffTeam strong { color:#10213e; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.club-mobilePlayoffTeam--winner strong { color:#166534; font-weight:950; }.club-mobilePlayoffTeam--loser { opacity:.68; }
+        .club-mobilePlayoffSeed { color:#718096; font-size:10px; font-weight:900; }.club-mobilePlayoffScore { display:grid; gap:5px; grid-template-columns:22px 22px; }.club-mobilePlayoffScore span { color:#51647d; font-size:11px; font-weight:850; text-align:center; }.club-mobilePlayoffScore--won { background:#e7f8eb; border-radius:5px; color:#16703a !important; }
+        .club-mobilePlayoffMatch footer { color:#718096; font-size:10px; font-weight:700; gap:8px; }.club-mobilePlayoffMatch footer .club-groupResultBtn { min-height:32px; padding:5px 10px; }
+        .club-mobilePlayoffBye, .club-mobilePlayoffFuture { background:#f8fbfc; border:1px dashed rgba(15,23,42,.14); border-radius:12px; color:#60718a; display:grid; font-size:11px; gap:3px; padding:10px; }.club-mobilePlayoffBye b { color:#16703a; }.club-mobilePlayoffFuture b { color:#0f294f; }
+        .club-mobilePlayoffBracketHead { color:#667892; font-size:10px; font-weight:800; margin:2px 0 7px; }.club-mobilePlayoffBracketHead button { align-items:center; background:#fff; border:1px solid rgba(6,182,212,.35); border-radius:9px; color:#087897; display:inline-flex; font-size:10px; font-weight:900; gap:4px; min-height:32px; padding:4px 8px; }
+        .club-mobilePlayoffCanvas { display:flex; gap:14px; margin-inline:-14px; overflow-x:auto; overscroll-behavior-x:contain; padding:4px 14px 10px; scroll-snap-type:x proximity; touch-action:pan-x pan-y; }.club-mobilePlayoffCanvasRound { display:grid; flex:0 0 calc(100vw - 78px); gap:7px; scroll-snap-align:start; }.club-mobilePlayoffCanvasRound > b { color:#0b3155; font-size:12px; }.club-mobilePlayoffCanvasRound > div { display:grid; gap:8px; position:relative; }.club-mobilePlayoffCanvasRound + .club-mobilePlayoffCanvasRound > div::before { background:rgba(6,182,212,.38); content:''; height:2px; left:-14px; position:absolute; top:50%; width:12px; }
+        .club-mobilePlayoffSheetBackdrop { align-items:end; background:rgba(4,15,33,.42); display:flex; inset:0; justify-content:center; padding:14px; position:fixed; z-index:130; }.club-mobilePlayoffSheet { background:#fff; border-radius:20px 20px 14px 14px; box-shadow:0 -12px 38px rgba(0,0,0,.18); display:grid; gap:12px; max-width:560px; padding:10px 14px calc(16px + env(safe-area-inset-bottom)); width:100%; }.club-mobilePlayoffSheetHandle { background:#cbd5e1; border-radius:999px; height:4px; justify-self:center; width:38px; }.club-mobilePlayoffSheet header span,.club-mobilePlayoffSheet p { color:#667892; font-size:12px; font-weight:700; margin:0; }.club-mobilePlayoffSheet h3 { color:#0a2548; font-size:18px; margin:2px 0 0; }.club-mobilePlayoffSheet header button,.club-mobilePlayoffFullscreen header button { align-items:center; background:#f1f5f9; border:0; border-radius:10px; display:inline-flex; height:36px; justify-content:center; width:36px; }.club-mobilePlayoffSheetTeams { display:grid; gap:7px; }.club-mobilePlayoffSheetTeams strong { background:#f8fafc; border-radius:9px; color:#10213e; font-size:13px; padding:9px; }.club-mobilePlayoffSheetActions { display:grid; gap:8px; grid-template-columns:1fr 1fr; }.club-mobilePlayoffSheetActions button { justify-content:center; min-height:42px; }
+        .club-mobilePlayoffFullscreen { background:#f5f8fb; display:grid; grid-template-rows:auto auto minmax(0,1fr); inset:0; padding:calc(10px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)); position:fixed; z-index:140; }.club-mobilePlayoffFullscreen > header { border-bottom:1px solid rgba(15,23,42,.08); padding-bottom:10px; }.club-mobilePlayoffFullscreen > header b { color:#08254b; font-size:16px; }.club-mobilePlayoffFullscreen > header div { display:flex; gap:7px; }.club-mobilePlayoffHint { color:#667892; font-size:11px; font-weight:800; margin:10px 0 4px; text-align:center; }.club-mobilePlayoffCanvas--fullscreen { margin:0 -12px; max-height:none; padding:10px 12px; }
         .club-playoffBracketViewport { display: block; min-width: 0; overflow: visible; position: relative; }
         .club-playoffBracketViewport--simple { overflow: hidden; }
         .club-playoffBracketScroll { cursor: grab; max-height: min(72vh, 760px); min-height: 260px; min-width: 0; overflow: auto; overscroll-behavior: contain; padding-bottom: 6px; scroll-behavior: smooth; scroll-snap-type: x proximity; scrollbar-color: var(--club-admin-accent) rgba(226,232,240,.78); scrollbar-width: thin; touch-action: none; }
@@ -6566,9 +6840,36 @@ export default function ClubTournamentDetailPage() {
           .club-registrationDetailGrid { grid-template-columns: 1fr; }
           .club-paymentActionsGrid { grid-template-columns: 1fr; }
           .club-courtDraftCard { grid-template-columns: minmax(0, 1fr) auto; }
-          .club-matchSectionHead { align-items: flex-start; flex-direction: column; }
+          .club-matchSectionHead { align-items: flex-start; flex-direction: row; }
+          .club-matchTableHead { display: none; }
+          .club-matchTable { background: transparent; border: 0; border-radius: 0; gap: 6px; overflow: visible; padding: 1px 0; }
+          .club-matchTableRow, .club-matchTableRow:last-child { align-items: start; background: #fff; border: 1px solid rgba(6,27,58,.20); border-radius: 10px; box-shadow: 0 2px 5px rgba(15,23,42,.045); gap: 4px 5px; grid-template-areas: 'info status action' 'body body body'; grid-template-columns: minmax(0, 1fr) auto auto; padding: 6px 7px; }
+          .club-matchScheduleActionCell { align-self: center; display: flex; grid-area: info; justify-self: end; margin-right: 4px; position: relative; z-index: 1; }
+          .club-scheduleSwapBtn { background: #fff; border-color: rgba(15,23,42,.12); box-shadow: 0 1px 2px rgba(15,23,42,.06); height: 30px; width: 30px; }
+          .club-matchInfoCell { align-items: start; background: #f8fafc; border-radius: 8px; display: grid; gap: 1px; grid-area: info; justify-items: start; min-height: 40px; padding: 5px 38px 5px 7px; text-align: left; width: 100%; }
+          .club-matchInfoCell strong { font-size: 11px; max-width: 100%; }
+          .club-matchInfoCell span { font-size: 10px; max-width: 100%; }
+          .club-matchPairCell { grid-area: body; min-width: 0; width: 100%; }
+          .club-groupMatchCode { justify-self: start; padding-left: 2px; }
+          .club-matchTeams, .club-matchResultCell { display: none; }
+          .club-mobileMatchScoreGrid { align-items: center; column-gap: 3px; display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 24px); grid-template-rows: 12px minmax(28px, auto) 1px minmax(28px, auto); min-width: 0; row-gap: 2px; width: 100%; }
+          .club-mobileScoreLabel { color: #94a3b8; font-size: 8px; font-weight: 950; line-height: 1; text-align: center; text-transform: uppercase; }
+          .club-mobileMatchTeam { align-items: center; color: #17253f; display: flex; font-size: clamp(10.5px, 1.6vw, 11.5px); font-weight: 800; line-height: 1.1; min-width: 0; overflow: hidden; padding: 3px 2px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+          .club-mobileMatchTeam--winner { background: transparent; border-left: 2px solid rgba(22,163,74,.62); color: #17253f; gap: 4px; padding-left: 5px; }
+          .club-mobileMatchTeam--winner::before { color: #16a34a; content: '✓'; font-size: 10px; font-weight: 950; }
+          .club-mobileScoreValue { align-items: center; color: #64748b; display: flex; font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 700; justify-content: center; min-height: 24px; text-align: center; }
+          .club-mobileScoreValue--winner { background: #ecfdf3; border: 1px solid rgba(22,163,74,.18); border-radius: 5px; color: #15803d; font-weight: 900; }
+          .club-mobileMatchDivider { background: rgba(148,163,184,.32); grid-column: 1 / -1; height: 1px; width: 100%; }
+          .club-matchStatusCell { align-self: start; grid-area: status; justify-self: end; min-height: 30px; }
+          .club-matchActionCell { align-self: start; grid-area: action; justify-self: end; min-height: 30px; }
+          .club-groupResultBtn { font-size: 11px; min-height: 34px; min-width: 0; padding-inline: 7px; }
         }
         @media (max-width: 560px) {
+          .club-nextSeedStep { align-items: stretch; flex-direction: column; }
+          .club-nextSeedStep .club-generateGroupsBtn { width: 100%; }
+          .club-nextGroupStep { align-items: stretch; flex-direction: column; gap: 8px; padding: 9px 10px; }
+          .club-nextGroupStep h2 { font-size: 15px; }
+          .club-nextGroupStep .club-generateSeedBtn { min-height: 40px; width: 100%; }
           .club-title { font-size:25px; padding-right:4px; }
           .club-detailHero { border-radius:0; margin:0 -22px; padding:11px 16px; position:relative; }
           .club-detailHero .club-kicker { font-size:9px; }
@@ -6609,26 +6910,47 @@ export default function ClubTournamentDetailPage() {
           .club-flyerSlot { grid-template-columns:106px minmax(0,1fr); padding:8px; }
           .club-flyerPreviewButton { height:133px; width:106px; }
           .club-flyerSlot .flyerPreview { height:133px; min-height:133px; width:106px; }
-          .club-planningSummary { grid-template-columns: 1fr; }
+          .club-groupsTabContent { margin-inline: -14px; }
+          .club-groupsTabContent .club-registrationsPanel, .club-groupsTabContent .club-matchSection { border-radius: 12px; padding: 9px; }
+          .club-planningMobileLayout { display: grid; gap: 7px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .club-planningSummary { display: contents; }
+          .club-planningMetric { border-radius: 10px; gap: 2px; padding: 8px; }
+          .club-planningMetric span { font-size: 9px; }
+          .club-planningMetric strong { font-size: 16px; }
+          .club-planningMetric:nth-child(4) { grid-column: 1; }
+          .club-planningMetric:nth-child(4) span { font-size: 8px; white-space: nowrap; }
+          .club-planningMetric:nth-child(4) strong { font-size: 14px; line-height: 1; white-space: nowrap; }
+          .club-planningStatus { align-items: start; gap: 2px 7px; grid-column: 2 / -1; grid-template-columns: auto minmax(0, 1fr); margin-top: 0; padding: 8px 9px; }
+          .club-planningStatus > span { align-self: center; }
+          .club-planningStatus > strong { align-self: center; font-size: 14px; }
+          .club-planningStatus > small { font-size: 10px; grid-column: 2; }
           .club-detailTopbar { align-items:center; flex-direction:row; }
           .club-backDesktop, .club-desktopAction { display:none !important; }
           .club-backMobile, .club-mobileActionMenu { display:flex; }
           .club-detailTopbar .club-backBtn { background:transparent; border:0; min-height:42px; padding:0 2px; }
           .club-topbarActions { align-items:center; flex-wrap:nowrap; justify-content:flex-end; }
           .club-topbarActions .club-publishBtn { display:none; }
-          .club-matchTableHead { display: none; }
-          .club-matchTableRow { align-items: start; gap: 6px; grid-template-columns: 1fr; padding: 7px; }
-          .club-matchInfoCell { background: #f8fafc; border-radius: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 7px; }
-          .club-matchInfoCell strong { grid-column: 1 / -1; }
-          .club-matchTeams strong, .club-result { white-space: normal; }
-          .club-matchResultCell, .club-matchActionCell { justify-items: center; }
           .club-groupStandings { width: 100%; }
-          .club-groupStandingRow { gap: 3px; grid-template-columns: 20px minmax(0, 1fr) repeat(3, 28px); padding: 7px 6px; }
-          .club-groupStandingRow span { font-size: 11px; }
-          .club-groupStandingRow > span:nth-child(5), .club-groupStandingRow > span:nth-child(7), .club-groupStandingRow > span:nth-child(8) { display: none; }
+          .club-groupStandingRow { gap: 2px; grid-template-columns: 18px minmax(0, 1fr) repeat(6, 24px); padding: 2px 5px; }
+          .club-groupStandingRow--head { padding-block: 3px; }
+          .club-groupStandingRow span { font-size: 10px; font-variant-numeric: tabular-nums; font-weight: 600; }
+          .club-groupStandingRow--head span { font-size: 9px; }
+          .club-groupStandingRow > span:nth-child(6) { background: rgba(6,182,212,.07); border-inline: 1px solid rgba(6,182,212,.18); color: #17253f; font-weight: 800; order: 3; }
+          .club-groupStandingRow > span:nth-child(3) { order: 4; }
+          .club-groupStandingRow > span:nth-child(4) { order: 5; }
+          .club-groupStandingRow > span:nth-child(5) { order: 6; }
+          .club-groupStandingRow > span:nth-child(7) { order: 7; }
+          .club-groupStandingRow > span:nth-child(8) { order: 8; }
           .club-groupStandingTeam { align-items: center; display: flex; gap: 5px; min-width: 0; }
-          .club-groupStandingTeam > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-          .club-groupStandingTeam b { background: color-mix(in srgb, var(--club-admin-accent) 12%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 28%, transparent); border-radius: 999px; color: #0f766e; display: inline-flex; flex: 0 0 auto; font-size: 8px; font-weight: 950; line-height: 1; padding: 4px 5px; text-transform: uppercase; }
+          .club-groupStandingPlayerNames { display: grid; gap: 1px; min-width: 0; }
+          .club-groupStandingPlayerNames > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .club-groupStandingPlayerNames > span + span::before { content: ''; }
+          .club-groupStandingRow--qualified .club-groupStandingPlayerNames > span { font-weight: 900; }
+          .club-groupStandingTeam b { display: none; }
+          .club-groupStandingPosition i { display: inline; }
+          .club-operationalNotices--embedded .club-operationalNotice { gap: 4px; padding: 5px 7px; }
+          .club-operationalNotices--embedded .club-operationalNoticeBody > p { display: none; }
+          .club-operationalNotices--embedded .club-operationalNoticeDisclosure p { display: block; }
           .club-playoffSummaryGrid { grid-template-columns: 1fr; }
           .club-playoffToolbarLeft { width: 100%; }
           .club-playoffViewChip { flex: 1 1 0; justify-content: center; }
@@ -6662,6 +6984,27 @@ export default function ClubTournamentDetailPage() {
           .club-playoffUpcomingHead { display: none; }
           .club-playoffUpcomingRow { align-items: start; gap: 6px; grid-template-columns: 1fr; }
           .club-playoffUpcomingRow span[role="cell"]:nth-child(3) { flex-wrap: wrap; }
+          .club-modalBackdrop { align-items: end; padding: 8px; }
+          .club-resultModal { border-radius: 16px 16px 10px 10px; gap: 10px; max-height: calc(100dvh - 8px); overflow: auto; padding: 12px; width: 100%; }
+          .club-resultModal .club-pointsHead { gap: 8px; }
+          .club-resultModal .club-pointsHead h2 { font-size: 17px; }
+          .club-resultForm { gap: 8px; padding: 8px; }
+          .club-scoreGrid { gap: 5px; grid-template-columns: minmax(104px, 1fr) repeat(3, 44px); }
+          .club-scoreHead { font-size: 10px; }
+          .club-scoreRow > span { font-size: 11px; }
+          .club-scoreInput { min-height: 44px; text-align: center; }
+          .club-resultSummary { font-size: 11px; padding: 7px 8px; }
+          .club-resultActions { display: grid; grid-template-columns: 1fr; margin: 0 -8px -8px; padding: 8px; }
+          .club-resultActions .club-primaryBtn { background: #061b3a; color: #fff; min-height: 46px; width: 100%; }
+          .club-resultActions .club-editBtn { min-height: 40px; width: 100%; }
+          .club-courtConfigModal { border-radius: 14px 14px 10px 10px; gap: 10px; max-height: min(88dvh, 720px); overflow: auto; padding: 12px; }
+          .club-courtConfigModal .club-manualHead h2 { font-size: 18px; }
+          .club-courtConfigModal .club-manualHead p { font-size: 12px; }
+          .club-courtConfigModal .club-manualGrid { gap: 8px; grid-template-columns: 1fr; }
+          .club-courtConfigModal .club-courtDraftList { gap: 6px; }
+          .club-courtConfigModal .club-courtDraftCard { gap: 3px 8px; grid-template-columns: minmax(0, 1fr) auto; padding: 8px 9px; }
+          .club-courtConfigModal .club-courtDraftCard small { display: none; }
+          .club-courtConfigModal .club-scheduleCapacity { padding: 8px 9px; }
           .club-courtDraftCard { grid-template-columns: 1fr; }
         }
       `}</style>

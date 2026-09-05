@@ -1,9 +1,9 @@
 'use client'
 
-import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { Search, Trophy } from 'lucide-react'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
+import CommunityTournamentCalendar from '@/components/public/CommunityTournamentCalendar'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
 
@@ -44,18 +44,6 @@ function normalizeGender(value?: string | null) {
   return normalized || 'UNKNOWN'
 }
 
-function formatGender(value?: string | null) {
-  const normalized = normalizeGender(value)
-  if (normalized === 'M') return 'Caballeros'
-  if (normalized === 'F') return 'Damas'
-  if (normalized === 'MIXED' || normalized === 'MIXTO') return 'Mixto'
-  return 'Sin rama'
-}
-
-function formatCategory(value?: number | null) {
-  return value ? `${value}ta` : 'Sin categoría'
-}
-
 function tournamentBucket(tournament: PublicTournamentItem) {
   return getTournamentDisplayStatus(tournament).key
 }
@@ -91,17 +79,17 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
     const dateValue = (item: PublicTournamentItem) => new Date(item.startDate ?? '2999-12-31').getTime()
     const closestFirst = (items: PublicTournamentItem[]) => items.sort((a, b) => dateValue(a) - dateValue(b))
     const mostRecentFirst = (items: PublicTournamentItem[]) => items.sort((a, b) => dateValue(b) - dateValue(a))
+    const nextThree = closestFirst([...registrationOpen, ...upcoming]).slice(0, 3)
     return [
       { key: 'live', title: 'En juego', subtitle: 'Torneos jugándose ahora', items: closestFirst(live) },
-      { key: 'registration-open', title: 'Inscripción abierta', subtitle: 'Torneos disponibles para anotarte', items: closestFirst(registrationOpen) },
-      { key: 'upcoming', title: 'Próximos', subtitle: 'Agenda deportiva que se viene', items: closestFirst(upcoming) },
+      { key: 'upcoming', title: 'Próximos', subtitle: 'Los próximos tres torneos', items: nextThree },
       { key: 'finished', title: 'Finalizados', subtitle: 'Historial reciente compacto', items: mostRecentFirst(finished) },
     ] as const
   }, [visible])
 
   function renderCard(tournament: PublicTournamentItem) {
     return (
-      <TournamentPublicCard key={tournament.id} tournament={tournament} showClub showRegisterAction />
+      <TournamentPublicCard key={tournament.id} tournament={tournament} compactAgenda showClub showRegisterAction />
     )
   }
 
@@ -120,7 +108,8 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
       </section>
 
       <section className="publicTournamentSections">
-        {sections.map((section) => (
+        {sections.map((section, index) => (
+          <Fragment key={section.key}>
           <div className="publicTournamentSection" key={section.key}>
             <header>
               <div>
@@ -135,6 +124,8 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
               <div className="publicTournamentEmpty"><Trophy size={18} /><strong>Sin torneos</strong><p>No hay eventos en esta sección con los filtros actuales.</p></div>
             )}
           </div>
+          {index === 1 ? <CommunityTournamentCalendar tournaments={visible} /> : null}
+          </Fragment>
         ))}
       </section>
 
@@ -193,12 +184,12 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
           .publicTournamentHero::after { height: 4px; left: 0; right: 0; }
           .publicTournamentHero span { font-size: 10px; font-weight: 850; letter-spacing: .06em; }
           .publicTournamentHero h1 { font-size: clamp(28px, 8vw, 32px); font-weight: 950; letter-spacing: -.06em; line-height: .9; margin: 5px 0; }
-          .publicTournamentFilters { border-radius: 14px; gap: 5px 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 7px; }
+          .publicTournamentFilters { border-radius: 14px; gap: 6px; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 8px; }
           .publicTournamentFilters label { gap: 2px; }
-          .publicTournamentFilters label > span { font-size: 9px; font-weight: 680; letter-spacing: .01em; }
-          .publicTournamentFilters select, .publicTournamentFilters input { border-radius: 9px; font-size: 11.5px; font-weight: 620; min-height: var(--ds-control-h-sm); padding: 6px 7px; }
-          .publicTournamentSearch { grid-column: auto; }
-          .publicTournamentSearch div { border-radius: 9px; gap: 5px; min-height: var(--ds-control-h-sm); min-width: 0; padding-left: 7px; }
+          .publicTournamentFilters label > span { font-size: 8px; font-weight: 760; letter-spacing: .05em; }
+          .publicTournamentFilters select, .publicTournamentFilters input { border-radius: 9px; font-size: 11px; font-weight: 680; min-height: 36px; padding: 5px 7px; }
+          .publicTournamentSearch { grid-column: 1 / -1; grid-row: 1; }
+          .publicTournamentSearch div { border-radius: 9px; gap: 6px; min-height: 36px; min-width: 0; padding-left: 9px; }
           .publicTournamentSearch input { min-width: 0; width: 100%; }
           .publicTournamentSearch svg { height: 13px; width: 13px; }
           .publicTournamentSections { gap: 12px; }

@@ -49,6 +49,7 @@ type ClubSummary = {
     status: string | null
     date: string | null
     registration_deadline: string | null
+    has_generated_groups: boolean
   }>
 }
 
@@ -299,12 +300,14 @@ export default function ClubPage() {
   const club = summary.club
   const isActive = club.status === 'ACTIVE'
   const greeting = user?.name?.trim() ? `Hola, ${user.name.trim().split(/\s+/)[0]} 👋` : 'Todo listo para hoy'
+  const operationalTournament = summary.tournaments.find((tournament) => tournament.has_generated_groups)
   const priorities = [
-    ...(summary.tournaments.slice(0, 2).filter((tournament) => tournament.registration_deadline).map((tournament) => ({ href: '/club/torneos', title: tournament.name, detail: `Inscripciones cierran ${formatDate(tournament.registration_deadline!)}`, badge: 'URGENTE', tone: 'urgent' }))),
+    ...(operationalTournament ? [{ href: `/club/torneos/${operationalTournament.id}`, title: operationalTournament.name, detail: 'Grupos generados · Cargá resultados para continuar.', badge: 'EN CURSO', tone: 'running' }] : []),
+    ...(summary.tournaments.slice(0, 2).filter((tournament) => tournament.id !== operationalTournament?.id && tournament.registration_deadline).map((tournament) => ({ href: '/club/torneos', title: tournament.name, detail: `Inscripciones cierran ${formatDate(tournament.registration_deadline!)}`, badge: 'URGENTE', tone: 'urgent' }))),
     ...(summary.counts.pending_player_requests > 0 ? [{ href: '/club/solicitudes', title: `${summary.counts.pending_player_requests} solicitud${summary.counts.pending_player_requests === 1 ? '' : 'es'} pendiente${summary.counts.pending_player_requests === 1 ? '' : 's'}`, detail: 'Revisalas para mantener el padrón actualizado.', badge: 'PENDIENTE', tone: 'pending' }] : []),
     ...(summary.counts.active_or_upcoming_tournaments > 0 ? [{ href: '/club/torneos', title: 'Torneos próximos', detail: 'Revisá sede, cupos y organización.', badge: 'PRÓXIMO', tone: 'upcoming' }] : []),
   ].slice(0, 3)
-  const recommendedTournament = summary.tournaments[0]
+  const recommendedTournament = operationalTournament ?? summary.tournaments[0]
   // La membresía aprobada/capacidad canónica del club activo decide el destino.
   // La API administrativa vuelve a validar el permiso al cargar el detalle.
   const canManageAgendaTournament = canUpdateTournament(clubRole)
@@ -361,7 +364,7 @@ export default function ClubPage() {
                       <b>{tournament.date ? new Date(tournament.date).getDate() : '—'}</b>
                     </div><div className="club-listMain">
                       <strong>{tournament.name}</strong>
-                      <span>Torneo · {tournament.status ?? 'Sin estado'}</span>
+                      <span>{tournament.has_generated_groups ? 'Grupos listos · Cargar resultados' : `Torneo · ${tournament.status ?? 'Sin estado'}`}</span>
                     </div><span className="club-agendaCta">{canManageAgendaTournament ? 'Gestionar →' : 'Entrar →'}</span>
                   </Link>
                 ))}
@@ -372,7 +375,7 @@ export default function ClubPage() {
           </section>
 
         </section>
-        <section className="club-recommendation"><div className="club-assistantLead"><span className="club-kicker">SELPA recomienda</span><strong>{recommendedTournament ? 'Hoy te recomiendo...' : 'No te olvides de...'}</strong></div><p>{recommendedTournament ? <>Revisá la organización de <b>{recommendedTournament.name}</b> antes de la próxima jornada.</> : 'Prepará la próxima competencia para mantener la actividad del club en movimiento.'}</p><Link href={recommendedTournament ? '/club/torneos' : '/club/competition'}>Revisar →</Link></section>
+        <section className="club-recommendation"><div className="club-assistantLead"><span className="club-kicker">SELPA recomienda</span><strong>{recommendedTournament ? 'Hoy te recomiendo...' : 'No te olvides de...'}</strong></div><p>{recommendedTournament ? operationalTournament ? <>Ya generaste los grupos de <b>{recommendedTournament.name}</b>. Continuá con la carga de resultados.</> : <>Revisá la organización de <b>{recommendedTournament.name}</b> antes de la próxima jornada.</> : 'Prepará la próxima competencia para mantener la actividad del club en movimiento.'}</p><Link href={recommendedTournament ? canManageAgendaTournament ? `/club/torneos/${recommendedTournament.id}` : '/club/torneos' : '/club/competition'}>{operationalTournament ? 'Gestionar →' : 'Revisar →'}</Link></section>
       </div>
 
       <style>{`
@@ -410,7 +413,7 @@ export default function ClubPage() {
         .club-heroMetrics { border-top:1px solid rgba(15,23,42,.08); display:grid; gap:0; grid-column:1 / -1; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:0; padding-top:10px; }.club-heroMetrics a { color:#52657a; display:grid; gap:1px; min-width:0; padding:0 8px; text-decoration:none; }.club-heroMetrics a+a { border-left:1px solid rgba(15,23,42,.08); }.club-heroMetrics strong { color:#071b3a; font-size:24px; line-height:1; }.club-heroMetrics span { font-size:10px; font-weight:800; line-height:1.2; }
         .club-priorityStrip { align-items:center; background:#071b39; border-radius:18px; color:#fff; display:grid; gap:10px; grid-template-columns:minmax(0,1fr); margin-top:12px; padding:12px 14px; }
         .club-priorityStrip .club-kicker { color:#bde97c; }.club-priorityStrip h2 { font-size:17px; line-height:1.15; margin:3px 0 0; }
-        .club-priorityList { display:grid; gap:0; }.club-priorityList a,.club-priorityClear { align-items:center; color:#fff; display:grid; gap:8px; grid-template-columns:minmax(0,1fr) auto auto; min-height:39px; padding:5px 0; text-decoration:none; }.club-priorityList a+a { border-top:1px solid rgba(255,255,255,.14); }.club-priorityCopy { display:grid; gap:1px; min-width:0; }.club-priorityList b { color:#fff; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.club-priorityList small,.club-priorityClear span { color:rgba(255,255,255,.72); font-size:10px; font-weight:700; line-height:1.15; }.club-priorityBadge { border:1px solid transparent; border-radius:999px; font-size:9px; font-style:normal; font-weight:950; letter-spacing:.04em; padding:3px 6px; }.club-priorityBadge--urgent { background:rgba(255,219,135,.16); border-color:rgba(255,219,135,.34); color:#ffe0a1; }.club-priorityBadge--pending { background:rgba(190,233,124,.13); border-color:rgba(190,233,124,.30); color:#d6f2a2; }.club-priorityBadge--upcoming { background:rgba(143,211,255,.12); border-color:rgba(143,211,255,.30); color:#b9e8ff; }.club-priorityList i { color:#d6f2a2; font-size:18px; font-style:normal; }.club-priorityClear { grid-template-columns:1fr; }
+        .club-priorityList { display:grid; gap:0; }.club-priorityList a,.club-priorityClear { align-items:center; color:#fff; display:grid; gap:8px; grid-template-columns:minmax(0,1fr) auto auto; min-height:39px; padding:5px 0; text-decoration:none; }.club-priorityList a+a { border-top:1px solid rgba(255,255,255,.14); }.club-priorityCopy { display:grid; gap:1px; min-width:0; }.club-priorityList b { color:#fff; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.club-priorityList small,.club-priorityClear span { color:rgba(255,255,255,.72); font-size:10px; font-weight:700; line-height:1.15; }.club-priorityBadge { border:1px solid transparent; border-radius:999px; font-size:9px; font-style:normal; font-weight:950; letter-spacing:.04em; padding:3px 6px; }.club-priorityBadge--urgent { background:rgba(255,219,135,.16); border-color:rgba(255,219,135,.34); color:#ffe0a1; }.club-priorityBadge--running { background:rgba(103,232,249,.14); border-color:rgba(103,232,249,.36); color:#bff7ff; }.club-priorityBadge--pending { background:rgba(190,233,124,.13); border-color:rgba(190,233,124,.30); color:#d6f2a2; }.club-priorityBadge--upcoming { background:rgba(143,211,255,.12); border-color:rgba(143,211,255,.30); color:#b9e8ff; }.club-priorityList i { color:#d6f2a2; font-size:18px; font-style:normal; }.club-priorityClear { grid-template-columns:1fr; }
         .club-agendaCard { color:inherit; transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease; }.club-agendaCard:hover { border-color:color-mix(in srgb,var(--club-admin-accent) 30%,transparent); box-shadow:0 18px 44px var(--club-admin-glow); transform:translateY(-1px); }.club-agendaRow { align-items:center; border-left:2px solid var(--club-admin-accent); color:inherit; display:grid; gap:10px; grid-template-columns:auto minmax(0,1fr) auto; padding-left:8px; text-decoration:none; }.club-agendaRow:hover .club-agendaCta { text-decoration:underline; }.club-agendaCta { align-self:end; color:var(--club-admin-accent); font-size:11px; font-weight:900; justify-self:end; padding-bottom:2px; white-space:nowrap; }.club-agendaDate { background:#fff; border:1px solid rgba(15,23,42,.12); border-radius:10px; display:grid; justify-items:center; min-width:46px; overflow:hidden; position:relative; }.club-agendaMonth { background:var(--club-admin-soft); color:#36506e; font-size:9px; font-weight:950; letter-spacing:.06em; line-height:1; padding:5px 4px; text-align:center; width:100%; }.club-agendaDate b { color:#071b3a; font-size:21px; line-height:1; padding:6px 4px 7px; }.club-agendaDate .club-agendaRelative { background:var(--club-admin-accent); border-radius:999px; color:#fff; font-size:8px; font-weight:950; padding:3px 5px; position:absolute; right:-4px; top:-5px; }.club-recommendation { align-items:center; background:transparent; border:0; border-left:3px solid var(--club-admin-accent); border-radius:0; display:grid; gap:4px 12px; grid-template-columns:minmax(0,1fr) auto; margin-top:12px; padding:8px 0 8px 12px; }.club-assistantLead { display:grid; gap:2px; }.club-assistantLead .club-kicker { font-size:9px; }.club-recommendation strong { color:#102544; font-size:14px; }.club-recommendation p { color:#607089; font-size:12px; grid-column:1 / -1; line-height:1.35; margin:0; }.club-recommendation p b { color:#334b68; }.club-recommendation a { align-self:center; color:var(--club-admin-accent); font-size:12px; font-weight:900; text-decoration:none; white-space:nowrap; }
         .club-mainBadge, .club-statusBadge {
           border: 1px solid rgba(15, 23, 42, 0.10);

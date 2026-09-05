@@ -1954,8 +1954,12 @@ button.px-playerClubCta:disabled{
 }
 
 @media (max-width: 430px){
+  .app-shell--auth .px-auth{
+    padding-inline:0;
+  }
+
   .px-loginAuth{
-    padding: 14px 10px;
+    padding: 14px var(--selpa-mobile-gutter);
   }
 
   .px-loginAuth .px-authTop{

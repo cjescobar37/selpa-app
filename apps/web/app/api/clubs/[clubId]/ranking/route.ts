@@ -61,6 +61,17 @@ type ActivePartnershipRow = {
   player2_club_player_id: string
 }
 
+type CompetitionPairProjectionRow = {
+  club_id: string
+  season_id: string
+  division_id: string
+  player1_user_id: string
+  player2_user_id: string
+  pair_key: string
+  total_points: number
+  settled_results: number
+}
+
 type ClubCategoryRow = {
   category_id: number
   is_enabled: boolean
@@ -374,6 +385,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       })
     const rankedLegacyIndividual = withRankingPositions(legacyIndividual, 'position')
     let rankedIndividual = rankedLegacyIndividual
+    let competitionRows: Awaited<ReturnType<typeof getCompetitionRanking>>['rows'] = []
     if (rankingEngineSource === 'competition') {
       const competitionStats = new Map(Array.from(playerStats.entries()).map(([userId, stats]) => [userId, {
         tournamentsPlayed: stats.tournamentsPlayed.size,
@@ -384,10 +396,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         finals: stats.finals,
       }]))
       const competition = await getCompetitionRanking(clubId, competitionStats)
+      competitionRows = competition.rows
       rankedIndividual = competition.rows.map(mapCompetitionRankingToLegacyContract)
     }
 
-    const pairs = activePartnerships
+    const legacyPairs = activePartnerships
       .map((partnership) => {
         const player1 = playersByClubPlayerId.get(partnership.player1_club_player_id) ?? null
         const player2 = playersByClubPlayerId.get(partnership.player2_club_player_id) ?? null
@@ -422,12 +435,61 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
 
     let previousPairPoints: number | null = null
     let previousPairPosition = 0
-    const rankedPairs = pairs.map((pair, index) => {
+    let rankedPairs = legacyPairs.map((pair, index) => {
       const position = previousPairPoints === pair.combined_points ? previousPairPosition : index + 1
       previousPairPoints = pair.combined_points
       previousPairPosition = position
       return { ...pair, position }
     })
+
+    if (rankingEngineSource === 'competition') {
+      const { data: projectionData, error: projectionError } = await supabaseAdmin
+        .from('competition_pair_ranking_projection')
+        .select('club_id,season_id,division_id,player1_user_id,player2_user_id,pair_key,total_points,settled_results')
+        .eq('club_id', clubId)
+
+      if (projectionError) {
+        if (isMissingSchemaError(projectionError.message)) {
+          warnings.push('El ranking de parejas estará disponible cuando se aplique la proyección competitiva.')
+          rankedPairs = []
+        } else {
+          return NextResponse.json({ error: projectionError.message }, { status: 500 })
+        }
+      } else {
+        const competitorByUser = new Map(competitionRows.map((row) => [row.userId, row]))
+        const projectedPairs = ((projectionData ?? []) as CompetitionPairProjectionRow[])
+          .map((pair) => {
+            const player1 = competitorByUser.get(pair.player1_user_id)
+            const player2 = competitorByUser.get(pair.player2_user_id)
+            if (!player1 || !player2 || player1.divisionId !== pair.division_id || player2.divisionId !== pair.division_id) return null
+            return {
+              partnership_id: pair.pair_key,
+              pair_key: pair.pair_key,
+              player1_user_id: pair.player1_user_id,
+              player2_user_id: pair.player2_user_id,
+              player1_name: player1.fullName,
+              player2_name: player2.fullName,
+              player1_avatar_url: player1.avatarUrl,
+              player2_avatar_url: player2.avatarUrl,
+              player1_points: pair.total_points,
+              player2_points: pair.total_points,
+              category: player1.category,
+              gender: player1.gender,
+              combined_points: Number(pair.total_points),
+            }
+          })
+          .filter((pair): pair is NonNullable<typeof pair> => pair !== null)
+          .sort((a, b) => b.combined_points - a.combined_points || a.pair_key.localeCompare(b.pair_key))
+        let previousPoints: number | null = null
+        let previousPosition = 0
+        rankedPairs = projectedPairs.map((pair, index) => {
+          const position = previousPoints === pair.combined_points ? previousPosition : index + 1
+          previousPoints = pair.combined_points
+          previousPosition = position
+          return { ...pair, position }
+        })
+      }
+    }
 
     if (!warnings.some((warning) => warning.includes('supabase_full.sql'))) {
       warnings.push('Deuda detectada: supabase_full.sql/docs no reflejan completamente tournament_matches ni ranking_points, aunque el código actual los usa.')
@@ -436,8 +498,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     const response = NextResponse.json({
       meta: {
         source: 'derived',
-        individualSource: 'club_players.ranking_points',
-        pairSource: 'player_active_partnerships ACTIVE + club_players.ranking_points',
+        individualSource: rankingEngineSource === 'competition' ? 'competition_point_transactions' : 'club_players.ranking_points',
+        pairSource: rankingEngineSource === 'competition' ? 'competition_pair_ranking_projection' : 'player_active_partnerships ACTIVE + club_players.ranking_points',
         generatedAt: new Date().toISOString(),
         warnings,
       },

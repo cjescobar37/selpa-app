@@ -36,6 +36,7 @@ type ClubPlayerRow = {
   display_name: string | null
   category: number | null
   gender: string | null
+  operational_status?: string | null
 }
 
 type ProfileRow = {
@@ -228,9 +229,9 @@ export async function GET(
 
     let playersQuery = supabaseAdmin
       .from('club_players')
-      .select('id,user_id,display_name,category,gender')
+      .select('id,user_id,display_name,category,gender,operational_status')
       .eq('club_id', clubId)
-      .not('approved_at', 'is', null)
+      .eq('operational_status', 'ACTIVE')
       .limit(80)
 
     if (tournamentCategory !== null) {
@@ -325,10 +326,10 @@ async function resolveExistingClubPlayer(
 
   const { data: clubPlayer, error: clubPlayerError } = await supabaseAdmin
     .from('club_players')
-    .select('id,user_id,display_name,category,gender')
+    .select('id,user_id,display_name,category,gender,operational_status')
     .eq('id', clubPlayerId)
     .eq('club_id', clubId)
-    .not('approved_at', 'is', null)
+    .eq('operational_status', 'ACTIVE')
     .maybeSingle()
 
   if (clubPlayerError) throw clubPlayerError

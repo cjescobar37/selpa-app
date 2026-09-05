@@ -14,6 +14,10 @@ type TournamentRow = {
   signup_deadline: string | null
 }
 
+type TournamentGroupRow = {
+  tournament_id: string
+}
+
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
@@ -98,6 +102,16 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       return NextResponse.json({ error: 'Club no encontrado.' }, { status: 404 })
     }
 
+    const tournamentIds = (tournamentsRes.data ?? []).map((row) => row.id)
+    const groupsRes = tournamentIds.length
+      ? await supabaseAdmin
+        .from('tournament_groups')
+        .select('tournament_id')
+        .in('tournament_id', tournamentIds)
+      : { data: [] as TournamentGroupRow[], error: null }
+
+    if (groupsRes.error) return NextResponse.json({ error: groupsRes.error.message }, { status: 500 })
+
     const staffRes = await supabaseAdmin
       .from('club_memberships')
       .select('id', { count: 'exact', head: true })
@@ -109,9 +123,14 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     if (staffRes.error) return NextResponse.json({ error: staffRes.error.message }, { status: 500 })
 
     const today = new Date().toISOString().slice(0, 10)
+    const tournamentsWithGroups = new Set((groupsRes.data ?? []).map((group) => group.tournament_id))
     const activeOrUpcomingTournaments = ((tournamentsRes.data ?? []) as TournamentRow[])
       .filter((row) => isActiveOrUpcomingTournament(row, today))
-      .sort((a, b) => String(getTournamentDate(a) ?? '9999-12-31').localeCompare(String(getTournamentDate(b) ?? '9999-12-31')))
+      .sort((a, b) => {
+        const operationalDifference = Number(tournamentsWithGroups.has(b.id)) - Number(tournamentsWithGroups.has(a.id))
+        if (operationalDifference) return operationalDifference
+        return String(getTournamentDate(a) ?? '9999-12-31').localeCompare(String(getTournamentDate(b) ?? '9999-12-31'))
+      })
       .slice(0, 5)
 
     const club = clubRes.data as {
@@ -145,6 +164,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         status: row.status,
         date: getTournamentDate(row),
         registration_deadline: row.registration_deadline ?? row.signup_deadline,
+        has_generated_groups: tournamentsWithGroups.has(row.id),
       })),
     })
   } catch (error: unknown) {

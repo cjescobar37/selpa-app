@@ -1,4 +1,5 @@
 import { createMatch } from '@/lib/tournamentMatches'
+import { buildOpenGroupInitialFixture } from '@/lib/tournamentOpen/groupFixtures'
 import {
   assignScheduleSlots,
   buildProfessionalSchedulePlan,
@@ -76,36 +77,9 @@ export class TournamentGroupMatchesGenerationError extends Error {
 }
 
 function buildRoundRobinPairs(teamRows: TournamentGroupTeamRow[]) {
-  const teams = [...teamRows].sort((a, b) => a.seed - b.seed)
-
-  if (teams.length === 4) {
-    const [seed1, seed2, seed3, seed4] = teams
-    if (!seed1 || !seed2 || !seed3 || !seed4) return []
-
-    return [
-      { team1Id: seed1.team_id, team2Id: seed3.team_id, round: 1 },
-      { team1Id: seed2.team_id, team2Id: seed4.team_id, round: 1 },
-      { team1Id: seed1.team_id, team2Id: seed4.team_id, round: 2 },
-      { team1Id: seed3.team_id, team2Id: seed2.team_id, round: 2 },
-    ]
-  }
-
-  const pairs: Array<{ team1Id: string; team2Id: string; round: number }> = []
-
-  for (let i = 0; i < teams.length; i += 1) {
-    for (let j = i + 1; j < teams.length; j += 1) {
-      const team1 = teams[i]
-      const team2 = teams[j]
-      if (!team1 || !team2) continue
-      pairs.push({
-        team1Id: team1.team_id,
-        team2Id: team2.team_id,
-        round: pairs.length + 1,
-      })
-    }
-  }
-
-  return pairs
+  return buildOpenGroupInitialFixture(teamRows.map((team) => ({ teamId: team.team_id, seed: team.seed })))
+    .initialMatches
+    .map((match) => ({ team1Id: match.team1Id, team2Id: match.team2Id, round: match.round }))
 }
 
 function countCourtUsage(assignments: Array<{ court_name: string }>) {

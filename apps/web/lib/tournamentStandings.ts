@@ -17,6 +17,31 @@ export type TournamentClassificationRules = {
   points_for_loss?: number
 }
 
+function normalizeScoringValue(value: unknown) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null
+}
+
+export function resolveTournamentClassificationRules(value: unknown, tournamentRules?: unknown): TournamentClassificationRules | null {
+  const base = value && typeof value === 'object' && !Array.isArray(value) ? value as TournamentClassificationRules : {}
+  const safeRules = tournamentRules && typeof tournamentRules === 'object' && !Array.isArray(tournamentRules)
+    ? tournamentRules as Record<string, unknown>
+    : {}
+  const groupScoring = safeRules.group_scoring && typeof safeRules.group_scoring === 'object' && !Array.isArray(safeRules.group_scoring)
+    ? safeRules.group_scoring as Record<string, unknown>
+    : {}
+  const winPoints = base.points_for_win ?? normalizeScoringValue(groupScoring.win_points)
+  const lossPoints = base.points_for_loss ?? normalizeScoringValue(groupScoring.loss_points)
+
+  const resolved: TournamentClassificationRules = {
+    ...base,
+    ...(safeRules.group_tiebreakers ? { group_tiebreakers: safeRules.group_tiebreakers as GroupTiebreakerConfig } : {}),
+    ...(winPoints !== null && winPoints !== undefined ? { points_for_win: winPoints } : {}),
+    ...(lossPoints !== null && lossPoints !== undefined ? { points_for_loss: lossPoints } : {}),
+  }
+  return Object.keys(resolved).length > 0 ? resolved : null
+}
+
 export type TournamentGroup = {
   id: string
   tournament_id: string

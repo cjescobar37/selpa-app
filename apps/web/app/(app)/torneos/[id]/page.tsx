@@ -2295,7 +2295,15 @@ export default function TorneoDetallePage() {
 
         @media (max-width: 560px) {
           .tournamentPublicDetail {
+            width:100%;
             padding-bottom: 34px;
+          }
+
+          .tournamentPublicDetail > .pampraxHero {
+            box-sizing: border-box;
+            justify-self: stretch;
+            max-width: none;
+            width: 100%;
           }
 
           .tournamentPublicDetail__modalBackdrop {

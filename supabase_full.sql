@@ -283,12 +283,22 @@ ALTER TYPE auth.one_time_token_type OWNER TO supabase_auth_admin;
 CREATE TYPE public.club_role AS ENUM (
     'OWNER',
     'ADMIN',
+    'OPERADOR',
     'PLANILLERO',
     'PLAYER'
 );
 
 
 ALTER TYPE public.club_role OWNER TO postgres;
+
+CREATE TYPE public.club_status AS ENUM (
+    'PENDING_APPROVAL',
+    'ACTIVE',
+    'REJECTED',
+    'SUSPENDED'
+);
+
+ALTER TYPE public.club_status OWNER TO postgres;
 
 --
 -- Name: membership_status; Type: TYPE; Schema: public; Owner: postgres
@@ -918,7 +928,25 @@ CREATE TABLE public.clubs (
     owner_email text,
     owner_phone text,
     owner_user_id uuid,
-    rules_pdf_url text
+    rules_pdf_url text,
+    mobile_phone text,
+    description text,
+    court_surfaces jsonb,
+    opening_hours_json jsonb,
+    status public.club_status DEFAULT 'PENDING_APPROVAL'::public.club_status NOT NULL,
+    theme_key text DEFAULT 'cyan'::text NOT NULL,
+    theme_locked boolean DEFAULT false NOT NULL,
+    approved_at timestamp with time zone,
+    approved_by uuid,
+    rejected_at timestamp with time zone,
+    rejected_by uuid,
+    rejection_reason text,
+    correction_requested_at timestamp with time zone,
+    correction_requested_by uuid,
+    correction_reason text,
+    suspended_at timestamp with time zone,
+    suspended_by uuid,
+    suspension_reason text
 );
 
 
@@ -9679,6 +9707,71 @@ create policy "player assets public read" on storage.objects for select using (b
 create policy "player assets insert own" on storage.objects for insert to authenticated with check (bucket_id='player-assets' and array_length(storage.foldername(name),1)=2 and (storage.foldername(name))[1] in ('avatars','covers') and (storage.foldername(name))[2]=auth.uid()::text);
 create policy "player assets update own" on storage.objects for update to authenticated using (bucket_id='player-assets' and array_length(storage.foldername(name),1)=2 and (storage.foldername(name))[1] in ('avatars','covers') and (storage.foldername(name))[2]=auth.uid()::text) with check (bucket_id='player-assets' and array_length(storage.foldername(name),1)=2 and (storage.foldername(name))[1] in ('avatars','covers') and (storage.foldername(name))[2]=auth.uid()::text);
 create policy "player assets delete own" on storage.objects for delete to authenticated using (bucket_id='player-assets' and array_length(storage.foldername(name),1)=2 and (storage.foldername(name))[1] in ('avatars','covers') and (storage.foldername(name))[2]=auth.uid()::text);
+
+-- Canonical Club Public Profile V1 (2026-07-30).
+create or replace function public.has_club_capability(p_club_id uuid,p_capability text) returns boolean language plpgsql stable security definer set search_path=pg_catalog,public as $$
+declare v_role public.club_role; v_capability text:=lower(btrim(coalesce(p_capability,'')));
+begin
+  if v_capability not in ('dashboard:view','club:view','club:update','club:branding','club:profile_manage','memberships:view','memberships:manage','roles:view','roles:manage','ownership:transfer','players:view','players:manage','players:private_view','ranking:view','ranking:manage','tournaments:view','tournaments:create','tournaments:update','tournaments:publish','tournaments:cancel','tournaments:delete','registrations:view','registrations:manage','groups:generate','matches:view','matches:update','matches:schedule','playoff:generate','finance:view','finance:manage','payments:view','payments:manage','content:view','news:manage','sponsors:manage','ads:manage','messages:view','messages:reply','reports:operational_view','audit:view','security:manage') then raise exception 'Unknown club capability: %',p_capability using errcode='22023'; end if;
+  select cm.role into v_role from public.club_memberships cm where cm.club_id=p_club_id and cm.user_id=auth.uid() and cm.status='APPROVED' and cm.approved_at is not null limit 1;
+  if v_role::text='OWNER' then return true; end if;
+  if v_role::text='ADMIN' then return v_capability<>'ownership:transfer'; end if;
+  if v_role::text='OPERADOR' then return v_capability in ('dashboard:view','club:view','memberships:view','memberships:manage','players:view','players:manage','players:private_view','ranking:view','ranking:manage','tournaments:view','tournaments:create','tournaments:update','tournaments:publish','tournaments:cancel','registrations:view','registrations:manage','groups:generate','matches:view','matches:update','matches:schedule','playoff:generate','content:view','news:manage','sponsors:manage','ads:manage','messages:view','messages:reply','reports:operational_view'); end if;
+  if v_role::text='PLANILLERO' then return v_capability in ('dashboard:view','club:view','tournaments:view','matches:view','matches:update'); end if;
+  return false;
+end;$$;
+revoke all on function public.has_club_capability(uuid,text) from public,anon;
+grant execute on function public.has_club_capability(uuid,text) to authenticated,service_role;
+create table if not exists public.club_public_profiles (
+  club_id uuid primary key references public.clubs(id) on delete cascade,
+  tagline text check (tagline is null or char_length(tagline)<=120),
+  story text check (story is null or char_length(story)<=4000),
+  publication_status text not null default 'DRAFT' check (publication_status in ('DRAFT','PUBLISHED')),
+  published_at timestamptz,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  check ((publication_status='PUBLISHED' and published_at is not null) or publication_status='DRAFT')
+);
+create table if not exists public.club_media (
+  id uuid primary key default gen_random_uuid(), club_id uuid not null references public.clubs(id) on delete cascade,
+  kind text not null check (kind in ('COVER','STORY','GALLERY')), storage_path text not null, public_url text not null,
+  alt_text text check (alt_text is null or char_length(alt_text)<=180), caption text check (caption is null or char_length(caption)<=500),
+  sort_order integer not null default 0 check (sort_order>=0), is_visible boolean not null default true,
+  created_by uuid references auth.users(id) on delete set null, created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  unique(club_id,storage_path)
+);
+create unique index if not exists club_media_single_cover_idx on public.club_media(club_id) where kind='COVER';
+create unique index if not exists club_media_single_story_idx on public.club_media(club_id) where kind='STORY';
+create index if not exists club_media_gallery_order_idx on public.club_media(club_id,kind,sort_order,created_at);
+create table if not exists public.club_facilities (
+  id uuid primary key default gen_random_uuid(), club_id uuid not null references public.clubs(id) on delete cascade,
+  facility_key text not null check (facility_key ~ '^[A-Z][A-Z0-9_]{1,49}$'), label text not null check (char_length(label) between 1 and 80),
+  description text check (description is null or char_length(description)<=500), is_available boolean not null default true,
+  sort_order integer not null default 0 check (sort_order>=0), created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  unique(club_id,facility_key)
+);
+create index if not exists club_facilities_order_idx on public.club_facilities(club_id,sort_order,label);
+create trigger trg_club_public_profiles_updated_at before update on public.club_public_profiles for each row execute function public.set_updated_at();
+create trigger trg_club_media_updated_at before update on public.club_media for each row execute function public.set_updated_at();
+create trigger trg_club_facilities_updated_at before update on public.club_facilities for each row execute function public.set_updated_at();
+alter table public.club_public_profiles enable row level security;
+alter table public.club_media enable row level security;
+alter table public.club_facilities enable row level security;
+create policy club_public_profiles_public_read on public.club_public_profiles for select using (publication_status='PUBLISHED' and exists(select 1 from public.clubs c where c.id=club_public_profiles.club_id and c.is_active and c.status='ACTIVE'));
+create policy club_public_profiles_manage on public.club_public_profiles for all to authenticated using(public.has_club_capability(club_id,'club:profile_manage')) with check(public.has_club_capability(club_id,'club:profile_manage'));
+create policy club_media_public_read on public.club_media for select using(is_visible and exists(select 1 from public.club_public_profiles p join public.clubs c on c.id=p.club_id where p.club_id=club_media.club_id and p.publication_status='PUBLISHED' and c.is_active and c.status='ACTIVE'));
+create policy club_media_manage on public.club_media for all to authenticated using(public.has_club_capability(club_id,'club:profile_manage')) with check(public.has_club_capability(club_id,'club:profile_manage'));
+create policy club_facilities_public_read on public.club_facilities for select using(is_available and exists(select 1 from public.club_public_profiles p join public.clubs c on c.id=p.club_id where p.club_id=club_facilities.club_id and p.publication_status='PUBLISHED' and c.is_active and c.status='ACTIVE'));
+create policy club_facilities_manage on public.club_facilities for all to authenticated using(public.has_club_capability(club_id,'club:profile_manage')) with check(public.has_club_capability(club_id,'club:profile_manage'));
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types) values('club-profile-assets','club-profile-assets',true,8388608,array['image/jpeg','image/png','image/webp']::text[]) on conflict(id) do update set public=excluded.public,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
+create policy club_profile_assets_public_read on storage.objects for select using(bucket_id='club-profile-assets');
+create policy club_profile_assets_insert on storage.objects for insert to authenticated with check(bucket_id='club-profile-assets' and (storage.foldername(name))[1] in ('covers','history','gallery') and public.has_club_capability(((storage.foldername(name))[2])::uuid,'club:profile_manage'));
+create policy club_profile_assets_update on storage.objects for update to authenticated using(bucket_id='club-profile-assets' and public.has_club_capability(((storage.foldername(name))[2])::uuid,'club:profile_manage')) with check(bucket_id='club-profile-assets' and (storage.foldername(name))[1] in ('covers','history','gallery') and public.has_club_capability(((storage.foldername(name))[2])::uuid,'club:profile_manage'));
+create policy club_profile_assets_delete on storage.objects for delete to authenticated using(bucket_id='club-profile-assets' and public.has_club_capability(((storage.foldername(name))[2])::uuid,'club:profile_manage'));
+create or replace function public.get_public_club_profile(p_club_id uuid) returns jsonb language sql stable security definer set search_path=pg_catalog,public as $$
+select jsonb_build_object('club_id',c.id,'name',c.name,'brand_name',c.brand_name,'slug',c.slug,'logo_url',c.logo_url,'description',c.description,'city',c.city,'province',c.province,'country',c.country,'address',c.address,'phone',c.phone,'mobile_phone',c.mobile_phone,'contact_email',c.contact_email,'website',c.website,'instagram',c.instagram,'opening_hours',c.opening_hours,'opening_hours_json',c.opening_hours_json,'courts_count',c.courts_count,'courts_surface',c.courts_surface,'court_surfaces',c.court_surfaces,'theme_key',c.theme_key,'tagline',p.tagline,'story',p.story,'published_at',p.published_at,'media',coalesce((select jsonb_agg(jsonb_build_object('id',m.id,'kind',m.kind,'public_url',m.public_url,'alt_text',m.alt_text,'caption',m.caption,'sort_order',m.sort_order) order by m.kind,m.sort_order,m.created_at) from public.club_media m where m.club_id=c.id and m.is_visible),'[]'::jsonb),'facilities',coalesce((select jsonb_agg(jsonb_build_object('id',f.id,'facility_key',f.facility_key,'label',f.label,'description',f.description,'sort_order',f.sort_order) order by f.sort_order,f.label) from public.club_facilities f where f.club_id=c.id and f.is_available),'[]'::jsonb)) from public.clubs c join public.club_public_profiles p on p.club_id=c.id where c.id=p_club_id and c.is_active and c.status='ACTIVE' and p.publication_status='PUBLISHED';
+$$;
+revoke all on function public.get_public_club_profile(uuid) from public;
+grant execute on function public.get_public_club_profile(uuid) to anon,authenticated,service_role;
 
 --
 -- PostgreSQL database dump complete

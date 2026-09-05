@@ -7,6 +7,100 @@
   margin-top: 14px;
 }
 
+/* Public ranking cards must be correct in the server-rendered first paint too.
+   These rules intentionally live in the global sheet rather than a client style tag. */
+@media (max-width:640px){
+  .publicRankingCardV2--ranking{
+    display:block !important;
+    min-height:118px !important;
+    overflow:hidden !important;
+    padding:0 !important;
+    position:relative !important;
+  }
+
+  .publicRankingCardV2--ranking > span:not(.publicRankingCardV2__mobileCta),
+  .publicRankingCardV2--ranking > header,
+  .publicRankingCardV2--ranking > .publicRankingCardV2__rankingMeta,
+  .publicRankingCardV2--ranking > footer{
+    display:none !important;
+  }
+
+  .publicRankingCardV2--ranking > .publicRankingCardV2__mobileLayout{
+    display:grid !important;
+    grid-template-columns:92px minmax(0,1fr) !important;
+    min-height:118px !important;
+    overflow:hidden !important;
+    width:100% !important;
+  }
+
+  .publicRankingCardV2--ranking .publicRankingCardV2__mobileVisual{
+    align-content:center !important;
+    background:linear-gradient(135deg,rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(150deg,#071936,#0b2344) !important;
+    background-size:12px 12px,auto !important;
+    border-right:3px solid var(--club-primary) !important;
+    display:grid !important;
+    gap:7px !important;
+    justify-items:center !important;
+    padding:10px 7px !important;
+  }
+
+  .publicRankingCardV2--ranking .publicRankingCardV2__mobileRankingMark{
+    align-items:center !important;
+    animation:publicRankingCardPulse 2.8s ease-in-out infinite !important;
+    border:1px solid rgba(255,255,255,.7) !important;
+    border-radius:999px !important;
+    color:#fff !important;
+    display:inline-flex !important;
+    height:50px !important;
+    justify-content:center !important;
+    width:50px !important;
+  }
+
+  .publicRankingCardV2--ranking .publicRankingCardV2__mobileRankingMark svg{height:29px !important;width:29px !important}
+  .publicRankingCardV2--ranking .publicRankingCardV2__mobileLabel{color:rgba(255,255,255,.68) !important;font-size:7px !important;font-weight:800 !important;letter-spacing:.07em !important;text-transform:uppercase !important}
+
+  .publicRankingCardV2--ranking .publicRankingCardV2__mobileBody{
+    align-content:start !important;
+    display:grid !important;
+    gap:3px !important;
+    min-width:0 !important;
+    padding:12px 12px 38px !important;
+  }
+
+  .publicRankingCardV2--ranking .publicRankingCardV2__mobileBody h2{color:#020617 !important;font-size:19px !important;font-weight:850 !important;line-height:1 !important;margin:0 !important;overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important}
+  .publicRankingCardV2--ranking .publicRankingCardV2__mobileBody p,.publicRankingCardV2--ranking .publicRankingCardV2__mobileBody small{font-size:10.5px !important;font-weight:700 !important;line-height:1.15 !important;margin:0 !important}
+  .publicRankingCardV2--ranking .publicRankingCardV2__mobileBody p{color:#0f172a !important}
+  .publicRankingCardV2--ranking .publicRankingCardV2__mobileBody small{color:#64748b !important}
+
+  .publicRankingCardV2--ranking > .publicRankingCardV2__mobileCta{
+    align-items:center !important;
+    background:#020617 !important;
+    border-radius:999px !important;
+    bottom:9px !important;
+    color:#fff !important;
+    display:inline-flex !important;
+    font-size:8.8px !important;
+    font-weight:880 !important;
+    gap:6px !important;
+    justify-content:center !important;
+    left:auto !important;
+    min-height:28px !important;
+    min-width:108px !important;
+    padding:0 11px !important;
+    position:absolute !important;
+    right:10px !important;
+    top:auto !important;
+    z-index:5 !important;
+  }
+
+  @media (prefers-reduced-motion:reduce){.publicRankingCardV2--ranking .publicRankingCardV2__mobileRankingMark{animation:none !important}}
+}
+
+@keyframes publicRankingCardPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.12);transform:translateY(0)}
+  50%{box-shadow:0 0 0 7px rgba(255,255,255,0);transform:translateY(-1px)}
+}
+
 .px-publicFrame .px-publicHome,
 .px-publicFrame .publicTournamentShell,
 .px-publicFrame .publicRankingShell,
@@ -6618,13 +6712,13 @@ a.clubPublicRankingFooter span{
 @media (max-width: 640px){
   .clubPublicTournamentGrid .TournamentPublicCard,
   .clubPublicTournamentGrid .TournamentPublicCard.is-manual-flyer{
-    height:138px !important;
-    min-height:138px !important;
+    height:126px !important;
+    min-height:126px !important;
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard.has-circuit{
-    height:138px !important;
-    min-height:138px !important;
+    height:126px !important;
+    min-height:126px !important;
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard__body{
@@ -6669,7 +6763,7 @@ a.clubPublicRankingFooter span{
     display:flex;
     flex-direction:column;
     min-height:0;
-    padding:6px 1px 6px 0;
+    padding:4px 1px 4px 0;
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact .TournamentPublicCard__circuit{
@@ -6685,10 +6779,10 @@ a.clubPublicRankingFooter span{
 
   .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact h3{
     color:#071936;
-    font-size:19px;
-    font-weight:900;
+    font-size:16px;
+    font-weight:850;
     line-height:1.05;
-    margin:7px 0 0;
+    margin:4px 0 0;
     padding:0;
   }
 
@@ -6697,13 +6791,13 @@ a.clubPublicRankingFooter span{
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact:not(.has-circuit) h3{
-    margin-top:7px;
+    margin-top:4px;
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard.is-agendaCompact.has-circuit h3{
     border-top:1px solid rgba(15,23,42,.12);
-    margin-top:10px;
-    padding-top:8px;
+    margin-top:6px;
+    padding-top:5px;
   }
 
   .TournamentPublicCard__agendaDates{
@@ -6714,7 +6808,7 @@ a.clubPublicRankingFooter span{
     font-weight:650;
     gap:7px;
     grid-template-columns:14px minmax(0,1fr) 22px;
-    margin-top:7px;
+    margin-top:4px;
     min-width:0;
     order:4;
     padding-top:5px;
@@ -6757,6 +6851,44 @@ a.clubPublicRankingFooter span{
     background:#f8fafc;
     transform:scale(.98);
     transition:background .12s ease,transform .12s ease;
+  }
+
+  /* Public calendar uses the same dense agenda treatment: poster-led, no empty lower track. */
+  .publicTournamentGrid .TournamentPublicCard.is-agendaCompact,
+  .publicTournamentGrid .TournamentPublicCard.is-agendaCompact.is-manual-flyer{
+    height:126px !important;
+    min-height:126px !important;
+  }
+
+  .publicTournamentGrid .TournamentPublicCard.is-agendaCompact .TournamentPublicCard__body{
+    align-content:stretch;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    padding:4px 1px 4px 0;
+  }
+
+  .publicTournamentGrid .TournamentPublicCard.is-agendaCompact h3{
+    color:#071936;
+    font-size:16px;
+    font-weight:850;
+    line-height:1.05;
+    margin:4px 0 0;
+    padding:0;
+  }
+
+  .publicTournamentGrid .TournamentPublicCard.is-agendaCompact .TournamentPublicCard__compactMeta{
+    display:none;
+  }
+
+  .publicTournamentGrid .TournamentPublicCard.is-agendaCompact.has-circuit h3{
+    border-top:1px solid rgba(15,23,42,.12);
+    margin-top:6px;
+    padding-top:5px;
+  }
+
+  .publicTournamentGrid .TournamentPublicCard.is-agendaCompact .TournamentPublicCard__agendaDates{
+    margin-top:4px;
   }
 
   /* Player home uses the same compact agenda card as the club and community views. */
@@ -7156,18 +7288,18 @@ a.clubPublicRankingFooter span{
     border-color:color-mix(in srgb, var(--club-card-accent, #06b6d4) 16%, #e2e8f0);
     border-top:2px solid var(--club-card-accent, #06b6d4);
     box-shadow:0 10px 22px rgba(15,23,42,.055), 0 8px 18px var(--club-card-glow, rgba(34,211,238,.12));
-    gap:12px;
-    grid-template-columns:minmax(0, 1fr) 96px;
-    min-height:140px;
-    padding:9px 14px 9px 16px;
+    gap:8px;
+    grid-template-columns:minmax(0, 1fr) 90px;
+    min-height:100px;
+    padding:4px 8px 4px 12px;
   }
 
   .publicClubLogo{
-    border-radius:18px;
-    font-size:18px;
-    height:96px;
+    border-radius:15px;
+    font-size:16px;
+    height:92px;
     padding:0;
-    width:96px;
+    width:90px;
   }
 
   .publicClubBody{
@@ -7175,31 +7307,32 @@ a.clubPublicRankingFooter span{
   }
 
   .publicClubBody small{
-    font-size:9px;
-    padding:4px 7px;
-    right:12px;
-    top:10px;
+    font-size:8px;
+    padding:3px 6px;
+    right:8px;
+    top:7px;
   }
 
   .publicClubBody h2{
-    font-size:min(var(--club-name-size, 24px), 24px);
-    margin-top:18px;
+    font-size:min(var(--club-name-size, 21px), 21px);
+    margin-top:10px;
   }
 
   .publicClubBody p{
-    font-size:12px;
-    margin-bottom:8px;
+    font-size:10.5px;
+    line-height:1.12;
+    margin-bottom:4px;
   }
 
   .publicClubStats{
     flex-wrap:wrap;
-    gap:6px;
+    gap:4px;
     grid-column:auto;
   }
 
   .publicClubStats span{
-    font-size:9px;
-    padding:5px 7px;
+    font-size:8px;
+    padding:3px 6px;
   }
 
   .publicClubAction{
@@ -7599,9 +7732,9 @@ a.clubPublicRankingFooter span{
   .clubPublicHome .clubPublicRankingAvatar,
   .clubPublicHome .clubPublicRankingAvatar.is-secondary{
     border-width:2px;
-    font-size:13px;
-    height:42px;
-    width:42px;
+    font-size:18px;
+    height:58px;
+    width:58px;
   }
 
   .clubPublicHome .clubPublicRankingPlayer{
@@ -7609,7 +7742,7 @@ a.clubPublicRankingFooter span{
     gap:5px;
     grid-template-columns:1fr;
     justify-items:center;
-    max-width:64px;
+    max-width:76px;
     text-align:center;
   }
 

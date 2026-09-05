@@ -1,6 +1,7 @@
 import { createMatch } from '@/lib/tournamentMatches'
 import {
   calculateTournamentGroupStandings,
+  resolveTournamentClassificationRules,
   type GroupStandings,
   type TournamentClassificationRules,
   type TournamentGroup,
@@ -62,18 +63,6 @@ export class PlayoffGenerationError extends Error {
     this.code = code
     this.status = status
   }
-}
-
-function normalizeClassificationRules(value: unknown, tournamentRules?: unknown): TournamentClassificationRules | null {
-  const base = value && typeof value === 'object' && !Array.isArray(value) ? value as TournamentClassificationRules : {}
-  const safeRules = normalizeObject(tournamentRules)
-  if (safeRules.group_tiebreakers) {
-    return {
-      ...base,
-      group_tiebreakers: safeRules.group_tiebreakers as TournamentClassificationRules['group_tiebreakers'],
-    }
-  }
-  return Object.keys(base).length > 0 ? base : null
 }
 
 function isZonePlayoffLikeFormat(format: string | null | undefined) {
@@ -182,7 +171,7 @@ export async function generateZonePlayoffSemifinals(input: { clubId: string; tou
   if (groupTeamsError) throw new Error(`No pude leer equipos de grupos: ${groupTeamsError.message}`)
 
   const currentRules = normalizeObject(tournamentRow.rules_json ?? tournamentRow.rules ?? {})
-  const classificationRules = normalizeClassificationRules(tournamentRow.classification_rules, currentRules)
+  const classificationRules = resolveTournamentClassificationRules(tournamentRow.classification_rules, currentRules)
   let standings: GroupStandings[]
   try {
     standings = calculateTournamentGroupStandings({
