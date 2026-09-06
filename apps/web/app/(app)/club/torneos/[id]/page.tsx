@@ -4,7 +4,9 @@ import Link from 'next/link'
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Maximize2, MoreVertical, Repeat2, RotateCcw, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MoreVertical, Repeat2 } from 'lucide-react'
+import MobilePlayoff from '../_components/MobilePlayoff'
+import { hasClubCapability } from '@/lib/clubPermissions'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
@@ -924,7 +926,7 @@ export default function ClubTournamentDetailPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tournamentId = params?.id
-  const { activeClub } = useSession()
+  const { activeClub, clubRole, isPlatformAdmin } = useSession()
   const [summary, setSummary] = useState<TournamentSummary | null>(null)
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const [flyerConfig, setFlyerConfig] = useState<FlyerConfig>(defaultFlyerConfig)
@@ -987,12 +989,7 @@ export default function ClubTournamentDetailPage() {
   const [playoffBracketZoom, setPlayoffBracketZoom] = useState(1)
   const [activePlayoffTeamId, setActivePlayoffTeamId] = useState<string | null>(null)
   const [expandedGroupMatches, setExpandedGroupMatches] = useState<string[]>([])
-  const [selectedPlayoffRound, setSelectedPlayoffRound] = useState('')
   const [bracketView, setBracketView] = useState<'tree' | 'compact'>('tree')
-  const [mobilePlayoffView, setMobilePlayoffView] = useState<'round' | 'bracket'>('round')
-  const [mobilePlayoffFullscreen, setMobilePlayoffFullscreen] = useState(false)
-  const [mobilePlayoffHintVisible, setMobilePlayoffHintVisible] = useState(true)
-  const [selectedMobilePlayoffMatch, setSelectedMobilePlayoffMatch] = useState<TournamentMatch | null>(null)
   const [manualModalOpen, setManualModalOpen] = useState(false)
   const [courtConfigModalOpen, setCourtConfigModalOpen] = useState(false)
   const [savingCourtConfig, setSavingCourtConfig] = useState(false)
@@ -1827,10 +1824,6 @@ export default function ClubTournamentDetailPage() {
     if (!activePlayoffTeamId) return base
     return `${base} ${isActive ? 'club-playoffPathActive' : 'club-playoffPathDimmed'}`
   }
-  const selectedPlayoffRoundData = useMemo(
-    () => playoffRounds.find((round) => round.phase === selectedPlayoffRound) ?? playoffRounds[0] ?? null,
-    [playoffRounds, selectedPlayoffRound]
-  )
   const groupStandings = useMemo(() => {
     if (!tournamentId || sortedGroups.length === 0) return []
 
@@ -3733,72 +3726,6 @@ export default function ClubTournamentDetailPage() {
     await refreshTournamentExperience()
   }
 
-  function renderMobilePlayoffMatch(match: TournamentMatch, roundLabel: string) {
-    const played = String(match.status ?? '').toUpperCase() === 'PLAYED'
-    const team1Winner = played && match.winner_team_id === match.team1_id
-    const team2Winner = played && match.winner_team_id === match.team2_id
-    const team1Name = match.team1_name ?? teamNameLookup.get(match.team1_id) ?? 'Equipo 1'
-    const team2Name = match.team2_name ?? teamNameLookup.get(match.team2_id) ?? 'Equipo 2'
-    const scoreSets = extractStructuredScoreSets(match.score)
-    const scores = scoreSets.length > 0 ? scoreSets : [{ team1: '—', team2: '—' }, { team1: '—', team2: '—' }]
-
-    const renderTeam = (team: 1 | 2, name: string, winner: boolean) => (
-      <button
-        type="button"
-        className={`club-mobilePlayoffTeam ${winner ? 'club-mobilePlayoffTeam--winner' : played ? 'club-mobilePlayoffTeam--loser' : ''}`}
-        onClick={(event) => {
-          event.stopPropagation()
-          setActivePlayoffTeamId(team === 1 ? match.team1_id : match.team2_id)
-        }}
-      >
-        <span className="club-mobilePlayoffSeed">{teamSeedLookup.get(team === 1 ? match.team1_id : match.team2_id) ?? '—'}</span>
-        <strong title={name}>{name}</strong>
-        <span className="club-mobilePlayoffScore" aria-label={played ? 'Resultado' : 'Sin resultado'}>
-          {scores.map((set, index) => {
-            const value = team === 1 ? set.team1 : set.team2
-            const opposite = team === 1 ? set.team2 : set.team1
-            const setWon = typeof value === 'number' && typeof opposite === 'number' && value > opposite
-            return <span className={setWon ? 'club-mobilePlayoffScore--won' : ''} key={`${match.id}-${team}-${index}`}>{value}</span>
-          })}
-        </span>
-      </button>
-    )
-
-    return (
-      <article className={`club-mobilePlayoffMatch ${isPlayoffMatchInActivePath(match) ? 'club-mobilePlayoffMatch--path' : ''}`} onClick={() => setSelectedMobilePlayoffMatch(match)}>
-        <header>
-          <div>
-            <b>{roundLabel} · M{match.match_order || match.round}</b>
-            <span>{getMatchScheduleLabel(match)}</span>
-          </div>
-          <span className={`club-statusBadge club-statusBadge--${played ? 'played' : 'pending'}`}>{matchStatusLabel(match.status)}</span>
-        </header>
-        <div className="club-mobilePlayoffScoreLabels" aria-hidden="true"><span>S1</span><span>S2</span></div>
-        {renderTeam(1, team1Name, team1Winner)}
-        {renderTeam(2, team2Name, team2Winner)}
-        <footer>
-          <span>{played ? 'Tocá para ver el resultado' : 'Tocá para gestionar el partido'}</span>
-          <button type="button" className="club-groupResultBtn club-groupResultBtn--mini" onClick={(event) => { event.stopPropagation(); openResultForm(match) }}>
-            {played ? 'Editar' : 'Cargar'}
-          </button>
-        </footer>
-      </article>
-    )
-  }
-
-  function renderMobilePlayoffSlot(slot: PlayoffVisualSlot, roundLabel: string) {
-    if (slot.kind === 'match' && slot.match) return renderMobilePlayoffMatch(slot.match, roundLabel)
-    if (slot.kind === 'bye') return (
-      <div className="club-mobilePlayoffBye" key={`mobile-${slot.id}`}>
-        <b>Pasa directo</b><span>{slot.byeTeam?.teamName ?? 'Pareja por definir'}</span>
-      </div>
-    )
-    return (
-      <div className="club-mobilePlayoffFuture" key={`mobile-${slot.id}`}>
-        <b>{slot.label}</b><span>{slot.placeholderTeams?.[0]?.teamName ?? 'Ganador por definir'}</span><span>{slot.placeholderTeams?.[1]?.teamName ?? 'Ganador por definir'}</span>
-      </div>
-    )
-  }
 
   function requestGenerateGroups() {
     requestConfirmation({
@@ -4160,16 +4087,6 @@ export default function ClubTournamentDetailPage() {
     queueMicrotask(() => setConfirmKeywordInput(''))
   }, [confirmAction])
 
-  useEffect(() => {
-    if (playoffRounds.length === 0) {
-      queueMicrotask(() => setSelectedPlayoffRound(''))
-      return
-    }
-
-    if (!playoffRounds.some((round) => round.phase === selectedPlayoffRound)) {
-      queueMicrotask(() => setSelectedPlayoffRound(playoffRounds[0].phase))
-    }
-  }, [playoffRounds, selectedPlayoffRound])
 
   useEffect(() => {
     if (cancelTournamentModal) return
@@ -4181,7 +4098,7 @@ export default function ClubTournamentDetailPage() {
 
   return (
     <div className="px-wrap">
-      <div className="club-panel club-tournamentDetail" style={themeStyle}>
+      <div className={`club-panel club-tournamentDetail ${activeTab === 'playoff' ? 'club-detail--playoff' : ''}`} style={themeStyle}>
         {actionFeedback ? <ActionFeedbackNotice {...actionFeedback} onDismiss={() => setActionFeedback(null)} autoDismissMs={actionFeedback.tone === 'success' ? 4000 : undefined} /> : null}
         <div className="club-detailTopbar">
           <Link href={circuitBackTarget} className="club-backBtn"><span className="club-backDesktop">{circuitBackLabel ? `Volver a ${circuitBackLabel}` : 'Volver a torneos'}</span><span className="club-backMobile"><ChevronLeft aria-hidden="true" size={18} />{circuitBackLabel ?? 'Volver'}</span></Link>
@@ -5000,7 +4917,7 @@ export default function ClubTournamentDetailPage() {
 
                 {activeTab === 'playoff' ? (
                   <div className="club-tabContent">
-                    {renderOperationalNotices('playoff')}
+                    <div className="club-playoffNotices">{renderOperationalNotices('playoff')}</div>
                     {playoffMatchesTotal === 0 ? (
                       <section className="club-placeholderPanel">
                         <span className="club-kicker">Playoff</span>
@@ -5021,6 +4938,20 @@ export default function ClubTournamentDetailPage() {
                       </section>
                     ) : (
                       <>
+                        {playoffRounds.length > 0 && <MobilePlayoff
+                          rounds={playoffRounds}
+                          currentPhase={currentPlayoffRound?.phase}
+                          champion={summary.champion?.name}
+                          nextMatch={nextPlayoffMatch}
+                          teamNames={teamNameLookup}
+                          teamSeeds={teamSeedLookup}
+                          canEditResults={isPlatformAdmin || hasClubCapability(clubRole, 'matches:update')}
+                          canSchedule={isPlatformAdmin || hasClubCapability(clubRole, 'matches:schedule')}
+                          onResult={openResultForm}
+                          onSchedule={openScheduleSwapModal}
+                          scheduleDisabledReason={getScheduleSwapOpenDisabledReason}
+                        />}
+                        <div className="club-playoffDesktop">
                         <section className="club-registrationsPanel">
                           <div className="club-sectionHead">
                             <div>
@@ -5260,47 +5191,6 @@ export default function ClubTournamentDetailPage() {
                                 </div>
                               )}
 
-                              <div className="club-playoffMobileBracket">
-                                <div className="club-mobilePlayoffSegmented" role="tablist" aria-label="Vista de playoff">
-                                  <button type="button" role="tab" aria-selected={mobilePlayoffView === 'round'} className={mobilePlayoffView === 'round' ? 'is-active' : ''} onClick={() => setMobilePlayoffView('round')}>Ronda</button>
-                                  <button type="button" role="tab" aria-selected={mobilePlayoffView === 'bracket'} className={mobilePlayoffView === 'bracket' ? 'is-active' : ''} onClick={() => setMobilePlayoffView('bracket')}>Cuadro</button>
-                                </div>
-                                <div className="club-playoffRoundTabs">
-                                  {playoffRounds.map((round) => (
-                                    <button
-                                      key={round.phase}
-                                      type="button"
-                                      className={`club-playoffRoundTab ${selectedPlayoffRoundData?.phase === round.phase ? 'club-playoffRoundTab--active' : ''}`}
-                                      onClick={() => setSelectedPlayoffRound(round.phase)}
-                                    >
-                                      {round.label}
-                                    </button>
-                                  ))}
-                                </div>
-
-                                {mobilePlayoffView === 'round' && selectedPlayoffRoundData ? (
-                                  <div className="club-mobilePlayoffRound">
-                                    {selectedPlayoffRoundData.slots.map((slot) => renderMobilePlayoffSlot(slot, selectedPlayoffRoundData.label))}
-                                  </div>
-                                ) : null}
-
-                                {mobilePlayoffView === 'bracket' ? (
-                                  <>
-                                    <div className="club-mobilePlayoffBracketHead">
-                                      <span>Deslizá para recorrer las llaves</span>
-                                      <button type="button" onClick={() => setMobilePlayoffFullscreen(true)}><Maximize2 size={14} /> Cuadro completo</button>
-                                    </div>
-                                    <div className="club-mobilePlayoffCanvas" onPointerDown={() => setMobilePlayoffHintVisible(false)}>
-                                      {playoffRounds.map((round) => (
-                                        <section className="club-mobilePlayoffCanvasRound" key={`mobile-tree-${round.phase}`}>
-                                          <b>{round.label}</b>
-                                          <div>{round.slots.map((slot) => renderMobilePlayoffSlot(slot, round.label))}</div>
-                                        </section>
-                                      ))}
-                                    </div>
-                                  </>
-                                ) : null}
-                              </div>
                             </>
                           ) : (
                             <div className="club-inlineNote">
@@ -5309,33 +5199,6 @@ export default function ClubTournamentDetailPage() {
                           )}
                         </section>
 
-                        {selectedMobilePlayoffMatch ? (
-                          <div className="club-mobilePlayoffSheetBackdrop" role="presentation" onClick={() => setSelectedMobilePlayoffMatch(null)}>
-                            <section className="club-mobilePlayoffSheet" role="dialog" aria-modal="true" aria-label="Detalle del partido" onClick={(event) => event.stopPropagation()}>
-                              <div className="club-mobilePlayoffSheetHandle" />
-                              <header><div><span>{formatPlayoffPhaseLabel(selectedMobilePlayoffMatch.phase)} · M{selectedMobilePlayoffMatch.match_order || selectedMobilePlayoffMatch.round}</span><h3>{matchStatusLabel(selectedMobilePlayoffMatch.status)}</h3></div><button type="button" aria-label="Cerrar detalle" onClick={() => setSelectedMobilePlayoffMatch(null)}><X size={20} /></button></header>
-                              <p>{getMatchScheduleLabel(selectedMobilePlayoffMatch)}</p>
-                              <div className="club-mobilePlayoffSheetTeams">
-                                <strong>({teamSeedLookup.get(selectedMobilePlayoffMatch.team1_id) ?? '—'}) {selectedMobilePlayoffMatch.team1_name ?? teamNameLookup.get(selectedMobilePlayoffMatch.team1_id) ?? 'Equipo 1'}</strong>
-                                <strong>({teamSeedLookup.get(selectedMobilePlayoffMatch.team2_id) ?? '—'}) {selectedMobilePlayoffMatch.team2_name ?? teamNameLookup.get(selectedMobilePlayoffMatch.team2_id) ?? 'Equipo 2'}</strong>
-                              </div>
-                              <div className="club-mobilePlayoffSheetActions">
-                                <button type="button" className="club-groupResultBtn" onClick={() => { const current = selectedMobilePlayoffMatch; setSelectedMobilePlayoffMatch(null); openResultForm(current) }}>{String(selectedMobilePlayoffMatch.status ?? '').toUpperCase() === 'PLAYED' ? 'Editar resultado' : 'Cargar resultado'}</button>
-                                <button type="button" className="club-secondaryBtn club-secondaryBtn--compact" disabled={Boolean(getScheduleSwapOpenDisabledReason(selectedMobilePlayoffMatch))} onClick={() => { const current = selectedMobilePlayoffMatch; setSelectedMobilePlayoffMatch(null); openScheduleSwapModal(current) }}>Cambiar horario/cancha</button>
-                              </div>
-                            </section>
-                          </div>
-                        ) : null}
-
-                        {mobilePlayoffFullscreen ? (
-                          <div className="club-mobilePlayoffFullscreen" role="dialog" aria-modal="true" aria-label="Cuadro completo">
-                            <header><b>Cuadro completo</b><div><button type="button" onClick={() => setActivePlayoffTeamId(null)} aria-label="Restablecer recorrido"><RotateCcw size={17} /></button><button type="button" onClick={() => setMobilePlayoffFullscreen(false)} aria-label="Cerrar cuadro"><X size={20} /></button></div></header>
-                            {mobilePlayoffHintVisible ? <p className="club-mobilePlayoffHint">☝ Deslizá para recorrer las llaves</p> : null}
-                            <div className="club-mobilePlayoffCanvas club-mobilePlayoffCanvas--fullscreen" onPointerDown={() => setMobilePlayoffHintVisible(false)}>
-                              {playoffRounds.map((round) => <section className="club-mobilePlayoffCanvasRound" key={`fullscreen-${round.phase}`}><b>{round.label}</b><div>{round.slots.map((slot) => renderMobilePlayoffSlot(slot, round.label))}</div></section>)}
-                            </div>
-                          </div>
-                        ) : null}
 
                         {pendingPlayoffMatches.length > 0 ? (
                           <section className="club-playoffUpcomingSection" id="playoff-upcoming">
@@ -5383,6 +5246,7 @@ export default function ClubTournamentDetailPage() {
                             </div>
                           </section>
                         ) : null}
+                        </div>
                       </>
                     )}
                   </div>
@@ -5996,6 +5860,17 @@ export default function ClubTournamentDetailPage() {
       ) : null}
 
       <style>{`
+        .club-playoffDesktop { display: contents; }
+        @media (max-width: 900px) {
+          .club-playoffDesktop { display: none !important; }
+          .club-tournamentDetail.club-detail--playoff { overflow: visible; padding-top: 8px; }
+          .club-detail--playoff .club-detailTopbar { position: static; box-shadow: none; }
+          .club-detail--playoff .club-detailHero { padding-block: 8px; }
+          .club-detail--playoff .club-tabPanel { padding-inline: 0; }
+          .club-detail--playoff .club-tabPanel .club-tabContent { gap: 8px; }
+          .club-playoffNotices .club-operationalNotice--info { display: none; }
+          .club-playoffNotices:not(:has(.club-operationalNotice--warning, .club-operationalNotice--error)) { display: none; }
+        }
         .club-tournamentDetail {
           background: #fff;
           border: 1px solid rgba(15,23,42,.08);
@@ -6510,23 +6385,6 @@ export default function ClubTournamentDetailPage() {
         .club-playoffLegendDot--winner { background: #22c55e; }
         .club-playoffLegendDot--pending { background: #94a3b8; }
         .club-playoffLegendDot--walkover { background: #facc15; }
-        .club-mobilePlayoffSegmented, .club-mobilePlayoffBracketHead, .club-mobilePlayoffMatch header, .club-mobilePlayoffMatch footer, .club-mobilePlayoffSheet header, .club-mobilePlayoffFullscreen > header { align-items: center; display: flex; justify-content: space-between; }
-        .club-mobilePlayoffSegmented { background: #eef2f7; border-radius: 12px; gap: 3px; margin-bottom: 10px; padding: 3px; }
-        .club-mobilePlayoffSegmented button { background: transparent; border: 0; border-radius: 9px; color: #63738c; flex: 1; font-size: 12px; font-weight: 900; min-height: 36px; }
-        .club-mobilePlayoffSegmented button.is-active { background: #fff; box-shadow: 0 2px 8px rgba(15,23,42,.12); color: #061b3a; }
-        .club-mobilePlayoffRound { display: grid; gap: 8px; }
-        .club-mobilePlayoffMatch { background: linear-gradient(135deg,#fff,#f8fbfd); border: 1px solid rgba(15,23,42,.14); border-radius: 14px; box-shadow: 0 6px 15px rgba(15,23,42,.05); cursor: pointer; display: grid; gap: 4px; padding: 9px; }
-        .club-mobilePlayoffMatch--path { border-color: rgba(6,182,212,.72); box-shadow: 0 7px 18px rgba(6,182,212,.14); }
-        .club-mobilePlayoffMatch header > div { display: grid; gap: 2px; min-width: 0; }.club-mobilePlayoffMatch header b { color:#071d3d; font-size:11px; }.club-mobilePlayoffMatch header span { color:#64748b; font-size:10px; font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .club-mobilePlayoffScoreLabels { color:#7b8ba3; display:grid; font-size:9px; font-weight:900; gap:5px; grid-template-columns:22px 22px; justify-content:end; margin-right:3px; }.club-mobilePlayoffScoreLabels span { text-align:center; }
-        .club-mobilePlayoffTeam { align-items:center; background:transparent; border:0; border-top:1px solid rgba(15,23,42,.07); display:grid; gap:6px; grid-template-columns:22px minmax(0,1fr) 49px; min-height:32px; padding:5px 0; text-align:left; width:100%; }.club-mobilePlayoffTeam strong { color:#10213e; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.club-mobilePlayoffTeam--winner strong { color:#166534; font-weight:950; }.club-mobilePlayoffTeam--loser { opacity:.68; }
-        .club-mobilePlayoffSeed { color:#718096; font-size:10px; font-weight:900; }.club-mobilePlayoffScore { display:grid; gap:5px; grid-template-columns:22px 22px; }.club-mobilePlayoffScore span { color:#51647d; font-size:11px; font-weight:850; text-align:center; }.club-mobilePlayoffScore--won { background:#e7f8eb; border-radius:5px; color:#16703a !important; }
-        .club-mobilePlayoffMatch footer { color:#718096; font-size:10px; font-weight:700; gap:8px; }.club-mobilePlayoffMatch footer .club-groupResultBtn { min-height:32px; padding:5px 10px; }
-        .club-mobilePlayoffBye, .club-mobilePlayoffFuture { background:#f8fbfc; border:1px dashed rgba(15,23,42,.14); border-radius:12px; color:#60718a; display:grid; font-size:11px; gap:3px; padding:10px; }.club-mobilePlayoffBye b { color:#16703a; }.club-mobilePlayoffFuture b { color:#0f294f; }
-        .club-mobilePlayoffBracketHead { color:#667892; font-size:10px; font-weight:800; margin:2px 0 7px; }.club-mobilePlayoffBracketHead button { align-items:center; background:#fff; border:1px solid rgba(6,182,212,.35); border-radius:9px; color:#087897; display:inline-flex; font-size:10px; font-weight:900; gap:4px; min-height:32px; padding:4px 8px; }
-        .club-mobilePlayoffCanvas { display:flex; gap:14px; margin-inline:-14px; overflow-x:auto; overscroll-behavior-x:contain; padding:4px 14px 10px; scroll-snap-type:x proximity; touch-action:pan-x pan-y; }.club-mobilePlayoffCanvasRound { display:grid; flex:0 0 calc(100vw - 78px); gap:7px; scroll-snap-align:start; }.club-mobilePlayoffCanvasRound > b { color:#0b3155; font-size:12px; }.club-mobilePlayoffCanvasRound > div { display:grid; gap:8px; position:relative; }.club-mobilePlayoffCanvasRound + .club-mobilePlayoffCanvasRound > div::before { background:rgba(6,182,212,.38); content:''; height:2px; left:-14px; position:absolute; top:50%; width:12px; }
-        .club-mobilePlayoffSheetBackdrop { align-items:end; background:rgba(4,15,33,.42); display:flex; inset:0; justify-content:center; padding:14px; position:fixed; z-index:130; }.club-mobilePlayoffSheet { background:#fff; border-radius:20px 20px 14px 14px; box-shadow:0 -12px 38px rgba(0,0,0,.18); display:grid; gap:12px; max-width:560px; padding:10px 14px calc(16px + env(safe-area-inset-bottom)); width:100%; }.club-mobilePlayoffSheetHandle { background:#cbd5e1; border-radius:999px; height:4px; justify-self:center; width:38px; }.club-mobilePlayoffSheet header span,.club-mobilePlayoffSheet p { color:#667892; font-size:12px; font-weight:700; margin:0; }.club-mobilePlayoffSheet h3 { color:#0a2548; font-size:18px; margin:2px 0 0; }.club-mobilePlayoffSheet header button,.club-mobilePlayoffFullscreen header button { align-items:center; background:#f1f5f9; border:0; border-radius:10px; display:inline-flex; height:36px; justify-content:center; width:36px; }.club-mobilePlayoffSheetTeams { display:grid; gap:7px; }.club-mobilePlayoffSheetTeams strong { background:#f8fafc; border-radius:9px; color:#10213e; font-size:13px; padding:9px; }.club-mobilePlayoffSheetActions { display:grid; gap:8px; grid-template-columns:1fr 1fr; }.club-mobilePlayoffSheetActions button { justify-content:center; min-height:42px; }
-        .club-mobilePlayoffFullscreen { background:#f5f8fb; display:grid; grid-template-rows:auto auto minmax(0,1fr); inset:0; padding:calc(10px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)); position:fixed; z-index:140; }.club-mobilePlayoffFullscreen > header { border-bottom:1px solid rgba(15,23,42,.08); padding-bottom:10px; }.club-mobilePlayoffFullscreen > header b { color:#08254b; font-size:16px; }.club-mobilePlayoffFullscreen > header div { display:flex; gap:7px; }.club-mobilePlayoffHint { color:#667892; font-size:11px; font-weight:800; margin:10px 0 4px; text-align:center; }.club-mobilePlayoffCanvas--fullscreen { margin:0 -12px; max-height:none; padding:10px 12px; }
         .club-playoffBracketViewport { display: block; min-width: 0; overflow: visible; position: relative; }
         .club-playoffBracketViewport--simple { overflow: hidden; }
         .club-playoffBracketScroll { cursor: grab; max-height: min(72vh, 760px); min-height: 260px; min-width: 0; overflow: auto; overscroll-behavior: contain; padding-bottom: 6px; scroll-behavior: smooth; scroll-snap-type: x proximity; scrollbar-color: var(--club-admin-accent) rgba(226,232,240,.78); scrollbar-width: thin; touch-action: none; }
