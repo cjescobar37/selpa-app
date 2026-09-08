@@ -526,3 +526,39 @@
   border-color: var(--club-accent, #568500);
   background: var(--club-accent, #568500);
 }
+
+@media (min-width:351px) and (max-width:767px) {
+  .controlHero {
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:3px 10px;
+    padding:10px 11px;
+    border-radius:15px;
+  }
+  .controlHero > .badge { right:10px; top:10px; }
+  .controlBack { grid-column:1; min-height:32px; }
+  .controlHero > small { grid-column:1 / -1; margin-top:3px; }
+  .controlHero h1 { grid-column:1 / -1; max-width:calc(100% - 72px); font-size:22px; }
+  .controlHero p,.controlHero em { grid-column:1; min-width:0; }
+  .controlPrimary {
+    align-self:end;
+    grid-column:2;
+    grid-row:4 / span 3;
+    max-width:170px;
+    min-height:40px;
+    margin-top:0;
+    padding:0 12px;
+    line-height:1.15;
+    text-align:center;
+    white-space:normal;
+  }
+  .controlStrip { margin:7px 0; }
+  .controlStrip div { min-height:46px; padding:6px 4px; }
+  .controlTabs { padding:3px; }
+  .controlTabs button { min-height:36px; }
+  .nextStep,.controlPanel,.controlEmpty { margin-top:7px; padding:10px 11px; }
+  .nextStep h2,.controlPanel .sectionHead h2 { font-size:16px; }
+  .nextStep p { line-height:1.32; }
+  .nextStep a,.nextStep button,.secondaryLink { margin-top:6px; }
+  .controlFacts { margin-top:7px; }
+  .controlFacts div { padding:8px 9px; }
+}
