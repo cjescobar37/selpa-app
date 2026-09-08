@@ -23,25 +23,59 @@ type Props = {
   scheduleDisabledReason: (match: MobilePlayoffMatch) => string
 }
 let openOverlayCount = 0
-let bodyOverflowBeforeOverlays = ''
+let pageLockBeforeOverlays: {
+  bodyOverflow: string
+  bodyPosition: string
+  bodyTop: string
+  bodyWidth: string
+  htmlScrollBehavior: string
+  scrollY: number
+} | null = null
 
 /** Portals escape the tournament stacking context and the sticky navbar.
  * Native dialog supplies focus trapping, Escape and background inertness. */
-function Overlay({ children, title, fullscreen = false, onClose }: { children: ReactNode; title: string; fullscreen?: boolean; onClose: () => void }) {
+function Overlay({ children, title, fullscreen = false, initialScrollY, onClose }: { children: ReactNode; title: string; fullscreen?: boolean; initialScrollY?: number; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
   const startY = useRef<number | null>(null)
   useEffect(() => {
     const dialog = ref.current
-    dialog?.showModal()
-    if (openOverlayCount === 0) bodyOverflowBeforeOverlays = document.body.style.overflow
+    if (openOverlayCount === 0) {
+      const { body, documentElement } = document
+      pageLockBeforeOverlays = {
+        bodyOverflow: body.style.overflow,
+        bodyPosition: body.style.position,
+        bodyTop: body.style.top,
+        bodyWidth: body.style.width,
+        htmlScrollBehavior: documentElement.style.scrollBehavior,
+        scrollY: initialScrollY ?? window.scrollY,
+      }
+      documentElement.style.scrollBehavior = 'auto'
+      body.style.overflow = 'hidden'
+      body.style.position = 'fixed'
+      body.style.top = `-${pageLockBeforeOverlays.scrollY}px`
+      body.style.width = '100%'
+    }
     openOverlayCount += 1
-    document.body.style.overflow = 'hidden'
+    dialog?.showModal()
     return () => {
       dialog?.close()
       openOverlayCount -= 1
-      if (openOverlayCount === 0) document.body.style.overflow = bodyOverflowBeforeOverlays
+      if (openOverlayCount === 0 && pageLockBeforeOverlays) {
+        const previous = pageLockBeforeOverlays
+        const { body, documentElement } = document
+        body.style.overflow = previous.bodyOverflow
+        body.style.position = previous.bodyPosition
+        body.style.top = previous.bodyTop
+        body.style.width = previous.bodyWidth
+        pageLockBeforeOverlays = null
+        const restoreScroll = () => window.scrollTo(0, previous.scrollY)
+        restoreScroll()
+        requestAnimationFrame(() => requestAnimationFrame(restoreScroll))
+        window.setTimeout(restoreScroll, 80)
+        window.setTimeout(() => { documentElement.style.scrollBehavior = previous.htmlScrollBehavior }, 120)
+      }
     }
-  }, [])
+  }, [initialScrollY])
   return createPortal(
     <dialog ref={ref} className={fullscreen ? styles.fullscreen : styles.sheet} aria-label={title}
       onCancel={(event) => { event.preventDefault(); onClose() }}
@@ -63,6 +97,7 @@ export default function MobilePlayoff(props: Props) {
   const [view, setView] = useState<'round' | 'bracket'>('round')
   const [phase, setPhase] = useState(props.currentPhase ?? rounds[0]?.phase)
   const [fullscreen, setFullscreen] = useState(false)
+  const [fullscreenOriginY, setFullscreenOriginY] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [followTeam, setFollowTeam] = useState<string | null>(null)
   const [hint, setHint] = useState(true)
@@ -78,6 +113,10 @@ export default function MobilePlayoff(props: Props) {
   const journey = useMemo(() => bracketPath(rounds, followTeam), [rounds, followTeam])
   const path = journey.ids
 
+  useEffect(() => {
+    const requestedPhase = props.currentPhase
+    if (requestedPhase && rounds.some((round) => round.phase === requestedPhase)) queueMicrotask(() => setPhase(requestedPhase))
+  }, [props.currentPhase, rounds])
   useEffect(() => {
     const navbar = document.querySelector<HTMLElement>('.px-nav')
     const measure = () => root.current?.style.setProperty('--playoff-nav-offset', `${navbar?.offsetHeight ?? 0}px`)
@@ -100,6 +139,7 @@ export default function MobilePlayoff(props: Props) {
 
   const dismissHint = () => { setHint(false); try { sessionStorage.setItem('selpa-playoff-swipe-seen', '1') } catch { /* private browsing */ } }
   const showBracket = () => { try { if (sessionStorage.getItem('selpa-playoff-swipe-seen')) setHint(false) } catch { /* private browsing */ } setView('bracket') }
+  const showFullscreenBracket = () => { setFullscreenOriginY(window.scrollY); setFullscreen(true) }
   const selectRound = (index: number) => {
     setPhase(rounds[index].phase)
     if (view === 'bracket' || fullscreen) { dismissHint(); bracketApi.current?.go(index) }
@@ -162,9 +202,9 @@ export default function MobilePlayoff(props: Props) {
 
   return <div className={styles.host} ref={root} data-playoff-mobile>
     <section className={styles.summary} aria-label="Resumen del playoff">
-      <div><strong>{props.champion ? 'Finalizado' : info(rounds.find((round) => round.phase === props.currentPhase) ?? rounds[0]).label}</strong></div>
+      <div className={styles.currentRound}><span>Ronda actual</span><strong>{props.champion ? 'Finalizado' : info(rounds.find((round) => round.phase === props.currentPhase) ?? rounds[0]).label}</strong></div>
       <span className={styles.progress}><b>{matches.filter((match) => match.status === 'PLAYED').length}/{matches.length}</b> jugados</span>
-      {props.exportAction}
+      <div className={styles.exportAction}>{props.exportAction}</div>
       <div className={styles.champion}><span>Campeón</span><b>{props.champion || 'Por definirse'}</b></div>
       {props.nextMatch && nextSlot ? <button className={styles.next} type="button" onClick={() => { setPhase(rounds[nextSlot.roundIndex].phase); setSelectedId(nextSlot.id) }}><span>Próximo · {nextSlot.code}</span><b>{nextWhen.date} · {nextWhen.time} · {nextWhen.court}</b></button> : <span className={styles.next}>No hay partidos pendientes.</span>}
     </section>
@@ -178,12 +218,12 @@ export default function MobilePlayoff(props: Props) {
     <div id={panelId} className={styles.content}>
       {view === 'round' ? <div className={styles.roundList} aria-label={info(rounds[activeIndex]).label}>{displayRounds[activeIndex].slots.map((slot) => <div key={slot.id}>{card(slot)}</div>)}</div>
         : <>
-          <div className={styles.bracketTools}><span>{hint ? '☝ Deslizá para recorrer las llaves' : info(rounds[activeIndex]).label}</span><button type="button" onClick={() => setFullscreen(true)}><Maximize2 size={15} /> Cuadro completo</button></div>
+          <div className={styles.bracketTools}><span>{hint ? '☝ Deslizá para recorrer las llaves' : info(rounds[activeIndex]).label}</span><button type="button" onClick={showFullscreenBracket}><Maximize2 size={15} /> Cuadro completo</button></div>
           {tracking}
           {!fullscreen && renderBracket(false)}
         </>}
     </div>
-    {fullscreen && <Overlay title="Cuadro completo" fullscreen onClose={() => setFullscreen(false)}>
+    {fullscreen && <Overlay title="Cuadro completo" fullscreen initialScrollY={fullscreenOriginY} onClose={() => setFullscreen(false)}>
       {roundNav(true)}{tracking}{renderBracket(true)}
     </Overlay>}
     {selected && <Overlay title={`${info(rounds[selected.roundIndex]).label} · ${selected.code}`} onClose={() => setSelectedId(null)}>

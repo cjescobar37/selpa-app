@@ -41,30 +41,61 @@ export function useBracketViewport(width: number, height: number, autoFit: boole
   }, [zoom, width, height, fitVersion])
   useEffect(() => {
     const el = viewport.current
-    if (!el) return
+    if (!el || !autoFit) return
     let pinch: { distance: number; zoom: number; x: number; y: number } | null = null
+    let pan: { x: number; y: number; left: number; top: number } | null = null
     const points = (event: TouchEvent) => {
       const [a, b] = Array.from(event.touches), box = el.getBoundingClientRect()
       return { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), x: (a.clientX + b.clientX) / 2 - box.left, y: (a.clientY + b.clientY) / 2 - box.top }
     }
     const start = (event: TouchEvent) => {
-      if (event.touches.length !== 2) return
       event.preventDefault()
-      const p = points(event)
-      pinch = { distance: p.distance, zoom: zoomRef.current, x: (el.scrollLeft + p.x) / zoomRef.current, y: (el.scrollTop + p.y) / zoomRef.current }
+      if (event.touches.length === 2) {
+        const p = points(event)
+        pan = null
+        pinch = { distance: p.distance, zoom: zoomRef.current, x: (el.scrollLeft + p.x) / zoomRef.current, y: (el.scrollTop + p.y) / zoomRef.current }
+        return
+      }
+      if (event.touches.length === 1) {
+        const touch = event.touches[0]
+        pinch = null
+        pan = { x: touch.clientX, y: touch.clientY, left: el.scrollLeft, top: el.scrollTop }
+      }
     }
     const move = (event: TouchEvent) => {
-      if (!pinch || event.touches.length !== 2) return
       event.preventDefault()
-      const p = points(event)
-      zoomAt(pinch.zoom * p.distance / Math.max(1, pinch.distance), p, pinch)
+      if (pinch && event.touches.length === 2) {
+        const p = points(event)
+        zoomAt(pinch.zoom * p.distance / Math.max(1, pinch.distance), p, pinch)
+        return
+      }
+      if (pan && event.touches.length === 1) {
+        const touch = event.touches[0]
+        el.scrollLeft = pan.left - (touch.clientX - pan.x)
+        el.scrollTop = pan.top - (touch.clientY - pan.y)
+      }
     }
-    const end = () => { pinch = null }
+    const end = (event: TouchEvent) => {
+      pinch = null
+      pan = event.touches.length === 1
+        ? { x: event.touches[0].clientX, y: event.touches[0].clientY, left: el.scrollLeft, top: el.scrollTop }
+        : null
+    }
+    const preventSafariGesture = (event: Event) => event.preventDefault()
     el.addEventListener('touchstart', start, { passive: false })
     el.addEventListener('touchmove', move, { passive: false })
     el.addEventListener('touchend', end)
     el.addEventListener('touchcancel', end)
-    return () => { el.removeEventListener('touchstart', start); el.removeEventListener('touchmove', move); el.removeEventListener('touchend', end); el.removeEventListener('touchcancel', end) }
-  }, [zoomAt])
+    el.addEventListener('gesturestart', preventSafariGesture)
+    el.addEventListener('gesturechange', preventSafariGesture)
+    return () => {
+      el.removeEventListener('touchstart', start)
+      el.removeEventListener('touchmove', move)
+      el.removeEventListener('touchend', end)
+      el.removeEventListener('touchcancel', end)
+      el.removeEventListener('gesturestart', preventSafariGesture)
+      el.removeEventListener('gesturechange', preventSafariGesture)
+    }
+  }, [autoFit, zoomAt])
   return { viewport, zoom, zoomAt, fit }
 }

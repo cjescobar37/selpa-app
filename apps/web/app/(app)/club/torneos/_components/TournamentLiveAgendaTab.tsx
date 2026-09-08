@@ -42,6 +42,7 @@ type Props = {
   hasGroups?: boolean
   onPublish?: () => void
   onOpenGroups?: () => void
+  variant?: 'overview' | 'full'
 }
 
 function formatTime(value?: string | null) {
@@ -98,11 +99,12 @@ function LiveMatchRow({ match, compactCourt }: { match: LiveAgendaMatch; compact
   )
 }
 
-export function TournamentLiveAgendaTab({ clubId, tournamentId, tournamentStatus, registrationsCount = 0, hasGroups = false, onPublish, onOpenGroups }: Props) {
+export function TournamentLiveAgendaTab({ clubId, tournamentId, tournamentStatus, registrationsCount = 0, hasGroups = false, onPublish, onOpenGroups, variant = 'full' }: Props) {
   const [agenda, setAgenda] = useState<LiveAgendaResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<'all' | 'pending' | 'live' | 'played'>('all')
+  const [expanded, setExpanded] = useState(variant === 'full')
 
   useEffect(() => {
     let cancelled = false
@@ -153,6 +155,16 @@ export function TournamentLiveAgendaTab({ clubId, tournamentId, tournamentStatus
   }, [clubId, tournamentId])
 
   const timeline = useMemo(() => agenda?.timeline ?? [], [agenda])
+  const operationalTimeline = useMemo(() => [...timeline]
+    .filter((match) => !match.isPlayed)
+    .sort((left, right) => {
+      const leftPriority = left.isProbablyInProgress ? 0 : left.isLate ? 1 : 2
+      const rightPriority = right.isProbablyInProgress ? 0 : right.isLate ? 1 : 2
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority
+      const leftTime = left.scheduled_at ? new Date(left.scheduled_at).getTime() : Number.MAX_SAFE_INTEGER
+      const rightTime = right.scheduled_at ? new Date(right.scheduled_at).getTime() : Number.MAX_SAFE_INTEGER
+      return leftTime - rightTime
+    }), [timeline])
   const filteredTimeline = useMemo(() => timeline.filter((match) => {
     if (filter === 'pending') return !match.isPlayed && !match.isProbablyInProgress
     if (filter === 'live') return match.isProbablyInProgress
@@ -183,7 +195,7 @@ export function TournamentLiveAgendaTab({ clubId, tournamentId, tournamentStatus
   }
 
   return (
-    <section className="live-agenda">
+    <section className={`live-agenda ${variant === 'overview' ? 'live-agenda--overview' : ''}`}>
       <div className="live-metrics" aria-label="Resumen de agenda">
         <div className="live-metric">
           <span>Pendientes</span>
@@ -206,16 +218,26 @@ export function TournamentLiveAgendaTab({ clubId, tournamentId, tournamentStatus
           {isDraft && onPublish ? <button type="button" onClick={onPublish}>Publicar torneo</button> : null}
           {!isDraft && registrationsCount > 0 && !hasGroups && onOpenGroups ? <button type="button" onClick={onOpenGroups}>Ir a Grupos</button> : null}
         </section>
+      ) : variant === 'overview' && !expanded ? (
+        <section className="live-agendaPreview">
+          <header className="live-sectionHead"><span>Próximos partidos</span><strong>{operationalTimeline.length} por jugar</strong></header>
+          {operationalTimeline.length > 0
+            ? <div className="live-matchList">{operationalTimeline.slice(0, 5).map((match) => <LiveMatchRow key={match.id} match={match} compactCourt />)}</div>
+            : <div className="live-empty"><strong>Agenda al día</strong><br />No quedan partidos pendientes.</div>}
+          <button type="button" className="live-expandButton" onClick={() => setExpanded(true)}>Ver agenda completa</button>
+        </section>
       ) : (
         <section className="live-agendaList">
+          {variant === 'overview' ? <button type="button" className="live-collapseButton" onClick={() => setExpanded(false)}>Ocultar agenda completa</button> : null}
           {conflicts.length > 0 ? <div className="live-conflicts"><strong>⚠ {conflicts.length} conflicto{conflicts.length === 1 ? '' : 's'} de programación</strong><span>{conflicts[0][0].replace('|', ' · ')}</span></div> : null}
           <header className="live-agendaHead"><div><span>Agenda</span><strong>{timeline.length} partido{timeline.length === 1 ? '' : 's'}</strong></div><div className="live-filters">{([['all', 'Todos'], ['pending', 'Pendientes'], ['live', 'En curso'], ['played', 'Finalizados']] as const).map(([value, label]) => <button key={value} type="button" className={filter === value ? 'is-active' : ''} onClick={() => setFilter(value)}>{label}</button>)}</div></header>
           {Object.entries(matchesByDay).map(([day, matches]) => <div key={day} className="live-day"><strong>{day === 'Sin fecha' ? day : new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'short' }).format(new Date(`${day}T12:00:00`))}</strong><div className="live-timeline">{matches.map((match) => <LiveMatchRow key={match.id} match={match} compactCourt />)}</div></div>)}
         </section>
       )}
 
-      <style jsx>{`
+      <style jsx global>{`
         .live-agenda { display: grid; gap: 12px; min-width: 0; }
+        .live-agenda--overview { background:#fff; border:1px solid rgba(15,23,42,.08); border-radius:14px; padding:10px; }
         .live-metrics { background:#fff; border:1px solid rgba(15,23,42,.08); border-radius:12px; display:grid; gap:0; grid-template-columns:repeat(3,minmax(0,1fr)); overflow:hidden; }
         .live-metric { border-right:1px solid rgba(15,23,42,.07); display:grid; gap:3px; min-width:0; padding:10px 11px; }
         .live-metric:last-child { border-right:0; }
@@ -227,6 +249,9 @@ export function TournamentLiveAgendaTab({ clubId, tournamentId, tournamentStatus
         .live-sectionHead span { color: #17253f; font-size: 15px; font-weight: 950; }
         .live-sectionHead strong { color: #64748b; font-size: 12px; font-weight: 900; white-space: nowrap; }
         .live-matchList, .live-timeline { display: grid; gap: 7px; min-width: 0; }
+        .live-agendaPreview { display:grid; gap:8px; min-width:0; }
+        .live-expandButton, .live-collapseButton { background:transparent; border:0; color:var(--club-admin-accent,#0e7490); cursor:pointer; font:inherit; font-size:12px; font-weight:950; min-height:40px; padding:6px 3px; text-align:left; }
+        .live-collapseButton { justify-self:end; min-height:34px; }
         .live-matchRow { align-items: center; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 10px; display: grid; gap: 8px; grid-template-columns: 76px minmax(0, 1fr) auto; min-width: 0; padding: 8px; }
         .live-matchMeta { display: grid; gap: 2px; min-width: 0; }
         .live-matchMeta strong { color: #0f8ea0; font-size: 13px; font-weight: 950; }
@@ -264,14 +289,25 @@ export function TournamentLiveAgendaTab({ clubId, tournamentId, tournamentStatus
           .live-agendaHead { align-items:flex-start; flex-direction:column; }
         }
         @media (max-width: 560px) {
+          .live-agenda--overview { border-radius:12px; padding:8px; }
           .live-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
-          .live-matchRow { align-items: start; grid-template-columns: 1fr; }
-          .live-matchTeams { grid-template-columns: 1fr; }
-          .live-matchTeams span { display: none; }
-          .live-status { justify-self: start; }
-          .live-matchRow { grid-template-columns:60px minmax(0,1fr) auto; }
-          .live-matchTeams { grid-template-columns:1fr; }
+          .live-metric { padding:9px 8px; }
+          .live-metric span { font-size:10px; }
+          .live-metric strong { font-size:22px; }
+          .live-agendaHead { gap:7px; }
+          .live-filters { flex-wrap:nowrap; justify-content:flex-start; max-width:100%; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+          .live-filters::-webkit-scrollbar { display:none; }
+          .live-filters button { flex:0 0 auto; min-height:34px; padding:5px 10px; }
+          .live-matchRow { align-items:center; gap:5px 8px; grid-template-areas:'meta status' 'teams teams'; grid-template-columns:minmax(0,1fr) auto; padding:8px 9px; }
+          .live-matchMeta { align-items:baseline; display:flex; flex-wrap:wrap; gap:2px 4px; grid-area:meta; }
+          .live-matchMeta strong { font-size:13px; }
+          .live-matchMeta span::before { content:'· '; }
+          .live-matchMeta small { flex-basis:100%; font-size:10.5px; }
+          .live-matchTeams { align-items:stretch; display:grid; gap:0; grid-area:teams; grid-template-columns:1fr; }
+          .live-matchTeams strong { display:-webkit-box; font-size:12.5px; line-height:1.25; overflow:hidden; text-overflow:clip; white-space:normal; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+          .live-matchTeams strong + span + strong { border-top:1px solid rgba(15,23,42,.07); margin-top:4px; padding-top:4px; }
           .live-matchTeams span { display:none; }
+          .live-status { align-self:start; font-size:10px; grid-area:status; padding:4px 7px; }
         }
       `}</style>
     </section>

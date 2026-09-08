@@ -1,25 +1,27 @@
 .host { display: none; min-width: 0; color: #152a46; font-size: 13px; }
 .host button, .fullscreen button, .sheet button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .host button:focus-visible, .fullscreen button:focus-visible, .sheet button:focus-visible, .canvas:focus-visible { outline: 2px solid #0896b4; outline-offset: 2px; }
-.summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; border: 1px solid #d8e4e9; border-radius: 12px; background: linear-gradient(110deg, #f1f9f7, #f6fafd); padding: 10px 12px; margin-bottom: 6px; }
-.summary > div:first-child { display: flex; align-items: baseline; gap: 8px; }
-.summary strong { font-size: 17px; font-weight: 700; }
+.summary { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px 8px; border: 1px solid #cee0e5; border-radius: 12px; background: linear-gradient(110deg, #eef9f7, #f6fafd); padding: 8px 10px; margin-bottom: 5px; }
+.currentRound { align-self: center; display: grid; gap: 1px; min-width: 0; }
+.currentRound span { color: #3d7876; font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.currentRound strong { color: #16334c; font-size: 18px; font-weight: 750; line-height: 1.05; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .eyebrow { font-size: 10px; text-transform: uppercase; color: #3d7876; letter-spacing: .04em; font-weight: 600; }
-.progress { align-self: center; color: #657587; font-size: 11px; white-space: nowrap; }
-.progress b { color: #193a50; font-weight: 650; }
-.champion { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: #627283; }
-.champion b { color: #243950; font-weight: 500; text-align: right; }
-.next { grid-column: 1 / -1; display: grid; gap: 2px; background: transparent; border: 0; border-top: 1px solid #dce6e9; text-align: left; padding: 6px 0 0; min-height: 42px; color: #526a7b; font-size: 11px !important; }
-.next b { font-weight: 600; color: #193a50; }
-.navigation { position: sticky; top: var(--playoff-nav-offset, 58px); z-index: 42; background: #fff; padding: 5px 0 0; border-bottom: 1px solid #e0e8ec; }
-.switch { background: #edf2f5; border-radius: 10px; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; }
-.switch button { min-height: 38px; background: transparent; border: 0; border-radius: 8px; color: #697d90; font-weight: 600; font-size: 12px; }
+.progress { align-self: center; background: #fff; border: 1px solid #dce8eb; border-radius: 999px; color: #657587; font-size: 10px; padding: 5px 7px; white-space: nowrap; }
+.progress b { color: #193a50; font-size: 11px; font-weight: 750; }
+.exportAction { align-self: center; min-width: 0; }
+.champion { border-top: 1px solid #dce6e9; grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 10px; padding-top: 5px; font-size: 11px; color: #627283; }
+.champion b { color: #1b354c; font-size: 12px; font-weight: 650; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.next { grid-column: 1 / -1; display: grid; gap: 1px; background: transparent; border: 0; border-top: 1px solid #dce6e9; text-align: left; padding: 5px 0 0; min-height: 38px; color: #526a7b; font-size: 10px !important; }
+.next b { font-size: 11px; font-weight: 650; color: #193a50; }
+.navigation { position: sticky; top: var(--playoff-nav-offset, 58px); z-index: 42; background: #fff; padding: 2px 0 0; border-bottom: 1px solid #e0e8ec; }
+.switch { background: #edf2f5; border-radius: 9px; display: grid; grid-template-columns: 1fr 1fr; padding: 0; }
+.switch button { min-height: 44px; background: transparent; border: 0; border-radius: 8px; color: #697d90; font-weight: 600; font-size: 12px; }
 .switch button[aria-pressed="true"] { background: #fff; color: #122c4b; box-shadow: 0 1px 5px #16304716; }
-.roundNav, .minimap { display: flex; align-items: center; width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: 2px; padding: 3px 0; }
+.roundNav, .minimap { display: flex; align-items: center; width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: 1px; padding: 0; }
 .roundNav::-webkit-scrollbar, .minimap::-webkit-scrollbar { display: none; }
-.roundNav button, .minimap button { border: 0; background: transparent; color: #637487; flex: 1 0 auto; min-width: 48px; min-height: 44px; font-size: 12px; font-weight: 500; position: relative; padding: 7px 10px; }
+.roundNav button, .minimap button { border: 0; background: transparent; color: #637487; flex: 1 0 auto; min-width: 48px; min-height: 44px; font-size: 12px; font-weight: 500; position: relative; padding: 4px 9px; }
 .roundNav button[aria-current], .minimap button[aria-current] { color: #056e80; font-weight: 700; }
-.roundNav button[aria-current]::after { content: ''; position: absolute; height: 3px; bottom: 2px; left: 12px; right: 12px; border-radius: 2px; background: #079cb0; }
+.roundNav button[aria-current]::after { content: ''; position: absolute; height: 3px; bottom: 1px; left: 12px; right: 12px; border-radius: 2px; background: #079cb0; }
 .minimap button { flex-basis: 0; }
 .minimap button[aria-current] { background: #e7f5f6; border-radius: 9px; }
 .minimap button + button::before { content: '→'; color: #a4b5c2; position: absolute; left: -4px; font-size: 11px; font-weight: 400; }
@@ -110,15 +112,13 @@
 .primary, .secondary { min-height: 44px; border-radius: 9px; font-size: 12px !important; padding: 8px 12px; flex: 1; border: 1px solid #c8dfe5; }
 .primary { background: #087e97; color: #fff; border-color: #087e97; }
 .secondary { background: #f6fafb; color: #296779; }
-.fullscreen { margin: 0; inset: 0; height: 100dvh; max-height: 100dvh; width: 100vw; max-width: 100vw; padding: env(safe-area-inset-top) 8px env(safe-area-inset-bottom); overflow: hidden; }
+.fullscreen { box-sizing: border-box; height: 100dvh; inset: 0; margin: 0; max-height: 100dvh; max-width: none; overscroll-behavior: none; padding: env(safe-area-inset-top) 8px env(safe-area-inset-bottom); position: fixed; touch-action: none; width: 100%; }
 .fullscreen[open] { display: flex; flex-direction: column; }
-.fullscreen .overlayHead { padding: 3px 0; flex-shrink: 0; }
+.fullscreen .overlayHead { min-height: 44px; padding: 0; flex-shrink: 0; }
 .fullscreen .minimap { flex-shrink: 0; }
 .fullBracket { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-.fullBracket .canvas { height: auto; min-height: 0; flex: 1; }
-.fullBracket .canvasControls { flex-shrink: 0; }
-.summary { grid-template-columns: minmax(0, 1fr) auto auto; }
-.summary > div:first-child { align-self: center; }
+.fullBracket .canvas { border-radius: 10px; flex: 1; height: auto; min-height: 0; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; }
+.fullBracket .canvasControls { border-top: 1px solid #e1e9ed; flex-shrink: 0; min-height: 48px; padding-bottom: env(safe-area-inset-bottom); }
 .future .scoreLabels, .future .score { display: none; }
 .future .teamRow { display: block; min-height: 24px; padding-block: 3px; }
 .future .cardHead { min-height: 28px; }
@@ -126,11 +126,12 @@
 .future .teamName { font-size: 11px; }
 .future .waitingNote { font-size: 10px; margin-top: 1px; }
 .overview .bracketCard { padding-inline: 5px; }
-.overview .compactTeams .teamName { font-size: 14px; line-height: 1.1; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.overview .compactTeams .teamName { font-size: 16px; font-weight: 650; line-height: 1.1; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .overview .teamRow, .overview .scoreLabels { grid-template-columns: minmax(0, 1fr); }
 .overview .scoreLabels, .overview .score { display: none; }
 .overview .teamButton { min-height: 28px; }
-.overview .state { font-size: 8px; }
+.overview .seed { color: #536a7d; font-size: 11px; font-weight: 600; }
+.overview .state { font-size: 10px; font-weight: 600; }
 .overview .bracketCard .cardHead { height: 23px; }
 .tracking > span { white-space: normal; }
 .tracking small { display: block; font-size: 10px; line-height: 1.4; margin-top: 3px; }

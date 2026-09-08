@@ -887,6 +887,7 @@
     align-items: center;
     display: flex;
     min-height: 34px;
+    min-width: 0;
   }
 
   .px-mobileBar--authed .px-mobileBar__center {
@@ -900,13 +901,17 @@
   }
 
   .px-mobileBar--authed .px-mobileBar__left {
-    flex: 0 1 auto;
+    flex: 1 1 0;
   }
 
   .px-mobileBar--authed .px-mobileBar__right {
-    flex: 0 0 auto;
+    flex: 1.3 1 0;
     margin-left: auto;
-    width: max-content;
+    width: auto;
+  }
+
+  .px-mobileBar--authed .px-mobileActions {
+    width: 100%;
   }
 
   .px-mobileBar--authed .px-iconBtn,
@@ -950,9 +955,11 @@
   .px-mobileBar--authed .px-mobileClubBtn {
     gap: 5px;
     justify-content: flex-start;
-    max-width: min(33vw, 146px);
-    min-width: 88px;
+    max-width: none;
+    min-width: 0;
+    overflow: hidden;
     padding-inline: 5px 7px;
+    width: 100%;
   }
 
   .px-mobileBar--authed .px-clubBtn--themed {
@@ -972,10 +979,12 @@
   }
 
   .px-mobileBar--authed .px-mobileUserBtn {
+    flex: 1 1 auto;
     gap: 5px;
     justify-content: flex-start;
-    max-width: min(36vw, 144px);
-    min-width: 100px;
+    max-width: none;
+    min-width: 0;
+    overflow: hidden;
     padding-inline: 5px 7px;
   }
 
@@ -1001,18 +1010,20 @@
     letter-spacing: 0;
     line-height: 1.1;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     text-transform: none;
+    white-space: nowrap;
   }
 
   .px-mobileBar--authed .px-mobileClubName {
-    max-width: 82px;
+    flex: 1 1 auto;
+    max-width: none;
   }
 
   .px-mobileBar--authed .px-mobileUserName {
-    max-width: 68px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    flex: 1 1 auto;
+    max-width: none;
   }
 
   .px-mobileClubMenu,

@@ -31,6 +31,7 @@ import { getClubInitials } from '@/lib/clubAssets'
 import { hasAnyClubPermission } from '@/lib/clubPermissions'
 import { supabase } from '@/lib/supabaseClient'
 import { BRAND } from '@/lib/branding'
+import { getClubPresentationName, getFirstPresentationName } from '@/lib/presentationNames'
 
 const SELPA_WORDMARK = '/brand/selpa-wordmark-clean.png'
 
@@ -58,45 +59,11 @@ type PreviewThread = {
 
 type NavbarOverlay = 'club' | 'player' | 'messages' | 'notifications' | null
 
-function shorten(text?: string, max = 16) {
-  const value = (text || '').trim()
-  if (!value) return ''
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value
-}
-
-function getMobileClubLabel(text?: string) {
-  const value = (text || '').trim().replace(/\s+/g, ' ')
-  if (!value) return ''
-  if (value.length <= 10) return value
-
-  const words = value.split(' ')
-  const isGenericWord = (word: string) => ['club', 'padel', 'pádel', 'complejo', 'academia', 'escuela', 'centro'].includes(word.toLocaleLowerCase('es-AR'))
-  const isShortCode = (word: string) => /^[A-Z0-9]{2,4}$/.test(word)
-
-  if (words.length === 2 && words[0]?.toLocaleLowerCase('es-AR') === 'padel' && isShortCode(words[1] ?? '')) {
-    return value
-  }
-
-  if (words.length >= 2 && isGenericWord(words[0] ?? '') && isShortCode(words[1] ?? '')) {
-    return words[1] ?? value
-  }
-
-  const meaningful = words.filter((word) => !isGenericWord(word))
-  const inferred = meaningful.length ? meaningful.join(' ') : words[0]
-  if (inferred && inferred.length <= 10) return inferred
-  const fallback = meaningful[0] || words[0] || value
-  return fallback.length <= 9 ? `${fallback}…` : `${fallback.slice(0, 9).trim()}…`
-}
-
 function toTitleCaseName(text?: string) {
   return (text || 'Usuario')
     .trim()
     .toLocaleLowerCase('es-AR')
     .replace(/(^|\s|-)(\p{L})/gu, (match) => match.toLocaleUpperCase('es-AR'))
-}
-
-function getFirstVisibleName(text?: string) {
-  return toTitleCaseName(text).split(/\s+/).filter(Boolean)[0] || 'Jugador'
 }
 
 function normalizePath(p?: string | null) {
@@ -337,6 +304,8 @@ export default function AppNavbarClient() {
   const displayClubName = displayClub?.name?.trim() ? displayClub.name : 'Sin club'
   const visibleUserName = user?.name?.trim() || user?.email?.trim() || (role === 'club' ? 'Administrador' : 'Usuario')
   const formattedVisibleUserName = visibleUserName.includes('@') ? visibleUserName : toTitleCaseName(visibleUserName)
+  const navbarClubName = getClubPresentationName(displayClubName)
+  const navbarUserName = toTitleCaseName(getFirstPresentationName(visibleUserName))
   const clubPublicHomeHref = displayClub?.id ? `/clubs/${displayClub.id}` : '/club'
   const nav = useMemo(() => {
     const items = cfg.main as NavItem[]
@@ -832,7 +801,7 @@ export default function AppNavbarClient() {
       const clubHomeContent = (
         <>
           <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
-          <span className="px-clubName">{shorten(displayClubName, 18)}</span>
+          <span className="px-clubName">{navbarClubName}</span>
         </>
       )
 
@@ -1084,7 +1053,7 @@ export default function AppNavbarClient() {
           <div className="px-userWrap px-dd">
             <button type="button" className="px-userBtn" aria-expanded={userOpen} onClick={(event) => toggleNavbarOverlay('player', event.currentTarget)}>
               <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
-              <span className="px-userName">{shorten(toTitleCaseName(user?.name), 14)}</span>
+              <span className="px-userName">{navbarUserName}</span>
               <ChevronDown size={16} className="px-caret" />
             </button>
             {renderUserMenu()}
@@ -1118,7 +1087,7 @@ export default function AppNavbarClient() {
           aria-label={`Club activo: ${displayClubName}`}
         >
           <span className="px-clubLogo" aria-hidden="true"><ClubLogo /></span>
-          <span className="px-mobileClubName">{getMobileClubLabel(displayClubName)}</span>
+          <span className="px-mobileClubName">{navbarClubName}</span>
           <ChevronDown size={14} className="px-caret" />
         </button>
         {renderMobileClubMenu()}
@@ -1206,7 +1175,7 @@ export default function AppNavbarClient() {
             aria-controls="player-navbar-player-popover"
           >
             <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
-            <span className="px-mobileUserName">{getFirstVisibleName(visibleUserName)}</span>
+            <span className="px-mobileUserName">{navbarUserName}</span>
             <ChevronDown size={14} className="px-caret" />
           </button>
           {renderUserMenu(true)}

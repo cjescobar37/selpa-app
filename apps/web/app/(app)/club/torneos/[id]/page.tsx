@@ -23,10 +23,12 @@ import {
 } from '@/lib/tournamentSchedule'
 import { TournamentFlyerPreviewCard, defaultFlyerConfig, readFlyerConfigFromRules, type FlyerConfig } from '../_components/TournamentFlyerConfigurator'
 import { TournamentLiveAgendaTab } from '../_components/TournamentLiveAgendaTab'
+import { TournamentPrimaryNav, type TournamentPrimaryTab } from '../_components/TournamentPrimaryNav'
+import { TournamentMilestoneNotice, type TournamentMilestone } from '../_components/TournamentMilestoneNotice'
 import { calculateTournamentGroupStandings, resolveTournamentClassificationRules } from '@/lib/tournamentStandings'
 import { getOpenGroupMatchDisplayCode } from '@/lib/tournamentOpen/groupFixtures'
 import { isValidNormalSet, isValidSuperTiebreak, validateStructuredMatchScore, type ScoreValidationResult, type StructuredMatchScore } from '@/lib/tournamentScore'
-import { buildTournamentOperationalNotices, type TournamentOperationalNotice, type TournamentOperationalNoticeScope } from '@/lib/tournamentOperationalNotices'
+import { buildTournamentOperationalNotices, type TournamentOperationalNoticeScope } from '@/lib/tournamentOperationalNotices'
 import {
   getTournamentOperationalStatus,
   isTournamentRegistrationClosed,
@@ -125,7 +127,7 @@ type TournamentRuleSchedule = {
   tournamentCourts: TournamentCourtConfig[]
 }
 
-type TournamentTab = 'general' | 'agenda' | 'inscriptos' | 'seed' | 'grupos' | 'playoff'
+type TournamentPairsView = 'registrations' | 'seed'
 
 type Registration = {
   id: string
@@ -938,7 +940,11 @@ export default function ClubTournamentDetailPage() {
   const [finalizingTournament, setFinalizingTournament] = useState(false)
   const [deletingTournament, setDeletingTournament] = useState(false)
   const [pausingTournament, setPausingTournament] = useState(false)
-  const [activeTab, setActiveTab] = useState<TournamentTab>('general')
+  const [activeTab, setActiveTab] = useState<TournamentPrimaryTab>('general')
+  const [pairsView, setPairsView] = useState<TournamentPairsView>('registrations')
+  const [milestone, setMilestone] = useState<(TournamentMilestone & { targetTab: TournamentPrimaryTab; targetPhase?: string }) | null>(null)
+  const [playoffFocusPhase, setPlayoffFocusPhase] = useState<string | undefined>(undefined)
+  const initialTabSelectedRef = useRef(false)
   const [actionFeedback, setActionFeedback] = useState<{ tone: ActionFeedbackTone; title: string; message: string } | null>(null)
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [seedMeta, setSeedMeta] = useState<SeedMeta>(emptySeedMeta)
@@ -1030,7 +1036,24 @@ export default function ClubTournamentDetailPage() {
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      if (requestedTab === 'inscriptos' || highlightedRegistrationId || highlightedChangeRequestId) setActiveTab('inscriptos')
+      if (requestedTab === 'inscriptos' || requestedTab === 'parejas' || highlightedRegistrationId || highlightedChangeRequestId) {
+        setActiveTab('pairs')
+        setPairsView('registrations')
+        initialTabSelectedRef.current = true
+      } else if (requestedTab === 'seed') {
+        setActiveTab('pairs')
+        setPairsView('seed')
+        initialTabSelectedRef.current = true
+      } else if (requestedTab === 'general') {
+        setActiveTab('general')
+        initialTabSelectedRef.current = true
+      } else if (requestedTab === 'grupos' || requestedTab === 'groups') {
+        setActiveTab('groups')
+        initialTabSelectedRef.current = true
+      } else if (requestedTab === 'playoff') {
+        setActiveTab('playoff')
+        initialTabSelectedRef.current = true
+      }
       const targetId = highlightedChangeRequestId
         ? `change-request-${highlightedChangeRequestId}`
         : highlightedRegistrationId
@@ -1125,11 +1148,16 @@ export default function ClubTournamentDetailPage() {
       return left.created_at.localeCompare(right.created_at)
     })
   }, [registrations, seedMeta.hasSeedSnapshot])
-  const canUseSeedTab = seedMeta.hasSeedSnapshot
-  const canUseGroupsTab = seedMeta.hasGroups
+  const showGroupsTab = tournamentDisplayConfig.competitionSystem !== 'SINGLE_ELIMINATION'
+  const showPlayoffTab = tournamentDisplayConfig.competitionSystem !== 'ROUND_ROBIN'
+  useEffect(() => {
+    if ((activeTab === 'groups' && !showGroupsTab) || (activeTab === 'playoff' && !showPlayoffTab)) {
+      queueMicrotask(() => setActiveTab('pairs'))
+    }
+  }, [activeTab, showGroupsTab, showPlayoffTab])
+  const groupsComplete = Boolean(summary?.counts.groupMatches.total) && summary?.counts.groupMatches.played === summary?.counts.groupMatches.total
   const canUsePlayoffTab = seedMeta.hasGroupMatches &&
-    Boolean(summary?.counts.groupMatches.total) &&
-    summary?.counts.groupMatches.played === summary?.counts.groupMatches.total
+    groupsComplete
   const registrationClosed = isTournamentRegistrationClosed({
     registrationDeadline: summary?.tournament.registration_deadline,
   })
@@ -1506,6 +1534,21 @@ export default function ClubTournamentDetailPage() {
   const currentPlayoffRoundLabel = currentPlayoffRound
     ? formatPlayoffPhaseLabel(currentPlayoffRound.phase)
     : null
+  const operationalNextStep = useMemo(() => {
+    if (!summary) return ''
+    if (summary.champion || summary.operationalStage === 'FINALIZADO') return 'Torneo terminado.'
+    if (isDraft) return 'Publicá el torneo para abrir las inscripciones.'
+    if (!seedMeta.hasSeedSnapshot) return canGenerateSeed
+      ? 'Las parejas están listas. Generá el seed.'
+      : 'Completá las inscripciones para generar el seed.'
+    if (showGroupsTab && !seedMeta.hasGroups) return 'El seed está listo. Configurá los grupos.'
+    if (showGroupsTab && !seedMeta.hasGroupMatches) return 'Generá los partidos de grupos.'
+    if (showGroupsTab && summary.counts.groupMatches.played < summary.counts.groupMatches.total) return 'Completá los partidos pendientes de grupos.'
+    if (showPlayoffTab && playoffMatches.length === 0) return 'La fase de grupos terminó. Generá el playoff.'
+    if (showPlayoffTab && currentPlayoffRoundLabel === 'Final') return 'Cargá el resultado de la Final para definir al campeón.'
+    if (showPlayoffTab && currentPlayoffRoundLabel) return `Completá ${currentPlayoffRoundLabel} para abrir la siguiente ronda.`
+    return summary.nextStep
+  }, [canGenerateSeed, currentPlayoffRoundLabel, isDraft, playoffMatches.length, seedMeta.hasGroupMatches, seedMeta.hasGroups, seedMeta.hasSeedSnapshot, showGroupsTab, showPlayoffTab, summary])
   const tournamentOperationalBadge = useMemo(() => {
     if (!summary) return getTournamentOperationalStatus({ operationalStage: 'INSCRIPCIONES', status: 'OPEN' })
 
@@ -1873,6 +1916,25 @@ export default function ClubTournamentDetailPage() {
     }),
     [groupMatches, groupStandings, playoffMatches, playoffRounds, registrations]
   )
+
+  useEffect(() => {
+    if (initialTabSelectedRef.current || loading || loadingRegistrations || !summary) return
+
+    initialTabSelectedRef.current = true
+    if (summary.operationalStage === 'FINALIZADO' || summary.champion) {
+      queueMicrotask(() => setActiveTab('general'))
+      return
+    }
+    if (summary.operationalStage === 'PLAYOFF' || playoffMatches.length > 0) {
+      queueMicrotask(() => setActiveTab(showPlayoffTab ? 'playoff' : 'general'))
+      return
+    }
+    if (summary.operationalStage === 'GRUPOS' || seedMeta.hasGroups) {
+      queueMicrotask(() => setActiveTab(showGroupsTab ? 'groups' : 'pairs'))
+      return
+    }
+    queueMicrotask(() => setActiveTab('pairs'))
+  }, [loading, loadingRegistrations, playoffMatches.length, seedMeta.hasGroups, showGroupsTab, showPlayoffTab, summary])
   const resultMatch = useMemo(
     () => resultForm
       ? groupMatches.find((match) => match.id === resultForm.matchId) ??
@@ -2437,6 +2499,12 @@ export default function ClubTournamentDetailPage() {
       return
     }
 
+    const phase = String(match.phase ?? '').toUpperCase()
+    const completesGroups = phase === 'GROUP' && groupMatches.filter((item) => String(item.status ?? '').toUpperCase() !== 'PLAYED').length === 1
+    const completedRoundIndex = phase === 'GROUP' ? -1 : playoffRounds.findIndex((round) => String(round.phase).toUpperCase() === phase)
+    const completesPlayoffRound = completedRoundIndex >= 0 && playoffRounds[completedRoundIndex].matches.filter((item) => String(item.status ?? '').toUpperCase() !== 'PLAYED').length === 1
+    const nextRound = completesPlayoffRound ? playoffRounds[completedRoundIndex + 1] ?? null : null
+
     setSavingResult(true)
     setMessage('')
     setActionMessage('')
@@ -2487,6 +2555,15 @@ export default function ClubTournamentDetailPage() {
       }
       : item
     ))
+    setPlayoffMatches((current) => current.map((item) => item.id === match.id
+      ? {
+        ...item,
+        status: json.match?.status ?? 'PLAYED',
+        score: json.match?.score ?? validation.score,
+        winner_team_id: json.match?.winner_team_id ?? winnerTeamId,
+      }
+      : item
+    ))
     setActionFeedback({
       tone: json.groupDependencyWarning ? 'warning' : 'success',
       title: 'Resultado guardado',
@@ -2496,7 +2573,49 @@ export default function ClubTournamentDetailPage() {
         : 'La tabla y los cruces se actualizaron con este resultado.'),
     })
     await refreshTournamentExperience()
-    scrollToTournamentMatch(match.id)
+    if (completesGroups) {
+      setMilestone({
+        id: `groups-complete-${match.id}`,
+        eyebrow: 'Fase completada',
+        title: 'Fase de grupos completada',
+        message: 'Todos los resultados están cargados y los clasificados quedaron definidos.',
+        actionLabel: !showPlayoffTab ? 'Ver resumen' : (summary?.counts.playoffMatches ?? 0) > 0 ? 'Ver Playoff' : 'Generar Playoff',
+        targetTab: !showPlayoffTab ? 'general' : (summary?.counts.playoffMatches ?? 0) > 0 ? 'playoff' : 'groups',
+      })
+      setActiveTab('groups')
+    } else if (completesPlayoffRound && nextRound) {
+      const completedLabel = formatPlayoffPhaseLabel(phase)
+      const nextLabel = formatPlayoffPhaseLabel(nextRound.phase)
+      setPlayoffFocusPhase(nextRound.phase)
+      setActiveTab('playoff')
+      setMilestone({
+        id: `round-complete-${phase}-${match.id}`,
+        eyebrow: `${completedLabel} completados`,
+        title: `${completedLabel} finalizados`,
+        message: `Los cruces de ${nextLabel} quedaron definidos.`,
+        actionLabel: `Ver ${nextLabel}`,
+        targetTab: 'playoff',
+        targetPhase: nextRound.phase,
+      })
+    } else if (completesPlayoffRound && phase === 'FINAL') {
+      const championName = winnerTeamId === match.team1_id
+        ? match.team1_name ?? teamNameLookup.get(match.team1_id) ?? 'Pareja ganadora'
+        : match.team2_name ?? teamNameLookup.get(match.team2_id) ?? 'Pareja ganadora'
+      const runnerUpName = winnerTeamId === match.team1_id
+        ? match.team2_name ?? teamNameLookup.get(match.team2_id) ?? 'Pareja finalista'
+        : match.team1_name ?? teamNameLookup.get(match.team1_id) ?? 'Pareja finalista'
+      setActiveTab('general')
+      setMilestone({
+        id: `tournament-complete-${match.id}`,
+        eyebrow: 'Torneo finalizado',
+        title: `Campeón: ${championName}`,
+        message: `Subcampeón: ${runnerUpName}. El resumen deportivo ya está disponible.`,
+        actionLabel: 'Ver resumen del torneo',
+        targetTab: 'general',
+      })
+    } else {
+      scrollToTournamentMatch(match.id)
+    }
   }
 
   function renderTournamentGroupStandings(group: TournamentGroup, standingBlock?: (typeof groupStandings)[number]) {
@@ -3690,6 +3809,16 @@ export default function ClubTournamentDetailPage() {
     setActionMessage(`Seed generado correctamente${json.seededTeamsCount ? `: ${json.seededTeamsCount} parejas` : ''}.`)
     setGeneratingSeed(false)
     await refreshTournamentExperience()
+    setPairsView('seed')
+    setActiveTab('pairs')
+    setMilestone({
+      id: `seed-generated-${tournamentId}`,
+      eyebrow: 'Seed generado',
+      title: 'El orden de las parejas quedó definido',
+      message: showGroupsTab ? 'Revisá el seed y generá los grupos para continuar.' : 'Las parejas ya tienen su orden competitivo.',
+      actionLabel: showGroupsTab ? 'Ver Seed' : 'Ver Parejas',
+      targetTab: 'pairs',
+    })
   }
 
   async function generateGroups() {
@@ -3729,6 +3858,47 @@ export default function ClubTournamentDetailPage() {
     setActionMessage(`Grupos generados correctamente${json.groupCount ? `: ${json.groupCount} grupos` : ''}${json.teamsAssigned ? ` · ${json.teamsAssigned} parejas` : ''}.`)
     setGeneratingGroups(false)
     await refreshTournamentExperience()
+    setActiveTab('groups')
+    setMilestone({
+      id: `groups-generated-${tournamentId}`,
+      eyebrow: 'Grupos generados',
+      title: 'Las parejas ya están distribuidas',
+      message: 'Revisá los grupos y generá sus partidos para comenzar la fase.',
+      actionLabel: 'Ver Grupos',
+      targetTab: 'groups',
+    })
+  }
+
+  function openPairs(view: TournamentPairsView) {
+    setPairsView(view)
+    setActiveTab('pairs')
+  }
+
+  function renderPrimaryNextAction() {
+    if (!summary || isTournamentPaused) return null
+
+    if (isDraft) {
+      return <button type="button" className="club-nextAction" onClick={() => requestConfirmation({ title: 'Publicar torneo', body: 'Esto abre las inscripciones del torneo. Podés seguir gestionándolo desde este centro de control.', confirmLabel: 'Publicar torneo', onConfirm: publishTournament })} disabled={publishing || loading || deletingTournament || cancellingTournament}>{publishing ? 'Publicando...' : 'Publicar ahora →'}</button>
+    }
+    if (summary.champion) {
+      return <button type="button" className="club-nextAction" onClick={() => document.querySelector('.club-championCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Ver campeón y cierre →</button>
+    }
+    if (!seedMeta.hasSeedSnapshot) {
+      return <button type="button" className="club-nextAction" onClick={() => openPairs('registrations')}>{canGenerateSeed ? 'Generar seed en Parejas →' : 'Revisar parejas →'}</button>
+    }
+    if (!seedMeta.hasGroups && showGroupsTab) {
+      return <button type="button" className="club-nextAction" onClick={() => openPairs('seed')}>Generar grupos desde Seed →</button>
+    }
+    if (showGroupsTab && (!seedMeta.hasGroupMatches || summary.counts.groupMatches.played < summary.counts.groupMatches.total)) {
+      return <button type="button" className="club-nextAction" onClick={() => setActiveTab('groups')}>{seedMeta.hasGroupMatches ? 'Completar partidos de grupos →' : 'Preparar partidos de grupos →'}</button>
+    }
+    if (canGenerateOpenPlayoff) {
+      return <button type="button" className="club-nextAction" disabled={generatingOpenPlayoff} onClick={requestGenerateOpenPlayoff}>{generatingOpenPlayoff ? 'Generando...' : 'Generar playoff →'}</button>
+    }
+    if (showPlayoffTab && playoffMatches.length > 0) {
+      return <button type="button" className="club-nextAction" onClick={() => setActiveTab('playoff')}>{currentPlayoffRoundLabel ? `Ver ${currentPlayoffRoundLabel} →` : 'Ver playoff →'}</button>
+    }
+    return null
   }
 
 
@@ -3789,6 +3959,15 @@ export default function ClubTournamentDetailPage() {
     )
     setGeneratingGroupMatches(false)
     await refreshTournamentExperience()
+    setActiveTab('groups')
+    setMilestone({
+      id: `group-matches-generated-${tournamentId}`,
+      eyebrow: 'Fase preparada',
+      title: 'Los partidos de grupos están listos',
+      message: 'Ya podés cargar resultados y seguir la clasificación en tiempo real.',
+      actionLabel: 'Ver partidos',
+      targetTab: 'groups',
+    })
   }
 
   async function generateOpenPlayoff() {
@@ -3839,6 +4018,16 @@ export default function ClubTournamentDetailPage() {
     )
     setGeneratingOpenPlayoff(false)
     await refreshTournamentExperience()
+    setActiveTab('playoff')
+    setMilestone({
+      id: `playoff-generated-${tournamentId}`,
+      eyebrow: 'Playoff generado',
+      title: 'La primera ronda quedó definida',
+      message: 'Los cruces reales ya están listos para seguir operando el torneo.',
+      actionLabel: 'Ver Playoff',
+      targetTab: 'playoff',
+      targetPhase: json.phase,
+    })
   }
 
   function requestGenerateOpenPlayoff() {
@@ -3882,6 +4071,17 @@ export default function ClubTournamentDetailPage() {
     setActionMessage(`Final generada correctamente${typeof json.createdCount === 'number' ? `: ${json.createdCount} partido` : ''}.`)
     setGeneratingPlayoffFinal(false)
     await refreshTournamentExperience()
+    setPlayoffFocusPhase('FINAL')
+    setActiveTab('playoff')
+    setMilestone({
+      id: `final-generated-${tournamentId}`,
+      eyebrow: 'Semifinales finalizadas',
+      title: 'La Final está definida',
+      message: 'Las dos parejas finalistas ya están listas para disputar el título.',
+      actionLabel: 'Ver Final',
+      targetTab: 'playoff',
+      targetPhase: 'FINAL',
+    })
   }
 
   function openManualRegistration() {
@@ -4028,7 +4228,8 @@ export default function ClubTournamentDetailPage() {
     setManualModalOpen(false)
     setManualError('')
     setActionMessage('Pareja agregada correctamente.')
-    setActiveTab('inscriptos')
+    setActiveTab('pairs')
+    setPairsView('registrations')
     await refreshTournamentExperience()
   }
 
@@ -4197,70 +4398,29 @@ export default function ClubTournamentDetailPage() {
             </section>
 
             <section className="club-tabsShell">
-              <div className="club-tabs" role="tablist" aria-label="Operación del torneo">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === 'general'}
-                  className={`club-tab ${activeTab === 'general' ? 'club-tab--active' : ''}`}
-                  onClick={() => setActiveTab('general')}
-                >
-                  General
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === 'agenda'}
-                  className={`club-tab ${activeTab === 'agenda' ? 'club-tab--active' : ''}`}
-                  onClick={() => setActiveTab('agenda')}
-                >
-                  Agenda
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === 'inscriptos'}
-                  className={`club-tab ${activeTab === 'inscriptos' ? 'club-tab--active' : ''}`}
-                  onClick={() => setActiveTab('inscriptos')}
-                >
-                  Inscriptos ({registrationStats.total})
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === 'seed'}
-                  className={`club-tab ${activeTab === 'seed' ? 'club-tab--active' : ''}`}
-                  disabled={!canUseSeedTab}
-                  title={!canUseSeedTab ? 'Primero generá el seed del torneo.' : undefined}
-                  onClick={() => canUseSeedTab && setActiveTab('seed')}
-                >
-                  Seed
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === 'grupos'}
-                  className={`club-tab ${activeTab === 'grupos' ? 'club-tab--active' : ''}`}
-                  disabled={!canUseGroupsTab}
-                  title={!canUseGroupsTab ? 'Primero generá los grupos del torneo.' : undefined}
-                  onClick={() => canUseGroupsTab && setActiveTab('grupos')}
-                >
-                  Grupos
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === 'playoff'}
-                  className={`club-tab ${activeTab === 'playoff' ? 'club-tab--active' : ''}`}
-                  disabled={!canUsePlayoffTab}
-                  title={!canUsePlayoffTab ? 'Completá la fase de grupos para habilitar playoff.' : undefined}
-                  onClick={() => canUsePlayoffTab && setActiveTab('playoff')}
-                >
-                  Playoff
-                </button>
-              </div>
+              <TournamentPrimaryNav
+                activeTab={activeTab}
+                registrationsCount={registrationStats.total}
+                showGroups={showGroupsTab}
+                showPlayoff={showPlayoffTab}
+                onChange={(tab) => {
+                  setMilestone(null)
+                  setActiveTab(tab)
+                }}
+              />
 
               <div className="club-tabPanel">
+                {milestone ? (
+                  <TournamentMilestoneNotice
+                    milestone={milestone}
+                    onDismiss={() => setMilestone(null)}
+                    onAction={() => {
+                      setActiveTab(milestone.targetTab)
+                      if (milestone.targetPhase) setPlayoffFocusPhase(milestone.targetPhase)
+                      setMilestone(null)
+                    }}
+                  />
+                ) : null}
                 {activeTab === 'general' ? (
                   <div className="club-tabContent">
                     {renderOperationalNotices('general')}
@@ -4268,10 +4428,22 @@ export default function ClubTournamentDetailPage() {
                       <div className="club-summaryMain">
                         <article className="club-nextCard">
                           <span className="club-kicker">Próximo paso</span>
-                          <h2>{isTournamentPaused ? 'Este torneo está pausado.' : summary.nextStep}</h2>
+                          <h2>{isTournamentPaused ? 'Este torneo está pausado.' : operationalNextStep}</h2>
                           <p>{isTournamentPaused ? 'Nadie puede inscribirse hasta que lo reanudes.' : isDraft ? 'Publicalo para abrir las inscripciones.' : 'Seguimos el estado operativo del torneo en tiempo real.'}</p>
-                          {isDraft ? <button type="button" className="club-nextAction" onClick={() => requestConfirmation({ title: 'Publicar torneo', body: 'Esto abre las inscripciones del torneo. Podés seguir gestionándolo desde este centro de control.', confirmLabel: 'Publicar torneo', onConfirm: publishTournament })} disabled={publishing || loading || deletingTournament || cancellingTournament}>{publishing ? 'Publicando...' : 'Publicar ahora →'}</button> : null}
+                          {renderPrimaryNextAction()}
                         </article>
+
+                        <TournamentLiveAgendaTab
+                          key={`overview-${summary.counts.groupMatches.played}-${playoffPlayedCount}-${playoffMatches.length}`}
+                          clubId={activeClub?.id}
+                          tournamentId={tournamentId}
+                          tournamentStatus={summary.tournament.status}
+                          registrationsCount={registrations.length}
+                          hasGroups={seedMeta.hasGroups}
+                          variant="overview"
+                          onPublish={isDraft ? () => requestConfirmation({ title: 'Publicar torneo', body: 'Esto abre las inscripciones del torneo. Podés seguir gestionándolo desde este centro de control.', confirmLabel: 'Publicar torneo', onConfirm: publishTournament }) : undefined}
+                          onOpenGroups={() => setActiveTab('groups')}
+                        />
 
                         <section className="club-metrics club-metrics--detail">
                           <div className="club-metric"><span>Inicio</span><strong>{formatDate(summary.tournament.start_date)}</strong></div>
@@ -4439,21 +4611,14 @@ export default function ClubTournamentDetailPage() {
                   </div>
                 ) : null}
 
-                {activeTab === 'agenda' ? (
-                  <div className="club-tabContent">
-                    <TournamentLiveAgendaTab
-                      clubId={activeClub?.id}
-                      tournamentId={tournamentId}
-                      tournamentStatus={summary.tournament.status}
-                      registrationsCount={registrations.length}
-                      hasGroups={seedMeta.hasGroups}
-                      onPublish={isDraft ? () => requestConfirmation({ title: 'Publicar torneo', body: 'Esto abre las inscripciones del torneo. Podés seguir gestionándolo desde este centro de control.', confirmLabel: 'Publicar torneo', onConfirm: publishTournament }) : undefined}
-                      onOpenGroups={() => setActiveTab('grupos')}
-                    />
+                {activeTab === 'pairs' && seedMeta.hasSeedSnapshot ? (
+                  <div className="club-pairsSwitch" role="group" aria-label="Vista de Parejas">
+                    <button type="button" className={pairsView === 'registrations' ? 'is-active' : ''} aria-pressed={pairsView === 'registrations'} onClick={() => setPairsView('registrations')}>Inscriptos</button>
+                    <button type="button" className={pairsView === 'seed' ? 'is-active' : ''} aria-pressed={pairsView === 'seed'} onClick={() => setPairsView('seed')}>Seed</button>
                   </div>
                 ) : null}
 
-                {activeTab === 'inscriptos' ? (
+                {activeTab === 'pairs' && pairsView === 'registrations' ? (
                   <div className="club-tabContent">
                     {registrations.length === 0 ? (
                       <section className="club-registrationEmptyState">
@@ -4676,7 +4841,7 @@ export default function ClubTournamentDetailPage() {
                   </div>
                 ) : null}
 
-                {activeTab === 'seed' ? (
+                {activeTab === 'pairs' && pairsView === 'seed' ? (
                   <div className="club-tabContent">
                     {!seedMeta.hasSeedSnapshot ? (
                       <section className="club-placeholderPanel">
@@ -4743,10 +4908,9 @@ export default function ClubTournamentDetailPage() {
                   </div>
                 ) : null}
 
-                {activeTab === 'grupos' ? (
+                {activeTab === 'groups' ? (
                   <div className="club-tabContent club-groupsTabContent">
                     {renderOperationalNotices('groups')}
-                    {sortedGroups.length > 0 && <div className="club-exportRow"><TournamentExportMenu data={printableTournament} kind="groups" /></div>}
                     {!seedMeta.hasGroups || sortedGroups.length === 0 ? (
                       <section className="club-placeholderPanel">
                         <span className="club-kicker">Grupos</span>
@@ -4756,18 +4920,21 @@ export default function ClubTournamentDetailPage() {
                       ) : (
                         <>
                           <section className="club-registrationsPanel">
-                            <div className="club-sectionHead">
+                            <div className="club-sectionHead club-groupPlanningHead">
                               <div>
                                 <span className="club-kicker">Planificación</span>
                                 <h2>Ventana operativa de grupos</h2>
                               </div>
-                              <button
-                                type="button"
-                                className="club-secondaryBtn club-secondaryBtn--compact"
-                                onClick={openCourtConfigModal}
-                              >
-                                {tournamentRuleSchedule.tournamentCourts.length === 0 ? 'Agregar canchas' : 'Configurar canchas'}
-                              </button>
+                              <div className="club-groupPlanningActions">
+                                <TournamentExportMenu data={printableTournament} kind="groups" />
+                                <button
+                                  type="button"
+                                  className="club-secondaryBtn club-secondaryBtn--compact"
+                                  onClick={openCourtConfigModal}
+                                >
+                                  {tournamentRuleSchedule.tournamentCourts.length === 0 ? 'Agregar canchas' : 'Configurar canchas'}
+                                </button>
+                              </div>
                             </div>
                             <div className="club-planningMobileLayout">
                               <div className="club-planningSummary">
@@ -4799,20 +4966,20 @@ export default function ClubTournamentDetailPage() {
                               </div>
                             </div>
                           </section>
-                          {canGenerateOpenPlayoff ? (
+                          {groupsComplete && showPlayoffTab ? (
                             <section className="club-nextGroupStep">
                               <div>
-                                <span>Siguiente paso</span>
-                                <h2>Los grupos están completos</h2>
-                                <p>Ya cargaste todos los resultados. Generá el playoff para continuar el torneo.</p>
+                                <span>Fase completada</span>
+                                <h2>Fase de grupos completada</h2>
+                                <p>Todos los resultados están cargados y los clasificados quedaron definidos.</p>
                               </div>
                               <button
                                 type="button"
                                 className="club-generateSeedBtn"
                                 disabled={generatingOpenPlayoff}
-                                onClick={requestGenerateOpenPlayoff}
+                                onClick={canGenerateOpenPlayoff ? requestGenerateOpenPlayoff : () => setActiveTab('playoff')}
                               >
-                                {generatingOpenPlayoff ? 'Generando...' : 'Generar playoff'}
+                                {generatingOpenPlayoff ? 'Generando...' : canGenerateOpenPlayoff ? 'Generar playoff' : 'Ver playoff'}
                               </button>
                             </section>
                           ) : null}
@@ -4880,7 +5047,7 @@ export default function ClubTournamentDetailPage() {
                                 {group.size === 4 ? (
                                   <div className="club-groupFixtureHint">
                                     {secondRoundDefined
-                                      ? 'Cruces Ganadores vs Ganadores y Perdedores vs Perdedores definidos.'
+                                      ? 'Ganadores vs ganadores · Perdedores vs perdedores definidos.'
                                       : 'Se definirán 2 cruces después de completar los partidos iniciales.'}
                                   </div>
                                 ) : null}
@@ -4947,7 +5114,7 @@ export default function ClubTournamentDetailPage() {
                         {playoffRounds.length > 0 && <MobilePlayoff
                           exportAction={<TournamentExportMenu data={printableTournament} kind="playoff" />}
                           rounds={playoffRounds}
-                          currentPhase={currentPlayoffRound?.phase}
+                          currentPhase={playoffFocusPhase ?? currentPlayoffRound?.phase}
                           champion={summary.champion?.name}
                           nextMatch={nextPlayoffMatch}
                           teamNames={teamNameLookup}
@@ -5872,6 +6039,7 @@ export default function ClubTournamentDetailPage() {
       <style>{`
         .club-playoffDesktop { display: contents; }
         .club-exportRow { display: flex; justify-content: flex-end; }
+        .club-groupPlanningActions { align-items: center; display: flex; flex: 0 0 auto; gap: 8px; justify-content: flex-end; }
         .club-playoffTracking { display: flex; align-items: center; gap: 12px; padding: 6px 10px; background: #edf8f8; color: #286577; border-radius: 8px; font-size: 12px; }
         .club-playoffTracking small { display: block; font-size: 11px; margin-top: 3px; }
         .club-playoffTracking button { border: 0; background: transparent; color: #176d80; min-height: 44px; }
@@ -6099,6 +6267,9 @@ export default function ClubTournamentDetailPage() {
         .club-actionsCard { align-items: center; background: linear-gradient(135deg, #fff, #f8fafc); display: flex; gap: 12px; justify-content: space-between; margin-top: 12px; }
         .club-actionGrid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .club-tabsShell { margin: 14px -22px 0; }
+.club-pairsSwitch { background:#eef3f6; border-radius:11px; display:grid; gap:3px; grid-template-columns:repeat(2,minmax(0,1fr)); margin:10px 0 2px; padding:4px; }
+.club-pairsSwitch button { background:transparent; border:1px solid transparent; border-radius:8px; color:#64748b; cursor:pointer; font:inherit; font-size:12px; font-weight:850; min-height:40px; }
+.club-pairsSwitch button.is-active { background:#fff; border-color:rgba(15,23,42,.08); box-shadow:0 2px 8px rgba(15,23,42,.07); color:#061b3a; }
 .club-tabs { align-items: center; background: linear-gradient(180deg, color-mix(in srgb, var(--club-admin-accent) 8%, white) 0%, #f8fafc 100%); border-bottom: 1px solid color-mix(in srgb, var(--club-admin-accent) 18%, transparent); border-top: 1px solid color-mix(in srgb, var(--club-admin-accent) 12%, transparent); box-shadow: inset 0 1px 0 rgba(255,255,255,.74); display: flex; gap: 20px; min-width: 0; overflow-x: auto; padding: 5px 22px 0; }
 .club-tab { background: transparent; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: #64748b; cursor: pointer; flex: 0 0 auto; font-size: 13px; font-weight: 850; min-height: 36px; padding: 8px 2px 9px; transition: border-color .18s ease, color .18s ease, opacity .18s ease; white-space: nowrap; }
 .club-tab:hover:not(:disabled) { color: #061b3a; opacity: .92; }
@@ -6265,7 +6436,7 @@ export default function ClubTournamentDetailPage() {
         .club-matchInfoCell span { color: #64748b; font-size: 11px; font-weight: 850; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-matchPairCell { display: grid; gap: 2px; justify-items: center; text-align: center; }
         .club-groupMatchCode { color: #64748b; font-size: 9px; font-weight: 900; line-height: 1.1; min-height: 10px; text-transform: uppercase; }
-        .club-groupFixtureHint { color: #0f766e; font-size: 11px; font-weight: 800; line-height: 1.3; margin-top: 7px; }
+        .club-groupFixtureHint { color: #0f766e; font-size: 11px; font-weight: 800; line-height: 1.2; margin-top: 1px; }
         .club-mobileMatchScoreGrid { display: none; }
         .club-matchTeams { align-items: center; display: grid; gap: 2px; grid-template-rows: 10px 24px 1px 24px; justify-items: center; min-width: 0; width: 100%; }
         .club-matchTeams::before { content: ''; display: block; height: 10px; }
@@ -6768,8 +6939,9 @@ export default function ClubTournamentDetailPage() {
           .club-detailTopbar .club-backBtn { max-width:min(52vw,240px); overflow:hidden; }
           .club-detailTopbar .club-backMobile { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
           .club-tabsShell { margin:7px 0 0; }
+          .club-pairsSwitch { margin:7px 6px 0; }
           .club-tabs { background:#f2f6f8; border:0; border-radius:12px; display:grid; gap:3px; grid-template-columns:repeat(3,minmax(0,1fr)); overflow:visible; padding:4px; }
-          .club-tab { align-items:center; border:1px solid transparent; border-radius:8px; display:flex; font-size:10px; justify-content:center; min-height:36px; min-width:0; padding:6px 2px; white-space:nowrap; }
+          .club-tab { align-items:center; border:1px solid transparent; border-radius:8px; display:flex; font-size:11px; font-weight:800; justify-content:center; min-height:36px; min-width:0; padding:6px 2px; white-space:nowrap; }
           .club-tab--active { background:#fff; border-color:color-mix(in srgb,var(--club-admin-accent) 34%,transparent); box-shadow:0 2px 8px rgba(15,23,42,.08),inset 0 -2px var(--club-admin-accent); }
           .club-tabPanel { margin-top:7px; padding:0; }
           .club-tabContent { gap:8px; }
@@ -6778,7 +6950,7 @@ export default function ClubTournamentDetailPage() {
           .club-metric:nth-child(3n) { border-right:0!important; }
           .club-metric:nth-child(n+10) { border-bottom:0; }
           .club-metric strong { font-size:clamp(12px,3.4vw,14px); overflow:visible; text-overflow:clip; white-space:normal; }
-          .club-metric span { font-size:9px; line-height:1.15; white-space:normal; }
+          .club-metric span { font-size:10px; line-height:1.15; white-space:normal; }
           .club-metricButton strong { display:-webkit-box; font-size:11px; line-height:1.15; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
           .club-summaryGrid { gap:8px; }
           .club-nextCard { border-radius:12px; padding:10px 11px; }
@@ -6795,6 +6967,11 @@ export default function ClubTournamentDetailPage() {
           .club-flyerSlot .flyerPreview { height:133px; min-height:133px; width:106px; }
           .club-groupsTabContent { margin-inline:0; }
           .club-groupsTabContent .club-registrationsPanel, .club-groupsTabContent .club-matchSection { border-radius: 12px; padding: 9px; }
+          .club-groupPlanningHead { align-items: stretch; display: grid; grid-template-columns: minmax(0, 1fr); }
+          .club-groupPlanningActions { display: grid; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); width: 100%; }
+          .club-groupPlanningActions > * { min-width: 0; }
+          .club-groupPlanningActions .club-secondaryBtn { min-height: 44px; width: 100%; }
+          .club-groupFixtureHint { margin-top: 0; }
           .club-planningMobileLayout { display: grid; gap: 7px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .club-planningSummary { display: contents; }
           .club-planningMetric { border-radius: 10px; gap: 2px; padding: 8px; }
@@ -6814,10 +6991,10 @@ export default function ClubTournamentDetailPage() {
           .club-topbarActions { align-items:center; flex-wrap:nowrap; justify-content:flex-end; }
           .club-topbarActions .club-publishBtn { display:none; }
           .club-groupStandings { width: 100%; }
-          .club-groupStandingRow { gap: 2px; grid-template-columns: 18px minmax(0, 1fr) repeat(6, 24px); padding: 2px 5px; }
+          .club-groupStandingRow { gap: 2px; grid-template-columns: 22px minmax(0, 1fr) repeat(6, 23px); padding: 2px 5px; }
           .club-groupStandingRow--head { padding-block: 3px; }
-          .club-groupStandingRow span { font-size: 10px; font-variant-numeric: tabular-nums; font-weight: 600; }
-          .club-groupStandingRow--head span { font-size: 9px; }
+          .club-groupStandingRow span { font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 600; }
+          .club-groupStandingRow--head span { color:#52657a; font-size: 9.5px; }
           .club-groupStandingRow > span:nth-child(6) { background: rgba(6,182,212,.07); border-inline: 1px solid rgba(6,182,212,.18); color: #17253f; font-weight: 800; order: 3; }
           .club-groupStandingRow > span:nth-child(3) { order: 4; }
           .club-groupStandingRow > span:nth-child(4) { order: 5; }
@@ -6826,11 +7003,12 @@ export default function ClubTournamentDetailPage() {
           .club-groupStandingRow > span:nth-child(8) { order: 8; }
           .club-groupStandingTeam { align-items: center; display: flex; gap: 5px; min-width: 0; }
           .club-groupStandingPlayerNames { display: grid; gap: 1px; min-width: 0; }
-          .club-groupStandingPlayerNames > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .club-groupStandingPlayerNames > span { display: block; line-height:1.18; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .club-groupStandingPlayerNames > span + span::before { content: ''; }
           .club-groupStandingRow--qualified .club-groupStandingPlayerNames > span { font-weight: 900; }
           .club-groupStandingTeam b { display: none; }
           .club-groupStandingPosition i { display: inline; }
+          .club-groupStandingPosition { overflow:visible!important; text-overflow:clip!important; }
           .club-operationalNotices--embedded .club-operationalNotice { gap: 4px; padding: 5px 7px; }
           .club-operationalNotices--embedded .club-operationalNoticeBody > p { display: none; }
           .club-operationalNotices--embedded .club-operationalNoticeDisclosure p { display: block; }

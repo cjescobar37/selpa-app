@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { Download, Share2 } from 'lucide-react'
+import { Download, FileDown, Share2 } from 'lucide-react'
 import type { TournamentExportData } from './tournamentExportData'
 import styles from './TournamentExportMenu.module.css'
 
@@ -19,6 +19,7 @@ export default function TournamentExportMenu({ data, kind }: { data: TournamentE
   // Refetches may replace object references without changing printable content.
   const dataKey = useMemo(() => JSON.stringify(data), [data])
   const file = prepared?.key === dataKey ? prepared.file : null
+  const triggerLabel = kind === 'groups' ? 'PDF grupos' : 'Exportar PDF'
   const create = async () => {
     setBusy(true); setMessage('Preparando PDF…')
     try {
@@ -41,7 +42,7 @@ export default function TournamentExportMenu({ data, kind }: { data: TournamentE
     }
   }
   return <details ref={root} className={styles.menu} onKeyDown={(event) => { if (event.key === 'Escape' && root.current) { root.current.open = false; root.current.querySelector('summary')?.focus() } }}>
-    <summary aria-label={`Exportar ${kind === 'groups' ? 'Grupos' : 'Playoff'}`}><Download size={14} /> Exportar</summary>
+    <summary aria-label={`Exportar ${kind === 'groups' ? 'Grupos' : 'Playoff'}`}><FileDown size={15} /> {triggerLabel}</summary>
     <div className={styles.popover}>
       <button type="button" disabled={busy} onClick={create}>{busy ? 'Preparando…' : file ? 'Actualizar PDF' : 'Generar PDF'}</button>
       {file && <><button type="button" onClick={() => download(file)}><Download size={14} /> Descargar PDF</button><button type="button" onClick={share}><Share2 size={14} /> Compartir PDF</button></>}

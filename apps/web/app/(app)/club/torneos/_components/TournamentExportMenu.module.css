@@ -1,10 +1,13 @@
-.menu { position: relative; color: #31576c; font-size: 12px; z-index: 48; }
-.menu summary { display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 44px; padding: 0 9px; cursor: pointer; list-style: none; border-radius: 8px; }
+.menu { position: relative; color: #087b8e; font-size: 12px; font-weight: 750; min-width: 0; z-index: 48; }
+.menu summary { background: #effafb; border: 1px solid #b9e1e6; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 10px; cursor: pointer; list-style: none; border-radius: 9px; white-space: nowrap; }
 .menu summary::-webkit-details-marker { display: none; }
-.menu summary:hover, .menu[open] summary { background: #eff7f8; }
+.menu summary:hover, .menu[open] summary { background: #ddf5f7; border-color: #70c8d2; color: #056677; }
 .menu summary:focus-visible, .menu button:focus-visible { outline: 2px solid #069aab; outline-offset: 2px; }
 .popover { position: absolute; right: 0; top: 100%; width: min(248px, calc(100vw - 32px)); padding: 6px; background: #fff; border: 1px solid #d4e3e9; border-radius: 10px; box-shadow: 0 8px 25px #102b4626; }
 .popover button { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 44px; border: 0; border-radius: 6px; background: transparent; color: #174559; padding: 8px; font: inherit; text-align: left; cursor: pointer; }
 .popover button:hover { background: #f0f7f8; }
 .popover button:disabled { opacity: .6; cursor: wait; }
 .popover span { display: block; font-size: 11px; line-height: 1.4; padding: 0 8px 5px; color: #627487; }
+@media (max-width: 900px) {
+  .menu summary { min-height: 44px; }
+}
