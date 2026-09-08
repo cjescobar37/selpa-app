@@ -41,7 +41,7 @@ export default function TournamentExportMenu({ data, kind }: { data: TournamentE
       download(file); setMessage('No se pudo compartir. Descargamos el PDF.')
     }
   }
-  return <details ref={root} className={styles.menu} onKeyDown={(event) => { if (event.key === 'Escape' && root.current) { root.current.open = false; root.current.querySelector('summary')?.focus() } }}>
+  return <details ref={root} className={styles.menu} data-kind={kind} onKeyDown={(event) => { if (event.key === 'Escape' && root.current) { root.current.open = false; root.current.querySelector('summary')?.focus() } }}>
     <summary aria-label={`Exportar ${kind === 'groups' ? 'Grupos' : 'Playoff'}`}><FileDown size={15} /> {triggerLabel}</summary>
     <div className={styles.popover}>
       <button type="button" disabled={busy} onClick={create}>{busy ? 'Preparando…' : file ? 'Actualizar PDF' : 'Generar PDF'}</button>

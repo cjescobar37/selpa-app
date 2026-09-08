@@ -49,8 +49,8 @@ export function useBracketViewport(width: number, height: number, autoFit: boole
       return { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), x: (a.clientX + b.clientX) / 2 - box.left, y: (a.clientY + b.clientY) / 2 - box.top }
     }
     const start = (event: TouchEvent) => {
-      event.preventDefault()
       if (event.touches.length === 2) {
+        event.preventDefault()
         const p = points(event)
         pan = null
         pinch = { distance: p.distance, zoom: zoomRef.current, x: (el.scrollLeft + p.x) / zoomRef.current, y: (el.scrollTop + p.y) / zoomRef.current }

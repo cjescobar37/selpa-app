@@ -6966,11 +6966,11 @@ export default function ClubTournamentDetailPage() {
           .club-flyerPreviewButton { height:133px; width:106px; }
           .club-flyerSlot .flyerPreview { height:133px; min-height:133px; width:106px; }
           .club-groupsTabContent { margin-inline:0; }
-          .club-groupsTabContent .club-registrationsPanel, .club-groupsTabContent .club-matchSection { border-radius: 12px; padding: 9px; }
+          .club-groupsTabContent .club-registrationsPanel, .club-groupsTabContent .club-matchSection { border-radius: 12px; padding: 10px; }
           .club-groupPlanningHead { align-items: stretch; display: grid; grid-template-columns: minmax(0, 1fr); }
           .club-groupPlanningActions { display: grid; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); width: 100%; }
           .club-groupPlanningActions > * { min-width: 0; }
-          .club-groupPlanningActions .club-secondaryBtn { min-height: 44px; width: 100%; }
+          .club-groupPlanningActions .club-secondaryBtn { min-height: 40px; width: 100%; }
           .club-groupFixtureHint { margin-top: 0; }
           .club-planningMobileLayout { display: grid; gap: 7px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .club-planningSummary { display: contents; }
@@ -6991,10 +6991,10 @@ export default function ClubTournamentDetailPage() {
           .club-topbarActions { align-items:center; flex-wrap:nowrap; justify-content:flex-end; }
           .club-topbarActions .club-publishBtn { display:none; }
           .club-groupStandings { width: 100%; }
-          .club-groupStandingRow { gap: 2px; grid-template-columns: 22px minmax(0, 1fr) repeat(6, 23px); padding: 2px 5px; }
+          .club-groupStandingRow { gap: 2px; grid-template-columns: 22px minmax(0, 1fr) repeat(6, 23px); padding: 3px 5px; }
           .club-groupStandingRow--head { padding-block: 3px; }
-          .club-groupStandingRow span { font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 600; }
-          .club-groupStandingRow--head span { color:#52657a; font-size: 9.5px; }
+          .club-groupStandingRow span { font-size: 11.5px; font-variant-numeric: tabular-nums; font-weight: 600; line-height: 1.16; }
+          .club-groupStandingRow--head span { color:#52657a; font-size: 10px; }
           .club-groupStandingRow > span:nth-child(6) { background: rgba(6,182,212,.07); border-inline: 1px solid rgba(6,182,212,.18); color: #17253f; font-weight: 800; order: 3; }
           .club-groupStandingRow > span:nth-child(3) { order: 4; }
           .club-groupStandingRow > span:nth-child(4) { order: 5; }
@@ -7003,7 +7003,7 @@ export default function ClubTournamentDetailPage() {
           .club-groupStandingRow > span:nth-child(8) { order: 8; }
           .club-groupStandingTeam { align-items: center; display: flex; gap: 5px; min-width: 0; }
           .club-groupStandingPlayerNames { display: grid; gap: 1px; min-width: 0; }
-          .club-groupStandingPlayerNames > span { display: block; line-height:1.18; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .club-groupStandingPlayerNames > span { display: block; line-height:1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .club-groupStandingPlayerNames > span + span::before { content: ''; }
           .club-groupStandingRow--qualified .club-groupStandingPlayerNames > span { font-weight: 900; }
           .club-groupStandingTeam b { display: none; }

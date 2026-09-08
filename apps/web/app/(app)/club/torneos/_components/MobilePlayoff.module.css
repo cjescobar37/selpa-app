@@ -26,6 +26,11 @@
 .minimap button[aria-current] { background: #e7f5f6; border-radius: 9px; }
 .minimap button + button::before { content: '→'; color: #a4b5c2; position: absolute; left: -4px; font-size: 11px; font-weight: 400; }
 .content { min-width: 0; padding-top: 8px; }
+.bracketContent { background: #fff; box-sizing: border-box; display: flex; flex-direction: column; height: calc(100dvh - var(--playoff-nav-offset, 58px) - 90px); min-height: 0; padding-top: 4px; }
+.bracketContent .bracketTools, .bracketContent .tracking { flex: 0 0 auto; }
+.bracketContent .bracketWrap { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.bracketContent .canvas { flex: 1 1 auto; height: auto; min-height: 0; }
+.bracketContent .canvasControls { flex: 0 0 auto; }
 .roundList { display: grid; gap: 8px; }
 .card { position: relative; border: 1px solid #bfcdd9; border-radius: 11px; background: #fff; padding: 5px 9px 6px; min-width: 0; box-shadow: 0 2px 5px #19324b05; }
 .cardHead { display: flex; align-items: center; gap: 7px; min-width: 0; }
@@ -65,8 +70,9 @@
 .tracking > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tracking b { font-weight: 550; }
 .tracking button { border: 0; background: transparent; color: #146d82; min-height: 40px; font-size: 10px; display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
-.canvas { min-width: 0; max-width: 100%; overflow: auto; height: min(58dvh, 520px); background: #f4f8fa; border: 1px solid #dce6ec; border-radius: 12px; overscroll-behavior-x: contain; touch-action: pan-x pan-y; scrollbar-width: thin; scrollbar-color: #b3cdd7 transparent; }
-.canvas > div { position: relative; }
+.bracketWrap { min-width: 0; }
+.canvas { min-width: 0; max-width: 100%; overflow: auto; height: clamp(380px, calc(100dvh - var(--playoff-nav-offset, 58px) - 180px), 620px); background: #f4f8fa; border: 1px solid #dce6ec; border-radius: 12px; overscroll-behavior: contain; touch-action: pan-x pan-y; scrollbar-width: thin; scrollbar-color: #b3cdd7 transparent; }
+.canvas > div { min-height: calc(100% + 1px); position: relative; }
 .tree { position: relative; transform-origin: top left; }
 .connectors { position: absolute; top: 0; left: 0; pointer-events: none; }
 .connectors path { fill: none; stroke: #90afbe; stroke-width: 1.5; }
@@ -118,6 +124,7 @@
 .fullscreen .minimap { flex-shrink: 0; }
 .fullBracket { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 .fullBracket .canvas { border-radius: 10px; flex: 1; height: auto; min-height: 0; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; }
+.fullBracket .canvas > div { min-height: 0; }
 .fullBracket .canvasControls { border-top: 1px solid #e1e9ed; flex-shrink: 0; min-height: 48px; padding-bottom: env(safe-area-inset-bottom); }
 .future .scoreLabels, .future .score { display: none; }
 .future .teamRow { display: block; min-height: 24px; padding-block: 3px; }

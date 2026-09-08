@@ -138,7 +138,18 @@ export default function MobilePlayoff(props: Props) {
   }, [])
 
   const dismissHint = () => { setHint(false); try { sessionStorage.setItem('selpa-playoff-swipe-seen', '1') } catch { /* private browsing */ } }
-  const showBracket = () => { try { if (sessionStorage.getItem('selpa-playoff-swipe-seen')) setHint(false) } catch { /* private browsing */ } setView('bracket') }
+  const showBracket = () => {
+    try { if (sessionStorage.getItem('selpa-playoff-swipe-seen')) setHint(false) } catch { /* private browsing */ }
+    setView('bracket')
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const target = nav.current
+      const stage = root.current?.querySelector<HTMLElement>(`.${styles.bracketContent}`)
+      if (!target || !stage) return
+      const navbarHeight = document.querySelector<HTMLElement>('.px-nav')?.offsetHeight ?? 0
+      const stageTop = stage.getBoundingClientRect().top + window.scrollY
+      window.scrollTo({ top: Math.max(0, stageTop - navbarHeight - target.offsetHeight), behavior: 'auto' })
+    }))
+  }
   const showFullscreenBracket = () => { setFullscreenOriginY(window.scrollY); setFullscreen(true) }
   const selectRound = (index: number) => {
     setPhase(rounds[index].phase)
@@ -215,7 +226,7 @@ export default function MobilePlayoff(props: Props) {
       </div>
       {roundNav(view === 'bracket')}
     </div>
-    <div id={panelId} className={styles.content}>
+    <div id={panelId} className={`${styles.content} ${view === 'bracket' ? styles.bracketContent : ''}`}>
       {view === 'round' ? <div className={styles.roundList} aria-label={info(rounds[activeIndex]).label}>{displayRounds[activeIndex].slots.map((slot) => <div key={slot.id}>{card(slot)}</div>)}</div>
         : <>
           <div className={styles.bracketTools}><span>{hint ? '☝ Deslizá para recorrer las llaves' : info(rounds[activeIndex]).label}</span><button type="button" onClick={showFullscreenBracket}><Maximize2 size={15} /> Cuadro completo</button></div>
