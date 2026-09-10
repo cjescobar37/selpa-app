@@ -10,6 +10,13 @@ export type TournamentCircuitContext={
   event_id:string
   event_number:number|null
   planned_events_count:number|null
+  event_division_id:string
+  event_status:string
+  event_division_status:string
+  scoring_mode:string|null
+  homologation_status:string|null
+  settlement_status:string|null
+  points_scheme:{id:string;name:string;rules:Array<{rule_key:string;points:number}>;multiplier:number;source:'EVENT_DRAFT'|'EVENT_SNAPSHOT'|'SETTLEMENT_SNAPSHOT'}|null
 }
 
 /** Resolves the persisted Competition bridge without adding data to tournaments. */
@@ -21,12 +28,12 @@ export async function getTournamentCircuitContexts(client:SupabaseClient,clubId:
   const activeLinks=links.data??[]
   const divisionIds=[...new Set(activeLinks.map((link)=>link.event_division_id).filter(Boolean))]
   if(!divisionIds.length)return {}
-  const divisions=await client.from('competition_series_event_divisions').select('id,event_id').eq('club_id',clubId).in('id',divisionIds)
+  const divisions=await client.from('competition_series_event_divisions').select('id,event_id,status,scoring_mode,points_scheme_override_id,configuration_snapshot').eq('club_id',clubId).in('id',divisionIds)
   if(divisions.error)throw fail('list linked event divisions',divisions.error)
   const eventByDivision=new Map((divisions.data??[]).map((division)=>[division.id,division.event_id]))
   const eventIds=[...new Set([...eventByDivision.values()])]
   if(!eventIds.length)return {}
-  const events=await client.from('competition_series_events').select('id,series_id,event_number,sequence').eq('club_id',clubId).in('id',eventIds)
+  const events=await client.from('competition_series_events').select('id,series_id,event_number,sequence,status').eq('club_id',clubId).in('id',eventIds)
   if(events.error)throw fail('list linked events',events.error)
   const eventById=new Map((events.data??[]).map((event)=>[event.id,event]))
   const seriesIds=[...new Set((events.data??[]).map((event)=>event.series_id).filter(Boolean))]
@@ -34,6 +41,32 @@ export async function getTournamentCircuitContexts(client:SupabaseClient,clubId:
   const series=await client.from('competition_series').select('id,name,planned_events_count').eq('club_id',clubId).in('id',seriesIds)
   if(series.error)throw fail('list linked series',series.error)
   const seriesById=new Map((series.data??[]).map((item)=>[item.id,item]))
+  const [homologations,settlements]=await Promise.all([
+    client.from('competition_event_homologations').select('event_division_id,status,version,created_at').eq('club_id',clubId).in('event_division_id',divisionIds).order('version',{ascending:false}),
+    client.from('competition_event_settlements').select('event_division_id,status,version,points_scheme_id,effective_multiplier,calculation_snapshot,created_at').eq('club_id',clubId).in('event_division_id',divisionIds).order('version',{ascending:false}),
+  ])
+  if(homologations.error)throw fail('list tournament homologations',homologations.error)
+  if(settlements.error)throw fail('list tournament settlements',settlements.error)
+  const latestHomologation=new Map<string,Record<string,unknown>>()
+  for(const row of (homologations.data??[]) as Array<Record<string,unknown>>){const id=String(row.event_division_id);if(!latestHomologation.has(id))latestHomologation.set(id,row)}
+  const latestSettlement=new Map<string,Record<string,unknown>>()
+  for(const row of (settlements.data??[]) as Array<Record<string,unknown>>){const id=String(row.event_division_id);if(!latestSettlement.has(id))latestSettlement.set(id,row)}
+  const divisionById=new Map((divisions.data??[]).map((division)=>[division.id,division]))
+  const effectiveSchemeIds=new Set<string>()
+  for(const division of divisions.data??[]){
+    const settlement=latestSettlement.get(division.id)
+    const calculation=(settlement?.calculation_snapshot??null) as Record<string,unknown>|null
+    const configuration=(division.configuration_snapshot??null) as Record<string,unknown>|null
+    const id=String(settlement?.points_scheme_id??(calculation?.event_configuration as Record<string,unknown>|undefined)?.effective_points_scheme_id??configuration?.effective_points_scheme_id??division.points_scheme_override_id??'')
+    if(id)effectiveSchemeIds.add(id)
+  }
+  const schemes=effectiveSchemeIds.size?await client.from('points_schemes').select('id,name').in('id',[...effectiveSchemeIds]):{data:[],error:null}
+  if(schemes.error)throw fail('list effective points schemes',schemes.error)
+  const rules=effectiveSchemeIds.size?await client.from('points_scheme_rules').select('scheme_id,rule_key,points').in('scheme_id',[...effectiveSchemeIds]).order('rule_key'):{data:[],error:null}
+  if(rules.error)throw fail('list effective points rules',rules.error)
+  const schemeById=new Map((schemes.data??[]).map((scheme)=>[scheme.id,scheme]))
+  const rulesByScheme=new Map<string,Array<{rule_key:string;points:number}>>()
+  for(const rule of (rules.data??[]) as Array<{scheme_id:string;rule_key:string;points:number}>){const list=rulesByScheme.get(rule.scheme_id)??[];list.push({rule_key:rule.rule_key,points:Number(rule.points)});rulesByScheme.set(rule.scheme_id,list)}
   // `sequence` is an ordering key with intentional gaps (10, 20, ...), not the
   // human-facing date number. Derive the ordinal from persisted event order.
   const orderedEvents=await client.from('competition_series_events').select('id,series_id').eq('club_id',clubId).in('series_id',seriesIds).order('sequence')
@@ -52,8 +85,23 @@ export async function getTournamentCircuitContexts(client:SupabaseClient,clubId:
     const eventId=eventByDivision.get(link.event_division_id)
     const event=eventId?eventById.get(eventId):null
     const parent=event?seriesById.get(event.series_id):null
-    if(!event||!parent)continue
-    contexts[link.tournament_id]={tournament_id:link.tournament_id,series_id:parent.id,series_name:parent.name,event_id:event.id,event_number:eventPositionById.get(event.id)??event.event_number??null,planned_events_count:parent.planned_events_count??null}
+    const division=divisionById.get(link.event_division_id)
+    if(!event||!parent||!division)continue
+    const settlement=latestSettlement.get(division.id)
+    const homologation=latestHomologation.get(division.id)
+    const calculation=(settlement?.calculation_snapshot??null) as Record<string,unknown>|null
+    const configuration=(division.configuration_snapshot??null) as Record<string,unknown>|null
+    const schemeId=String(settlement?.points_scheme_id??(calculation?.event_configuration as Record<string,unknown>|undefined)?.effective_points_scheme_id??configuration?.effective_points_scheme_id??division.points_scheme_override_id??'')
+    const scheme=schemeId?schemeById.get(schemeId):null
+    const snapshotRules=Array.isArray(calculation?.points_rules)?calculation.points_rules as Array<{rule_key:string;points:number}>:null
+    const source:'EVENT_DRAFT'|'EVENT_SNAPSHOT'|'SETTLEMENT_SNAPSHOT'=settlement?'SETTLEMENT_SNAPSHOT':configuration?'EVENT_SNAPSHOT':'EVENT_DRAFT'
+    contexts[link.tournament_id]={
+      tournament_id:link.tournament_id,series_id:parent.id,series_name:parent.name,event_id:event.id,
+      event_number:eventPositionById.get(event.id)??event.event_number??null,planned_events_count:parent.planned_events_count??null,
+      event_division_id:division.id,event_status:String(event.status),event_division_status:String(division.status),scoring_mode:division.scoring_mode??null,
+      homologation_status:homologation?String(homologation.status):null,settlement_status:settlement?String(settlement.status):null,
+      points_scheme:scheme?{id:schemeId,name:String(scheme.name),rules:snapshotRules??rulesByScheme.get(schemeId)??[],multiplier:Number(settlement?.effective_multiplier??configuration?.effective_multiplier??1),source}:null,
+    }
   }
   return contexts
 }
@@ -111,6 +159,7 @@ export async function getEventDivisionCompletionPreflight(client:SupabaseClient,
   const tournament=await client.from('tournaments').select('id,name,status,club_id').eq('id',link.data.tournament_id).maybeSingle()
   if(tournament.error)throw fail('linked tournament',tournament.error)
   if(!tournament.data||tournament.data.club_id!==clubId){blockers.push({code:'TOURNAMENT_SCOPE_INVALID',message:'El torneo vinculado no pertenece al club.'});return{ready:false,blockers,warnings,tournament:null}}
+  if(String(tournament.data.status??'').toUpperCase()!=='FINISHED')blockers.push({code:'TOURNAMENT_NOT_FINISHED',message:'Finalizá formalmente el torneo antes de completar la fecha Competition.'})
   const matches=await client.from('tournament_matches').select('id,phase,status,team1_id,team2_id,winner_team_id,match_order,created_at').eq('tournament_id',tournament.data.id)
   if(matches.error)throw fail('linked tournament matches',matches.error);const rows=matches.data??[]
   if(!rows.length)blockers.push({code:'MATCHES_MISSING',message:'El torneo todavía no tiene partidos.'})

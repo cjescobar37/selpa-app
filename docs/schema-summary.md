@@ -747,6 +747,23 @@ El recorrido competitivo se define por club, temporada, jugador, rama y segmento
 
 RLS permite lectura administrativa con `ranking:view`. Los usuarios autenticados no tienen escritura directa: `assign_player_to_competition_division(...)` y `set_competition_player_entry_status(...)` son las RPCs canónicas y requieren `ranking:manage` o platform admin.
 
+#### Pipeline PAIRS → ranking individual
+
+La migración correctiva `20260909120000_competition_pairs_ranking_pipeline_fix.sql` mantiene dos conceptos separados:
+
+- `competition_series_divisions.division_id`: contexto deportivo de la serie/fecha; puede ser `PAIRS`.
+- `competition_series_divisions.ranking_division_id`: recorrido `INDIVIDUAL` donde cada integrante acredita puntos.
+
+Para una serie `PAIRS`, el mapping debe pertenecer al mismo club y temporada, tener la misma rama y categoría, no tener segmento y usar modalidad `INDIVIDUAL`. Una fecha `PAIRS + POINTS` no puede pasar a `SCHEDULED` sin mapping; al programarla se congela `ranking_division_id` en `competition_series_event_divisions.configuration_snapshot`.
+
+`competition_player_entries` sigue siendo exclusivamente individual: no existe entry ni ledger de parejas. La homologación resuelve la entrada individual vigente en la fecha efectiva del evento y conserva `tournament_team_id` como identidad histórica. Settlement consume esa elegibilidad congelada y publica un movimiento por jugador en `competition_point_transactions`, sobre la división individual congelada. Un cambio posterior de categoría no invalida el resultado ya homologado.
+
+`competition_pair_ranking_projection` es reconstruible desde ledger + settlement + `tournament_team_id`: exige exactamente dos jugadores distintos, cuenta una vez el resultado compartido, compensa reversals y expone como `division_id` la división individual acreditada. La vista usa `security_invoker`, revoca acceso a `anon`/`authenticated` y concede `SELECT` explícito a `service_role`.
+
+Cuando `RANKING_ENGINE_SOURCE=competition`, participantes, categorías y puntos provienen íntegramente de Competition (`competition_player_entries`, ledger y proyección de parejas). `club_players.ranking_points` queda reservado al modo legacy completo.
+
+Una división/fecha Competition vinculada no puede completarse hasta que `tournaments.status` sea `FINISHED`; tener una final jugada y campeón sólo significa que los resultados deportivos están completos.
+
 #### Backfill competitivo controlado
 
 - `competition_backfill_batches`: lote por club y temporada, con estados `DRAFT`, `REVIEWED`, `APPROVED`, `EXECUTED`, `CANCELLED` y `FAILED`.

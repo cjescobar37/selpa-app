@@ -9774,6 +9774,18 @@ revoke all on function public.get_public_club_profile(uuid) from public;
 grant execute on function public.get_public_club_profile(uuid) to anon,authenticated,service_role;
 
 --
+-- Competition Engine corrective schema overlay (2026-09-09).
+-- The Competition Engine itself is introduced by the ordered migrations under
+-- apps/web/supabase/migrations (the historical base dump predates Stage 5A).
+-- Its current additive contract is finalized by:
+--   20260909120000_competition_pairs_ranking_pipeline_fix.sql
+-- That migration adds competition_series_divisions.ranking_division_id, the
+-- same-club composite FK, validation/snapshot/finalization guards, temporal
+-- homologation, individual-ledger settlement and the security-invoker
+-- competition_pair_ranking_projection with an explicit service_role grant.
+-- Keep this manifest synchronized until the next regenerated full schema dump.
+--
+--
 -- PostgreSQL database dump complete
 --
 

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
+import { readCompetitionPlayerStandings } from '@/features/competition/ranking/competition-ranking.repository'
 
 type ClubPlayer = {
   id: string
@@ -143,6 +145,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ playerI
     }]
   }
 
+  const competitionMode = getRankingEngineSource() === 'competition'
+  const competitionEntry = competitionMode
+    ? (await readCompetitionPlayerStandings(player.club_id)).get(player.id)
+    : null
+
   return NextResponse.json({
     visibility: 'public',
     club,
@@ -150,9 +157,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ playerI
       id: player.id,
       user_id: player.user_id,
       full_name: publicName(profile),
-      category: player.category,
-      gender: player.gender,
-      ranking_points: Number(player.ranking_points ?? 0),
+      category: competitionEntry?.category ?? player.category,
+      gender: competitionEntry?.gender ?? player.gender,
+      ranking_points: competitionEntry?.points ?? (competitionMode ? 0 : Number(player.ranking_points ?? 0)),
       preferred_position: profile?.preferred_position ?? null,
     },
     profile: profile ? {

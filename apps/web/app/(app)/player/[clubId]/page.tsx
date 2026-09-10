@@ -175,20 +175,9 @@ export default function PlayerClubHomePage() {
         ])
 
         if (playerError) throw playerError
-        const currentPlayer = (playerData ?? null) as ClubPlayerRow | null
+        let currentPlayer = (playerData ?? null) as ClubPlayerRow | null
 
         let rank: number | null = null
-        const { data: rankingRows } = await supabase
-          .from('club_players')
-          .select('id,ranking_points,approved_at')
-          .eq('club_id', clubId)
-          .not('approved_at', 'is', null)
-          .order('ranking_points', { ascending: false })
-
-        if (currentPlayer && rankingRows && rankingRows.length > 0) {
-          const index = rankingRows.findIndex((row) => row.id === currentPlayer.id)
-          rank = index >= 0 ? index + 1 : null
-        }
 
         const today = new Date().toISOString().slice(0, 10)
         const { data: tournamentData } = await supabase
@@ -239,14 +228,18 @@ export default function PlayerClubHomePage() {
         const token = sessionData.session?.access_token
         let partnership: ActivePartnership | null = null
         if (token) {
-          const activeRes = await fetch(`/api/clubs/${clubId}/active-partnerships`, {
-            headers: { Authorization: `Bearer ${token}` },
-            cache: 'no-store',
-          })
+          const [activeRes,rankingRes] = await Promise.all([
+            fetch(`/api/clubs/${clubId}/active-partnerships`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }),
+            fetch(`/api/clubs/${clubId}/ranking`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }),
+          ])
           const activeJson = await activeRes.json().catch(() => ({ partnerships: [] }))
+          const rankingJson = await rankingRes.json().catch(() => ({ individual: [] }))
           const rows = activeRes.ok ? (activeJson.partnerships ?? []) as ActivePartnership[] : []
-          partnership = currentPlayer
-            ? rows.find((row) => row.status === 'ACTIVE' && (row.player1_club_player_id === currentPlayer.id || row.player2_club_player_id === currentPlayer.id)) ?? null
+          const standing = rankingRes.ok ? (rankingJson.individual ?? []).find((row: { user_id?: string }) => row.user_id === session.user?.id) as { ranking_points:number;category:number|null;gender:string|null;position:number }|undefined : undefined
+          if(currentPlayer&&standing){currentPlayer={...currentPlayer,ranking_points:standing.ranking_points,category:standing.category,gender:standing.gender};rank=standing.position}
+          const currentPlayerId = currentPlayer?.id
+          partnership = currentPlayerId
+            ? rows.find((row) => row.status === 'ACTIVE' && (row.player1_club_player_id === currentPlayerId || row.player2_club_player_id === currentPlayerId)) ?? null
             : null
         }
 

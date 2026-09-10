@@ -392,10 +392,11 @@ export default function PlayerHomePage() {
         const token = sessionData.session?.access_token
         let activeRows: ActivePartnership[] = []
         let inviteRows: PartnerInvite[] = []
+        const standingsByClubAndUser = new Map<string,{ranking_points:number;category:number|null;gender:string|null}>()
 
         if (token && clubIds.length) {
           const partnerResults = await Promise.all(clubIds.map(async (clubId) => {
-            const [activeRes, invitesRes] = await Promise.all([
+            const [activeRes, invitesRes, rankingRes] = await Promise.all([
               fetch(`/api/clubs/${clubId}/active-partnerships`, {
                 headers: { Authorization: `Bearer ${token}` },
                 cache: 'no-store',
@@ -404,12 +405,19 @@ export default function PlayerHomePage() {
                 headers: { Authorization: `Bearer ${token}` },
                 cache: 'no-store',
               }),
+              fetch(`/api/clubs/${clubId}/ranking`, {
+                headers: { Authorization: `Bearer ${token}` },
+                cache: 'no-store',
+              }),
             ])
             const activeJson = await activeRes.json().catch(() => ({ partnerships: [] }))
             const invitesJson = await invitesRes.json().catch(() => ({ invites: [] }))
+            const rankingJson = await rankingRes.json().catch(() => ({ individual: [] }))
             return {
+              clubId,
               partnerships: activeRes.ok ? (activeJson.partnerships ?? []) as ActivePartnership[] : [],
               invites: invitesRes.ok ? (invitesJson.invites ?? []) as PartnerInvite[] : [],
+              standings: rankingRes.ok ? (rankingJson.individual ?? []) as Array<{user_id:string;ranking_points:number;category:number|null;gender:string|null}> : [],
             }
           }))
 
@@ -421,10 +429,14 @@ export default function PlayerHomePage() {
             ).values()
           )
           inviteRows = partnerResults.flatMap((result) => result.invites)
+          for(const result of partnerResults)for(const standing of result.standings)standingsByClubAndUser.set(`${result.clubId}:${standing.user_id}`,standing)
         }
 
         if (!alive) return
-        setPlayers((playersResult.data ?? []) as ClubPlayerRow[])
+        setPlayers(((playersResult.data ?? []) as ClubPlayerRow[]).map((player) => {
+          const standing=standingsByClubAndUser.get(`${player.club_id}:${player.user_id}`)
+          return standing?{...player,ranking_points:standing.ranking_points,category:standing.category,gender:standing.gender}:player
+        }))
         setTournaments(tournamentRows)
         setMyTeams(teamRows)
         setRegistrations(registrationRows)

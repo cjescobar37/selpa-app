@@ -112,6 +112,12 @@ type TournamentSummary = {
     name: string
   } | null
   operationalStage: OperationalStage
+  sportsComplete: boolean
+  competitionState: {
+    key: 'SPORTS_COMPLETE' | 'TOURNAMENT_FINISHED' | 'RESULTS_HOMOLOGATED' | 'SETTLED'
+    title: string
+    message: string
+  } | null
   nextStep: string
 }
 
@@ -1219,8 +1225,7 @@ export default function ClubTournamentDetailPage() {
     registrationDeadline: summary?.tournament.registration_deadline,
   })
   const isTournamentFinished =
-    summary?.operationalStage === 'FINALIZADO' ||
-    ['FINALIZADO', 'FINISHED'].includes(summary?.tournament.status?.toUpperCase() ?? '')
+    ['FINALIZADO', 'FINISHED', 'COMPLETED'].includes(summary?.tournament.status?.toUpperCase() ?? '')
   const canFinalizeTournament = Boolean(summary?.champion) && !isTournamentFinished &&
     ['OPEN', 'RUNNING'].includes(String(summary?.tournament.status ?? '').toUpperCase())
   const canAddPair = Boolean(summary) && isTournamentOpen && !isTournamentFinished && !seedMeta.hasSeedSnapshot
@@ -1536,7 +1541,7 @@ export default function ClubTournamentDetailPage() {
     : null
   const operationalNextStep = useMemo(() => {
     if (!summary) return ''
-    if (summary.champion || summary.operationalStage === 'FINALIZADO') return 'Torneo terminado.'
+    if (summary.competitionState) return summary.competitionState.title
     if (isDraft) return 'Publicá el torneo para abrir las inscripciones.'
     if (!seedMeta.hasSeedSnapshot) return canGenerateSeed
       ? 'Las parejas están listas. Generá el seed.'
@@ -3880,6 +3885,9 @@ export default function ClubTournamentDetailPage() {
     if (isDraft) {
       return <button type="button" className="club-nextAction" onClick={() => requestConfirmation({ title: 'Publicar torneo', body: 'Esto abre las inscripciones del torneo. Podés seguir gestionándolo desde este centro de control.', confirmLabel: 'Publicar torneo', onConfirm: publishTournament })} disabled={publishing || loading || deletingTournament || cancellingTournament}>{publishing ? 'Publicando...' : 'Publicar ahora →'}</button>
     }
+    if (summary.champion && !isTournamentFinished) {
+      return <button type="button" className="club-nextAction" disabled={finalizingTournament} onClick={() => requestConfirmation({ title: 'Finalizar torneo', body: 'Confirmá que todos los resultados están cargados. Se guardará el campeón y recién entonces quedará habilitado el siguiente paso Competition.', confirmLabel: 'Finalizar torneo', onConfirm: finalizeTournament })}>{finalizingTournament ? 'Finalizando…' : 'Finalizar torneo →'}</button>
+    }
     if (summary.champion) {
       return <button type="button" className="club-nextAction" onClick={() => document.querySelector('.club-championCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Ver campeón y cierre →</button>
     }
@@ -4429,7 +4437,7 @@ export default function ClubTournamentDetailPage() {
                         <article className="club-nextCard">
                           <span className="club-kicker">Próximo paso</span>
                           <h2>{isTournamentPaused ? 'Este torneo está pausado.' : operationalNextStep}</h2>
-                          <p>{isTournamentPaused ? 'Nadie puede inscribirse hasta que lo reanudes.' : isDraft ? 'Publicalo para abrir las inscripciones.' : 'Seguimos el estado operativo del torneo en tiempo real.'}</p>
+                          <p>{isTournamentPaused ? 'Nadie puede inscribirse hasta que lo reanudes.' : isDraft ? 'Publicalo para abrir las inscripciones.' : summary.competitionState?.message ?? 'Seguimos el estado operativo del torneo en tiempo real.'}</p>
                           {renderPrimaryNextAction()}
                         </article>
 

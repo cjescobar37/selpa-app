@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { getTokenUser } from '@/lib/platformApiAuth'
 import { getApprovedMembership, userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
+import { readCompetitionPlayerStandings } from '@/features/competition/ranking/competition-ranking.repository'
 
 type PlayerRow = { id: string; user_id: string | null; display_name: string | null; category: number | null; gender: string | null; ranking_points: number | null; approved_at: string | null; created_at: string; operational_status: 'ACTIVE' | 'BLOCKED' | 'LEFT' }
 type MembershipRow = { id: string; role: string; status: string; created_at: string; approved_at: string | null; rejection_reason: string | null }
@@ -93,11 +95,14 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     && lifecycleTargetAllowed,
   )
   const canReincorporate = Boolean(canManageLifecycle && player.operational_status === 'LEFT' && (manualAccount || playerMembership?.id))
+  const competitionEntry = getRankingEngineSource() === 'competition'
+    ? (await readCompetitionPlayerStandings(clubId)).get(player.id)
+    : null
 
   return NextResponse.json({
     player: {
       id: player.id, user_id: player.user_id, full_name: fullName(profile, player.display_name), avatar_url: profile?.avatar_url ?? null, operational_status: player.operational_status,
-      category: player.category, gender: player.gender, ranking_points: Number(player.ranking_points ?? 0), approved_at: player.approved_at, created_at: player.created_at,
+      category: competitionEntry?.category ?? player.category, gender: competitionEntry?.gender ?? player.gender, ranking_points: competitionEntry?.points ?? (getRankingEngineSource() === 'competition' ? 0 : Number(player.ranking_points ?? 0)), approved_at: player.approved_at, created_at: player.created_at,
       account_kind: manualAccount ? 'MANUAL' : 'REGISTERED',
       personal: canViewPrivate ? { email: manualAccount ? null : profile?.email ?? null, city: profile?.city ?? null, birth_date: profile?.birth_date ?? null, dominant_hand: profile?.dominant_hand ?? null, preferred_position: profile?.preferred_position ?? null } : null,
     },

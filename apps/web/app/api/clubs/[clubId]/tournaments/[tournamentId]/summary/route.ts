@@ -2,14 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getTournamentCircuitContexts } from '@/features/competition/events/competition-events.repository'
-
-type OperationalStage =
-  | 'BORRADOR'
-  | 'INSCRIPCIONES'
-  | 'LISTO_PARA_INICIAR'
-  | 'GRUPOS'
-  | 'PLAYOFF'
-  | 'FINALIZADO'
+import { deriveCompetitionPipelineState, deriveTournamentOperationalStage } from '@/lib/competitionTournamentState'
 
 type TournamentRow = {
   id: string
@@ -106,14 +99,6 @@ function getTournamentType(row: TournamentRow) {
   return row.tournament_type ?? row.type ?? null
 }
 
-function isFinishedStatus(status: string) {
-  return status === 'FINISHED' || status === 'COMPLETED'
-}
-
-function isOpenStatus(status: string) {
-  return status === 'OPEN' || status === 'PUBLISHED' || status === 'REGISTRATION_OPEN'
-}
-
 function getFullName(profile?: ProfileRow | null) {
   return (
     profile?.display_name ||
@@ -133,23 +118,8 @@ function getTeamName(team: TeamRow | null | undefined, profilesByUserId: Map<str
   return userIds.map((userId) => getFullName(profilesByUserId.get(userId))).join(' / ')
 }
 
-function deriveOperationalStage(input: {
-  status: string
-  groupCount: number
-  groupMatchesTotal: number
-  playoffMatchesCount: number
-  hasChampion: boolean
-}): OperationalStage {
-  if (input.hasChampion || isFinishedStatus(input.status)) return 'FINALIZADO'
-  if (input.status === 'DRAFT') return 'BORRADOR'
-  if (input.playoffMatchesCount > 0) return 'PLAYOFF'
-  if (input.groupCount > 0 || input.groupMatchesTotal > 0) return 'GRUPOS'
-  if (isOpenStatus(input.status)) return 'INSCRIPCIONES'
-  return 'INSCRIPCIONES'
-}
-
 function deriveNextStep(input: {
-  stage: OperationalStage
+  stage: ReturnType<typeof deriveTournamentOperationalStage>
   confirmedRegistrations: number
   minPairs: number
   groupMatchesPlayed: number
@@ -336,12 +306,18 @@ export async function GET(
     const status = String(tournamentRow.status ?? 'DRAFT').toUpperCase()
     const minPairs = Number(tournamentRow.min_pairs ?? 6)
     const groupMatchesPlayed = groupMatches.filter((match) => match.status === 'PLAYED').length
-    const operationalStage = deriveOperationalStage({
+    const sportsComplete = Boolean(championTeamId)
+    const operationalStage = deriveTournamentOperationalStage({
       status,
       groupCount: groupCount ?? 0,
       groupMatchesTotal: groupMatches.length,
       playoffMatchesCount: playoffMatches.length,
-      hasChampion: Boolean(championTeamId),
+    })
+    const competitionState = deriveCompetitionPipelineState({
+      tournamentStatus: status,
+      sportsComplete,
+      homologationStatus: circuit?.homologation_status,
+      settlementStatus: circuit?.settlement_status,
     })
     const nextStep = deriveNextStep({
       stage: operationalStage,
@@ -376,6 +352,7 @@ export async function GET(
         points_total: tournamentRow.points_total,
         created_at: tournamentRow.created_at,
         updated_at: tournamentRow.updated_at,
+        points_scheme: circuit?.points_scheme ?? null,
         circuit,
       },
       counts: {
@@ -411,6 +388,8 @@ export async function GET(
           }
         : null,
       operationalStage,
+      sportsComplete,
+      competitionState,
       currentPlayoffPhase,
       nextStep,
     })

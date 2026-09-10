@@ -7,7 +7,7 @@ import {
 import type { CompetitionPointsSource } from './competition-points.types'
 
 export function getCompetitionPointsSource(): CompetitionPointsSource {
-  if (process.env.COMPETITION_POINTS_SOURCE === undefined) return 'legacy'
+  if (process.env.COMPETITION_POINTS_SOURCE === undefined) return 'ledger'
   const value = process.env.COMPETITION_POINTS_SOURCE.trim().toLowerCase()
   if (value !== 'legacy' && value !== 'ledger') {
     throw new Error(`COMPETITION_POINTS_SOURCE inválido: ${value || '<vacío>'}`)

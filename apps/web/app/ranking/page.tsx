@@ -1,6 +1,7 @@
 import PublicRankingExperience, { type PublicRankingPlayer } from '@/components/public/PublicRankingExperience'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { BRAND } from '@/lib/branding'
+import { getCompetitionRanking, getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,9 +69,7 @@ export default async function RankingPublicPage({
 
   const clubsById = new Map(((clubRows ?? []) as ClubRow[]).map((club) => [club.id, club]))
   const profilesByUser = new Map(((profileRows ?? []) as ProfileRow[]).map((profile) => [profile.user_id, profile]))
-  const playersByUser = new Map(players.filter((player) => player.user_id).map((player) => [player.user_id as string, player]))
-
-  const publicPlayers: PublicRankingPlayer[] = players.map((player) => {
+  let publicPlayers: PublicRankingPlayer[] = players.map((player) => {
     const club = clubsById.get(player.club_id)
     const profile = player.user_id ? profilesByUser.get(player.user_id) : null
     return {
@@ -87,27 +86,54 @@ export default async function RankingPublicPage({
     }
   })
 
+  const rankingEngineSource = getRankingEngineSource()
+  if (rankingEngineSource === 'competition') {
+    const competitionPlayers = await Promise.all(clubIds.map(async (clubId) => {
+      try {
+        const ranking = await getCompetitionRanking(clubId, new Map())
+        const club = clubsById.get(clubId)
+        return ranking.rows.map((player): PublicRankingPlayer => ({
+          id: player.playerId,
+          clubId,
+          clubName: club?.name ?? `Club ${BRAND.name}`,
+          clubLogoUrl: club?.logo_url ?? null,
+          clubThemeKey: club?.theme_key ?? null,
+          name: player.fullName,
+          avatarUrl: player.avatarUrl,
+          category: player.category,
+          gender: player.gender,
+          points: player.points,
+        }))
+      } catch {
+        return []
+      }
+    }))
+    publicPlayers = competitionPlayers.flat()
+  }
+
   const clubs = Array.from(new Set(publicPlayers.map((player) => player.clubName))).sort((a, b) => a.localeCompare(b))
 
   const { data: projectionData, error: projectionError } = clubIds.length
     ? await supabaseAdmin.from('competition_pair_ranking_projection').select('club_id,player1_user_id,player2_user_id,pair_key,total_points').in('club_id', clubIds)
     : { data: [], error: null }
 
-  const publicPairs = projectionError ? [] : ((projectionData ?? []) as PairProjectionRow[])
+  const publicPlayerByUser = new Map(publicPlayers.map((player) => {
+    const legacy = players.find((candidate) => candidate.id === player.id)
+    return [legacy?.user_id ?? '', player] as const
+  }).filter(([userId]) => Boolean(userId)))
+  const publicPairs = rankingEngineSource !== 'competition' || projectionError ? [] : ((projectionData ?? []) as PairProjectionRow[])
     .map((pair) => {
-      const player1 = playersByUser.get(pair.player1_user_id)
-      const player2 = playersByUser.get(pair.player2_user_id)
-      if (!player1 || !player2 || player1.club_id !== pair.club_id || player2.club_id !== pair.club_id) return null
-      const profile1 = profilesByUser.get(pair.player1_user_id)
-      const profile2 = profilesByUser.get(pair.player2_user_id)
+      const player1 = publicPlayerByUser.get(pair.player1_user_id)
+      const player2 = publicPlayerByUser.get(pair.player2_user_id)
+      if (!player1 || !player2 || player1.clubId !== pair.club_id || player2.clubId !== pair.club_id) return null
       return {
         partnership_id: pair.pair_key,
         player1_user_id: '',
         player2_user_id: '',
-        player1_name: displayName(player1, profile1),
-        player2_name: displayName(player2, profile2),
-        player1_avatar_url: profile1?.avatar_url ?? null,
-        player2_avatar_url: profile2?.avatar_url ?? null,
+        player1_name: player1.name,
+        player2_name: player2.name,
+        player1_avatar_url: player1.avatarUrl,
+        player2_avatar_url: player2.avatarUrl,
         player1_points: Number(pair.total_points),
         player2_points: Number(pair.total_points),
         combined_points: Number(pair.total_points),

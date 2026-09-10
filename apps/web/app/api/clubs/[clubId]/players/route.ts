@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getApprovedMembership, userHasClubCapability } from '@/lib/clubMembershipServer'
+import { getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
+import { readCompetitionPlayerStandings } from '@/features/competition/ranking/competition-ranking.repository'
 
 type ProfileRow = {
   user_id: string | null
@@ -107,6 +109,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     if (membershipsRes.error) return NextResponse.json({ error: membershipsRes.error.message }, { status: 500 })
 
     const players = (playersRes.data ?? []) as PlayerRow[]
+    const competitionByPlayer = getRankingEngineSource() === 'competition'
+      ? await readCompetitionPlayerStandings(clubId)
+      : null
     const memberships = (membershipsRes.data ?? []) as MembershipRow[]
     const isPlanillero = membership.role === 'PLANILLERO'
     const profiles = await getProfilesMap([
@@ -119,6 +124,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         const profile = player.user_id ? profiles.get(player.user_id) ?? null : null
         return {
           ...player,
+          category: competitionByPlayer?.get(player.id)?.category ?? player.category,
+          gender: competitionByPlayer?.get(player.id)?.gender ?? player.gender,
+          ranking_points: competitionByPlayer ? competitionByPlayer.get(player.id)?.points ?? 0 : player.ranking_points,
           profile,
           full_name: getFullName(profile, player.display_name),
         }

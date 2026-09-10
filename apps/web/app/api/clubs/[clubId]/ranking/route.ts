@@ -398,6 +398,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       const competition = await getCompetitionRanking(clubId, competitionStats)
       competitionRows = competition.rows
       rankedIndividual = competition.rows.map(mapCompetitionRankingToLegacyContract)
+      configuredCategories = competition.categories
     }
 
     const legacyPairs = activePartnerships
@@ -491,13 +492,10 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       }
     }
 
-    if (!warnings.some((warning) => warning.includes('supabase_full.sql'))) {
-      warnings.push('Deuda detectada: supabase_full.sql/docs no reflejan completamente tournament_matches ni ranking_points, aunque el código actual los usa.')
-    }
-
     const response = NextResponse.json({
       meta: {
         source: 'derived',
+        engineSource: rankingEngineSource,
         individualSource: rankingEngineSource === 'competition' ? 'competition_point_transactions' : 'club_players.ranking_points',
         pairSource: rankingEngineSource === 'competition' ? 'competition_pair_ranking_projection' : 'player_active_partnerships ACTIVE + club_players.ranking_points',
         generatedAt: new Date().toISOString(),

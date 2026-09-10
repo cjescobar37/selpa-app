@@ -54,6 +54,7 @@ type ClubRankingCategory = { id: number; name: string }
 type RankingResponse = {
   meta?: {
     source: string
+    engineSource?: 'legacy' | 'competition'
     individualSource: string
     pairSource: string
     generatedAt: string
@@ -308,7 +309,7 @@ export default function ClubRankingPage() {
             ) : !availableCategories.length ? null : view === 'pairs' ? (
               pairRows.length ? <>
                 <PairRankingBoard rows={pairRows} />
-                <p className="club-rankingPairNote">Los puntos de la pareja corresponden a la suma de los puntos individuales de ambos jugadores.</p>
+                <p className="club-rankingPairNote">{data?.meta?.engineSource === 'competition' ? 'Los puntos de la pareja corresponden a los resultados que ambos jugadores obtuvieron juntos.' : 'Los puntos de la pareja corresponden a la suma de los puntos individuales de ambos jugadores.'}</p>
               </> : <div className="px-empty">{query ? 'No encontramos parejas con esa búsqueda.' : 'No hay parejas activas en esta categoría.'}</div>
             ) : individualCount ? (
               <RankingBoard columns={rankingBoardColumns} className="clubAdminRankingBoard" mobileGender={gender} showMobileTabs={false} showColumnHeader={false} showMetadata={false} />

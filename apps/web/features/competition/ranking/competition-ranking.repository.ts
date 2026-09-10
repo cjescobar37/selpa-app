@@ -1,12 +1,12 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getCompetitionPointsSource, getLedgerPointsByEntry } from '@/features/competition/points/competition-points.service'
+import { getLedgerPointsByEntry } from '@/features/competition/points/competition-points.service'
 import type { CompetitionRankingBasePlayer, CompetitionRankingResult } from './competition-ranking.types'
 
 type DivisionRow = { id: string; branch_id: string; category_id: string | null }
 type BranchRow = { id: string; slug: string }
 type CategoryRow = { id: string; legacy_category_id: number | null; name: string }
 type EntryRow = { id: string; club_player_id: string; division_id: string }
-type PlayerRow = { id: string; user_id: string; display_name: string | null; ranking_points: number | null; approved_at: string | null }
+type PlayerRow = { id: string; user_id: string; display_name: string | null; approved_at: string | null }
 type ProfileRow = { user_id: string; display_name: string | null; first_name: string | null; last_name: string | null; avatar_url: string | null }
 
 function fullName(profile: ProfileRow | undefined, fallback: string | null) {
@@ -48,8 +48,7 @@ export async function readCompetitionRanking(clubId: string): Promise<Competitio
   if (!playerIds.length) return { seasonId, players: [], categories: [] }
 
   const { data: playersData, error: playersError } = await supabaseAdmin.from('club_players')
-    // Stage 3 migrates membership and divisions first; points remain legacy until the ledger exists.
-    .select('id,user_id,display_name,ranking_points,approved_at').eq('club_id', clubId)
+    .select('id,user_id,display_name,approved_at').eq('club_id', clubId)
     .not('approved_at', 'is', null).in('id', playerIds)
   if (playersError) throw new Error('No pude leer los jugadores competitivos.')
   const players = (playersData ?? []) as PlayerRow[]
@@ -60,8 +59,7 @@ export async function readCompetitionRanking(clubId: string): Promise<Competitio
   if (profilesError) throw new Error('No pude leer los perfiles competitivos.')
   const profiles = new Map(((profilesData ?? []) as ProfileRow[]).map((row) => [row.user_id, row]))
   const playersById = new Map(players.map((row) => [row.id, row]))
-  const pointsSource = getCompetitionPointsSource()
-  const ledgerPoints = pointsSource === 'ledger' ? await getLedgerPointsByEntry(clubId, seasonId) : null
+  const ledgerPoints = await getLedgerPointsByEntry(clubId, seasonId)
   const seen = new Set<string>()
   const result: CompetitionRankingBasePlayer[] = []
 
@@ -73,9 +71,7 @@ export async function readCompetitionRanking(clubId: string): Promise<Competitio
     const category = division?.category_id ? categories.get(division.category_id) : undefined
     const gender = branch?.slug === 'caballeros' ? 'M' : branch?.slug === 'damas' ? 'F' : null
     if (!division || !player || !gender || !category?.legacy_category_id || category.legacy_category_id < 1 || category.legacy_category_id > 7) continue
-    const legacyPoints = Number.isFinite(player.ranking_points ?? NaN) ? Number(player.ranking_points) : 0
-    const points = pointsSource === 'ledger' ? ledgerPoints?.get(entry.id) : legacyPoints
-    if (points === undefined) throw new Error(`El ledger no devolvió la entrada competitiva ${entry.id}.`)
+    const points = ledgerPoints.get(entry.id) ?? 0
     seen.add(entry.club_player_id)
     result.push({
       playerEntryId: entry.id,
@@ -88,4 +84,14 @@ export async function readCompetitionRanking(clubId: string): Promise<Competitio
 
   const usedCategories = new Map(result.map((row) => [row.category, { id: row.category, name: row.categoryName }]))
   return { seasonId, players: result, categories: [...usedCategories.values()].sort((a, b) => a.id - b.id) }
+}
+
+export async function readCompetitionPlayerStandings(clubId: string) {
+  try {
+    const ranking = await readCompetitionRanking(clubId)
+    return new Map(ranking.players.map((entry) => [entry.playerId, entry]))
+  } catch (error) {
+    if (error instanceof Error && error.message === 'El club no tiene una temporada competitiva activa.') return new Map()
+    throw error
+  }
 }
