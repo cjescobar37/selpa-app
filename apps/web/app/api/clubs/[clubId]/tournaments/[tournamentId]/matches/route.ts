@@ -173,11 +173,14 @@ export async function GET(
         const team1 = teams.get(match.team1_id) ?? null
         const team2 = teams.get(match.team2_id) ?? null
 
+        const assignment = matchScheduleAssignments[match.id]
+
         return {
           ...match,
-          court_name: matchScheduleAssignments[match.id]?.court_name ?? null,
-          court_id: matchScheduleAssignments[match.id]?.court_id ?? null,
-          court_source: matchScheduleAssignments[match.id]?.court_source ?? null,
+          scheduled_at: assignment?.scheduled_at ?? match.scheduled_at,
+          court_name: assignment?.court_name ?? null,
+          court_id: assignment?.court_id ?? null,
+          court_source: assignment?.court_source ?? null,
           team1_name: getTeamName(team1, profiles),
           team2_name: getTeamName(team2, profiles),
           team1: team1

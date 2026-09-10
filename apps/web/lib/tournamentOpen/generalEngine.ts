@@ -357,39 +357,73 @@ function minimizeSameGroupConflicts(pairings: Array<[OpenGlobalSeed, OpenGlobalS
   return next
 }
 
+export function buildCanonicalSeedLine(bracketSize: number): number[] {
+  if (!Number.isInteger(bracketSize) || bracketSize < 2 || (bracketSize & (bracketSize - 1)) !== 0) {
+    throw new OpenTournamentEngineError('INVALID_BRACKET_SIZE', 'bracketSize debe ser una potencia de 2 mayor o igual a 2.')
+  }
+
+  if (bracketSize === 2) return [1, 2]
+  const previous = buildCanonicalSeedLine(bracketSize / 2)
+  return previous.flatMap((seed) => [seed, bracketSize + 1 - seed])
+}
+
+type PairPlanEntry = {
+  kind: 'BYE' | 'PLAYABLE' | 'EMPTY'
+  byeTeam: OpenGlobalSeed | null
+}
+
 function buildPairPlan(input: {
   bracketSize: number
   byeTeams: OpenGlobalSeed[]
   teamsEnteringFirstRound: OpenGlobalSeed[]
 }) {
+  const totalParticipants = input.byeTeams.length + input.teamsEnteringFirstRound.length
   const firstRoundPairCount = input.bracketSize / 2
-  const nextRoundMatchCount = Math.max(1, firstRoundPairCount / 2)
-  const pairKinds: Array<'BYE' | 'PLAYABLE' | 'EMPTY'> = Array(firstRoundPairCount).fill('EMPTY')
-  let remainingByes = input.byeTeams.length
-  let remainingPlayablePairs = input.teamsEnteringFirstRound.length / 2
+  const pairPlan: PairPlanEntry[] = Array.from({ length: firstRoundPairCount }, () => ({
+    kind: 'EMPTY',
+    byeTeam: null,
+  }))
+  const byeTeamBySeed = new Map(input.byeTeams.map((team) => [team.globalSeed, team]))
+  const seedLine = buildCanonicalSeedLine(input.bracketSize)
 
-  for (let groupIndex = 0; groupIndex < nextRoundMatchCount; groupIndex += 1) {
-    const firstPairIndex = groupIndex * 2
-    const secondPairIndex = firstPairIndex + 1
+  for (let pairIndex = 0; pairIndex < firstRoundPairCount; pairIndex += 1) {
+    const firstSeed = seedLine[pairIndex * 2]
+    const secondSeed = seedLine[pairIndex * 2 + 1]
+    const firstIsReal = firstSeed <= totalParticipants
+    const secondIsReal = secondSeed <= totalParticipants
 
-    if (remainingByes > 0) {
-      pairKinds[firstPairIndex] = 'BYE'
-      remainingByes -= 1
-    } else if (remainingPlayablePairs > 0) {
-      pairKinds[firstPairIndex] = 'PLAYABLE'
-      remainingPlayablePairs -= 1
+    if (firstIsReal === secondIsReal) continue
+    const beneficiarySeed = firstIsReal ? firstSeed : secondSeed
+    const byeTeam = byeTeamBySeed.get(beneficiarySeed)
+    if (!byeTeam) {
+      throw new OpenTournamentEngineError(
+        'INVALID_BRACKET_PLAN',
+        `No se encontró el seed global ${beneficiarySeed} esperado para un BYE canónico.`
+      )
     }
 
-    if (remainingPlayablePairs > 0) {
-      pairKinds[secondPairIndex] = 'PLAYABLE'
-      remainingPlayablePairs -= 1
-    } else if (remainingByes > 0) {
-      pairKinds[secondPairIndex] = 'BYE'
-      remainingByes -= 1
-    }
+    pairPlan[pairIndex] = { kind: 'BYE', byeTeam }
   }
 
-  return pairKinds
+  const assignedByeIds = new Set(
+    pairPlan.flatMap((entry) => entry.byeTeam ? [entry.byeTeam.teamId] : [])
+  )
+  if (assignedByeIds.size !== input.byeTeams.length) {
+    throw new OpenTournamentEngineError('INVALID_BYE_COUNT', 'La seed-line canónica no pudo ubicar todos los BYEs.')
+  }
+
+  let remainingPlayablePairs = input.teamsEnteringFirstRound.length / 2
+  for (let pairIndex = 0; pairIndex < pairPlan.length && remainingPlayablePairs > 0; pairIndex += 1) {
+    if (pairPlan[pairIndex].kind !== 'EMPTY') continue
+    pairPlan[pairIndex] = { kind: 'PLAYABLE', byeTeam: null }
+    remainingPlayablePairs -= 1
+  }
+
+  if (remainingPlayablePairs !== 0) {
+    throw new OpenTournamentEngineError('INVALID_BRACKET_PLAN', 'No alcanzan posiciones para ubicar todos los cruces jugables.')
+  }
+
+  return pairPlan
 }
 
 export function buildBracketSlots(input: {
@@ -412,28 +446,25 @@ export function buildBracketSlots(input: {
   const playablePairs = config.avoidSameGroupFirstRound
     ? minimizeSameGroupConflicts(basePlayablePairs)
     : basePlayablePairs
-  const pairKinds = buildPairPlan({ bracketSize, byeTeams, teamsEnteringFirstRound })
+  const pairPlan = buildPairPlan({ bracketSize, byeTeams, teamsEnteringFirstRound })
   const slots: OpenGeneralBracketSlot[] = []
   const firstRoundMatches: OpenFirstRoundMatch[] = []
-  let byeIndex = 0
   let playablePairIndex = 0
 
-  pairKinds.forEach((kind, pairIndex) => {
+  pairPlan.forEach((entry, pairIndex) => {
     const pairOrder = pairIndex + 1
     const advancesToMatchOrder = Math.ceil(pairOrder / 2)
     const position = pairIndex * 2 + 1
 
-    if (kind === 'BYE') {
-      const team = byeTeams[byeIndex] ?? null
-      byeIndex += 1
+    if (entry.kind === 'BYE') {
       slots.push(
-        { position, pairOrder, pairSlot: 1, team, isByeSlot: false, advancesToMatchOrder },
+        { position, pairOrder, pairSlot: 1, team: entry.byeTeam, isByeSlot: false, advancesToMatchOrder },
         { position: position + 1, pairOrder, pairSlot: 2, team: null, isByeSlot: true, advancesToMatchOrder }
       )
       return
     }
 
-    if (kind === 'PLAYABLE') {
+    if (entry.kind === 'PLAYABLE') {
       const pair = playablePairs[playablePairIndex]
       playablePairIndex += 1
       if (!pair) {

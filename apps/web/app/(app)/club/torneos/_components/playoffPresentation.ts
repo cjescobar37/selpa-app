@@ -5,6 +5,8 @@ export type MobilePlayoffMatch = {
   status: string | null
   scheduled_at?: string | null
   court_name?: string | null
+  court_id?: string | null
+  court_source?: string | null
   team1_id: string
   team2_id: string
   team1_name?: string | null

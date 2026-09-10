@@ -26,6 +26,7 @@ import { OpenTournamentEngineError, type OpenBracketPlan, type OpenPersistableMa
 import { getTournamentRegistrationEligibilityGate } from '@/lib/tournamentRegistrationEligibility'
 import { evaluatePlayoffSchedulingPlan } from '@/lib/tournamentPlayoffSchedulingDiagnostics'
 import { normalizeScheduleConfig, normalizeTournamentCourts, readMatchScheduleAssignments, type MatchScheduleAssignment } from '@/lib/tournamentSchedule'
+import { clearPlayoffScheduleReservationsFromRules } from '@/lib/tournamentPlayoffScheduleReservations'
 
 type OpenPlayoffErrorCode =
   | 'UNAUTHORIZED'
@@ -453,7 +454,9 @@ function removePlayoffScheduleState(input: {
     }
   }
 
-  const { playoff_plan: _playoffPlan, ...nextRules } = input.rules
+  const rulesWithoutReservations = clearPlayoffScheduleReservationsFromRules(input.rules)
+  const nextRules = { ...rulesWithoutReservations }
+  delete nextRules.playoff_plan
   nextRules.match_schedule_assignments = nextAssignments
   return nextRules
 }

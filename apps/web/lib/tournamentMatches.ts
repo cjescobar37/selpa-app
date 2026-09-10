@@ -1,5 +1,11 @@
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
 import { materializeOpenGroupDependentMatches } from '@/lib/tournamentOpenGroupDependencies'
+import {
+  cleanupFuturePlayoffReservationForRealMatch,
+  promoteFuturePlayoffScheduleToMatch,
+  readFuturePlayoffScheduleForMaterialization,
+} from '@/lib/tournamentPlayoffScheduleServer'
+import type { PlayoffSchedulePhase } from '@/lib/tournamentPlayoffScheduleReservations'
 
 export type MatchStatus = 'PENDING' | 'PLAYED' | 'CANCELLED'
 export type MatchPhase =
@@ -457,6 +463,64 @@ function getSourceWinnersForDependentMatch(input: {
   }
 }
 
+async function createDependentPlayoffMatch(input: {
+  tournamentId: string
+  clubId: string
+  team1Id: string
+  team2Id: string
+  phase: MatchPhase
+  round: number
+  matchOrder: number
+}) {
+  const phase = input.phase as PlayoffSchedulePhase
+  const futureSchedule = await readFuturePlayoffScheduleForMaterialization({
+    tournamentId: input.tournamentId,
+    clubId: input.clubId,
+    phase,
+    matchOrder: input.matchOrder,
+  })
+
+  const { match } = await createMatch({
+    tournamentId: input.tournamentId,
+    clubId: input.clubId,
+    groupId: null,
+    team1Id: input.team1Id,
+    team2Id: input.team2Id,
+    phase: input.phase,
+    round: input.round,
+    matchOrder: input.matchOrder,
+    scheduledAt: futureSchedule.reservation?.scheduled_at ?? null,
+  })
+
+  if (!match?.id) return match
+
+  try {
+    await promoteFuturePlayoffScheduleToMatch({
+      tournamentId: input.tournamentId,
+      clubId: input.clubId,
+      phase,
+      matchOrder: input.matchOrder,
+      matchId: match.id,
+    })
+  } catch (error) {
+    const { error: rollbackError } = await supabaseAdmin
+      .from('tournament_matches')
+      .delete()
+      .eq('id', match.id)
+      .eq('tournament_id', input.tournamentId)
+      .eq('club_id', input.clubId)
+
+    if (rollbackError) {
+      throw new Error(
+        `No pude promover la programación del playoff y tampoco revertir el partido creado: ${rollbackError.message}`
+      )
+    }
+    throw error
+  }
+
+  return match
+}
+
 async function propagatePlayoffWinner(input: {
   match: PlayoffMatchRow
   winnerTeamId: string | null | undefined
@@ -517,6 +581,14 @@ async function propagatePlayoffWinner(input: {
       .single()
 
     if (error) throw new Error(`No pude propagar el ganador a la llave siguiente: ${error.message}`)
+
+    await cleanupFuturePlayoffReservationForRealMatch({
+      tournamentId: input.match.tournament_id,
+      clubId: input.match.club_id,
+      phase: nextPhase as PlayoffSchedulePhase,
+      matchOrder: nextMatchOrder,
+    })
+
     debugPlayoffPropagation('updated-next-match', {
       sourceMatchId: input.match.id,
       nextMatchId: existingNextMatch.id,
@@ -553,10 +625,9 @@ async function propagatePlayoffWinner(input: {
 
     const team1Id = targetSlot === 'team1_id' ? input.winnerTeamId : oppositeTeamId
     const team2Id = targetSlot === 'team2_id' ? input.winnerTeamId : oppositeTeamId
-    const { match } = await createMatch({
+    const match = await createDependentPlayoffMatch({
       tournamentId: input.match.tournament_id,
       clubId: input.match.club_id,
-      groupId: null,
       team1Id,
       team2Id,
       phase: nextPhase,
@@ -594,10 +665,9 @@ async function propagatePlayoffWinner(input: {
     return null
   }
 
-  const { match } = await createMatch({
+  const match = await createDependentPlayoffMatch({
     tournamentId: input.match.tournament_id,
     clubId: input.match.club_id,
-    groupId: null,
     team1Id: sourceWinners.team1Id,
     team2Id: sourceWinners.team2Id,
     phase: nextPhase,
@@ -643,7 +713,9 @@ async function ensureTeams(input: { tournamentId: string; clubId: string; team1I
 
   if (error) throw new Error(`No pude validar equipos: ${error.message}`)
 
-  const teams = new Map((data ?? []).map((team: { id: string; tournament_id: string; club_id: string }) => [team.id, team]))
+  const teams = new Map<string, { id: string; tournament_id: string; club_id: string }>(
+    (data ?? []).map((team: { id: string; tournament_id: string; club_id: string }) => [team.id, team])
+  )
   for (const teamId of teamIds) {
     const team = teams.get(teamId)
     if (!team) throw new Error('Equipo no encontrado.')

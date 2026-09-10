@@ -2,9 +2,17 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useParams } from 'next/navigation'
 import { Check, Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react'
 import { useBracketViewport } from './useBracketViewport'
 import styles from './MobilePlayoff.module.css'
+import { useSession } from '@/components/session/SessionProvider'
+import { supabase } from '@/lib/supabaseClient'
+import {
+  buildPlayoffScheduleReservationKey,
+  type PlayoffScheduleReservation,
+} from '@/lib/tournamentPlayoffScheduleReservations'
+import type { MatchScheduleAssignment, TournamentCourtConfig } from '@/lib/tournamentSchedule'
 
 import { displayBracket, bracketPath, info, schedule, matchState, scoreColumns, type MobilePlayoffMatch, type Slot, type Round, type DisplaySlot, type DisplayRound } from './playoffPresentation'
 export type { MobilePlayoffMatch } from './playoffPresentation'
@@ -22,6 +30,49 @@ type Props = {
   onSchedule: (match: MobilePlayoffMatch) => void
   scheduleDisabledReason: (match: MobilePlayoffMatch) => string
 }
+
+type FutureScheduleState = {
+  category: string | null
+  reservations: Record<string, PlayoffScheduleReservation>
+  courts: TournamentCourtConfig[]
+}
+
+type ScheduleEditorState = {
+  slotId: string
+  kind: 'reservation' | 'match'
+  matchId?: string
+  phase: string
+  matchOrder: number
+  dateTime: string
+  courtKey: string
+  hasSchedule: boolean
+  error: string
+  saving: boolean
+}
+
+function courtKey(court: Pick<TournamentCourtConfig, 'id' | 'name' | 'source'>) {
+  return court.id ? `id:${court.id}` : `name:${court.source}:${court.name}`
+}
+
+function toLocalDateTimeInput(value?: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
+function formatScheduleValues(scheduledAt?: string | null, courtName?: string | null) {
+  if (!scheduledAt) return null
+  const date = new Date(scheduledAt)
+  if (Number.isNaN(date.getTime())) return null
+  return {
+    date: new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit' }).format(date),
+    time: new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date),
+    court: courtName || 'Cancha sin asignar',
+  }
+}
+
 let openOverlayCount = 0
 let pageLockBeforeOverlays: {
   bodyOverflow: string
@@ -93,7 +144,11 @@ function Overlay({ children, title, fullscreen = false, initialScrollY, onClose 
 }
 
 export default function MobilePlayoff(props: Props) {
-  const { rounds, teamNames, teamSeeds, canEditResults, canSchedule, onResult, onSchedule } = props
+  const { rounds, teamNames, teamSeeds, canEditResults, canSchedule, onResult } = props
+  const params = useParams<{ id: string }>()
+  const tournamentId = params?.id
+  const { activeClub } = useSession()
+  const activeClubId = activeClub?.id
   const [view, setView] = useState<'round' | 'bracket'>('round')
   const [phase, setPhase] = useState(props.currentPhase ?? rounds[0]?.phase)
   const [fullscreen, setFullscreen] = useState(false)
@@ -101,6 +156,9 @@ export default function MobilePlayoff(props: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [followTeam, setFollowTeam] = useState<string | null>(null)
   const [hint, setHint] = useState(true)
+  const [futureSchedule, setFutureSchedule] = useState<FutureScheduleState>({ category: null, reservations: {}, courts: [] })
+  const [realScheduleOverrides, setRealScheduleOverrides] = useState<Record<string, MatchScheduleAssignment | null>>({})
+  const [scheduleEditor, setScheduleEditor] = useState<ScheduleEditorState | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const nav = useRef<HTMLDivElement>(null)
   const bracketApi = useRef<{ go: (index: number) => void; reset: () => void } | null>(null)
@@ -112,6 +170,29 @@ export default function MobilePlayoff(props: Props) {
   const followedName = followTeam ? teamNames.get(followTeam) ?? displayRounds.flatMap((round) => round.slots).flatMap((slot) => slot.teams).find((team) => team.id === followTeam)?.name : null
   const journey = useMemo(() => bracketPath(rounds, followTeam), [rounds, followTeam])
   const path = journey.ids
+
+  const loadFutureSchedule = useCallback(async () => {
+    if (!canSchedule || !activeClubId || !tournamentId) {
+      setFutureSchedule({ category: null, reservations: {}, courts: [] })
+      return
+    }
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return
+    const response = await fetch(`/api/clubs/${activeClubId}/tournaments/${tournamentId}/playoff/schedule`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+    if (!response.ok) return
+    const json = await response.json().catch(() => ({}))
+    setFutureSchedule({
+      category: typeof json.category === 'string' ? json.category : null,
+      reservations: json.reservations ?? {},
+      courts: Array.isArray(json.courts) ? json.courts : [],
+    })
+  }, [activeClubId, canSchedule, tournamentId])
+
+  useEffect(() => { queueMicrotask(() => void loadFutureSchedule()) }, [loadFutureSchedule])
 
   useEffect(() => {
     const requestedPhase = props.currentPhase
@@ -155,11 +236,159 @@ export default function MobilePlayoff(props: Props) {
     setPhase(rounds[index].phase)
     if (view === 'bracket' || fullscreen) { dismissHint(); bracketApi.current?.go(index) }
   }
-  const edit = (match: MobilePlayoffMatch, action: 'result' | 'schedule') => {
+  const editResult = (match: MobilePlayoffMatch) => {
     setSelectedId(null); setFullscreen(false)
-    requestAnimationFrame(() => action === 'result' ? onResult(match) : onSchedule(match))
+    requestAnimationFrame(() => onResult(match))
   }
   const actionable = (slot: Slot) => Boolean(canEditResults && slot.match && ['PENDING', 'PLAYED', 'IN_PROGRESS', 'LIVE'].includes(slot.match.status?.toUpperCase() ?? ''))
+  const canEditMatchSchedule = (match: MobilePlayoffMatch) => {
+    const status = String(match.status ?? '').toUpperCase()
+    const hasScore = Boolean(match.score && Object.keys(match.score).length > 0)
+    return status === 'PENDING' && !match.winner_team_id && !hasScore
+  }
+  const reservationFor = (slot: DisplaySlot) => {
+    if (slot.kind !== 'placeholder' || !futureSchedule.category) return null
+    const round = rounds[slot.roundIndex]
+    if (!round) return null
+    try {
+      const key = buildPlayoffScheduleReservationKey({
+        category: futureSchedule.category,
+        phase: round.phase,
+        matchOrder: slot.slotOrder,
+      })
+      return futureSchedule.reservations[key] ?? null
+    } catch {
+      return null
+    }
+  }
+  const scheduleFor = (slot: DisplaySlot) => {
+    if (slot.match) {
+      const hasOverride = Object.prototype.hasOwnProperty.call(realScheduleOverrides, slot.match.id)
+      const override = hasOverride ? realScheduleOverrides[slot.match.id] : undefined
+      return override === null
+        ? null
+        : formatScheduleValues(override?.scheduled_at ?? slot.match.scheduled_at, override?.court_name ?? slot.match.court_name)
+    }
+    const reservation = reservationFor(slot)
+    return formatScheduleValues(reservation?.scheduled_at, reservation?.court_name)
+  }
+  const stateFor = (slot: DisplaySlot) => {
+    if (slot.kind === 'placeholder' && scheduleFor(slot)) {
+      return { label: 'Programado', tone: 'scheduled' }
+    }
+    return matchState(slot)
+  }
+  const openScheduleEditor = (slot: DisplaySlot) => {
+    if (!canSchedule || slot.kind === 'bye') return
+    if (slot.match && !canEditMatchSchedule(slot.match)) return
+    const round = rounds[slot.roundIndex]
+    if (!round) return
+    const hasOverride = slot.match && Object.prototype.hasOwnProperty.call(realScheduleOverrides, slot.match.id)
+    const override = slot.match && hasOverride ? realScheduleOverrides[slot.match.id] : undefined
+    const reservation = reservationFor(slot)
+    const scheduledAt = slot.match ? override?.scheduled_at ?? slot.match.scheduled_at : reservation?.scheduled_at
+    const scheduledCourtId = slot.match ? override?.court_id ?? slot.match.court_id : reservation?.court_id
+    const scheduledCourtName = slot.match ? override?.court_name ?? slot.match.court_name : reservation?.court_name
+    const scheduledCourtSource = slot.match ? override?.court_source ?? slot.match.court_source : reservation?.court_source
+    const selectedCourt = futureSchedule.courts.find((court) =>
+      scheduledCourtId ? court.id === scheduledCourtId : Boolean(
+        scheduledCourtName && court.name === scheduledCourtName && (!scheduledCourtSource || court.source === scheduledCourtSource)
+      )
+    ) ?? futureSchedule.courts[0]
+    setSelectedId(null)
+    setFullscreen(false)
+    setScheduleEditor({
+      slotId: slot.id,
+      kind: slot.match ? 'match' : 'reservation',
+      ...(slot.match ? { matchId: slot.match.id } : {}),
+      phase: round.phase,
+      matchOrder: slot.slotOrder,
+      dateTime: toLocalDateTimeInput(scheduledAt),
+      courtKey: selectedCourt ? courtKey(selectedCourt) : '',
+      hasSchedule: Boolean(scheduledAt),
+      error: '',
+      saving: false,
+    })
+  }
+  const saveScheduleEditor = async () => {
+    if (!scheduleEditor || !activeClub?.id || !tournamentId) return
+    const court = futureSchedule.courts.find((item) => courtKey(item) === scheduleEditor.courtKey)
+    const date = scheduleEditor.dateTime ? new Date(scheduleEditor.dateTime) : null
+    if (!court || !date || Number.isNaN(date.getTime())) {
+      setScheduleEditor((current) => current ? { ...current, error: 'Elegí una fecha/hora y una cancha válidas.' } : current)
+      return
+    }
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return
+    setScheduleEditor((current) => current ? { ...current, saving: true, error: '' } : current)
+    const realMatch = scheduleEditor.kind === 'match' && scheduleEditor.matchId
+    const endpoint = realMatch
+      ? `/api/clubs/${activeClub.id}/tournaments/${tournamentId}/matches/${scheduleEditor.matchId}/schedule`
+      : `/api/clubs/${activeClub.id}/tournaments/${tournamentId}/playoff/schedule`
+    const body = realMatch
+      ? { scheduled_at: date.toISOString(), court_id: court.id, court_name: court.name, court_source: court.source }
+      : {
+          category: futureSchedule.category,
+          phase: scheduleEditor.phase,
+          match_order: scheduleEditor.matchOrder,
+          scheduled_at: date.toISOString(),
+          court_id: court.id,
+          court_name: court.name,
+          court_source: court.source,
+        }
+    const response = await fetch(endpoint, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      setScheduleEditor((current) => current ? { ...current, saving: false, error: json.error ?? 'No pude guardar la programación.' } : current)
+      return
+    }
+    if (realMatch && scheduleEditor.matchId && json.assignment) {
+      setRealScheduleOverrides((current) => ({ ...current, [scheduleEditor.matchId!]: json.assignment }))
+    } else if (json.key && json.reservation) {
+      setFutureSchedule((current) => ({
+        ...current,
+        reservations: { ...current.reservations, [json.key]: json.reservation },
+      }))
+    }
+    setScheduleEditor(null)
+  }
+  const deleteScheduleEditor = async () => {
+    if (!scheduleEditor || !scheduleEditor.hasSchedule || !activeClub?.id || !tournamentId) return
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return
+    setScheduleEditor((current) => current ? { ...current, saving: true, error: '' } : current)
+    const realMatch = scheduleEditor.kind === 'match' && scheduleEditor.matchId
+    const endpoint = realMatch
+      ? `/api/clubs/${activeClub.id}/tournaments/${tournamentId}/matches/${scheduleEditor.matchId}/schedule`
+      : `/api/clubs/${activeClub.id}/tournaments/${tournamentId}/playoff/schedule`
+    const response = await fetch(endpoint, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      ...(realMatch ? {} : { body: JSON.stringify({ category: futureSchedule.category, phase: scheduleEditor.phase, match_order: scheduleEditor.matchOrder }) }),
+    })
+    const json = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      setScheduleEditor((current) => current ? { ...current, saving: false, error: json.error ?? 'No pude quitar la programación.' } : current)
+      return
+    }
+    if (realMatch && scheduleEditor.matchId) {
+      setRealScheduleOverrides((current) => ({ ...current, [scheduleEditor.matchId!]: null }))
+    } else if (futureSchedule.category) {
+      const key = buildPlayoffScheduleReservationKey({ category: futureSchedule.category, phase: scheduleEditor.phase, matchOrder: scheduleEditor.matchOrder })
+      setFutureSchedule((current) => {
+        const reservations = { ...current.reservations }
+        delete reservations[key]
+        return { ...current, reservations }
+      })
+    }
+    setScheduleEditor(null)
+  }
   const follow = (id: string) => setFollowTeam((current) => current === id ? null : id)
 
   const teams = (slot: DisplaySlot, compact = false, detail = false, overview = false) => {
@@ -183,8 +412,8 @@ export default function MobilePlayoff(props: Props) {
     </div>
   }
   const card = (slot: DisplaySlot, compact = false, overview = false) => {
-    const state = matchState(slot)
-    const when = schedule(slot.match)
+    const state = stateFor(slot)
+    const when = scheduleFor(slot)
     return <article id={compact ? undefined : `playoff-match-${slot.match?.id ?? slot.id}`}
       className={`${styles.card} ${compact ? styles.bracketCard : ''} ${slot.kind === 'bye' ? styles.bye : slot.kind === 'placeholder' ? styles.future : ''} ${followTeam && compact ? path.has(slot.id) ? styles.following : styles.dimmed : ''}`}
       data-slot={slot.code}>
@@ -193,9 +422,9 @@ export default function MobilePlayoff(props: Props) {
           {compact ? slot.code : `${info(rounds[slot.roundIndex]).label} · ${slot.code}`}
         </button>
         <span className={styles.state} data-state={state.tone}>{state.label}{slot.kind === 'bye' && ' ✓'}</span>
-        {!compact && actionable(slot) && <button type="button" className={styles.action} onClick={() => edit(slot.match!, 'result')}>{slot.match?.status === 'PLAYED' ? 'Editar' : 'Cargar'}</button>}
+        {!compact && actionable(slot) && <button type="button" className={styles.action} onClick={() => editResult(slot.match!)}>{slot.match?.status === 'PLAYED' ? 'Editar' : 'Cargar'}</button>}
       </div>
-      {!compact && slot.kind === 'match' && <button className={styles.schedule} type="button" onClick={() => setSelectedId(slot.id)}>{when.date} · {when.time} · {when.court}</button>}
+      {!compact && slot.kind !== 'bye' && (when || canSchedule) && <button className={styles.schedule} type="button" onClick={() => when ? setSelectedId(slot.id) : openScheduleEditor(slot)}>{when ? `${when.date} · ${when.time} · ${when.court}` : 'Programar horario/cancha'}</button>}
       {teams(slot, compact, false, overview)}
       {!compact && slot.kind === 'placeholder' && <span className={styles.waitingNote}>Se define al completar {slot.roundIndex > 0 ? info(rounds[slot.roundIndex - 1]).label : 'la ronda anterior'}.</span>}
       {compact && <button type="button" className={styles.cardSurface} aria-label={`Abrir partido ${slot.code}`} onClick={() => setSelectedId(slot.id)} tabIndex={-1} />}
@@ -216,8 +445,10 @@ export default function MobilePlayoff(props: Props) {
       <div className={styles.currentRound}><span>Ronda actual</span><strong>{props.champion ? 'Finalizado' : info(rounds.find((round) => round.phase === props.currentPhase) ?? rounds[0]).label}</strong></div>
       <span className={styles.progress}><b>{matches.filter((match) => match.status === 'PLAYED').length}/{matches.length}</b> jugados</span>
       <div className={styles.exportAction}>{props.exportAction}</div>
-      <div className={styles.champion}><span>Campeón</span><b>{props.champion || 'Por definirse'}</b></div>
-      {props.nextMatch && nextSlot ? <button className={styles.next} type="button" onClick={() => { setPhase(rounds[nextSlot.roundIndex].phase); setSelectedId(nextSlot.id) }}><span>Próximo · {nextSlot.code}</span><b>{nextWhen.date} · {nextWhen.time} · {nextWhen.court}</b></button> : <span className={styles.next}>No hay partidos pendientes.</span>}
+      <div className={styles.summaryDetails}>
+        <div className={styles.champion}><span>Campeón</span><b>{props.champion || 'Por definirse'}</b></div>
+        {props.nextMatch && nextSlot ? <button className={styles.next} type="button" onClick={() => { setPhase(rounds[nextSlot.roundIndex].phase); setSelectedId(nextSlot.id) }}><span>Próximo · {nextSlot.code}</span><b>{nextWhen.date} · {nextWhen.time} · {nextWhen.court}</b></button> : <span className={styles.next}><span>Próximo partido</span><b>Sin pendientes</b></span>}
+      </div>
     </section>
     <div className={styles.navigation} ref={nav}>
       <div className={styles.switch} role="group" aria-label="Vista del playoff">
@@ -239,16 +470,47 @@ export default function MobilePlayoff(props: Props) {
     </Overlay>}
     {selected && <Overlay title={`${info(rounds[selected.roundIndex]).label} · ${selected.code}`} onClose={() => setSelectedId(null)}>
       <div className={styles.sheetBody}>
-        <span className={styles.state} data-state={matchState(selected).tone}>{matchState(selected).label}</span>
-        {selected.match && <dl className={styles.matchFacts}><div><dt>Fecha</dt><dd>{schedule(selected.match).date}</dd></div><div><dt>Hora</dt><dd>{schedule(selected.match).time}</dd></div><div><dt>Cancha</dt><dd>{schedule(selected.match).court.replace(/^Cancha\s*/i, '')}</dd></div></dl>}
+        <span className={styles.state} data-state={stateFor(selected).tone}>{stateFor(selected).label}</span>
+        {scheduleFor(selected) && <dl className={styles.matchFacts}><div><dt>Fecha</dt><dd>{scheduleFor(selected)?.date}</dd></div><div><dt>Hora</dt><dd>{scheduleFor(selected)?.time}</dd></div><div><dt>Cancha</dt><dd>{scheduleFor(selected)?.court.replace(/^Cancha\s*/i, '')}</dd></div></dl>}
         {teams(selected, false, true)}
         {selected.match?.score?.text && !Array.isArray(selected.match.score.sets) ? <p>{String(selected.match.score.text)}</p> : null}
         {selected.teams.some((team) => team.source) && <div className={styles.sources}><b>De dónde vienen</b>{selected.teams.map((team, index) => team.source && <span key={index}>{team.source}{team.id ? ` · ${team.name}` : ''}</span>)}</div>}
         {selected.kind === 'bye' && <p className={styles.sourceNote}>Esta pareja pasa a la siguiente ronda sin jugar este cruce.</p>}
-        {selected.match && (actionable(selected) || canSchedule) && <div className={styles.sheetActions}>
-          {actionable(selected) && <button type="button" className={styles.primary} onClick={() => edit(selected.match!, 'result')}>{selected.match.status === 'PLAYED' ? 'Editar resultado' : 'Cargar resultado'}</button>}
-          {canSchedule && !props.scheduleDisabledReason(selected.match) && <button type="button" className={styles.secondary} onClick={() => edit(selected.match!, 'schedule')}>Cambiar horario/cancha</button>}
+        {(selected.match && actionable(selected) || canSchedule && selected.kind !== 'bye' && (!selected.match || canEditMatchSchedule(selected.match))) && <div className={styles.sheetActions}>
+          {selected.match && actionable(selected) && <button type="button" className={styles.primary} onClick={() => editResult(selected.match!)}>{selected.match.status === 'PLAYED' ? 'Editar resultado' : 'Cargar resultado'}</button>}
+          {canSchedule && selected.kind !== 'bye' && (!selected.match || canEditMatchSchedule(selected.match)) && <button type="button" className={styles.secondary} onClick={() => openScheduleEditor(selected)}>{scheduleFor(selected) ? 'Cambiar horario/cancha' : 'Programar horario/cancha'}</button>}
         </div>}
+      </div>
+    </Overlay>}
+    {scheduleEditor && <Overlay title={`Programar ${scheduleEditor.phase} · ${scheduleEditor.matchOrder}`} onClose={() => !scheduleEditor.saving && setScheduleEditor(null)}>
+      <div className={styles.sheetBody}>
+        <label style={{ display: 'grid', gap: 6, fontSize: 13, fontWeight: 800 }}>
+          <span>Fecha y hora</span>
+          <input
+            type="datetime-local"
+            value={scheduleEditor.dateTime}
+            disabled={scheduleEditor.saving}
+            onChange={(event) => setScheduleEditor((current) => current ? { ...current, dateTime: event.target.value, error: '' } : current)}
+            style={{ minHeight: 46, border: '1px solid rgba(15,23,42,.16)', borderRadius: 10, padding: '8px 10px', font: 'inherit' }}
+          />
+        </label>
+        <label style={{ display: 'grid', gap: 6, fontSize: 13, fontWeight: 800 }}>
+          <span>Cancha</span>
+          <select
+            value={scheduleEditor.courtKey}
+            disabled={scheduleEditor.saving}
+            onChange={(event) => setScheduleEditor((current) => current ? { ...current, courtKey: event.target.value, error: '' } : current)}
+            style={{ minHeight: 46, border: '1px solid rgba(15,23,42,.16)', borderRadius: 10, padding: '8px 10px', font: 'inherit', background: 'white' }}
+          >
+            <option value="">Seleccioná una cancha</option>
+            {futureSchedule.courts.map((court) => <option key={courtKey(court)} value={courtKey(court)}>{court.name}{court.complex_name ? ` · ${court.complex_name}` : ''}</option>)}
+          </select>
+        </label>
+        {scheduleEditor.error && <p style={{ margin: 0, color: '#b91c1c', fontSize: 13, fontWeight: 750 }}>{scheduleEditor.error}</p>}
+        <div className={styles.sheetActions}>
+          <button type="button" className={styles.primary} disabled={scheduleEditor.saving} onClick={() => void saveScheduleEditor()}>{scheduleEditor.saving ? 'Guardando…' : 'Guardar programación'}</button>
+          {scheduleEditor.hasSchedule && <button type="button" className={styles.secondary} disabled={scheduleEditor.saving} onClick={() => void deleteScheduleEditor()}>Quitar programación</button>}
+        </div>
       </div>
     </Overlay>}
   </div>

@@ -1,18 +1,22 @@
 .host { display: none; min-width: 0; color: #152a46; font-size: 13px; }
 .host button, .fullscreen button, .sheet button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .host button:focus-visible, .fullscreen button:focus-visible, .sheet button:focus-visible, .canvas:focus-visible { outline: 2px solid #0896b4; outline-offset: 2px; }
-.summary { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px 8px; border: 1px solid #cee0e5; border-radius: 12px; background: linear-gradient(110deg, #eef9f7, #f6fafd); padding: 8px 10px; margin-bottom: 5px; }
+.summary { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; border: 1px solid #cee0e5; border-radius: 12px; background: linear-gradient(110deg, #eef9f7, #f6fafd); padding: 10px; margin-bottom: 6px; }
 .currentRound { align-self: center; display: grid; gap: 1px; min-width: 0; }
-.currentRound span { color: #3d7876; font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
-.currentRound strong { color: #16334c; font-size: 18px; font-weight: 750; line-height: 1.05; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.currentRound span { color: #367775; font-size: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.currentRound strong { color: #102f49; font-size: 19px; font-weight: 750; line-height: 1.05; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .eyebrow { font-size: 10px; text-transform: uppercase; color: #3d7876; letter-spacing: .04em; font-weight: 600; }
-.progress { align-self: center; background: #fff; border: 1px solid #dce8eb; border-radius: 999px; color: #657587; font-size: 10px; padding: 5px 7px; white-space: nowrap; }
-.progress b { color: #193a50; font-size: 11px; font-weight: 750; }
+.progress { align-self: center; background: #fff; border: 1px solid #d7e5e9; border-radius: 999px; color: #6a7888; font-size: 10px; padding: 5px 8px; white-space: nowrap; }
+.progress b { color: #17364d; font-size: 11px; font-weight: 750; }
 .exportAction { align-self: center; min-width: 0; }
-.champion { border-top: 1px solid #dce6e9; grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 10px; padding-top: 5px; font-size: 11px; color: #627283; }
-.champion b { color: #1b354c; font-size: 12px; font-weight: 650; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
-.next { grid-column: 1 / -1; display: grid; gap: 1px; background: transparent; border: 0; border-top: 1px solid #dce6e9; text-align: left; padding: 5px 0 0; min-height: 38px; color: #526a7b; font-size: 10px !important; }
-.next b { font-size: 11px; font-weight: 650; color: #193a50; }
+.exportAction :global(summary) { font-size: 11px; min-height: 34px; padding-inline: 8px; }
+.summaryDetails { display: grid; gap: 7px; grid-column: 1 / -1; grid-template-columns: minmax(100px, .78fr) minmax(0, 1.55fr); min-width: 0; }
+.champion, .next { background: rgba(255,255,255,.72); border: 1px solid #d9e6e9; border-radius: 9px; box-sizing: border-box; min-width: 0; padding: 7px 8px; }
+.champion { display: grid; gap: 3px; color: #627283; }
+.champion span, .next span { color: #6c7d8d; font-size: 9px; font-weight: 650; letter-spacing: .025em; text-transform: uppercase; }
+.champion b { color: #17334b; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.next { display: grid; gap: 3px; border-color: #cfe3e7; text-align: left; min-height: 46px; color: #526a7b; font-size: 10px !important; }
+.next b { color: #17364d; font-size: 11px; font-weight: 650; line-height: 1.2; overflow-wrap: anywhere; }
 .navigation { position: sticky; top: var(--playoff-nav-offset, 58px); z-index: 42; background: #fff; padding: 2px 0 0; border-bottom: 1px solid #e0e8ec; }
 .switch { background: #edf2f5; border-radius: 9px; display: grid; grid-template-columns: 1fr 1fr; padding: 0; }
 .switch button { min-height: 44px; background: transparent; border: 0; border-radius: 8px; color: #697d90; font-weight: 600; font-size: 12px; }
