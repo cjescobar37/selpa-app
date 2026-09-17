@@ -26,6 +26,7 @@ export type MatchScheduleAssignment = {
   court_name: string
   court_id?: string
   court_source: 'OWN_CLUB' | 'EXTERNAL_COMPLEX'
+  court_complex_name?: string | null
 }
 
 export type ScheduleCapacity = {
@@ -226,6 +227,7 @@ export function readMatchScheduleAssignments(value: unknown) {
       court_name: courtName,
       ...(normalizeText(safeEntry.court_id) ? { court_id: normalizeText(safeEntry.court_id) ?? undefined } : {}),
       court_source: normalizeText(safeEntry.court_source) === 'EXTERNAL_COMPLEX' ? 'EXTERNAL_COMPLEX' : 'OWN_CLUB',
+      court_complex_name: normalizeText(safeEntry.court_complex_name),
     }
     return acc
   }, {})

@@ -7,6 +7,7 @@ import RankingGenderTabs from '@/components/ranking/RankingGenderTabs'
 import PairRankingBoard, { type PairRankingRow } from '@/components/ranking/PairRankingBoard'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
+import ClubBackLink from '@/components/club/ClubBackLink'
 import { getClubTheme } from '@/lib/clubThemes'
 import {
   filterRankingRows,
@@ -59,6 +60,13 @@ type RankingResponse = {
     pairSource: string
     generatedAt: string
     warnings: string[]
+    pipeline?: {
+      status: 'PENDING' | 'PUBLISHED' | 'EMPTY'
+      hasPublishedSettlement: boolean
+      eventName: string | null
+      eventStatus: string | null
+      message: string | null
+    }
   }
   individual?: IndividualRankingRow[]
   pairs?: PairRankingApiRow[]
@@ -162,6 +170,7 @@ export default function ClubRankingPage() {
   }, [activeClub?.id])
 
   const availableCategories = useMemo(() => {
+    if (data?.meta?.pipeline && !data.meta.pipeline.hasPublishedSettlement) return []
     const sourceRows = view === 'pairs' ? (data?.pairs ?? []) : (data?.individual ?? [])
     const used = new Set(sourceRows
       .filter((row) => normalizeRankingGender(row.gender) === gender)
@@ -171,7 +180,7 @@ export default function ClubRankingPage() {
     return Array.from(used)
       .sort((current, next) => current - next)
       .map((id) => configuredById.get(id) ?? { id, name: `${id}°` })
-  }, [data?.categories, data?.individual, data?.pairs, gender, view])
+  }, [data?.categories, data?.individual, data?.meta?.pipeline, data?.pairs, gender, view])
 
   const selectedCategory = availableCategories.some((item) => String(item.id) === category)
     ? category
@@ -246,11 +255,12 @@ export default function ClubRankingPage() {
           ['--club-admin-soft' as string]: theme.vars.soft,
         }}
       >
+        <ClubBackLink href="/club/competition" label="Volver a Competencia" />
         {!activeClub?.id ? (
           <div className="px-empty">Primero seleccioná un club activo.</div>
         ) : (
           <>
-            {message ? <div className="club-rankingAlert club-rankingAlert--danger">{message}</div> : null}
+            {message ? <div className="club-rankingAlert club-rankingAlert--danger"><strong>No pudimos cargar el ranking</strong><p>{message}</p><button type="button" onClick={() => void loadRanking()}>Reintentar</button></div> : null}
 
             <header className="club-rankingContentHead">
               <div>
@@ -262,6 +272,8 @@ export default function ClubRankingPage() {
                 {loading ? 'Actualizando...' : 'Actualizar'}
               </button>
             </header>
+
+            {!loading && data?.meta?.pipeline && !data.meta.pipeline.hasPublishedSettlement ? <div className="club-rankingAlert club-rankingAlert--pending"><strong>Aún no hay puntos publicados.</strong><p>{data.meta.pipeline.message ?? 'La primera fecha todavía está pendiente de homologación.'}</p></div> : null}
 
             <div className="club-rankingViewTabs" role="tablist" aria-label="Tipo de ranking">
               <button type="button" role="tab" aria-selected={view === 'pairs'} className={view === 'pairs' ? 'is-active' : ''} onClick={() => setView('pairs')}><UsersRound size={16} aria-hidden="true" />Parejas</button>
@@ -287,7 +299,7 @@ export default function ClubRankingPage() {
                     </button>
                   ))}
                 </div>
-              ) : <p>No hay categorías disponibles para {gender === 'M' ? 'Caballeros' : 'Damas'}.</p>}
+              ) : <p>{data?.meta?.pipeline?.hasPublishedSettlement ? 'No hay posiciones computables para esta selección.' : 'Las categorías aparecerán cuando se publiquen los primeros puntos.'}</p>}
             </section>
 
             {availableCategories.length ? <section className="club-rankingSearchBar">
@@ -500,6 +512,25 @@ export default function ClubRankingPage() {
           display: grid;
           gap: 9px;
           grid-template-columns: 130px minmax(180px, 1fr);
+        }
+
+        .club-rankingAlert--danger button {
+          background: #fff;
+          border: 1px solid #fda4af;
+          border-radius: 9px;
+          color: #9f1239;
+          font: inherit;
+          font-size: 12px;
+          font-weight: 900;
+          min-height: 38px;
+          padding: 0 11px;
+          width: max-content;
+        }
+
+        .club-rankingAlert--pending {
+          background: #fff8e5;
+          border-color: #f2d58a;
+          color: #6f5715;
         }
 
         .club-rankingContentHead {

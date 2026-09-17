@@ -1,23 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { CompetitionEventDetail,CompetitionSeriesEvent } from './competition-events.types'
+import type { CompetitionEventDetail,CompetitionSeriesEvent,TournamentCircuitContext } from './competition-events.types'
 function fail(op:string,error:{message:string;code?:string}|null){return Object.assign(new Error(`${op}: ${error?.message??'error'}`),{code:error?.code})}
 export async function eventRpc<T>(client:SupabaseClient,name:string,args:Record<string,unknown>){const {data,error}=await client.rpc(name,args);if(error)throw fail(name,error);return data as T}
 
-export type TournamentCircuitContext={
-  tournament_id:string
-  series_id:string
-  series_name:string
-  event_id:string
-  event_number:number|null
-  planned_events_count:number|null
-  event_division_id:string
-  event_status:string
-  event_division_status:string
-  scoring_mode:string|null
-  homologation_status:string|null
-  settlement_status:string|null
-  points_scheme:{id:string;name:string;rules:Array<{rule_key:string;points:number}>;multiplier:number;source:'EVENT_DRAFT'|'EVENT_SNAPSHOT'|'SETTLEMENT_SNAPSHOT'}|null
-}
+export type { TournamentCircuitContext } from './competition-events.types'
 
 /** Resolves the persisted Competition bridge without adding data to tournaments. */
 export async function getTournamentCircuitContexts(client:SupabaseClient,clubId:string,tournamentIds:string[]):Promise<Record<string,TournamentCircuitContext>>{
@@ -33,7 +19,7 @@ export async function getTournamentCircuitContexts(client:SupabaseClient,clubId:
   const eventByDivision=new Map((divisions.data??[]).map((division)=>[division.id,division.event_id]))
   const eventIds=[...new Set([...eventByDivision.values()])]
   if(!eventIds.length)return {}
-  const events=await client.from('competition_series_events').select('id,series_id,event_number,sequence,status').eq('club_id',clubId).in('id',eventIds)
+  const events=await client.from('competition_series_events').select('id,series_id,event_number,sequence,status,timezone').eq('club_id',clubId).in('id',eventIds)
   if(events.error)throw fail('list linked events',events.error)
   const eventById=new Map((events.data??[]).map((event)=>[event.id,event]))
   const seriesIds=[...new Set((events.data??[]).map((event)=>event.series_id).filter(Boolean))]
@@ -62,11 +48,11 @@ export async function getTournamentCircuitContexts(client:SupabaseClient,clubId:
   }
   const schemes=effectiveSchemeIds.size?await client.from('points_schemes').select('id,name').in('id',[...effectiveSchemeIds]):{data:[],error:null}
   if(schemes.error)throw fail('list effective points schemes',schemes.error)
-  const rules=effectiveSchemeIds.size?await client.from('points_scheme_rules').select('scheme_id,rule_key,points').in('scheme_id',[...effectiveSchemeIds]).order('rule_key'):{data:[],error:null}
+  const rules=effectiveSchemeIds.size?await client.from('points_scheme_rules').select('scheme_id,rule_key,points,sort_order').in('scheme_id',[...effectiveSchemeIds]).eq('is_active',true).order('sort_order').order('rule_key'):{data:[],error:null}
   if(rules.error)throw fail('list effective points rules',rules.error)
   const schemeById=new Map((schemes.data??[]).map((scheme)=>[scheme.id,scheme]))
-  const rulesByScheme=new Map<string,Array<{rule_key:string;points:number}>>()
-  for(const rule of (rules.data??[]) as Array<{scheme_id:string;rule_key:string;points:number}>){const list=rulesByScheme.get(rule.scheme_id)??[];list.push({rule_key:rule.rule_key,points:Number(rule.points)});rulesByScheme.set(rule.scheme_id,list)}
+  const rulesByScheme=new Map<string,Array<{rule_key:string;points:number;sort_order:number|null}>>()
+  for(const rule of (rules.data??[]) as Array<{scheme_id:string;rule_key:string;points:number;sort_order:number|null}>){const list=rulesByScheme.get(rule.scheme_id)??[];list.push({rule_key:rule.rule_key,points:Number(rule.points),sort_order:rule.sort_order});rulesByScheme.set(rule.scheme_id,list)}
   // `sequence` is an ordering key with intentional gaps (10, 20, ...), not the
   // human-facing date number. Derive the ordinal from persisted event order.
   const orderedEvents=await client.from('competition_series_events').select('id,series_id').eq('club_id',clubId).in('series_id',seriesIds).order('sequence')
@@ -97,7 +83,7 @@ export async function getTournamentCircuitContexts(client:SupabaseClient,clubId:
     const source:'EVENT_DRAFT'|'EVENT_SNAPSHOT'|'SETTLEMENT_SNAPSHOT'=settlement?'SETTLEMENT_SNAPSHOT':configuration?'EVENT_SNAPSHOT':'EVENT_DRAFT'
     contexts[link.tournament_id]={
       tournament_id:link.tournament_id,series_id:parent.id,series_name:parent.name,event_id:event.id,
-      event_number:eventPositionById.get(event.id)??event.event_number??null,planned_events_count:parent.planned_events_count??null,
+      event_number:eventPositionById.get(event.id)??event.event_number??null,planned_events_count:parent.planned_events_count??null,timezone:event.timezone??null,
       event_division_id:division.id,event_status:String(event.status),event_division_status:String(division.status),scoring_mode:division.scoring_mode??null,
       homologation_status:homologation?String(homologation.status):null,settlement_status:settlement?String(settlement.status):null,
       points_scheme:scheme?{id:schemeId,name:String(scheme.name),rules:snapshotRules??rulesByScheme.get(schemeId)??[],multiplier:Number(settlement?.effective_multiplier??configuration?.effective_multiplier??1),source}:null,
@@ -122,10 +108,16 @@ export async function listEvents(client:SupabaseClient,clubId:string,seriesId:st
   const tournamentByEvent=new Map<string,string>()
   for(const link of links.data??[]){const eventId=eventByDivision.get(link.event_division_id);if(eventId&&!tournamentByEvent.has(eventId))tournamentByEvent.set(eventId,link.tournament_id)}
   const tournamentIds=[...new Set(tournamentByEvent.values())]
-  const tournaments=tournamentIds.length?await client.from('tournaments').select('id,start_date,end_date').in('id',tournamentIds):{data:[],error:null}
+  const [tournaments,finals,contexts]=await Promise.all([
+    tournamentIds.length?client.from('tournaments').select('id,status,start_date,end_date,registration_deadline').eq('club_id',clubId).in('id',tournamentIds):Promise.resolve({data:[],error:null}),
+    tournamentIds.length?client.from('tournament_matches').select('tournament_id,status,team1_id,team2_id,winner_team_id').in('tournament_id',tournamentIds).eq('phase','FINAL'):Promise.resolve({data:[],error:null}),
+    getTournamentCircuitContexts(client,clubId,tournamentIds),
+  ])
   if(tournaments.error)throw fail('list linked tournaments',tournaments.error)
-  const tournamentDates=new Map((tournaments.data??[]).map((tournament)=>[tournament.id,{start:tournament.start_date as string|null,end:tournament.end_date as string|null}]))
-  return events.map((event)=>{const tournamentId=tournamentByEvent.get(event.id)??null,date=tournamentId?tournamentDates.get(tournamentId):null;return {...event,tournament_id:tournamentId,tournament_starts_at:date?.start??null,tournament_ends_at:date?.end??null}})
+  if(finals.error)throw fail('list linked tournament finals',finals.error)
+  const tournamentState=new Map((tournaments.data??[]).map((tournament)=>[tournament.id,{status:tournament.status as string|null,start:tournament.start_date as string|null,end:tournament.end_date as string|null,deadline:tournament.registration_deadline as string|null}]))
+  const sportsComplete=new Set((finals.data??[]).filter((match)=>String(match.status??'').toUpperCase()==='PLAYED'&&Boolean(match.winner_team_id)&&(match.winner_team_id===match.team1_id||match.winner_team_id===match.team2_id)).map((match)=>match.tournament_id))
+  return events.map((event)=>{const tournamentId=tournamentByEvent.get(event.id)??null,tournament=tournamentId?tournamentState.get(tournamentId):null;return {...event,tournament_id:tournamentId,tournament_status:tournament?.status??null,tournament_registration_deadline:tournament?.deadline??null,tournament_starts_at:tournament?.start??null,tournament_ends_at:tournament?.end??null,sports_complete:tournamentId?sportsComplete.has(tournamentId):false,circuit_context:tournamentId?contexts[tournamentId]??null:null}})
 }
 export async function getEventDetail(client:SupabaseClient,clubId:string,eventId:string):Promise<CompetitionEventDetail>{
   const eventResult=await client.from('competition_series_events').select('*').eq('club_id',clubId).eq('id',eventId).maybeSingle();if(eventResult.error)throw fail('event',eventResult.error);if(!eventResult.data)throw Object.assign(new Error('Evento inexistente.'),{code:'P0002'});const event=eventResult.data as CompetitionSeriesEvent
@@ -140,7 +132,22 @@ export async function getEventDetail(client:SupabaseClient,clubId:string,eventId
   const links=divisionIds.length?await client.from('competition_series_event_tournament_links').select('*').eq('club_id',clubId).in('event_division_id',divisionIds).order('created_at',{ascending:false}):{data:[],error:null}
   if(links.error)throw fail('event links',links.error)
   const allLinks=links.data??[]
-  return {event,series:series.data as Record<string,unknown>,season:season.data as Record<string,unknown>,divisions:(divisions.data??[]).map((d)=>{const item=d as Record<string,unknown>;const own=allLinks.filter((l)=>l.event_division_id===item.id);return {...item,rule:(item.competition_series_rules??null) as Record<string,unknown>|null,tier:(item.competition_event_tiers??null) as Record<string,unknown>|null,active_tournament_link:(own.find((l)=>l.status==='ACTIVE')??null) as Record<string,unknown>|null,link_history:own as Record<string,unknown>[]}}),schedule_history:(history.data??[]) as Record<string,unknown>[],completeness:completeness.data as Record<string,unknown>}
+  const linkedTournamentIds=[...new Set(allLinks.filter(link=>link.status==='ACTIVE').map(link=>link.tournament_id))]
+  const linkedTournaments=linkedTournamentIds.length
+    ? await client.from('tournaments').select('id,rules_json,status,registration_deadline').eq('club_id',clubId).in('id',linkedTournamentIds)
+    : {data:[],error:null}
+  if(linkedTournaments.error)throw fail('event tournament systems',linkedTournaments.error)
+  const systems=new Map((linkedTournaments.data??[]).map(tournament=>[
+    tournament.id,typeof tournament.rules_json?.competition_system==='string'?tournament.rules_json.competition_system:null,
+  ]))
+  const tournamentById=new Map((linkedTournaments.data??[]).map(tournament=>[tournament.id,tournament]))
+  const activeTournamentStates=(linkedTournaments.data??[]).map(tournament=>String(tournament.status??'').toUpperCase())
+  // Tournament owns sporting operation; Competition status is preserved for
+  // configuration snapshots and homologation/settlement preconditions.
+  const aggregateTournamentStatus=['RUNNING','OPEN','DRAFT'].find(status=>activeTournamentStates.includes(status))
+    ?? (activeTournamentStates.length&&activeTournamentStates.every(status=>['FINISHED','COMPLETED'].includes(status))?'FINISHED':activeTournamentStates.length&&activeTournamentStates.every(status=>status==='CANCELLED')?'CANCELLED':null)
+  const singleTournament=linkedTournamentIds.length===1?tournamentById.get(linkedTournamentIds[0]):null
+  return {event:{...event,tournament_id:singleTournament?.id??null,tournament_status:aggregateTournamentStatus,tournament_registration_deadline:singleTournament?.registration_deadline??null},series:series.data as Record<string,unknown>,season:season.data as Record<string,unknown>,divisions:(divisions.data??[]).map((d)=>{const item=d as Record<string,unknown>;const own=allLinks.filter((l)=>l.event_division_id===item.id);const activeLink=own.find((l)=>l.status==='ACTIVE')??null;const tournament=activeLink?tournamentById.get(activeLink.tournament_id):null;return {...item,competition_system:activeLink?systems.get(activeLink.tournament_id)??null:null,tournament_status:tournament?.status??null,tournament_registration_deadline:tournament?.registration_deadline??null,rule:(item.competition_series_rules??null) as Record<string,unknown>|null,tier:(item.competition_event_tiers??null) as Record<string,unknown>|null,active_tournament_link:activeLink as Record<string,unknown>|null,link_history:own as Record<string,unknown>[]}}),schedule_history:(history.data??[]) as Record<string,unknown>[],completeness:completeness.data as Record<string,unknown>}
 }
 
 type CompletionIssue={code:string;message:string}

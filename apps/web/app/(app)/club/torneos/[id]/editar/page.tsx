@@ -1,9 +1,12 @@
 'use client'
+import { toast } from '@/lib/toastStore'
 
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { competitionWallTime, competitionWallTimeToInstant, resolveCompetitionTimezone } from '@/lib/competitionTimezone'
+import type { TournamentConfigurationDetail } from '@/lib/tournamentOperationalConfiguration'
 import { useSession } from '@/components/session/SessionProvider'
 import { calculateScheduleCapacity, normalizeScheduleConfig, type ScheduleMode } from '@/lib/tournamentSchedule'
 import { uploadTournamentFlyer } from '@/lib/clubAssets'
@@ -106,6 +109,7 @@ type TournamentRulesLookup = {
   tournaments?: Array<{
     id: string
     rules_json?: Record<string, unknown> | null
+    circuit?: { timezone?: string | null } | null
   }>
 }
 
@@ -295,8 +299,8 @@ function toDateInput(value?: string | null) {
   return value ? value.slice(0, 10) : ''
 }
 
-function toDateTimeInput(value?: string | null) {
-  return value ? value.slice(0, 16) : ''
+function toDateTimeInput(value?: string | null, timezone?: string | null) {
+  return competitionWallTime(value ?? null, timezone ?? null)
 }
 
 function toTournamentType(value?: string | null): TournamentType {
@@ -307,7 +311,7 @@ function toTournamentGender(value?: string | null): TournamentGender {
   return genderOptions.some((option) => option.value === value) ? value as TournamentGender : 'MALE'
 }
 
-function formFromSummary(summary: TournamentSummary, rules?: Record<string, unknown> | null): FormState {
+function formFromSummary(summary: TournamentSummary, rules?: Record<string, unknown> | null, timezone?: string | null): FormState {
   const tournament = summary.tournament
   const safeRules = rules ?? {}
   const pointsConfig = typeof safeRules.points_config === 'object' && safeRules.points_config && !Array.isArray(safeRules.points_config)
@@ -351,7 +355,7 @@ function formFromSummary(summary: TournamentSummary, rules?: Record<string, unkn
     publicDescription: typeof safeRules.public_description === 'string' ? safeRules.public_description : '',
     startDate: toDateInput(tournament.start_date),
     endDate: toDateInput(tournament.end_date),
-    registrationDeadline: toDateTimeInput(tournament.registration_deadline),
+    registrationDeadline: toDateTimeInput(tournament.registration_deadline, timezone),
     pricePerPlayer: String(tournament.price_per_player ?? 0),
     minPairs: String(tournament.min_pairs ?? 6),
     maxPairs: tournament.max_pairs ? String(tournament.max_pairs) : '',
@@ -383,6 +387,9 @@ export default function EditClubTournamentPage() {
   const tournamentId = params?.id
   const { activeClub } = useSession()
   const [form, setForm] = useState<FormState | null>(null)
+  const [timezone, setTimezone] = useState<string | null>(null)
+  const [configurationBlocked, setConfigurationBlocked] = useState(false)
+  const [configurationBlockedReason, setConfigurationBlockedReason] = useState<string | null>(null)
   const [courtDraft, setCourtDraft] = useState<CourtDraftState>(initialCourtDraft)
   const [complexOptions, setComplexOptions] = useState<ClubComplexOption[]>([])
   const [ageCategories, setAgeCategories] = useState<AgeCategoryOption[]>([])
@@ -393,7 +400,7 @@ export default function EditClubTournamentPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
-  const isDraft = status.toUpperCase() === 'DRAFT'
+  const isDraft = status.toUpperCase() === 'DRAFT' && !configurationBlocked
 
   const errors = useMemo(() => {
     if (!form) return []
@@ -593,7 +600,14 @@ export default function EditClubTournamentPage() {
     const rulesJson = await rulesRes.json().catch(() => ({})) as TournamentRulesLookup
     const currentTournament = (rulesJson.tournaments ?? []).find((item) => item.id === tournamentId)
     setStatus(summary.tournament.status)
-    setForm(formFromSummary(summary, currentTournament?.rules_json))
+    const configurationResponse=await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}/configuration`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'})
+    const configuration=await configurationResponse.json().catch(()=>null) as TournamentConfigurationDetail|null
+    if(!configurationResponse.ok||!configuration){setConfigurationBlocked(true);setForm(null);setMessage('No pudimos verificar si la configuración está bloqueada.');setLoading(false);return}
+    setConfigurationBlocked(!configuration.canEdit)
+    setConfigurationBlockedReason(configuration.blockedReason)
+    const eventTimezone=resolveCompetitionTimezone({tournamentTimezone:currentTournament?.circuit?.timezone,deviceTimezone:Intl.DateTimeFormat().resolvedOptions().timeZone})
+    setTimezone(eventTimezone)
+    setForm(formFromSummary(summary, currentTournament?.rules_json, eventTimezone))
     setFlyerConfig(readFlyerConfigFromRules(currentTournament?.rules_json))
     setLoading(false)
   }
@@ -639,6 +653,9 @@ export default function EditClubTournamentPage() {
     }
 
     const tournamentConfig = buildTournamentConfigPayload(form)
+    let registrationDeadline: string | null
+    try { registrationDeadline = form.registrationDeadline ? competitionWallTimeToInstant(form.registrationDeadline, timezone ?? '') : null }
+    catch (cause) { setMessage(cause instanceof Error ? cause.message : 'Revisá el cierre de inscripciones.'); setSaving(false); return }
     const res = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}`, {
       method: 'PATCH',
       headers: {
@@ -665,7 +682,7 @@ export default function EditClubTournamentPage() {
         group_tiebreakers: tournamentConfig.group_tiebreakers,
         start_date: form.startDate,
         end_date: form.endDate || null,
-        registration_deadline: form.registrationDeadline || null,
+        registration_deadline: registrationDeadline,
         price_per_player: form.pricePerPlayer,
         min_pairs: form.minPairs,
         max_pairs: form.maxPairs || null,
@@ -679,14 +696,18 @@ export default function EditClubTournamentPage() {
     if (!res.ok) {
       const messages: Record<string, string> = {
         INVALID_STATUS_TRANSITION: 'Solo podés editar torneos en borrador.',
+        CONFIGURATION_FROZEN: json.error ?? 'La configuración deportiva ya está bloqueada.',
         UNAUTHORIZED: 'No tenés permisos para editar este torneo.',
         TOURNAMENT_NOT_FOUND: 'Torneo no encontrado para este club.',
         VALIDATION_ERROR: json.error ?? 'Revisá los datos del torneo.',
       }
-      setMessage(json.code ? messages[json.code] ?? json.error ?? 'No pude guardar los cambios.' : json.error ?? 'No pude guardar los cambios.')
+      const notice = json.code ? messages[json.code] ?? json.error ?? 'No pude guardar los cambios.' : json.error ?? 'No pude guardar los cambios.'
+      if (json.code === 'VALIDATION_ERROR') setMessage(notice)
+      else toast.error(notice)
       return
     }
 
+    toast.success('Configuración del torneo guardada.')
     router.replace(`/club/torneos/${tournamentId}`)
   }
 
@@ -749,8 +770,8 @@ export default function EditClubTournamentPage() {
         ) : !isDraft ? (
           <div className="club-blockedCard">
             <span className="club-kicker">Edición bloqueada</span>
-            <h2>Este torneo ya no está en borrador.</h2>
-            <p>Para proteger inscripciones, seed, grupos y operación deportiva, solo se editan torneos en estado DRAFT.</p>
+            <h2>La configuración deportiva está bloqueada.</h2>
+            <p>{configurationBlockedReason ?? 'El torneo ya está publicado. La edición general sólo está disponible en borrador.'}</p>
             <Link href={`/club/torneos/${tournamentId}`} className="club-secondaryBtn">Volver al torneo</Link>
           </div>
         ) : (

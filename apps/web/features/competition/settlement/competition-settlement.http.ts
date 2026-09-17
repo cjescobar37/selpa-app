@@ -1,5 +1,6 @@
 import{NextResponse}from'next/server'
-type Coded=Error&{code?:string}
+import{classifySettlementInfrastructureError}from'./competition-settlement.error'
+type Coded=Error&{code?:string;details?:string;hint?:string;supabaseMessage?:string}
 export async function readSettlementJson(request:Request,max=32768){const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>max)return{error:NextResponse.json({error:'Solicitud demasiado grande.'},{status:413})};try{return{value:raw?JSON.parse(raw):{}}}catch{return{error:NextResponse.json({error:'JSON inválido.'},{status:400})}}}
 export function settlementError(error:unknown){const value=error instanceof Error?error as Coded:null;const message=value?.message??''
  if(value?.code==='40001'||message.includes('PRECONDITION_FAILED'))return NextResponse.json({error:'El settlement fue modificado en otra sesión.',code:'PRECONDITION_FAILED'},{status:412})
@@ -7,5 +8,5 @@ export function settlementError(error:unknown){const value=error instanceof Erro
  if(value?.code==='22023'||value?.code==='23514')return NextResponse.json({error:'El settlement no cumple las precondiciones.',code:message.split(':').at(-1)?.trim()},{status:400})
  if(value?.code==='42501'||value?.code==='28000')return NextResponse.json({error:'No autorizado.'},{status:value.code==='28000'?401:403})
  if(value?.code==='P0002'||value?.code==='PGRST116')return NextResponse.json({error:'Recurso inexistente.'},{status:404})
- if(message.includes('does not exist')||message.includes('schema cache'))return NextResponse.json({error:'Falta aplicar la migración Stage 5A.5.',setupRequired:true},{status:412})
- return NextResponse.json({error:'No se pudo gestionar el settlement.'},{status:500})}
+ const classified=classifySettlementInfrastructureError(value)
+ return NextResponse.json(classified.body,{status:classified.status})}

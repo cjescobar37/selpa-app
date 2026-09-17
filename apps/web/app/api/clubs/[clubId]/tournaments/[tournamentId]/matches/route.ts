@@ -3,13 +3,15 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { createMatch, listMatchesByTournament, type MatchPhase } from '@/lib/tournamentMatches'
 import { readMatchScheduleAssignments } from '@/lib/tournamentSchedule'
+import { deriveGroupMatchNumbers } from '@/lib/tournamentGroupDependencies'
 
 type MatchRow = {
   id: string
   tournament_id: string
   club_id: string
-  team1_id: string
-  team2_id: string
+  team1_id: string | null
+  team2_id: string | null
+  group_id: string | null
   round: number
   phase: string
   status: string
@@ -125,6 +127,12 @@ export async function GET(
 
     const { matches } = await listMatchesByTournament({ clubId, tournamentId })
     const rows = (matches ?? []) as MatchRow[]
+    const groupMatchNumbers = deriveGroupMatchNumbers(rows.map(match => ({
+      id: match.id,
+      groupId: match.group_id,
+      round: match.round,
+      matchOrder: match.match_order,
+    })))
 
     const { data: teamRows, error: teamsError } = await supabaseAdmin
       .from('tournament_teams')
@@ -170,19 +178,21 @@ export async function GET(
         player2_user_id: team.player2_user_id,
       })),
       matches: rows.map((match) => {
-        const team1 = teams.get(match.team1_id) ?? null
-        const team2 = teams.get(match.team2_id) ?? null
+        const team1 = match.team1_id ? teams.get(match.team1_id) ?? null : null
+        const team2 = match.team2_id ? teams.get(match.team2_id) ?? null : null
 
         const assignment = matchScheduleAssignments[match.id]
 
         return {
           ...match,
+          group_match_number: groupMatchNumbers.get(match.id) ?? null,
           scheduled_at: assignment?.scheduled_at ?? match.scheduled_at,
           court_name: assignment?.court_name ?? null,
           court_id: assignment?.court_id ?? null,
           court_source: assignment?.court_source ?? null,
-          team1_name: getTeamName(team1, profiles),
-          team2_name: getTeamName(team2, profiles),
+          court_complex_name: assignment?.court_complex_name ?? null,
+          team1_name: team1 ? getTeamName(team1, profiles) : null,
+          team2_name: team2 ? getTeamName(team2, profiles) : null,
           team1: team1
             ? {
                 id: team1.id,

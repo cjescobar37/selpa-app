@@ -1,10 +1,12 @@
 'use client'
+import { toast } from '@/lib/toastStore'
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Bot, CalendarDays, ChevronRight, Clock3, MapPin, Ticket, Trophy, UserPlus, UserRound } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { resolveCompetitionTimezone } from '@/lib/competitionTimezone'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
 import { CreationSuccess } from '@/components/ui/CreationSuccess'
@@ -157,6 +159,7 @@ type CompetitionDateDivision = {
   age_category_id: string | null; age_category_name: string | null
 }
 type CompetitionDateContext = {
+  timezone?: string | null
   series_id: string; series_revision: number; series_name: string
   season: { id: string; name: string }
   allowed_actions: { create_date?: boolean }
@@ -1105,6 +1108,7 @@ export default function ClubNuevoTorneoPage() {
             event_tier_id: selectedCompetitionDivision.points_scheme_id ? selectedEventTierId : null,
             planned_starts_at: form.startDate || null,
             planned_ends_at: form.endDate || form.startDate || null,
+            timezone: resolveCompetitionTimezone({ clubTimezone: competitionContext.timezone, deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
             venue_name: form.venueName || null,
             is_public: false,
           },
@@ -1165,6 +1169,7 @@ export default function ClubNuevoTorneoPage() {
     setSaving(false)
     createdTournamentRef.current = null
     if (draftKey) localStorage.removeItem(draftKey)
+    toast.success('El torneo ya está creado.', { title: 'Torneo creado correctamente' })
     setCreationSuccess({ id: tournamentId, name: form.name.trim() || 'tu torneo' })
   }
 
@@ -1189,7 +1194,8 @@ export default function ClubNuevoTorneoPage() {
   return (
     <div className="px-wrap">
       <div className="club-panel club-newTournament" style={themeStyle}>
-        {message && !creationSuccess && noticeTone ? <ActionFeedbackNotice
+        {message && messageOriginStep ? <p role="alert" className="club-message">{message}</p> : null}
+        {message && !messageOriginStep && !creationSuccess && noticeTone ? <ActionFeedbackNotice
           tone={noticeTone}
           title={noticeTone === 'success' ? 'Listo' : noticeTone === 'error' ? 'No pudimos completar la acción' : 'Revisá este dato'}
           message={message}

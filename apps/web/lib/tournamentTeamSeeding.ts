@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getTournamentRegistrationEligibilityGate } from '@/lib/tournamentRegistrationEligibility'
+import { circuitPointsByPlayer, compareCircuitSeedCandidates, registrationsClosedForCircuitSeed, scoreCircuitTeam, type CircuitSeedRankingRow } from '@/lib/tournamentCircuitSeeding'
 
 type SeedingErrorCode =
   | 'TOURNAMENT_NOT_FOUND'
@@ -9,6 +10,7 @@ type SeedingErrorCode =
   | 'INSUFFICIENT_ELIGIBLE_TEAMS_FOR_SEED'
   | 'TEAM_DATA_INCOMPLETE'
   | 'COMPETITION_RANKING_UNAVAILABLE'
+  | 'REGISTRATIONS_NOT_CLOSED'
 
 type RegistrationRow = {
   id: string
@@ -29,15 +31,11 @@ type TeamRow = {
 
 type SeedSource = 'NO_RANKING' | 'COMPETITION_SERIES_RANKING'
 
-type CompetitionSeriesRankingRow = {
-  player_id: string | null
-  points: number | string | null
-}
-
 type CompetitionSeedScope = {
   seedSource: SeedSource
   sourceSeriesId: string | null
   sourceEventDivisionId: string | null
+  sourceSeriesDivisionId: string | null
   pointsByUserId: Map<string, number>
 }
 
@@ -77,22 +75,6 @@ export class TournamentSeedingError extends Error {
   }
 }
 
-function compareSeedCandidates(a: SeedCandidate, b: SeedCandidate) {
-  const teamScoreDiff = b.team_score - a.team_score
-  if (teamScoreDiff !== 0) return teamScoreDiff
-
-  const bestDiff = b.best_individual_points - a.best_individual_points
-  if (bestDiff !== 0) return bestDiff
-
-  const worstDiff = b.worst_individual_points - a.worst_individual_points
-  if (worstDiff !== 0) return worstDiff
-
-  const createdDiff = new Date(a.registration_created_at).getTime() - new Date(b.registration_created_at).getTime()
-  if (createdDiff !== 0) return createdDiff
-
-  return a.team_id.localeCompare(b.team_id)
-}
-
 function rankingClient(accessToken: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -103,7 +85,7 @@ function rankingClient(accessToken: string) {
   })
 }
 
-async function getCompetitionSeedScope(input: {
+export async function getCompetitionSeedScope(input: {
   clubId: string
   tournamentId: string
   accessToken?: string
@@ -122,13 +104,14 @@ async function getCompetitionSeedScope(input: {
       seedSource: 'NO_RANKING',
       sourceSeriesId: null,
       sourceEventDivisionId: null,
+      sourceSeriesDivisionId: null,
       pointsByUserId: new Map(),
     }
   }
 
   const { data: eventDivision, error: eventDivisionError } = await supabaseAdmin
     .from('competition_series_event_divisions')
-    .select('event_id')
+    .select('event_id,series_division_id')
     .eq('club_id', input.clubId)
     .eq('id', link.event_division_id)
     .maybeSingle()
@@ -162,7 +145,7 @@ async function getCompetitionSeedScope(input: {
       409
     )
   }
-  const { data: rankingRows, error: rankingError } = await client.rpc('get_competition_series_ranking', {
+  const { data: rankingRows, error: rankingError } = await client.rpc('get_competition_series_ranking_by_division', {
     p_club_id: input.clubId,
     p_series_id: event.series_id,
   })
@@ -174,16 +157,17 @@ async function getCompetitionSeedScope(input: {
     )
   }
 
-  const pointsByUserId = new Map<string, number>()
-  for (const row of (rankingRows ?? []) as CompetitionSeriesRankingRow[]) {
-    if (!row.player_id) continue
-    const points = Number(row.points)
-    pointsByUserId.set(row.player_id, Number.isFinite(points) ? points : 0)
+  let pointsByUserId: Map<string, number>
+  try {
+    pointsByUserId = circuitPointsByPlayer((rankingRows ?? []) as CircuitSeedRankingRow[], eventDivision.series_division_id)
+  } catch {
+    throw new TournamentSeedingError('COMPETITION_RANKING_UNAVAILABLE', 'El ranking de esta división no está listo para generar seeds.', 409)
   }
   return {
     seedSource: 'COMPETITION_SERIES_RANKING',
     sourceSeriesId: event.series_id,
     sourceEventDivisionId: link.event_division_id,
+    sourceSeriesDivisionId: eventDivision.series_division_id,
     pointsByUserId,
   }
 }
@@ -198,7 +182,7 @@ export async function generateTournamentSeedSnapshot(input: {
 
   const { data: tournament, error: tournamentError } = await supabaseAdmin
     .from('tournaments')
-    .select('id,club_id,name,min_pairs')
+    .select('id,club_id,name,min_pairs,registration_deadline')
     .eq('id', input.tournamentId)
     .eq('club_id', input.clubId)
     .maybeSingle()
@@ -268,6 +252,10 @@ export async function generateTournamentSeedSnapshot(input: {
 
   const teamsById = new Map(((teams ?? []) as TeamRow[]).map((team) => [team.id, team]))
   const competitionScope = await getCompetitionSeedScope(input)
+  if (competitionScope.seedSource === 'COMPETITION_SERIES_RANKING' &&
+    !registrationsClosedForCircuitSeed(tournament.registration_deadline, new Date())) {
+    throw new TournamentSeedingError('REGISTRATIONS_NOT_CLOSED', 'Esperá al cierre de inscripciones para congelar los seeds del circuito.', 409)
+  }
 
   const candidates = eligibleRegistrations.map((registration) => {
     const team = teamsById.get(registration.team_id)
@@ -279,8 +267,7 @@ export async function generateTournamentSeedSnapshot(input: {
       )
     }
 
-    const player1Points = competitionScope.pointsByUserId.get(team.player1_user_id) ?? 0
-    const player2Points = competitionScope.pointsByUserId.get(team.player2_user_id) ?? 0
+    const score = scoreCircuitTeam(team, competitionScope.pointsByUserId)
 
     return {
       tournament_id: input.tournamentId,
@@ -289,18 +276,14 @@ export async function generateTournamentSeedSnapshot(input: {
       registration_id: registration.id,
       player1_user_id: team.player1_user_id,
       player2_user_id: team.player2_user_id,
-      player1_points: player1Points,
-      player2_points: player2Points,
-      team_score: player1Points + player2Points,
-      best_individual_points: Math.max(player1Points, player2Points),
-      worst_individual_points: Math.min(player1Points, player2Points),
+      ...score,
       registration_created_at: registration.created_at,
     } satisfies SeedCandidate
   })
 
   const snapshotAt = new Date().toISOString()
   const inserts: SeedSnapshotInsert[] = [...candidates]
-    .sort(compareSeedCandidates)
+    .sort(compareCircuitSeedCandidates)
     .map((candidate, index) => ({
       tournament_id: candidate.tournament_id,
       club_id: candidate.club_id,

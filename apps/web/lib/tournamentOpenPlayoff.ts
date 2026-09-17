@@ -27,6 +27,7 @@ import { getTournamentRegistrationEligibilityGate } from '@/lib/tournamentRegist
 import { evaluatePlayoffSchedulingPlan } from '@/lib/tournamentPlayoffSchedulingDiagnostics'
 import { normalizeScheduleConfig, normalizeTournamentCourts, readMatchScheduleAssignments, type MatchScheduleAssignment } from '@/lib/tournamentSchedule'
 import { clearPlayoffScheduleReservationsFromRules } from '@/lib/tournamentPlayoffScheduleReservations'
+import { buildCircuitDirectPlayoffPlan } from '@/lib/tournamentCircuitDraw'
 
 type OpenPlayoffErrorCode =
   | 'UNAUTHORIZED'
@@ -41,6 +42,7 @@ type OpenPlayoffErrorCode =
   | 'OPEN_REQUIRES_MANUAL_RESOLUTION'
   | 'OPEN_GENERATION_ROLLED_BACK'
   | 'PLAYOFF_REGENERATION_BLOCKED'
+  | 'DIRECT_SEEDS_NOT_READY'
 
 type TournamentRow = {
   id: string
@@ -52,6 +54,7 @@ type TournamentRow = {
   classification_rules: TournamentClassificationRules | null
   start_date: string | null
   end_date: string | null
+  registration_deadline?: string | null
   rules_json: Record<string, unknown> | null
   rules: Record<string, unknown> | null
 }
@@ -317,6 +320,13 @@ function isOpenCompatibleTournament(tournament: TournamentRow) {
   return compatibleFormat && declaredTypes.length > 0 && declaredTypes.every((value) => value === 'OPEN')
 }
 
+function isDirectKnockoutTournament(tournament: TournamentRow) {
+  const rules = normalizeObject(tournament.rules_json ?? tournament.rules)
+  const format = String(tournament.format ?? '').toUpperCase()
+  return rules.competition_system === 'SINGLE_ELIMINATION' ||
+    ['DIRECT_ELIM', 'DIRECT_ELIMINATION', 'ELIMINATION'].includes(format)
+}
+
 function getPairKey(team1Id: string, team2Id: string) {
   return [team1Id, team2Id].sort().join(':')
 }
@@ -350,8 +360,9 @@ export function assertOpenGroupsComplete(input: {
     const expectedMatches = [...initialFixture.initialMatches]
     const initialMatches = initialFixture.initialMatches.map((expected) =>
       groupMatches.find((match) =>
+        Boolean(match.team1_id && match.team2_id) &&
         Number(match.round) === expected.round &&
-        getPairKey(match.team1_id, match.team2_id) === getPairKey(expected.team1Id, expected.team2Id)
+        getPairKey(match.team1_id!, match.team2_id!) === getPairKey(expected.team1Id, expected.team2Id)
       ) ?? null
     )
 
@@ -360,8 +371,8 @@ export function assertOpenGroupsComplete(input: {
     )) {
       const dependentFixture = buildOpenGroupDependentFixture({
         initialMatches: initialMatches.map((match) => ({
-          team1Id: match!.team1_id,
-          team2Id: match!.team2_id,
+          team1Id: match!.team1_id!,
+          team2Id: match!.team2_id!,
           winnerTeamId: match!.winner_team_id,
         })),
       })
@@ -372,6 +383,10 @@ export function assertOpenGroupsComplete(input: {
     const observed = new Map<string, MatchRow[]>()
     const invalidMatches: MatchRow[] = []
     for (const match of groupMatches) {
+      if (!match.team1_id || !match.team2_id) {
+        invalidMatches.push(match)
+        continue
+      }
       const key = `${Number(match.round ?? 0)}:${getPairKey(match.team1_id, match.team2_id)}`
       if (!groupTeamIds.has(match.team1_id) || !groupTeamIds.has(match.team2_id) || !expectedKeys.has(key)) {
         invalidMatches.push(match)
@@ -438,6 +453,126 @@ async function rollbackCreatedMatches(matchIds: string[]) {
     .in('id', matchIds)
 
   if (error) throw new Error(`No pude revertir partidos creados: ${error.message}`)
+}
+
+async function generateDirectFirstRound(input: {
+  clubId: string
+  tournamentId: string
+  tournament: TournamentRow
+}) {
+  const registrationClosedAt = input.tournament.registration_deadline
+    ? new Date(input.tournament.registration_deadline).getTime() : NaN
+  if (!Number.isFinite(registrationClosedAt) || registrationClosedAt > Date.now()) {
+    throw new OpenPlayoffGenerationError('DIRECT_SEEDS_NOT_READY',
+      'Esperá al cierre de inscripciones antes de generar el cuadro directo.', 409)
+  }
+  const eligibilityGate = await getTournamentRegistrationEligibilityGate(input)
+  if (eligibilityGate.blockedCount > 0) {
+    throw new OpenPlayoffGenerationError('REGISTRATION_ELIGIBILITY_BLOCKED',
+      `Hay ${eligibilityGate.blockedCount} parejas que no pueden competir todavía.`, 409)
+  }
+
+  const [{ data: groups, error: groupsError }, { data: matches, error: matchesError },
+    { data: seeds, error: seedsError }, { data: registrations, error: registrationsError }] = await Promise.all([
+    supabaseAdmin.from('tournament_groups').select('id').eq('tournament_id', input.tournamentId).limit(1),
+    supabaseAdmin.from('tournament_matches').select('id').eq('tournament_id', input.tournamentId).eq('club_id', input.clubId).limit(1),
+    supabaseAdmin.from('tournament_team_seed_snapshots').select('team_id,seed').eq('tournament_id', input.tournamentId).eq('club_id', input.clubId).order('seed'),
+    supabaseAdmin.from('tournament_registrations').select('team_id').eq('tournament_id', input.tournamentId).eq('club_id', input.clubId).eq('status', 'CONFIRMED'),
+  ])
+  if (groupsError || matchesError || seedsError || registrationsError) {
+    throw new Error(`No pude validar el cuadro directo: ${groupsError?.message ?? matchesError?.message ?? seedsError?.message ?? registrationsError?.message}`)
+  }
+  if (groups?.length || matches?.length) {
+    throw new OpenPlayoffGenerationError('PLAYOFF_ALREADY_EXISTS_OR_STARTED',
+      'El torneo ya tiene grupos o partidos; no se puede generar un cuadro directo nuevo.', 409)
+  }
+  const confirmedIds = new Set((registrations ?? []).map((row) => row.team_id))
+  const seedRows = seeds ?? []
+  if (seedRows.length < 5 || confirmedIds.size !== seedRows.length ||
+    seedRows.some((row) => !confirmedIds.has(row.team_id))) {
+    throw new OpenPlayoffGenerationError('DIRECT_SEEDS_NOT_READY',
+      'Cerrá inscripciones y generá un snapshot completo de seeds antes del cuadro directo.', 409)
+  }
+  let plan: ReturnType<typeof buildCircuitDirectPlayoffPlan>
+  try {
+    plan = buildCircuitDirectPlayoffPlan(seedRows.map((row) => ({ teamId: row.team_id, seed: row.seed })))
+  } catch {
+    throw new OpenPlayoffGenerationError('DIRECT_SEEDS_NOT_READY',
+      'El snapshot de seeds debe ser único y consecutivo para generar el cuadro directo.', 409)
+  }
+
+  const currentRules = normalizeObject(input.tournament.rules_json ?? input.tournament.rules)
+  const scheduleConfig = normalizeScheduleConfig(currentRules.schedule_config, {
+    startDate: input.tournament.start_date,
+    endDate: input.tournament.end_date ?? input.tournament.start_date,
+  })
+  const schedulingDecision = evaluatePlayoffSchedulingPlan({
+    tournamentId: input.tournamentId,
+    playoffType: 'OPEN',
+    candidateMatches: plan.matchInputs.map((match) => ({
+      id: `${plan.phase}:${match.matchOrder}`,
+      team1Id: match.team1Id,
+      team2Id: match.team2Id,
+      phase: plan.phase,
+      round: 1,
+      matchOrder: match.matchOrder,
+    })),
+    courts: normalizeTournamentCourts(currentRules.tournament_courts),
+    scheduleConfig,
+    scheduleConfigReady: hasCompletePlayoffScheduleConfig(currentRules.schedule_config),
+  })
+  const createdMatches = []
+  const createdMatchIds: string[] = []
+  const createdAssignments: MatchScheduleAssignment[] = []
+  try {
+    for (const matchInput of plan.matchInputs) {
+      const assignment = schedulingDecision.shouldApplySchedule
+        ? schedulingDecision.assignmentsByMatchId[`${plan.phase}:${matchInput.matchOrder}`]
+        : null
+      const { match } = await createMatch({
+        tournamentId: input.tournamentId,
+        clubId: input.clubId,
+        groupId: null,
+        team1Id: matchInput.team1Id,
+        team2Id: matchInput.team2Id,
+        phase: plan.phase,
+        round: 1,
+        matchOrder: matchInput.matchOrder,
+        scheduledAt: assignment?.scheduled_at ?? null,
+      })
+      createdMatches.push(match)
+      if (match?.id) {
+        createdMatchIds.push(String(match.id))
+        if (assignment) createdAssignments.push({ ...assignment, match_id: String(match.id) })
+      }
+    }
+    const nextAssignments = { ...readMatchScheduleAssignments(currentRules.match_schedule_assignments) }
+    for (const assignment of createdAssignments) nextAssignments[assignment.match_id] = assignment
+    const nextRules = {
+      ...currentRules,
+      playoff_plan: plan.persistedPlan,
+      ...(createdAssignments.length ? { match_schedule_assignments: nextAssignments } : {}),
+    }
+    const { error } = await supabaseAdmin.from('tournaments')
+      .update({ rules_json: nextRules, rules: nextRules })
+      .eq('id', input.tournamentId).eq('club_id', input.clubId)
+    if (error) throw new Error(error.message)
+  } catch (error: unknown) {
+    await rollbackCreatedMatches(createdMatchIds)
+    throw new OpenPlayoffGenerationError('OPEN_GENERATION_ROLLED_BACK',
+      `Falló la generación directa y se revirtieron los partidos creados. ${error instanceof Error ? error.message : 'Error desconocido.'}`, 500)
+  }
+  return {
+    tournament: { id: input.tournament.id, club_id: input.clubId, name: input.tournament.name,
+      format: input.tournament.format, type: input.tournament.type ?? input.tournament.tournament_type ?? null },
+    phase: plan.phase,
+    createdCount: createdMatches.length,
+    matches: createdMatches,
+    meta: { bracketSize: plan.draw.bracketSize, groupCount: 0, directQualifiers: seedRows.length,
+      bestThirdsCount: 0, byeCount: plan.draw.byeAdvances.length,
+      assignedByes: plan.draw.byeAdvances.length, planSource: 'circuit_seeded_direct',
+      conflictScore: 0, warnings: [] },
+  }
 }
 
 function removePlayoffScheduleState(input: {
@@ -650,7 +785,7 @@ export async function generateOpenFirstRoundPlayoff(input: {
 
   const { data: tournament, error: tournamentError } = await supabaseAdmin
     .from('tournaments')
-    .select('id,club_id,name,format,type,tournament_type,classification_rules,start_date,end_date,rules_json,rules')
+    .select('id,club_id,name,format,type,tournament_type,classification_rules,start_date,end_date,registration_deadline,rules_json,rules')
     .eq('id', input.tournamentId)
     .eq('club_id', input.clubId)
     .maybeSingle()
@@ -661,6 +796,13 @@ export async function generateOpenFirstRoundPlayoff(input: {
   }
 
   const tournamentRow = tournament as TournamentRow
+  if (isDirectKnockoutTournament(tournamentRow)) {
+    return generateDirectFirstRound({
+      clubId: input.clubId,
+      tournamentId: input.tournamentId,
+      tournament: tournamentRow,
+    })
+  }
   if (!isOpenCompatibleTournament(tournamentRow)) {
     throw new OpenPlayoffGenerationError(
       'UNSUPPORTED_TOURNAMENT_FORMAT',
@@ -780,6 +922,18 @@ export async function generateOpenFirstRoundPlayoff(input: {
     clubId: input.clubId,
     standings,
   })
+  const { data: circuitLink, error: circuitLinkError } = await supabaseAdmin
+    .from('competition_series_event_tournament_links')
+    .select('id')
+    .eq('club_id', input.clubId)
+    .eq('tournament_id', input.tournamentId)
+    .eq('status', 'ACTIVE')
+    .maybeSingle()
+  if (circuitLinkError) throw new Error(`No pude validar el vínculo del circuito: ${circuitLinkError.message}`)
+  if (circuitLink && !generalSelection.useGeneralPlan) {
+    throw new OpenPlayoffGenerationError('OPEN_REQUIRES_MANUAL_RESOLUTION',
+      'El cuadro del circuito no pasó la validación deportiva. No se generaron partidos.', 422)
+  }
   if (!generalSelection.useGeneralPlan) {
     debugGeneralOpenPlanFallback(generalSelection.fallbackReason)
   }

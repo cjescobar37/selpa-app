@@ -10,7 +10,7 @@ export async function listSeries(client:SupabaseClient,clubId:string,seasonId?:s
 export async function getSeriesDetail(client:SupabaseClient,clubId:string,seriesId:string):Promise<CompetitionSeriesDetail> {
   const {data:series,error}=await client.from('competition_series').select('*').eq('club_id',clubId).eq('id',seriesId).maybeSingle()
   if(error) throw fail('No pude leer el circuito',error); if(!series) throw Object.assign(new Error('Circuito inexistente.'),{code:'P0002'})
-  const {data:divisions,error:divisionError}=await client.from('competition_series_divisions').select('*,division:competition_divisions(id,modality,branch:competition_branches(name,slug),segment:competition_segments(name,slug),category:competition_categories(name,legacy_category_id))').eq('club_id',clubId).eq('series_id',seriesId).order('sort_order')
+  const {data:divisions,error:divisionError}=await client.from('competition_series_divisions').select('*,division:competition_divisions!competition_series_divisions_division_fkey(id,modality,branch:competition_branches(name,slug),segment:competition_segments(name,slug),category:competition_categories(name,legacy_category_id))').eq('club_id',clubId).eq('series_id',seriesId).order('sort_order')
   if(divisionError) throw fail('No pude leer las divisiones',divisionError)
   const ids=(divisions??[]).map((item)=>item.id); const rules=ids.length ? await client.from('competition_series_rules').select('*').in('series_division_id',ids).order('version',{ascending:false}) : {data:[],error:null}
   if(rules.error) throw fail('No pude leer las reglas',rules.error)
@@ -22,7 +22,12 @@ export async function getSeriesDetail(client:SupabaseClient,clubId:string,series
   ])
   if(finalization.error)throw fail('No pude validar el cierre del circuito',finalization.error)
   if(finalRanking.error)throw fail('No pude leer el ranking final',finalRanking.error)
-  return {series,divisions:(divisions??[]).map((division)=>({...division,rules:(rules.data??[]).filter((rule)=>rule.series_division_id===division.id).map((rule)=>({...rule,eligibility:(eligibility.data??[]).find((item)=>item.series_rule_id===rule.id)??null}))})),finalization:finalization.data,finalRanking:finalRanking.data??[]} as CompetitionSeriesDetail
+  const finalPairs=series.status==='CLOSED'
+    ? await client.from('competition_series_final_pair_rankings').select('*').eq('club_id',clubId).eq('series_id',seriesId).order('series_division_id').order('ranking_position')
+    : {data:[],error:null}
+  if(finalPairs.error && !(['PGRST205','42P01'].includes(finalPairs.error.code) && finalPairs.error.message.includes('competition_series_final_pair_rankings')))
+    throw fail('No pude leer el ranking final de parejas',finalPairs.error)
+  return {series,divisions:(divisions??[]).map((division)=>({...division,rules:(rules.data??[]).filter((rule)=>rule.series_division_id===division.id).map((rule)=>({...rule,eligibility:(eligibility.data??[]).find((item)=>item.series_rule_id===rule.id)??null}))})),finalization:finalization.data,finalRanking:finalRanking.data??[],finalPairRanking:finalPairs.data??[]} as CompetitionSeriesDetail
 }
 export async function rpc<T>(client:SupabaseClient,name:string,args:Record<string,unknown>):Promise<T> { const {data,error}=await client.rpc(name,args); if(error) throw fail(`Falló ${name}`,error); return data as T }
 export async function getSeriesRevision(client:SupabaseClient,clubId:string,seriesId:string):Promise<number>{const {data,error}=await client.from('competition_series').select('revision').eq('club_id',clubId).eq('id',seriesId).single();if(error)throw fail('No pude leer la revisión del circuito',error);return Number(data.revision)}

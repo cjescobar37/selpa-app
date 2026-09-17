@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toastStore'
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -58,11 +59,6 @@ export default function CompetitionDivisionsAdmin() {
     const timer = window.setTimeout(() => { void load() }, 0)
     return () => window.clearTimeout(timer)
   }, [load])
-  useEffect(() => {
-    if (notice?.kind !== 'success') return
-    const timeout = window.setTimeout(() => setNotice(null), 4000)
-    return () => window.clearTimeout(timeout)
-  }, [notice])
 
   const selectedGroup = data?.catalogs.groups.find((group) => group.id === form.segment_id)?.name.toLowerCase() ?? ''
   const categoryOptional = selectedGroup === 'menores' || selectedGroup === 'veteranos'
@@ -85,8 +81,8 @@ export default function CompetitionDivisionsAdmin() {
     try {
       await request(`/api/clubs/${clubId}/competition/divisions`, { method: 'POST', body: JSON.stringify({ season_id: seasonId, branch_id: form.branch_id, segment_id: form.segment_id, category_id: categoryOptional ? null : form.category_id }) })
       setCreating(false); setForm({ branch_id: '', segment_id: '', category_id: '' })
-      setState('active'); await load(seasonId, 'active'); setNotice({ kind: 'success', text: 'División agregada.' })
-    } catch (cause) { setNotice({ kind: 'error', text: cause instanceof Error ? cause.message : 'No pudimos agregar la división.' }) }
+      setState('active'); await load(seasonId, 'active'); toast.success('División agregada.')
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : 'No pudimos agregar la división.') }
     finally { setBusy('') }
   }
 
@@ -95,8 +91,8 @@ export default function CompetitionDivisionsAdmin() {
     setBusy(division.id)
     try {
       await request(`/api/clubs/${clubId}/competition/divisions`, { method: 'PATCH', body: JSON.stringify({ id: division.id, is_active: !division.is_active }) })
-      await load(seasonId, state); setNotice({ kind: 'success', text: division.is_active ? 'División desactivada.' : 'División activada.' })
-    } catch (cause) { setNotice({ kind: 'error', text: cause instanceof Error ? cause.message : 'No pudimos actualizar la división.' }) }
+      await load(seasonId, state); toast.success(division.is_active ? 'División desactivada.' : 'División activada.')
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : 'No pudimos actualizar la división.') }
     finally { setBusy('') }
   }
 
@@ -112,8 +108,8 @@ export default function CompetitionDivisionsAdmin() {
         ? await request<{ message?: string }>(`/api/clubs/${clubId}/competition/catalogs/${catalogEditor}`, { method: 'PATCH', body: JSON.stringify({ id: existing.id, is_active: true }) })
         : await request<{ message?: string }>(`/api/clubs/${clubId}/competition/catalogs/${catalogEditor}`, { method: 'POST', body: JSON.stringify({ name: catalogName.trim() }) })
       setCatalogEditor(null); setCatalogName(''); await load(seasonId, state)
-      setNotice({ kind: 'success', text: result.message || (existing ? `${existing.name} fue reactivado.` : `${catalogName.trim()} fue agregado.`) })
-    } catch (cause) { setNotice({ kind: 'error', text: cause instanceof Error ? cause.message : 'No pudimos agregar la opción.' }) }
+      toast.success(result.message || (existing ? `${existing.name} fue reactivado.` : `${catalogName.trim()} fue agregado.`))
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : 'No pudimos agregar la opción.') }
     finally { setBusy('') }
   }
 
@@ -122,8 +118,8 @@ export default function CompetitionDivisionsAdmin() {
     setBusy(`catalog-${item.id}`)
     try {
       await request(`/api/clubs/${clubId}/competition/catalogs/${kind}`, { method: 'PATCH', body: JSON.stringify({ id: item.id, is_active: !item.is_active }) })
-      await load(seasonId, state); setNotice({ kind: 'success', text: `${item.name} ${item.is_active ? 'desactivado' : 'activado'}.` })
-    } catch (cause) { setNotice({ kind: 'error', text: cause instanceof Error ? cause.message : 'No pudimos actualizar la opción.' }) }
+      await load(seasonId, state); toast.success(`${item.name} ${item.is_active ? 'desactivado' : 'activado'}.`)
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : 'No pudimos actualizar la opción.') }
     finally { setBusy('') }
   }
 

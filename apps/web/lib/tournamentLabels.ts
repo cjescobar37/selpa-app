@@ -27,12 +27,29 @@ export function formatTournamentSystemLabel(value?: string | null) {
     ZONE_PLAYOFF: 'Zona + Playoff',
     ELIMINATION: 'Eliminación directa',
     DIRECT_ELIM: 'Eliminación directa',
+    DIRECT_ELIMINATION: 'Eliminación directa',
     SINGLE_ELIMINATION: 'Eliminación directa',
     ROUND_ROBIN: 'Todos contra todos',
     GROUPS: 'Zonas',
     LEAGUE: 'Liga',
   }
   return labels[key] ?? fallbackLabel(value, 'Sin formato')
+}
+
+export function resolveTournamentCompetitionSystem(
+  rules?: Record<string, unknown> | null,
+  legacyFormat?: string | null,
+): 'GROUPS_PLAYOFF' | 'ROUND_ROBIN' | 'SINGLE_ELIMINATION' | null {
+  const configured = rules?.competition_system
+  if (configured === 'DIRECT_ELIMINATION') return 'SINGLE_ELIMINATION'
+  if (configured === 'GROUPS_PLAYOFF' || configured === 'ROUND_ROBIN' || configured === 'SINGLE_ELIMINATION') {
+    return configured
+  }
+  const legacy = String(legacyFormat ?? '').trim().toUpperCase()
+  if (['GROUPS_PLAYOFF', 'GROUPS_ELIMINATION', 'GROUPS_ELIM', 'ZONE_PLAYOFF'].includes(legacy)) return 'GROUPS_PLAYOFF'
+  if (['SINGLE_ELIMINATION', 'DIRECT_ELIM', 'DIRECT_ELIMINATION', 'ELIMINATION'].includes(legacy)) return 'SINGLE_ELIMINATION'
+  if (legacy === 'ROUND_ROBIN') return 'ROUND_ROBIN'
+  return null
 }
 
 export function formatBranchLabel(value?: string | null) {

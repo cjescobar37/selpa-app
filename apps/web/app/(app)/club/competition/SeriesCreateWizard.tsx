@@ -24,7 +24,7 @@ const steps = ['Presentación', 'Competencia', 'Ranking', 'Fechas', 'Revisión']
 const draftVersion = 3
 const initialForm: Form = { name: '', startsOn: '', endsOn: '', seasonId: '', branchId: '', segmentId: '', categoryId: '', ageCategoryId: '', schemeId: '', accumulation: 'ALL_RESULTS', bestResults: '4', planned: '6', prizes:[] }
 const newKey = () => typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `series-${Date.now()}-${Math.random().toString(16).slice(2)}`
-const pointLabels: Record<PointsSchemeRule['rule_key'], string> = { CHAMPION: 'Campeón', RUNNER_UP: 'Finalista', SEMIFINALIST: 'Semifinal', QUARTERFINALIST: 'Cuartos', PARTICIPANT: 'Participación' }
+const pointLabels: Record<PointsSchemeRule['rule_key'], string> = { CHAMPION: 'Campeón', RUNNER_UP: 'Finalista', SEMIFINALIST: 'Semifinal', QUARTERFINALIST: 'Cuartos', EIGHTH_FINALIST: 'Octavos', SIXTEENTH_FINALIST: 'Dieciseisavos', PARTICIPANT: 'Participación' }
 const prizePositions = { CHAMPION:'Campeón', RUNNER_UP:'Finalista', SEMIFINALISTS:'Semifinalistas', OTHER:'Otro rango' } as const
 const prizeTypes = { CASH:'Dinero', GOODS:'Producto', SERVICE:'Servicio', TROPHY:'Trofeo', OTHER:'Otro' } as const
 const schemeLabel = (scheme:PointsScheme|undefined) => scheme?.display_name?.trim() || scheme?.name || ''
@@ -178,7 +178,7 @@ export default function SeriesCreateWizard({ clubId, request }: { clubId: string
   const previous = step > 0 ? steps[step - 1] : ''
   const following = step < 4 ? steps[step + 1] : 'Listo'
   return <section className={styles.wizard}>
-    {feedback ? <ActionFeedbackNotice tone={feedback.tone} title={feedback.title} message={feedback.message} detail="Señalamos el paso que requiere atención." onDismiss={() => setFeedback(null)} /> : null}
+    {feedback?.tone === 'warning' ? <p role="alert">{feedback.title}: {feedback.message}</p> : feedback ? <ActionFeedbackNotice tone={feedback.tone} title={feedback.title} message={feedback.message} onDismiss={() => setFeedback(null)} /> : null}
     <header className={styles.wizardHead}>
       <div><span>Paso {step + 1} de 5</span><strong>{steps[step]}</strong></div>
       <i><span style={{ width: `${((step + 1) / 5) * 100}%` }} /></i>

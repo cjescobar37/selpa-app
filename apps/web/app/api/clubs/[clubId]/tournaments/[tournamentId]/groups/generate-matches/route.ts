@@ -5,6 +5,7 @@ import {
   generateTournamentGroupsAndFixtureAtomic,
   TournamentGroupsFixtureAtomicError,
 } from '@/lib/tournamentGroupsFixtureAtomic'
+import { repairAndScheduleTournamentGroups } from '@/lib/tournamentGroupFixtureService'
 
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
@@ -38,15 +39,17 @@ export async function POST(
 
     const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     const result = await generateTournamentGroupsAndFixtureAtomic({ token, clubId, tournamentId })
+    const prepared = await repairAndScheduleTournamentGroups({ clubId, tournamentId })
 
     return NextResponse.json(
       {
         ok: true,
         tournamentId,
         groupsCount: result.groupCount,
-        matchesCreated: result.matchesCreated,
-        scheduleApplied: false,
-        scheduleCapacity: null,
+        matchesCreated: prepared.matches,
+        scheduleApplied: prepared.scheduleApplied,
+        matchesScheduled: prepared.scheduled,
+        repairedMatches: prepared.created,
         generationStatus: result.status,
       },
       { status: result.status === 'ALREADY_GENERATED' ? 200 : 201 }

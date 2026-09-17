@@ -5,6 +5,8 @@ import { join } from 'node:path'
 
 const migration = readFileSync(join(process.cwd(), 'supabase/migrations/20260909120000_competition_pairs_ranking_pipeline_fix.sql'), 'utf8')
 const rankingRepository = readFileSync(join(process.cwd(), 'features/competition/ranking/competition-ranking.repository.ts'), 'utf8')
+const rankingService = readFileSync(join(process.cwd(), 'features/competition/ranking/competition-ranking.service.ts'), 'utf8')
+const pointsRepository = readFileSync(join(process.cwd(), 'features/competition/points/competition-points.repository.ts'), 'utf8')
 const pairProjection = migration.slice(migration.indexOf('create or replace view public.competition_pair_ranking_projection'))
 const ledgerValidator = migration.slice(
   migration.indexOf('create or replace function public.validate_competition_point_transaction()'),
@@ -82,6 +84,14 @@ test('Competition individual ranking has no legacy points fallback', () => {
   assert.doesNotMatch(rankingRepository, /club_players\.ranking_points/)
   assert.doesNotMatch(rankingRepository, /getCompetitionPointsSource/)
   assert.match(rankingRepository, /getLedgerPointsByEntry/)
+  assert.match(rankingService, /return 'competition'/)
+  assert.doesNotMatch(rankingService, /RANKING_ENGINE_SOURCE/)
+})
+
+test('ranking totals are aggregated from the server-side ledger without the user-context RPC', () => {
+  assert.match(pointsRepository, /from\('competition_point_transactions'\)/)
+  assert.match(pointsRepository, /total_points:\s*\(current\?\.total_points \?\? 0\) \+ Number\(row\.points \?\? 0\)/)
+  assert.doesNotMatch(pointsRepository, /rpc\('get_competition_points_totals'/)
 })
 
 test('Competition completion requires a persisted finished tournament', () => {

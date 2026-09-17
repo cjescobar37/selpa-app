@@ -9,6 +9,7 @@ import {
   type TournamentGroupTeam,
   type TournamentStandingMatch,
 } from '@/lib/tournamentStandings'
+import { deriveGroupMatchNumbers } from '@/lib/tournamentGroupDependencies'
 
 type TournamentRow = {
   id: string
@@ -143,7 +144,7 @@ export async function GET(
 
     let matchesQuery = supabaseAdmin
       .from('tournament_matches')
-      .select('id,group_id,phase,status,team1_id,team2_id,winner_team_id,score')
+      .select('id,group_id,phase,status,team1_id,team2_id,winner_team_id,score,round,match_order')
       .eq('tournament_id', tournamentId)
       .eq('club_id', clubId)
 
@@ -158,10 +159,12 @@ export async function GET(
     const classificationRules = resolveTournamentClassificationRules(row.classification_rules, row.rules_json ?? row.rules)
 
     try {
+      const rawMatches = (matchRows ?? []) as Array<TournamentStandingMatch & { round: number; match_order: number }>
+      const numbers = deriveGroupMatchNumbers(rawMatches.map(match => ({ id: match.id, groupId: match.group_id ?? null, round: match.round, matchOrder: match.match_order })))
       const standings = calculateTournamentGroupStandings({
         groups,
         groupTeams: (groupTeamRows ?? []) as TournamentGroupTeam[],
-        matches: (matchRows ?? []) as TournamentStandingMatch[],
+        matches: rawMatches.map(match => ({ ...match, group_match_number: numbers.get(match.id) ?? null })),
         classificationRules,
       })
 

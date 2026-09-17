@@ -6,6 +6,9 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { normalizeScheduleConfig, normalizeTournamentCourts } from '@/lib/tournamentSchedule'
 import { normalizeGroupTiebreakerConfig } from '@/lib/tournamentTiebreakers'
 import { mapTournamentError } from '@/lib/tournamentErrors'
+import { readTournamentOperationalConfiguration } from '@/lib/tournamentOperationalConfigurationServer'
+import { validateOperationalFieldChanges, validateTournamentCapacity, validateTournamentRegistrationDeadline, validateTournamentOperationalConfiguration } from '@/lib/tournamentOperationalConfiguration'
+import { competitionWallTimeToInstant } from '@/lib/competitionTimezone'
 
 type TournamentRow = {
   id: string
@@ -18,6 +21,8 @@ type TournamentRow = {
 }
 
 type UpdateDraftInput = {
+  confirm_competition_system_change?: unknown
+  expected_updated_at?: unknown
   action?: unknown
   reason?: unknown
   name?: unknown
@@ -275,6 +280,7 @@ export async function PATCH(
       action !== 'update_tournament_courts' &&
       action !== 'replace_tournament_court_assignments' &&
       action !== 'update_draft' &&
+      action !== 'update_operational_configuration' &&
       action !== 'pause_tournament' &&
       action !== 'resume_tournament' &&
       action !== 'delete_tournament' &&
@@ -289,6 +295,7 @@ export async function PATCH(
       update_tournament_courts: 'tournaments:update',
       replace_tournament_court_assignments: 'tournaments:update',
       update_draft: 'tournaments:update',
+      update_operational_configuration: 'tournaments:update',
       pause_tournament: 'tournaments:update',
       resume_tournament: 'tournaments:update',
       delete_tournament: 'tournaments:delete',
@@ -492,7 +499,7 @@ export async function PATCH(
       return NextResponse.json({ ok: true, tournament: updated })
     }
 
-    if (String(current.status ?? '').toUpperCase() !== 'DRAFT') {
+    if (action !== 'update_operational_configuration' && String(current.status ?? '').toUpperCase() !== 'DRAFT') {
       return NextResponse.json({
         error: 'Solo se puede editar un torneo en borrador.',
         code: 'INVALID_STATUS_TRANSITION',
@@ -500,7 +507,64 @@ export async function PATCH(
     }
 
     const updatedAt = new Date().toISOString()
+    if (action === 'update_operational_configuration') {
+      if (!validateTournamentOperationalConfiguration(body as Record<string,unknown>)) return NextResponse.json({ error: 'Revisá los datos de la configuración deportiva.', code: 'VALIDATION_ERROR' }, { status: 400 })
+      const detail = await readTournamentOperationalConfiguration(clubId, tournamentId)
+      if (!detail) return NextResponse.json({ error: 'Torneo no encontrado.' }, { status: 404 })
+      if (body.expected_updated_at !== detail.tournament.updated_at) return NextResponse.json({ error: 'La configuración cambió. Recargá antes de guardar.', code: 'PRECONDITION_FAILED' }, { status: 412 })
+      const deadline = body.registration_deadline === null ? null : normalizeDateTime(body.registration_deadline)
+      const minPairs = normalizeInteger(body.min_pairs, NaN)
+      const maxPairs = body.max_pairs === null ? null : normalizeInteger(body.max_pairs, NaN)
+      const price = normalizeNumber(body.price_per_player, NaN)
+      const system = normalizeText(body.competition_system)
+      if ((!deadline && body.registration_deadline !== null) || !Number.isInteger(minPairs) || minPairs < 2 || (maxPairs !== null && (!Number.isInteger(maxPairs) || maxPairs < minPairs)) || !Number.isFinite(price) || price < 0 || !competitionSystems.includes(system as typeof competitionSystems[number])) {
+        return NextResponse.json({ error: 'Revisá cierre, cupos, precio y sistema.', code: 'VALIDATION_ERROR' }, { status: 400 })
+      }
+      const rules = normalizeObject(current.rules_json ?? current.rules ?? {})
+      const scheduleConfig = normalizeScheduleConfig(body.schedule_config, { startDate: detail.tournament.start_date, endDate: detail.tournament.end_date })
+      const tournamentCourts = normalizeTournamentCourts(body.tournament_courts)
+      const currentSchedule = normalizeScheduleConfig(rules.schedule_config, { startDate: detail.tournament.start_date, endDate: detail.tournament.end_date })
+      const currentCourts = normalizeTournamentCourts(rules.tournament_courts)
+      const changed = {
+        registrationDeadline: (deadline ? Date.parse(deadline) : null) !== (detail.tournament.registration_deadline ? Date.parse(detail.tournament.registration_deadline) : null),
+        minimumPairs: minPairs !== detail.tournament.min_pairs,
+        capacity: maxPairs !== detail.tournament.max_pairs,
+        price: price !== Number(detail.tournament.price_per_player ?? 0),
+        competitionSystem: system !== normalizeText(rules.competition_system),
+        schedule: JSON.stringify(scheduleConfig) !== JSON.stringify(currentSchedule),
+        courts: JSON.stringify(tournamentCourts) !== JSON.stringify(currentCourts),
+      }
+      const blocked = validateOperationalFieldChanges(detail.capabilities, changed, body.confirm_competition_system_change)
+      if (blocked) return NextResponse.json({ error: blocked, code: 'CONFIGURATION_FROZEN' }, { status: 409 })
+      const capacityError = changed.capacity ? validateTournamentCapacity(maxPairs, detail.registrationCount) : null
+      if (capacityError) return NextResponse.json({ error: capacityError, code: 'VALIDATION_ERROR' }, { status: 400 })
+      if (changed.registrationDeadline && deadline && detail.tournament.start_date) {
+        const start = detail.timezone ? competitionWallTimeToInstant(`${detail.tournament.start_date.slice(0,10)}T00:00`,detail.timezone) : `${detail.tournament.start_date.slice(0,10)}T00:00:00Z`
+        const deadlineError=validateTournamentRegistrationDeadline(deadline,start)
+        if (deadlineError) return NextResponse.json({ error: deadlineError, code: 'VALIDATION_ERROR' }, { status: 400 })
+      }
+      if(!Object.values(changed).some(Boolean))return NextResponse.json({ok:true,unchanged:true})
+      const nextRules = { ...rules,
+        ...(changed.competitionSystem?{competition_system:system}:{}),
+        ...(changed.schedule?{schedule_config:scheduleConfig}:{}),
+        ...(changed.courts?{tournament_courts:tournamentCourts}:{}),
+      }
+      const mutation = supabaseAdmin.from('tournaments').update({
+        ...(changed.registrationDeadline?{registration_deadline: deadline, signup_deadline: deadline}:{}),
+        ...(changed.minimumPairs?{min_pairs:minPairs}:{}),...(changed.capacity?{max_pairs:maxPairs}:{}),
+        ...(changed.price?{price_per_player:price}:{}),
+        ...(changed.competitionSystem||changed.schedule||changed.courts?{rules_json:nextRules,rules:nextRules}:{}),updated_at:updatedAt,
+      })
+        .eq('id', tournamentId).eq('club_id', clubId).eq('status',detail.tournament.status)
+      const guarded = detail.tournament.updated_at === null ? mutation.is('updated_at',null) : mutation.eq('updated_at',detail.tournament.updated_at)
+      const update = await guarded.select('id').maybeSingle()
+      if (update.error) return NextResponse.json({ error: 'No pudimos guardar la configuración.' }, { status: 500 })
+      if (!update.data) return NextResponse.json({ error: 'La configuración cambió. Recargá antes de guardar.', code: 'PRECONDITION_FAILED' }, { status: 412 })
+      return NextResponse.json({ ok: true })
+    }
     if (action === 'update_draft') {
+      const detail = await readTournamentOperationalConfiguration(clubId, tournamentId)
+      if (!detail?.canEdit) return NextResponse.json({ error: detail?.blockedReason ?? 'No pudimos verificar la configuración.', code: 'CONFIGURATION_FROZEN' }, { status: 409 })
       const validation = validateDraftPayload(body)
       if ('error' in validation) {
         return NextResponse.json({ error: validation.error, code: 'VALIDATION_ERROR' }, { status: 400 })

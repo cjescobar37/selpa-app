@@ -1,5 +1,9 @@
 # SELPA Product Blueprint
 
+## Feedback UI obligatorio
+
+Todo feedback transitorio resultado de una acción debe mostrarse como toast flotante visible en viewport. Los estados persistentes permanecen inline. Ver [guía de feedback UI](ui-feedback.md) para implementación, duración, accesibilidad y QA.
+
 ## Competencias
 
 - **Torneo:** competencia independiente.

@@ -3,11 +3,11 @@ import { ArrowLeft } from 'lucide-react'
 
 import styles from './ClubBackLink.module.css'
 
-export default function ClubBackLink() {
+export default function ClubBackLink({ href = '/club/admin', label = 'Club', className }: { href?: string; label?: string; className?: string }) {
   return (
-    <Link className={styles.back} href="/club/admin">
+    <Link className={[styles.back, className].filter(Boolean).join(' ')} href={href}>
       <ArrowLeft aria-hidden="true" size={17} />
-      Club
+      {label}
     </Link>
   )
 }

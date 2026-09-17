@@ -6,6 +6,7 @@ import Footer from '@/components/Footer'
 import AppNavbarClient from '@/components/navbar/AppNavbarClient'
 import { ActiveClubThemeProvider } from '@/components/ActiveClubThemeProvider'
 import { SessionProvider } from '@/components/session/SessionProvider'
+import { ToastViewport } from '@/components/ui/ToastViewport'
 
 /**
  * AppShellClient
@@ -31,6 +32,7 @@ export default function AppShellClient({ children }: { children: ReactNode }) {
 
           <Footer compact={isAuthRoute} />
         </div>
+        <ToastViewport />
       </ActiveClubThemeProvider>
     </SessionProvider>
   )

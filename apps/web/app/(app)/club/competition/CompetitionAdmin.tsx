@@ -3,15 +3,17 @@
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Activity, ArrowLeft, CalendarDays, ChevronRight, CircleAlert, ListChecks, Medal, RefreshCw, Trophy } from 'lucide-react'
+import { Activity, CalendarDays, ChevronRight, CircleAlert, ListChecks, Medal, RefreshCw, Trophy } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import { ActionFeedbackNotice } from '@/components/ui/ActionFeedbackNotice'
 import ClubAdminHubNav from '@/components/club/ClubAdminHubNav'
+import ClubBackLink from '@/components/club/ClubBackLink'
 import { hasAnyClubPermission } from '@/lib/clubPermissions'
 import { supabase } from '@/lib/supabaseClient'
 import type { CompetitionSeries, CompetitionSeriesDetail } from '@/features/competition/series/competition-series.types'
 import { formatCompetitionDateRange } from '@/features/competition/series/competition-series-date'
 import type { CompetitionSeriesEvent } from '@/features/competition/events/competition-events.types'
+import { deriveCompetitionEventNextAction, deriveCompetitionEventOperationalState, deriveCompetitionEventPipelineState, selectCompetitionFocusEvent, selectNextCompetitionEvent, sortCompetitionPointsRules } from '@/lib/competitionTournamentState'
 import SeriesDraftEditor from './SeriesDraftEditor'
 import SeriesCreateWizard from './SeriesCreateWizard'
 import SeriesEventsAdmin from './SeriesEventsAdmin'
@@ -63,9 +65,24 @@ function ErrorState({ error, retry }: { error: Error & { status?: number; setupR
 
 function Header({ title, detail, back, action }: { title: string; detail: string; back?: string; action?: ReactNode }) {
   return <header className={styles.hero}>
-    <div className={styles.heroTop}>{back ? <Link href={back} className={styles.back} aria-label="Volver"><ArrowLeft size={18} /></Link> : null}<span>COMPETENCIAS</span></div>
+    <div className={styles.heroTop}>{back ? <ClubBackLink href={back} label="Volver a Competencia" /> : null}<span>COMPETENCIAS</span></div>
     <div className={styles.heading}><div><h1>{title}</h1><p>{detail}</p></div>{action}</div>
   </header>
+}
+
+const pointsRuleLabels: Record<string, string> = {
+  CHAMPION: 'Campeón', RUNNER_UP: 'Subcampeón', SEMIFINALIST: 'Semifinalista', QUARTERFINALIST: 'Cuartofinalista',
+  EIGHTH_FINALIST: 'Octavos', SIXTEENTH_FINALIST: 'Dieciseisavos', ROUND_OF_16: 'Octavos de final', PARTICIPATION: 'Participación', WIN: 'Victoria', LOSS: 'Derrota',
+}
+
+function pointsRuleLabel(key: string) {
+  return pointsRuleLabels[key] ?? key.toLowerCase().replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
+}
+
+function schemeSourceLabel(source: 'EVENT_DRAFT'|'EVENT_SNAPSHOT'|'SETTLEMENT_SNAPSHOT') {
+  if (source === 'SETTLEMENT_SNAPSHOT') return 'Liquidación publicada'
+  if (source === 'EVENT_SNAPSHOT') return 'Snapshot de la fecha'
+  return 'Configuración de la fecha'
 }
 
 function seriesOperationalLine(item: CompetitionSeries) {
@@ -75,13 +92,23 @@ function seriesOperationalLine(item: CompetitionSeries) {
   return dates === 1 ? '1 fecha programada.' : `${dates} fechas planificadas.`
 }
 
+function seriesProgressLine(item: CompetitionSeries, events: CompetitionSeriesEvent[]) {
+  const focus = selectCompetitionFocusEvent(events)
+  const state = focus ? deriveCompetitionEventOperationalState(focus) : null
+  if (state?.key === 'TOURNAMENT_FINISHED') return 'Pendiente homologación'
+  if (state?.key === 'HOMOLOGATED') return 'Pendiente publicar puntos'
+  if (state?.key === 'SETTLED') return 'Ranking actualizado'
+  if (state) return state.label
+  return seriesOperationalLine(item)
+}
+
 function formatEventSportDate(startValue: string | null | undefined, endValue: string | null | undefined) {
   const start = startValue?.slice(0, 10) ?? null
   const end = endValue?.slice(0, 10) ?? start
   return start ? formatCompetitionDateRange(start, end) : 'Pendiente'
 }
 
-export default function CompetitionAdmin({ screen }: { screen: Screen }) {
+export default function CompetitionAdmin({ screen, mode = 'hub' }: { screen: Screen; mode?: 'hub' | 'circuits' }) {
   const searchParams = useSearchParams()
   const { activeClub, clubRole } = useSession()
   const clubId = activeClub?.id
@@ -89,6 +116,7 @@ export default function CompetitionAdmin({ screen }: { screen: Screen }) {
   const [seasons, setSeasons] = useState<Season[]>([])
   const [detail, setDetail] = useState<CompetitionSeriesDetail | null>(null)
   const [events, setEvents] = useState<CompetitionSeriesEvent[]>([])
+  const [seriesEvents, setSeriesEvents] = useState<Record<string, CompetitionSeriesEvent[]>>({})
   const [detailTab, setDetailTab] = useState<'general' | 'dates' | 'ranking' | 'points' | 'rules'>('general')
   const [showRuleEditor, setShowRuleEditor] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -113,9 +141,10 @@ export default function CompetitionAdmin({ screen }: { screen: Screen }) {
     return () => window.clearTimeout(timer)
   }, [screen.kind, searchParams])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!clubId) return
-    setLoading(true); setError(null)
+    if (!options?.silent) setLoading(true)
+    setError(null)
     try {
       if (screen.kind === 'list') {
         const [{ series: items }, seasonResult] = await Promise.all([
@@ -124,6 +153,13 @@ export default function CompetitionAdmin({ screen }: { screen: Screen }) {
         ])
         if (seasonResult.error) throw new Error('No pudimos leer las temporadas del club.')
         setSeries(items); setSeasons((seasonResult.data ?? []) as Season[])
+        if (mode === 'circuits') {
+          const eventEntries = await Promise.all(items.map(async (item) => {
+            const result = await api<{ events: CompetitionSeriesEvent[] }>(`/api/clubs/${clubId}/competition/series/${item.id}/events`)
+            return [item.id, result.events] as const
+          }))
+          setSeriesEvents(Object.fromEntries(eventEntries))
+        }
       } else if (screen.kind === 'detail') {
         const seriesDetail = await api<CompetitionSeriesDetail>(`/api/clubs/${clubId}/competition/series/${screen.seriesId}`)
         const [eventData, seasonResult] = await Promise.all([
@@ -134,8 +170,8 @@ export default function CompetitionAdmin({ screen }: { screen: Screen }) {
         if (!seasonResult.error) setSeasons((seasonResult.data ?? []) as Season[])
       }
     } catch (cause) { setError(cause instanceof Error ? cause : new Error('No pudimos cargar Competencia.')) }
-    finally { setLoading(false) }
-  }, [clubId, screen])
+    finally { if (!options?.silent) setLoading(false) }
+  }, [clubId, mode, screen])
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load() }, 0)
@@ -159,9 +195,13 @@ export default function CompetitionAdmin({ screen }: { screen: Screen }) {
     const base = `/api/clubs/${clubId}/competition/series/${item.id}`
     const hasEvents = events.length > 0
     const seasonName = seasons.find((season) => season.id === item.season_id)?.name ?? 'Temporada del circuito'
-    const nextEvent = events.find((event) => event.status !== 'COMPLETED' && event.status !== 'CANCELLED')
-    const nextEventDate = formatEventSportDate(nextEvent?.tournament_starts_at ?? nextEvent?.planned_starts_at, nextEvent?.tournament_ends_at ?? nextEvent?.planned_ends_at)
+    const focusEvent = selectCompetitionFocusEvent(events)
+    const focusState = focusEvent ? deriveCompetitionEventPipelineState(focusEvent) : null
+    const focusAction = focusEvent ? deriveCompetitionEventNextAction(focusEvent) : null
+    const nextEvent = selectNextCompetitionEvent(events)
+    const nextEventDate = nextEvent ? formatEventSportDate(nextEvent.tournament_starts_at ?? nextEvent.planned_starts_at, nextEvent.tournament_ends_at ?? nextEvent.planned_ends_at) : 'Sin programar'
     const completed = events.filter((event) => event.status === 'COMPLETED').length
+    const publishedEvents = events.filter((event) => deriveCompetitionEventPipelineState(event)?.key === 'SETTLED')
     const firstDivision = detail.divisions.find((division) => division.is_active)
     const snapshot = firstDivision?.division_snapshot
     const activeRule = firstDivision?.rules.find((rule) => rule.status === 'ACTIVE')
@@ -187,15 +227,28 @@ export default function CompetitionAdmin({ screen }: { screen: Screen }) {
     const canActivate = item.status === 'SCHEDULED' && hasEvents && !configurationIssue
     const canAddDate = (item.status === 'SCHEDULED' || item.status === 'ACTIVE') && !configurationIssue
     const primaryHref = canAddDate ? `/club/torneos/nuevo?competitionSeriesId=${item.id}&competitionSeasonId=${item.season_id}` : null
-    const nextTournamentHref = nextEvent?.tournament_id ? `/club/torneos/${nextEvent.tournament_id}` : null
-    const primaryActionHref = nextTournamentHref ?? primaryHref
-    const primaryActionLabel = nextTournamentHref ? 'Gestionar próxima fecha' : hasEvents ? 'Agregar fecha' : 'Agregar primera fecha'
+    const eventOperationsHref = focusEvent ? `/club/competition/series/${item.id}/events/${focusEvent.id}` : null
+    const homologationHref = focusEvent?.circuit_context ? `${eventOperationsHref}/divisions/${focusEvent.circuit_context.event_division_id}/homologation` : eventOperationsHref
+    const nextEventHref = nextEvent ? `/club/competition/series/${item.id}/events/${nextEvent.id}` : null
+    const pipelineAction = focusState?.key === 'SPORTS_COMPLETE' && focusEvent?.tournament_id
+      ? { href: `/club/torneos/${focusEvent.tournament_id}`, label: 'Finalizar torneo' }
+      : focusAction && eventOperationsHref && focusAction.key === 'CLOSE_DATE'
+        ? { href: eventOperationsHref, label: focusAction.label }
+        : focusAction && homologationHref && ['REVIEW_RESULTS', 'APPROVE_RESULTS', 'PUBLISH_POINTS'].includes(focusAction.key)
+          ? { href: homologationHref, label: focusAction.label }
+          : focusState?.key === 'SETTLED'
+            ? { href: nextEventHref ?? primaryHref, label: 'Gestionar próxima fecha' }
+            : null
+    const primaryActionHref = pipelineAction?.href ?? nextEventHref ?? primaryHref
+    const primaryActionLabel = pipelineAction?.label ?? (nextEventHref ? 'Gestionar próxima fecha' : hasEvents ? 'Agregar fecha' : 'Agregar primera fecha')
+    const effectiveScheme = focusEvent?.circuit_context?.points_scheme ?? [...events].reverse().find((event) => event.circuit_context?.points_scheme)?.circuit_context?.points_scheme ?? null
     const plannedLabel = item.planned_events_count ? `${item.planned_events_count} ${item.planned_events_count === 1 ? 'fecha prevista' : 'fechas previstas'}` : 'Fechas por definir'
     const canDelete = item.status === 'DRAFT' && !item.archived_at && !hasEvents
     const isFinalized = item.status === 'CLOSED'
     const canFinalize = item.status === 'ACTIVE' && detail.finalization.can_finalize
     const finalizationBlocker = detail.finalization.blockers[0]?.message ?? null
     const champions = detail.finalRanking.filter((row) => row.ranking_position === 1)
+    const pairChampions = detail.finalPairRanking.filter((row) => row.ranking_position === 1)
     const scheduleSeries = async () => {
       if (!canSchedule) { setDetailTab('rules'); return }
       setScheduling(true)
@@ -242,25 +295,38 @@ export default function CompetitionAdmin({ screen }: { screen: Screen }) {
     return <div className={styles.page}>
       {feedback ? <ActionFeedbackNotice tone={feedback.tone} title={feedback.title} message={feedback.message} onDismiss={() => setFeedback(null)} /> : null}
       <section className={styles.controlHero}>
-        <Link href="/club/competition" className={styles.controlBack}><ArrowLeft size={17} /> Circuitos</Link>
+        <ClubBackLink href="/club/competition/circuits" label="Volver a Circuitos" className={styles.controlBack} />
         <span className={`${styles.badge} ${styles[`status_${item.status}`]}`}>{statusLabels[item.status]}</span>
         <small>CENTRO DE CONTROL</small><h1>{item.name}</h1><p>{[seasonName, sportSummary].filter(Boolean).join(' · ')}</p><em>{plannedLabel}</em>
-        {isFinalized ? <button className={styles.controlPrimary} type="button" onClick={() => setDetailTab('ranking')}>Ver ranking final</button> : canFinalize ? <button className={styles.controlPrimary} type="button" onClick={() => setFinalizeOpen(true)}>Finalizar circuito</button> : canActivate ? <button className={styles.controlPrimary} type="button" disabled={scheduling} onClick={() => void activateSeries()}>{scheduling ? 'Activando…' : 'Activar circuito'}</button> : primaryActionHref ? <Link className={styles.controlPrimary} href={primaryActionHref}>{nextTournamentHref ? primaryActionLabel : `+ ${primaryActionLabel}`}</Link> : canSchedule ? <button className={styles.controlPrimary} type="button" disabled={scheduling} onClick={() => void scheduleSeries()}>{scheduling ? 'Programando…' : 'Programar circuito'}</button> : <button className={styles.controlPrimary} type="button" onClick={() => setDetailTab('rules')}>Completar configuración</button>}
+        {isFinalized ? <button className={styles.controlPrimary} type="button" onClick={() => setDetailTab('ranking')}>Ver ranking final</button> : canFinalize ? <button className={styles.controlPrimary} type="button" onClick={() => setFinalizeOpen(true)}>Finalizar circuito</button> : canActivate ? <button className={styles.controlPrimary} type="button" disabled={scheduling} onClick={() => void activateSeries()}>{scheduling ? 'Activando…' : 'Activar circuito'}</button> : primaryActionHref ? <Link className={styles.controlPrimary} href={primaryActionHref}>{primaryActionLabel}</Link> : canSchedule ? <button className={styles.controlPrimary} type="button" disabled={scheduling} onClick={() => void scheduleSeries()}>{scheduling ? 'Programando…' : 'Programar circuito'}</button> : <button className={styles.controlPrimary} type="button" onClick={() => setDetailTab('rules')}>Completar configuración</button>}
       </section>
-      <section className={styles.controlStrip}><div><small>Fechas</small><strong>{item.planned_events_count ? `${events.length}/${item.planned_events_count}` : events.length || '—'}</strong></div><div><small>Próxima</small><strong>{nextEventDate}</strong></div><div><small>Ranking</small><strong>{completed ? 'Actualizable' : 'Sin resultados'}</strong></div></section>
+      <section className={styles.controlStrip}><div><small>Fechas</small><strong>{item.planned_events_count ? `${events.length}/${item.planned_events_count}` : events.length || '—'}</strong></div><div><small>Próxima</small><strong>{nextEventDate}</strong></div><div><small>Ranking</small><strong>{publishedEvents.length ? 'Actualizado' : focusState ? 'Pendiente' : 'Sin puntos'}</strong></div></section>
       <nav className={styles.controlTabs} aria-label="Centro del circuito">{([['general','General'],['dates','Fechas'],['ranking','Ranking'],['points','Puntos'],['rules','Reglas']] as const).map(([key,label]) => <button className={detailTab === key ? styles.controlTabActive : ''} type="button" onClick={() => setDetailTab(key)} key={key}>{label}</button>)}</nav>
       {detailTab === 'general' ? <>
-        <section className={styles.nextStep}><small>{isFinalized ? 'CIERRE CONFIRMADO' : 'PRÓXIMO PASO'}</small><h2>{isFinalized ? 'El circuito está finalizado.' : canFinalize ? 'Todo listo para finalizar el circuito.' : canActivate ? 'Activá el circuito para operar la primera fecha.' : !hasEvents ? (canAddDate ? 'Agregá la primera fecha.' : canSchedule ? 'Todo listo para programar.' : 'Terminá la configuración del circuito.') : `Prepará ${nextEvent?.name ?? 'la próxima fecha'}.`}</h2><p>{isFinalized ? 'El ranking final y los campeones quedaron protegidos.' : canFinalize ? 'Confirmá el cierre cuando ya no queden resultados ni puntos pendientes.' : finalizationBlocker ?? configurationIssue ?? (!hasEvents ? 'Cada fecha se crea como un torneo real y conserva las reglas del circuito.' : `${completed} ${completed === 1 ? 'fecha disputada' : 'fechas disputadas'} hasta ahora.`)}</p>{isFinalized ? <button type="button" onClick={() => setDetailTab('ranking')}>Ver ranking final →</button> : canFinalize ? <button type="button" onClick={() => setFinalizeOpen(true)}>Finalizar circuito →</button> : canActivate ? <button type="button" disabled={scheduling} onClick={() => void activateSeries()}>{scheduling ? 'Activando…' : 'Activar circuito →'}</button> : primaryActionHref ? <Link href={primaryActionHref}>{nextTournamentHref ? 'Gestionar próxima fecha →' : `${hasEvents ? 'Agregar otra fecha' : 'Agregar primera fecha'} →`}</Link> : canSchedule ? <button type="button" disabled={scheduling} onClick={() => void scheduleSeries()}>{scheduling ? 'Programando…' : 'Programar circuito →'}</button> : <button type="button" onClick={() => setDetailTab('rules')}>Completar configuración →</button>}</section>
-        {isFinalized && champions.length ? <section className={styles.champions}><small>CAMPEONES</small>{champions.map((champion) => <article key={champion.id}><Trophy size={18}/><div><strong>{champion.display_name}</strong><span>{champion.points.toLocaleString('es-AR')} puntos · {champion.titles} {champion.titles === 1 ? 'título' : 'títulos'}</span></div></article>)}</section> : null}
+        <section className={styles.nextStep}><small>{isFinalized ? 'CIERRE CONFIRMADO' : 'PRÓXIMO PASO'}</small><h2>{isFinalized ? 'El circuito está finalizado.' : canFinalize ? 'Todo listo para finalizar el circuito.' : focusState?.key === 'SPORTS_COMPLETE' ? `${focusEvent?.name} terminó deportivamente.` : focusState?.key === 'TOURNAMENT_FINISHED' ? `${focusEvent?.name} finalizado.` : focusState?.key === 'RESULTS_HOMOLOGATED' ? 'Resultados homologados.' : focusState?.key === 'SETTLED' ? `${focusEvent?.name} liquidado.` : canActivate ? 'Activá el circuito para operar la primera fecha.' : !hasEvents ? (canAddDate ? 'Agregá la primera fecha.' : canSchedule ? 'Todo listo para programar.' : 'Terminá la configuración del circuito.') : nextEvent ? `Prepará ${nextEvent.name}.` : 'Próxima fecha sin programar.'}</h2><p>{isFinalized ? 'El ranking final y los campeones quedaron protegidos.' : canFinalize ? 'Confirmá el cierre cuando ya no queden resultados ni puntos pendientes.' : focusState?.key === 'SPORTS_COMPLETE' ? 'Falta finalizar formalmente el torneo.' : focusState?.key === 'TOURNAMENT_FINISHED' ? 'Cerrá la fecha para detectar y revisar sus resultados.' : focusState?.key === 'RESULTS_HOMOLOGATED' ? 'Revisá la distribución y publicá los puntos.' : focusState?.key === 'SETTLED' ? (finalizationBlocker ?? `Los puntos ya fueron incorporados al ranking.${nextEvent ? '' : ' La próxima fecha todavía no está programada.'}`) : finalizationBlocker ?? configurationIssue ?? (!hasEvents ? 'Cada fecha se crea como un torneo real y conserva las reglas del circuito.' : `${completed} ${completed === 1 ? 'fecha disputada' : 'fechas disputadas'} hasta ahora.`)}</p>{isFinalized ? <button type="button" onClick={() => setDetailTab('ranking')}>Ver ranking final →</button> : canFinalize ? <button type="button" onClick={() => setFinalizeOpen(true)}>Finalizar circuito →</button> : canActivate ? <button type="button" disabled={scheduling} onClick={() => void activateSeries()}>{scheduling ? 'Activando…' : 'Activar circuito →'}</button> : primaryActionHref ? <Link href={primaryActionHref}>{primaryActionLabel} →</Link> : canSchedule ? <button type="button" disabled={scheduling} onClick={() => void scheduleSeries()}>{scheduling ? 'Programando…' : 'Programar circuito →'}</button> : <button type="button" onClick={() => setDetailTab('rules')}>Completar configuración →</button>}</section>
+        {isFinalized && (champions.length || pairChampions.length) ? <section className={styles.champions}><small>CAMPEONES</small>{champions.map((champion) => <article key={champion.id}><Trophy size={18}/><div><strong>{champion.display_name}</strong><span>{champion.points.toLocaleString('es-AR')} puntos · {champion.titles} {champion.titles === 1 ? 'título' : 'títulos'}</span></div></article>)}{pairChampions.map((champion) => <article key={champion.id}><Trophy size={18}/><div><strong>{champion.player1_name} / {champion.player2_name}</strong><span>Pareja · {champion.points.toLocaleString('es-AR')} puntos · {champion.titles} {champion.titles === 1 ? 'título' : 'títulos'}</span></div></article>)}</section> : null}
+        <section className={styles.compactDates}><small>FECHAS DEL CIRCUITO</small><div>{events.map((event, index) => { const state = deriveCompetitionEventOperationalState(event); return <Link key={event.id} href={`/club/competition/series/${item.id}/events/${event.id}`} className={styles.compactDateRow}><b>{index + 1}</b><span><strong>{event.name}</strong><small>{formatEventSportDate(event.tournament_starts_at ?? event.planned_starts_at, event.tournament_ends_at ?? event.planned_ends_at)}</small></span><em className={styles[`tone_${state.tone}`]}>{state.label}</em><ChevronRight size={16}/></Link> })}{Array.from({ length: Math.max(0, (item.planned_events_count ?? 0) - events.length) }, (_, index) => <div className={`${styles.compactDateRow} ${styles.compactDatePlaceholder}`} key={`pending-${index}`}><b>{events.length + index + 1}</b><span><strong>Fecha sin programar</strong><small>Sin fecha</small></span><em>Sin programar</em></div>)}</div></section>
         <section className={styles.controlFacts}><div><small>Temporada</small><strong>{seasonName}</strong></div><div><small>Período</small><strong>{formatCompetitionDateRange(item.starts_on, item.ends_on)}</strong></div><div><small>Formato</small><strong>{activeRule?.accumulation_mode === 'BEST_N' ? `Mejores ${activeRule.best_results_count}` : 'Todos los resultados'}</strong></div><div><small>Divisiones</small><strong>{detail.divisions.filter((division) => division.is_active).length}</strong></div></section>
       </> : null}
-      {detailTab === 'dates' ? <section className={styles.controlPanel}><div className={styles.sectionHead}><span>AGENDA</span><h2>{hasEvents ? 'Fechas del circuito' : 'Todavía no hay fechas'}</h2><p>{hasEvents ? 'Cada fecha corresponde a un torneo real del circuito.' : 'Agregá el primer torneo para empezar la agenda.'}</p></div>{primaryHref ? <Link className={styles.addDateAction} href={primaryHref}>+ {hasEvents ? 'Agregar fecha' : 'Agregar primera fecha'}</Link> : null}{hasEvents ? <div className={styles.dateList}>{events.map((event, index) => <Link key={event.id} href={event.tournament_id ? `/club/torneos/${event.tournament_id}` : `/club/competition/series/${item.id}/events/${event.id}`} className={styles.dateRow}><span className={`${styles.badge} ${styles[`status_${event.status}`]}`}>{statusLabels[event.status] ?? event.status}</span><small>FECHA {index + 1}</small><strong>{event.name}</strong><p>{formatEventSportDate(event.tournament_starts_at ?? event.planned_starts_at, event.tournament_ends_at ?? event.planned_ends_at)}{event.venue_name ? ` · ${event.venue_name}` : ''}</p><b>{event.tournament_id ? 'Gestionar' : 'Ver fecha'} <ChevronRight size={15} /></b></Link>)}</div> : null}{searchParams.get('event') ? <SeriesEventsAdmin clubId={clubId} series={detail} events={events} request={api} reload={load} hideCreate hideList /> : null}</section> : null}
-      {detailTab === 'ranking' ? <SeriesRankingPanel clubId={clubId} seriesId={item.id} request={api} hasCompletedEvent={completed > 0} finalized={isFinalized} /> : null}
-      {detailTab === 'points' ? <section className={styles.controlPanel}><div className={styles.sectionHead}><span>TABLA DE PUNTOS</span><h2>{activeRule ? 'Puntuación del circuito' : 'Puntuación pendiente'}</h2><p>{activeRule ? `${activeRule.accumulation_mode === 'BEST_N' ? `Cuentan los mejores ${activeRule.best_results_count} resultados.` : 'Cuentan todos los resultados.'}` : 'Completá las reglas para definir cómo suma el circuito.'}</p></div><Link className={styles.secondaryLink} href="/club/competition/points-schemes">Revisar tabla de puntos →</Link><SeriesPrizesPanel clubId={clubId} seriesId={item.id} seriesRevision={item.revision} editable={item.status==='DRAFT'&&!item.archived_at} request={api} reload={load}/></section> : null}
+      {detailTab === 'dates' ? <section className={styles.controlPanel}><div className={styles.sectionHead}><span>AGENDA</span><h2>{hasEvents ? 'Fechas del circuito' : 'Todavía no hay fechas'}</h2><p>{hasEvents ? 'Cada fecha corresponde a un torneo real del circuito.' : 'Agregá el primer torneo para empezar la agenda.'}</p></div>{primaryHref ? <Link className={styles.addDateAction} href={primaryHref}>+ {hasEvents ? 'Agregar fecha' : 'Agregar primera fecha'}</Link> : null}{hasEvents ? <div className={styles.dateList}>{events.map((event, index) => { const state = deriveCompetitionEventOperationalState(event); return <Link key={event.id} href={`/club/competition/series/${item.id}/events/${event.id}`} className={styles.dateRow}><span className={`${styles.operationalBadge} ${styles[`tone_${state.tone}`]}`}>{state.label}</span><small>FECHA {index + 1}</small><strong>{event.name}</strong><p>{formatEventSportDate(event.tournament_starts_at ?? event.planned_starts_at, event.tournament_ends_at ?? event.planned_ends_at)}{event.venue_name ? ` · ${event.venue_name}` : ''}</p><b>Gestionar <ChevronRight size={15} /></b></Link> })}</div> : null}{searchParams.get('event') ? <SeriesEventsAdmin clubId={clubId} series={detail} events={events} request={api} reload={() => load({ silent: true })} hideCreate hideList /> : null}</section> : null}
+      {detailTab === 'ranking' ? <SeriesRankingPanel clubId={clubId} seriesId={item.id} request={api} pipelineState={focusState} eventName={focusEvent?.name ?? null} hasPublishedEvent={publishedEvents.length > 0} divisions={detail.divisions.filter(division => division.is_active).map(division => ({ id: division.id, name: String(division.division_snapshot?.division_name ?? division.division_snapshot?.category_name ?? division.division?.category?.name ?? 'División'), modality: division.division?.modality ?? String(division.division_snapshot?.modality ?? '') }))} finalized={isFinalized} /> : null}
+      {detailTab === 'points' ? <section className={styles.controlPanel}><div className={styles.sectionHead}><span>PUNTUACIÓN DEL CIRCUITO</span><h2>{effectiveScheme?.name ?? 'Puntuación pendiente'}</h2><p>{effectiveScheme ? `Regla efectiva: ${schemeSourceLabel(effectiveScheme.source)}.` : 'Completá las reglas para definir cómo suma el circuito.'}</p></div>{effectiveScheme ? <><div className={styles.pointsChips}><span>{activeRule?.accumulation_mode === 'BEST_N' ? `Mejores ${activeRule.best_results_count}` : 'Todos los resultados'}</span><span>x{effectiveScheme.multiplier.toLocaleString('es-AR')}</span></div><div className={styles.pointsRules}><small>TABLA DE PUNTOS</small>{sortCompetitionPointsRules(effectiveScheme.rules).map((rule) => <div key={rule.rule_key}><span>{pointsRuleLabel(rule.rule_key)}</span><strong>{rule.points.toLocaleString('es-AR')} pts</strong></div>)}</div></> : null}<div className={styles.eventPointsStates}><small>ESTADO DE LAS FECHAS</small>{events.map((event) => { const state=deriveCompetitionEventOperationalState(event); return <Link href={`/club/competition/series/${item.id}/events/${event.id}`} key={event.id}><span>{event.name}</span><strong>{state.pointsLabel}</strong><ChevronRight size={15}/></Link> })}</div><Link className={styles.secondaryLink} href="/club/competition/points-schemes">Administrar esquema →</Link><SeriesPrizesPanel clubId={clubId} seriesId={item.id} seriesRevision={item.revision} editable={item.status==='DRAFT'&&!item.archived_at} request={api} reload={load}/></section> : null}
       {detailTab === 'rules' ? <section className={styles.controlPanel}><div className={styles.sectionHead}><span>CONFIGURACIÓN</span><h2>Reglas del circuito</h2><p>{sportSummary || 'Identidad deportiva pendiente'} · {activeRule ? 'Regla activa' : 'Regla pendiente'}</p></div><button className={styles.secondaryLink} type="button" onClick={() => setShowRuleEditor((value) => !value)}>{showRuleEditor ? 'Ocultar edición' : 'Editar configuración'} →</button>{showRuleEditor ? <SeriesDraftEditor {...{ clubId, detail, events, request: api, reload: load }} /> : null}</section> : null}
       {canDelete ? <section className={controlStyles.seriesDanger}><small>ADMINISTRACIÓN AVANZADA</small><button type="button" onClick={() => setDeleteOpen(true)}>Eliminar circuito <ChevronRight size={16}/></button></section> : null}
       {deleteOpen ? <div className={controlStyles.deleteOverlay} role="dialog" aria-modal="true" aria-labelledby="delete-series-title"><section className={controlStyles.deleteDialog}><h2 id="delete-series-title">¿Eliminar circuito?</h2><p>Esta acción eliminará definitivamente el circuito. No se puede deshacer.</p><label>Escribí <b>ACEPTAR</b> para confirmar<input autoFocus value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} /></label><footer><button type="button" onClick={() => { setDeleteOpen(false); setDeleteConfirmation('') }}>Cancelar</button><button type="button" disabled={deleteConfirmation.trim() !== 'ACEPTAR' || deleting} onClick={() => void deleteSeries()}>{deleting ? 'Eliminando…' : 'Eliminar circuito'}</button></footer></section></div> : null}
       {finalizeOpen ? <div className={controlStyles.deleteOverlay} role="dialog" aria-modal="true" aria-labelledby="finalize-series-title"><section className={`${controlStyles.deleteDialog} ${controlStyles.finalizeDialog}`}><h2 id="finalize-series-title">¿Finalizar circuito?</h2><p>Se confirmarán el ranking final y los campeones. Los resultados publicados quedarán protegidos y no podrán modificarse.</p><footer><button type="button" disabled={finalizing} onClick={() => setFinalizeOpen(false)}>Volver</button><button type="button" disabled={finalizing} onClick={() => void finalizeSeries()}>{finalizing ? 'Finalizando…' : 'Finalizar circuito'}</button></footer></section></div> : null}
+    </div>
+  }
+
+  if (mode === 'circuits') {
+    const groups = [
+      { key: 'active', label: 'Activos', items: series.filter((item) => item.status === 'ACTIVE' || item.status === 'SCHEDULED') },
+      { key: 'draft', label: 'Borradores', items: series.filter((item) => item.status === 'DRAFT') },
+      { key: 'closed', label: 'Finalizados', items: series.filter((item) => item.status === 'CLOSED' || item.status === 'CANCELLED') },
+    ]
+    return <div className={styles.page}>
+      <Header title="Circuitos" detail="Fechas, puntos y ranking de cada competencia." back="/club/competition" action={canCreateCircuit ? <Link className={styles.headerAction} href="/club/competition/series/new">Crear circuito</Link> : null} />
+      {!series.length ? <div className={styles.empty}><Trophy size={26}/><strong>Todavía no hay circuitos</strong><p>Creá el primero para organizar varias fechas bajo un mismo ranking.</p></div> : <div className={styles.circuitGroups}>{groups.filter((group) => group.items.length).map((group) => <section key={group.key}><h2>{group.label}</h2><div>{group.items.map((entry) => { const entryEvents = seriesEvents[entry.id] ?? []; return <Link href={`/club/competition/series/${entry.id}`} className={styles.circuitRow} key={entry.id}><span><strong>{entry.name}</strong><small>{entry.planned_events_count ? `${entryEvents.length}/${entry.planned_events_count} fechas` : `${entryEvents.length} fechas`}</small></span><em>{seriesProgressLine(entry, entryEvents)}</em><ChevronRight size={17}/></Link> })}</div></section>)}</div>}
     </div>
   }
 
@@ -273,7 +339,7 @@ export default function CompetitionAdmin({ screen }: { screen: Screen }) {
     <ClubAdminHubNav label="Herramientas de competencia" primaryLabel="Operación" secondaryLabel="Configuración" variant="competition" items={[
       { href:'/club/torneos', label:'Torneos', description:'Agenda y gestión', icon:'tournaments', requiredAnyCapabilities:['tournaments:view'] },
       { href:'/club/torneos/calendario', label:'Calendario', description:'Próximas fechas', icon:'calendar', requiredAnyCapabilities:['tournaments:view'] },
-      { href:'/club/competition', label:'Circuitos', description:'Fechas y ranking', icon:'circuits', requiredAnyCapabilities:['competition:view'] },
+      { href:'/club/competition/circuits', label:'Circuitos', description:'Fechas y ranking', icon:'circuits', requiredAnyCapabilities:['competition:view'] },
       { href:'/club/ranking', label:'Ranking', description:'Posiciones del club', icon:'ranking', requiredAnyCapabilities:['ranking:view'] },
       { href:'/club/competition/divisions', label:'Divisiones', description:'Categorías disponibles', icon:'divisions', group:'secondary', requiredAnyCapabilities:['ranking:manage'] },
       { href:'/club/competition/points-schemes', label:'Tablas de puntos', description:'Puntajes del circuito', icon:'points', group:'secondary', requiredAnyCapabilities:['competition:manage'] },

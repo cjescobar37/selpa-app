@@ -14,9 +14,10 @@ export default function RankingPlayerAvatar({
   src,
   sizes = '54px',
 }: RankingPlayerAvatarProps) {
+  const imageSrc = typeof src === 'string' ? src.trim() : ''
   return (
     <span className={className}>
-      {src ? <Image src={src} alt="" fill sizes={sizes} unoptimized /> : getClubInitials(name)}
+      {imageSrc ? <Image src={imageSrc} alt="" fill sizes={sizes} style={{ objectFit: 'cover' }} unoptimized /> : getClubInitials(name)}
     </span>
   )
 }

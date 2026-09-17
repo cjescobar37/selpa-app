@@ -10,18 +10,25 @@ function rpcError(operation: string, error: { message?: string } | null) {
 }
 
 export async function readCompetitionPointTotals(clubId: string, seasonId: string) {
-  const { data, error } = await supabaseAdmin.rpc('get_competition_points_totals', {
-    p_club_id: clubId,
-    p_season_id: seasonId,
-    p_division_id: null,
-  })
+  const { data, error } = await supabaseAdmin
+    .from('competition_point_transactions')
+    .select('player_entry_id,club_player_id,division_id,points')
+    .eq('club_id', clubId)
+    .eq('season_id', seasonId)
   if (error) throw rpcError('No pude leer los totales del ledger', error)
-  return ((data ?? []) as Array<Record<string, unknown>>).map((row): CompetitionPointTotalRow => ({
-    player_entry_id: String(row.player_entry_id),
-    club_player_id: String(row.club_player_id),
-    division_id: String(row.division_id),
-    total_points: Number(row.total_points ?? 0),
-  }))
+  const totals = new Map<string, CompetitionPointTotalRow>()
+  for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+    const playerEntryId = String(row.player_entry_id ?? '')
+    if (!playerEntryId) continue
+    const current = totals.get(playerEntryId)
+    totals.set(playerEntryId, {
+      player_entry_id: playerEntryId,
+      club_player_id: String(row.club_player_id ?? current?.club_player_id ?? ''),
+      division_id: String(row.division_id ?? current?.division_id ?? ''),
+      total_points: (current?.total_points ?? 0) + Number(row.points ?? 0),
+    })
+  }
+  return [...totals.values()]
 }
 
 export async function createOpeningBalance(playerEntryId: string) {

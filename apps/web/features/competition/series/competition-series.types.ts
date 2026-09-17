@@ -55,6 +55,7 @@ export type CompetitionSeriesDetail = {
   }>
   finalization: CompetitionSeriesFinalization
   finalRanking: CompetitionSeriesFinalRankingRow[]
+  finalPairRanking: CompetitionSeriesFinalPairRankingRow[]
 }
 
 export type CompetitionSeriesFinalizationBlocker = { code: string; message: string }
@@ -66,6 +67,14 @@ export type CompetitionSeriesFinalization = {
 export type CompetitionSeriesFinalRankingRow = {
   id: string; series_division_id: string; division_id: string; ranking_position: number
   club_player_id: string; player_id: string; display_name: string; avatar_url: string | null
+  points: number; events_played: number; titles: number; finals: number; semifinals: number
+  rule_id: string; rule_version: number; rule_snapshot: Record<string, unknown>
+  tie_break_snapshot: Record<string, unknown>; finalized_at: string
+}
+export type CompetitionSeriesFinalPairRankingRow = {
+  id: string; season_id: string; series_division_id: string; division_id: string; ranking_position: number
+  player1_user_id: string; player2_user_id: string; player1_name: string; player2_name: string
+  player1_avatar_url: string | null; player2_avatar_url: string | null; pair_key: string
   points: number; events_played: number; titles: number; finals: number; semifinals: number
   rule_id: string; rule_version: number; rule_snapshot: Record<string, unknown>
   tie_break_snapshot: Record<string, unknown>; finalized_at: string

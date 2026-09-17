@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getApprovedMembership, userHasClubCapability } from '@/lib/clubMembershipServer'
+import { getCompetitionSeedScope } from '@/lib/tournamentTeamSeeding'
+import { buildCircuitSeedPreview, scoreCircuitTeam } from '@/lib/tournamentCircuitSeeding'
+import { getTournamentRegistrationEligibilityGate } from '@/lib/tournamentRegistrationEligibility'
 
 type RegistrationRow = {
   id: string
@@ -32,11 +35,6 @@ type ProfileRow = {
   last_name: string | null
   display_name: string | null
   avatar_url: string | null
-}
-
-type ClubPlayerRow = {
-  user_id: string
-  ranking_points: number | null
 }
 
 type PaymentStatus = 'SIN_PAGO' | 'PENDIENTE' | 'PAGADO' | 'FALLIDO'
@@ -92,6 +90,8 @@ type SeedSnapshotRow = {
   team_score: number
   seed_source: string
   snapshot_at: string
+  player1_points: number
+  player2_points: number
 }
 
 type TournamentGroupRow = {
@@ -118,7 +118,7 @@ async function getTokenUser(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin.auth.getUser(token)
   if (error || !data?.user) return null
-  return data.user
+  return { user: data.user, accessToken: token }
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -213,8 +213,8 @@ export async function GET(
 
     const { clubId, tournamentId } = await context.params
     const [membership, canManage] = await Promise.all([
-      getApprovedMembership(user.id, clubId),
-      userHasClubCapability(user.id, clubId, 'registrations:view'),
+      getApprovedMembership(user.user.id, clubId),
+      userHasClubCapability(user.user.id, clubId, 'registrations:view'),
     ])
     if (!membership || !canManage) {
       return NextResponse.json({ error: 'No autorizado para ver inscripciones.' }, { status: 403 })
@@ -277,20 +277,11 @@ export async function GET(
       profiles = new Map(((profileRows ?? []) as ProfileRow[]).map((profile) => [profile.user_id, profile]))
     }
 
-    let clubPlayers = new Map<string, ClubPlayerRow>()
-    if (userIds.length > 0) {
-      const { data: clubPlayerRows, error: clubPlayersError } = await supabaseAdmin
-        .from('club_players')
-        .select('user_id,ranking_points')
-        .eq('club_id', clubId)
-        .in('user_id', userIds)
-
-      if (clubPlayersError) {
-        return NextResponse.json({ error: clubPlayersError.message }, { status: 500 })
-      }
-
-      clubPlayers = new Map(((clubPlayerRows ?? []) as ClubPlayerRow[]).map((clubPlayer) => [clubPlayer.user_id, clubPlayer]))
-    }
+    const competitionSeedScope = await getCompetitionSeedScope({
+      clubId,
+      tournamentId,
+      accessToken: user.accessToken,
+    })
 
     let tournamentPaymentsByRegistration = new Map<string, TournamentPaymentRow[]>()
     let paymentsByRegistration = new Map<string, PaymentRow[]>()
@@ -374,7 +365,7 @@ export async function GET(
     if (rows.length > 0) {
       const { data: snapshotRows, error: snapshotsError } = await supabaseAdmin
         .from('tournament_team_seed_snapshots')
-        .select('id,tournament_id,team_id,registration_id,seed,team_score,seed_source,snapshot_at')
+        .select('id,tournament_id,team_id,registration_id,seed,team_score,player1_points,player2_points,seed_source,snapshot_at')
         .eq('club_id', clubId)
         .eq('tournament_id', tournamentId)
         .order('seed', { ascending: true })
@@ -434,9 +425,23 @@ export async function GET(
       return NextResponse.json({ error: groupMatchesCountError.message }, { status: 500 })
     }
 
+    const eligibilityGate = await getTournamentRegistrationEligibilityGate({ clubId, tournamentId })
+    const blockedSeedRegistrationIds = new Set(eligibilityGate.blockedRegistrationIds)
+    const seedPreviewTeams = rows.flatMap((registration) => {
+      const team = teams.get(registration.team_id)
+      if (!team || registration.status !== 'CONFIRMED' || blockedSeedRegistrationIds.has(registration.id)) return []
+      return [{ ...team, registration_created_at: registration.created_at }]
+    })
+    const seedPreviewCandidates = buildCircuitSeedPreview(seedPreviewTeams, competitionSeedScope.pointsByUserId)
+    const estimatedSeedByTeam = new Map(seedPreviewCandidates.map((candidate) => [candidate.team_id, candidate.seed]))
+
     return NextResponse.json({
       tournament,
       meta: {
+        seedSource: competitionSeedScope.seedSource,
+        sourceSeriesId: competitionSeedScope.sourceSeriesId,
+        sourceSeriesDivisionId: competitionSeedScope.sourceSeriesDivisionId,
+        sourceEventDivisionId: competitionSeedScope.sourceEventDivisionId,
         hasSeedSnapshot: seedRows.length > 0,
         seededTeamsCount: seedRows.length,
         hasGroups: groups.length > 0,
@@ -484,8 +489,6 @@ export async function GET(
         const seedSnapshot = seedsByRegistration.get(registration.id) ?? seedsByTeam.get(registration.team_id) ?? null
         const player1 = team ? profiles.get(team.player1_user_id) ?? null : null
         const player2 = team ? profiles.get(team.player2_user_id) ?? null : null
-        const player1ClubPlayer = team ? clubPlayers.get(team.player1_user_id) ?? null : null
-        const player2ClubPlayer = team ? clubPlayers.get(team.player2_user_id) ?? null : null
         const tournamentPaymentRows = tournamentPaymentsByRegistration.get(registration.id) ?? []
         const paymentRows = paymentsByRegistration.get(registration.id) ?? []
         const changeRequest = changeRequestsByRegistration.get(registration.id) ?? null
@@ -493,8 +496,10 @@ export async function GET(
           ? deriveTournamentPaymentStatus(tournamentPaymentRows)
           : derivePaymentStatus(paymentRows)
         const eligible = deriveEligible(registration, paymentStatus)
-        const player1Points = Number.isFinite(player1ClubPlayer?.ranking_points ?? NaN) ? Number(player1ClubPlayer?.ranking_points ?? 0) : 0
-        const player2Points = Number.isFinite(player2ClubPlayer?.ranking_points ?? NaN) ? Number(player2ClubPlayer?.ranking_points ?? 0) : 0
+        const score = team
+          ? scoreCircuitTeam(team, competitionSeedScope.pointsByUserId)
+          : { player1_points: 0, player2_points: 0, team_score: 0, best_individual_points: 0, worst_individual_points: 0 }
+        const estimatedSeed = estimatedSeedByTeam.get(registration.team_id) ?? null
 
         return {
           id: registration.id,
@@ -537,11 +542,16 @@ export async function GET(
             : null,
           eligible,
           alerts: buildEligibilityAlerts(registration, paymentStatus),
-          estimated_team_score: player1Points + player2Points,
+          estimated_seed: estimatedSeed,
+          estimated_team_score: score.team_score,
+          estimated_player1_points: score.player1_points,
+          estimated_player2_points: score.player2_points,
           seed_snapshot: seedSnapshot
             ? {
                 seed: seedSnapshot.seed,
                 team_score: seedSnapshot.team_score,
+                player1_points: seedSnapshot.player1_points,
+                player2_points: seedSnapshot.player2_points,
                 seed_source: seedSnapshot.seed_source,
                 snapshot_at: seedSnapshot.snapshot_at,
               }
@@ -569,14 +579,14 @@ export async function GET(
                     full_name: getFullName(player1),
                     email: player1?.email ?? null,
                     avatar_url: player1?.avatar_url ?? null,
-                    ranking_points: player1Points,
+                    ranking_points: seedSnapshot?.player1_points ?? score.player1_points,
                   },
                   {
                     user_id: team.player2_user_id,
                     full_name: getFullName(player2),
                     email: player2?.email ?? null,
                     avatar_url: player2?.avatar_url ?? null,
-                    ranking_points: player2Points,
+                    ranking_points: seedSnapshot?.player2_points ?? score.player2_points,
                   },
                 ],
               }

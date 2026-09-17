@@ -451,7 +451,7 @@ export default function ClubTorneosPage() {
             <p className="club-sub">Torneos creados por {activeClub?.name ?? 'tu club'} y próximos pasos operativos.</p>
           </div>
           <div className="club-headActions">
-            <Link href="/club/competition" className="club-circuitsLink">Circuitos <span aria-hidden="true">→</span></Link>
+            <Link href="/club/competition/circuits" className="club-circuitsLink">Circuitos <span aria-hidden="true">→</span></Link>
             <Link href="/club/torneos/nuevo" className="club-primaryBtn">Crear torneo</Link>
           </div>
         </div>

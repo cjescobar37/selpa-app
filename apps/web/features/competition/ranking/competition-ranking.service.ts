@@ -1,10 +1,8 @@
 import { readCompetitionRanking } from './competition-ranking.repository'
-import type { CompetitionRankingRow, CompetitionRankingStats, RankingEngineSource } from './competition-ranking.types'
+import type { CompetitionRankingRow, CompetitionRankingStats } from './competition-ranking.types'
 
-export function getRankingEngineSource(): RankingEngineSource {
-  const value = String(process.env.RANKING_ENGINE_SOURCE ?? 'competition').trim().toLowerCase()
-  if (value !== 'legacy' && value !== 'competition') throw new Error(`RANKING_ENGINE_SOURCE inválido: ${value}`)
-  return value
+export function getRankingEngineSource() {
+  return 'competition'
 }
 
 export async function getCompetitionRanking(clubId: string, statsByUserId: Map<string, CompetitionRankingStats>) {

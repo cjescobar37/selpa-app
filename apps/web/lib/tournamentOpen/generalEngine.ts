@@ -332,6 +332,34 @@ function pairHighLowSeeds<T>(items: T[]) {
 }
 
 function minimizeSameGroupConflicts(pairings: Array<[OpenGlobalSeed, OpenGlobalSeed]>) {
+  if (pairings.every(([first, second]) => first.groupId !== second.groupId)) return pairings
+
+  // Keep the protected side in its bracket zone and seek a conflict-free
+  // assignment of the opposite side. A stable augmenting-path matching avoids
+  // the greedy case where the last pair needs an earlier opponent swap.
+  const lowSeeds = pairings.map((pair) => pair[1])
+  const ownerByLowSeed = Array<number>(pairings.length).fill(-1)
+  const assign = (highIndex: number, visited: Set<number>): boolean => {
+    const candidates = [highIndex, ...lowSeeds.map((_, index) => index).filter((index) => index !== highIndex)]
+    for (const lowIndex of candidates) {
+      if (visited.has(lowIndex) || pairings[highIndex][0].groupId === lowSeeds[lowIndex].groupId) continue
+      visited.add(lowIndex)
+      const previousOwner = ownerByLowSeed[lowIndex]
+      if (previousOwner === -1 || assign(previousOwner, visited)) {
+        ownerByLowSeed[lowIndex] = highIndex
+        return true
+      }
+    }
+    return false
+  }
+  if (pairings.every((_, index) => assign(index, new Set<number>()))) {
+    const resolved = Array<[OpenGlobalSeed, OpenGlobalSeed]>(pairings.length)
+    ownerByLowSeed.forEach((highIndex, lowIndex) => {
+      resolved[highIndex] = [pairings[highIndex][0], lowSeeds[lowIndex]]
+    })
+    return resolved
+  }
+
   const next = [...pairings]
   const hasConflict = (pair: [OpenGlobalSeed, OpenGlobalSeed]) => pair[0].groupId === pair[1].groupId
 

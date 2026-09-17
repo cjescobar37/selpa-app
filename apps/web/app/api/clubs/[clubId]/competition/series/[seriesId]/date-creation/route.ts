@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authorizeCompetitionEvents } from '@/features/competition/events/competition-events.auth'
 import { eventErrorResponse, readEventJson } from '@/features/competition/events/competition-events.http'
 import { isUuid } from '@/features/competition/series/competition-series.validation'
+import { getConfiguredClubTimezone } from '@/features/competition/events/competition-events.timezone'
+import { resolveCompetitionTimezone } from '@/lib/competitionTimezone'
 
 type Context = { params: Promise<{ clubId: string; seriesId: string }> }
 
@@ -22,7 +24,8 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const { data, error } = await auth.client.rpc('get_competition_date_creation_context', { p_club_id: clubId, p_series_id: seriesId })
     if (error) throw Object.assign(new Error(error.message), { code: error.code })
-    return NextResponse.json({ context: data })
+    const timezone = await getConfiguredClubTimezone(auth.client, clubId)
+    return NextResponse.json({ context: { ...data, timezone } })
   } catch (error) {
     return dateCreationError(error)
   }
@@ -43,6 +46,11 @@ export async function POST(request: NextRequest, context: Context) {
     return NextResponse.json({ error: 'La fecha del circuito no está lista para crear.' }, { status: 400 })
   }
   try {
+    const timezone = resolveCompetitionTimezone({
+      clubTimezone: await getConfiguredClubTimezone(auth.client, clubId),
+      tournamentTimezone: (value.eventPayload as Record<string, unknown>).timezone,
+    })
+    if (!timezone) return NextResponse.json({ error: 'Elegí una zona horaria válida para crear la fecha.' }, { status: 400 })
     const { data, error } = await auth.client.rpc('create_competition_date_tournament_atomic', {
       p_club_id: clubId,
       p_series_id: seriesId,
@@ -51,7 +59,7 @@ export async function POST(request: NextRequest, context: Context) {
       p_rule_id: value.ruleId,
       p_rule_revision: ruleRevision,
       p_idempotency_key: key,
-      p_event_payload: value.eventPayload,
+      p_event_payload: { ...(value.eventPayload as Record<string, unknown>), timezone },
       p_tournament_payload: value.tournamentPayload,
     })
     if (error) throw Object.assign(new Error(error.message), { code: error.code })

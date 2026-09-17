@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toastStore'
 
 import Link from 'next/link'
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react'
@@ -39,6 +40,7 @@ import {
   formatBranchLabel,
   formatTournamentSystemLabel,
   formatTournamentTypeLabel,
+  resolveTournamentCompetitionSystem,
 } from '@/lib/tournamentLabels'
 
 type TournamentSummary = {
@@ -164,10 +166,15 @@ type Registration = {
   }
   eligible: boolean
   alerts: string[]
+  estimated_seed: number | null
   estimated_team_score: number
+  estimated_player1_points: number
+  estimated_player2_points: number
   seed_snapshot: {
     seed: number
     team_score: number
+    player1_points: number
+    player2_points: number
     seed_source: string
     snapshot_at: string
   } | null
@@ -183,6 +190,7 @@ type Registration = {
 }
 
 type SeedMeta = {
+  seedSource?: string
   hasSeedSnapshot: boolean
   seededTeamsCount: number
   hasGroups: boolean
@@ -221,8 +229,14 @@ type TournamentMatch = {
   court_name?: string | null
   court_id?: string | null
   court_source?: string | null
+  court_complex_name?: string | null
   team1_id: string
   team2_id: string
+  group_match_number?: number | null
+  team1_source_match_id?: string | null
+  team1_source_outcome?: 'WINNER' | 'LOSER' | null
+  team2_source_match_id?: string | null
+  team2_source_outcome?: 'WINNER' | 'LOSER' | null
   team1_name?: string | null
   team2_name?: string | null
   winner_team_id: string | null
@@ -277,7 +291,7 @@ type GenerateOpenResponse = {
 type TournamentDisplayConfig = {
   segmentType: 'LIBRES' | 'MENORES' | 'VETERANOS'
   publicDescription: string | null
-  competitionSystem: 'GROUPS_PLAYOFF' | 'ROUND_ROBIN' | 'SINGLE_ELIMINATION'
+  competitionSystem: 'GROUPS_PLAYOFF' | 'ROUND_ROBIN' | 'SINGLE_ELIMINATION' | null
   venueName: string | null
   pointsConfig: {
     enabled: boolean
@@ -802,9 +816,7 @@ function readTournamentDisplayConfig(rules?: Record<string, unknown> | null): To
     ? safeRules.segment_type
     : 'LIBRES'
 
-  const competitionSystem = safeRules.competition_system === 'ROUND_ROBIN' || safeRules.competition_system === 'SINGLE_ELIMINATION'
-    ? safeRules.competition_system
-    : 'GROUPS_PLAYOFF'
+  const competitionSystem = resolveTournamentCompetitionSystem(safeRules)
 
   return {
     segmentType,
@@ -958,6 +970,7 @@ export default function ClubTournamentDetailPage() {
   const [generatingSeed, setGeneratingSeed] = useState(false)
   const [generatingGroups, setGeneratingGroups] = useState(false)
   const [generatingGroupMatches, setGeneratingGroupMatches] = useState(false)
+  const [repairingGroupFixture, setRepairingGroupFixture] = useState(false)
   const [generatingOpenPlayoff, setGeneratingOpenPlayoff] = useState(false)
   const [generatingPlayoffFinal, setGeneratingPlayoffFinal] = useState(false)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
@@ -1035,7 +1048,6 @@ export default function ClubTournamentDetailPage() {
     player2: false,
   })
   const [message, setMessage] = useState('')
-  const [actionMessage, setActionMessage] = useState('')
   const requestedTab = searchParams.get('tab')
   const highlightedRegistrationId = searchParams.get('registrationId')
   const highlightedChangeRequestId = searchParams.get('requestId')
@@ -1154,7 +1166,15 @@ export default function ClubTournamentDetailPage() {
       return left.created_at.localeCompare(right.created_at)
     })
   }, [registrations, seedMeta.hasSeedSnapshot])
-  const showGroupsTab = tournamentDisplayConfig.competitionSystem !== 'SINGLE_ELIMINATION'
+  const seedPreviewRegistrations = useMemo(
+    () => registrations
+      .filter((registration) => typeof registration.estimated_seed === 'number')
+      .sort((left, right) => (left.estimated_seed ?? Number.MAX_SAFE_INTEGER) - (right.estimated_seed ?? Number.MAX_SAFE_INTEGER)),
+    [registrations]
+  )
+  const isDirectKnockout = tournamentDisplayConfig.competitionSystem === 'SINGLE_ELIMINATION' ||
+    ['DIRECT_ELIM', 'DIRECT_ELIMINATION', 'ELIMINATION'].includes(String(summary?.tournament.format ?? '').toUpperCase())
+  const showGroupsTab = !isDirectKnockout
   const showPlayoffTab = tournamentDisplayConfig.competitionSystem !== 'ROUND_ROBIN'
   useEffect(() => {
     if ((activeTab === 'groups' && !showGroupsTab) || (activeTab === 'playoff' && !showPlayoffTab)) {
@@ -1171,8 +1191,8 @@ export default function ClubTournamentDetailPage() {
   const canGenerateSeed = !seedMeta.hasSeedSnapshot && registrationStats.eligible >= requiredEligibleTeamsForSeed
   const canGenerateGroups = seedMeta.hasSeedSnapshot && !seedMeta.hasGroups
   const canGenerateGroupMatches = seedMeta.hasGroups && !seedMeta.hasGroupMatches
-  const canGenerateOpenPlayoff = isOpenCompatibleTournament(summary) &&
-    canUsePlayoffTab &&
+  const canGenerateOpenPlayoff = ((isDirectKnockout && registrationClosed && seedMeta.hasSeedSnapshot && !seedMeta.hasGroups) ||
+    (isOpenCompatibleTournament(summary) && canUsePlayoffTab)) &&
     (summary?.counts.playoffMatches ?? 0) === 0 &&
       summary?.operationalStage !== 'FINALIZADO'
   const semifinalMatches = useMemo(
@@ -1200,7 +1220,11 @@ export default function ClubTournamentDetailPage() {
     : playoffMatchesCount > 0
       ? 'El playoff ya tiene partidos creados y está listo para seguir operándose.'
       : canGenerateOpenPlayoff
-        ? 'Los grupos ya están completos. Ya podés generar la primera ronda del playoff.'
+        ? isDirectKnockout
+          ? 'Los seeds están congelados. Ya podés generar el cuadro de eliminación directa.'
+          : 'Los grupos ya están completos. Ya podés generar la primera ronda del playoff.'
+        : isDirectKnockout
+          ? 'Esperá al cierre de inscripciones y generá el snapshot de seeds para habilitar el cuadro.'
         : seedMeta.hasGroupMatches && summary?.counts.groupMatches.total
           ? 'Todavía faltan resultados de grupos para habilitar el playoff.'
           : 'Primero necesitás grupos completos y partidos de grupos resueltos.'
@@ -1899,6 +1923,7 @@ export default function ClubTournamentDetailPage() {
         team1_id: match.team1_id,
         team2_id: match.team2_id,
         winner_team_id: match.winner_team_id,
+        group_match_number: match.group_match_number,
         score: match.score,
       })),
       classificationRules: resolveTournamentClassificationRules(null, tournamentRules),
@@ -2000,6 +2025,8 @@ export default function ClubTournamentDetailPage() {
     [sortedGroups]
   )
   const projectedGroupMatchesCount = Math.max(groupMatches.length, expectedGroupMatchesCount)
+  const groupFixtureRepairNeeded = sortedGroups.some(group => group.size === 4 && (groupMatchesByGroup[group.id]?.length ?? 0) < 4)
+    || (tournamentRuleSchedule.scheduleConfig.mode === 'AUTO' && groupMatches.some(match => !match.scheduled_at || !match.court_name))
   const groupsPlanningCapacity = useMemo(
     () =>
       calculateScheduleCapacity({
@@ -2160,6 +2187,7 @@ export default function ClubTournamentDetailPage() {
     setRegistrations((json?.registrations ?? []) as Registration[])
     setGroups((json?.groups ?? []) as TournamentGroup[])
     setSeedMeta({
+      seedSource: typeof json?.meta?.seedSource === 'string' ? json.meta.seedSource : undefined,
       hasSeedSnapshot: Boolean(json?.meta?.hasSeedSnapshot),
       seededTeamsCount: Number(json?.meta?.seededTeamsCount ?? 0),
       hasGroups: Boolean(json?.meta?.hasGroups),
@@ -2332,7 +2360,7 @@ export default function ClubTournamentDetailPage() {
     )
   }
 
-  function teamNameById(group: TournamentGroup, teamId: string) {
+  function teamNameById(group: TournamentGroup, teamId: string | null) {
     const team = group.teams.find((item) => item.team_id === teamId)?.team
     return team?.players?.map((player) => player.full_name).join(' / ') || 'Pareja sin datos'
   }
@@ -2404,7 +2432,6 @@ export default function ClubTournamentDetailPage() {
     setSavingScheduleSwap(true)
     setScheduleSwapModal((current) => current ? { ...current, error: '' } : current)
     setMessage('')
-    setActionMessage('')
 
     const res = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}/matches/swap-schedule`, {
       method: 'POST',
@@ -2427,7 +2454,7 @@ export default function ClubTournamentDetailPage() {
 
     setSavingScheduleSwap(false)
     setScheduleSwapModal(null)
-    setActionMessage('Horario/cancha intercambiados correctamente.')
+    toast.success('Horario/cancha intercambiados correctamente.')
     await refreshTournamentExperience()
   }
 
@@ -2456,7 +2483,7 @@ export default function ClubTournamentDetailPage() {
     return (
       <>
         <strong>{scheduleLabel}</strong>
-        <span>Cancha: {match.court_name ?? 'sin asignar'}</span>
+        <span>{match.court_complex_name ? `${match.court_complex_name} · ` : ''}{match.court_name ?? 'Cancha sin asignar'}</span>
       </>
     )
   }
@@ -2512,7 +2539,6 @@ export default function ClubTournamentDetailPage() {
 
     setSavingResult(true)
     setMessage('')
-    setActionMessage('')
 
     const token = await getToken()
     if (!token) {
@@ -2612,9 +2638,9 @@ export default function ClubTournamentDetailPage() {
       setActiveTab('general')
       setMilestone({
         id: `tournament-complete-${match.id}`,
-        eyebrow: 'Torneo finalizado',
+        eyebrow: 'Resultados deportivos completos',
         title: `Campeón: ${championName}`,
-        message: `Subcampeón: ${runnerUpName}. El resumen deportivo ya está disponible.`,
+        message: `Subcampeón: ${runnerUpName}. Falta finalizar formalmente el torneo.`,
         actionLabel: 'Ver resumen del torneo',
         targetTab: 'general',
       })
@@ -2628,10 +2654,13 @@ export default function ClubTournamentDetailPage() {
       return <div className="club-inlineNote">Todavía no hay standings calculables.</div>
     }
 
-    const qualifierIds = new Set(standingBlock.qualifiers.map((row) => row.team_id))
+    const definitionMatches = (groupMatchesByGroup[group.id] ?? []).filter(match => Number(match.group_match_number) === 3 || Number(match.group_match_number) === 4)
+    const definitionPending = group.size === 4 && (definitionMatches.length !== 2 || definitionMatches.some(match => String(match.status).toUpperCase() !== 'PLAYED'))
+    const qualifierIds = new Set(definitionPending ? [] : standingBlock.qualifiers.map((row) => row.team_id))
 
     return (
       <div className="club-groupStandings" role="table" aria-label={`Standings Grupo ${group.name}`}>
+        {definitionPending ? <p className="club-groupDefinitionPending">Definición pendiente · A-03 y A-04 determinan las posiciones finales.</p> : null}
         <div className="club-groupStandingRow club-groupStandingRow--head" role="row">
           <span role="columnheader">#</span>
           <span role="columnheader">Equipo</span>
@@ -2980,8 +3009,12 @@ export default function ClubTournamentDetailPage() {
           const team2Winner = played && match.winner_team_id === match.team2_id
           const scheduleSwapOpenDisabledReason = getScheduleSwapOpenDisabledReason(match)
           const mobileScoreSets = extractStructuredScoreSets(match.score).slice(0, 3)
-          const team1Name = match.team1_name ?? teamNameById(group, match.team1_id)
-          const team2Name = match.team2_name ?? teamNameById(group, match.team2_id)
+          const sourceLabel = (sourceId:string|null|undefined,outcome:'WINNER'|'LOSER'|null|undefined) => {
+            const source=orderedMatches.find(item=>item.id===sourceId)
+            return source ? `${outcome==='LOSER'?'Perdedor':'Ganador'} ${getOpenGroupMatchDisplayCode(group.order,source.group_match_number??orderedMatches.indexOf(source)+1)}` : 'Participante pendiente'
+          }
+          const team1Name = match.team1_name ?? (match.team1_id ? teamNameById(group, match.team1_id) : sourceLabel(match.team1_source_match_id,match.team1_source_outcome))
+          const team2Name = match.team2_name ?? (match.team2_id ? teamNameById(group, match.team2_id) : sourceLabel(match.team2_source_match_id,match.team2_source_outcome))
           const dependentMatchIndex = orderedMatches.filter((item) => Number(item.round) === 2).findIndex((item) => item.id === match.id)
           const dependentLabel = group.size === 4 && Number(match.round) === 2
             ? dependentMatchIndex === 0 ? 'Ganadores vs Ganadores' : 'Perdedores vs Perdedores'
@@ -3004,14 +3037,14 @@ export default function ClubTournamentDetailPage() {
                 {renderGroupMatchSchedule(match)}
               </div>
               <div className="club-matchPairCell" role="cell">
-                <span className="club-groupMatchCode">{getOpenGroupMatchDisplayCode(group.order, matchIndex + 1)}{dependentLabel ? ` · ${dependentLabel}` : ''}</span>
+                <span className="club-groupMatchCode">{getOpenGroupMatchDisplayCode(group.order, match.group_match_number ?? matchIndex + 1)}{dependentLabel ? ` · ${dependentLabel}` : ''}</span>
                 <div className="club-matchTeams" title={`${match.team1_name ?? 'Equipo 1'} vs ${match.team2_name ?? 'Equipo 2'}`}>
                   <strong className={team1Winner ? 'club-matchTeamWinner' : undefined}>
-                    {match.team1_name ?? teamNameById(group, match.team1_id)}
+                    {team1Name}
                   </strong>
                   <span aria-hidden="true" />
                   <strong className={team2Winner ? 'club-matchTeamWinner' : undefined}>
-                    {match.team2_name ?? teamNameById(group, match.team2_id)}
+                    {team2Name}
                   </strong>
                 </div>
                 <div className="club-mobileMatchScoreGrid" aria-label={`Resultado ${team1Name} versus ${team2Name}`}>
@@ -3042,6 +3075,8 @@ export default function ClubTournamentDetailPage() {
                 <button
                   type="button"
                   className={`club-groupResultBtn ${played ? 'club-groupResultBtn--secondary' : 'club-groupResultBtn--primary'}`}
+                  disabled={!match.team1_id || !match.team2_id}
+                  title={!match.team1_id || !match.team2_id ? 'Definición pendiente' : undefined}
                   onClick={() => openResultForm(match)}
                 >
                   {played ? 'Editar' : 'Cargar'}
@@ -3439,12 +3474,11 @@ export default function ClubTournamentDetailPage() {
     if (!activeClub?.id || !tournamentId || !summary) return
 
     setPublishing(true)
-    setActionMessage('')
     setMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setPublishing(false)
       return
     }
@@ -3482,7 +3516,6 @@ export default function ClubTournamentDetailPage() {
     if (!activeClub?.id || !tournamentId || !summary) return
 
     setDeletingTournament(true)
-    setActionMessage('')
     setMessage('')
 
     const token = await getToken()
@@ -3545,7 +3578,7 @@ export default function ClubTournamentDetailPage() {
       setFinalizingTournament(false)
       return
     }
-    setActionFeedback({ tone: 'success', title: 'Torneo finalizado', message: 'El campeón y toda la historia deportiva quedaron guardados.' })
+    setActionFeedback({ tone: 'success', title: 'Torneo finalizado', message: 'Ahora podés homologar los resultados desde Competition.' })
     setFinalizingTournament(false)
     await refreshTournamentExperience()
   }
@@ -3585,12 +3618,11 @@ export default function ClubTournamentDetailPage() {
     }
 
     setCancellingTournament(true)
-    setActionMessage('')
     setMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setCancellingTournament(false)
       return
     }
@@ -3613,7 +3645,7 @@ export default function ClubTournamentDetailPage() {
         CANCELLATION_REASON_REQUIRED: 'Necesitás indicar un motivo para cancelar o anular el torneo.',
         INVALID_ACTION: 'Acción inválida.',
       }
-      setMessage(json.code ? messages[json.code] ?? json.error ?? 'No pude cancelar el torneo.' : json.error ?? 'No pude cancelar el torneo.')
+      toast.error(json.code ? messages[json.code] ?? json.error ?? 'No pude cancelar el torneo.' : json.error ?? 'No pude cancelar el torneo.')
       setCancellingTournament(false)
       return
     }
@@ -3622,7 +3654,7 @@ export default function ClubTournamentDetailPage() {
     setCancelTournamentModal(null)
     setCancelTournamentKeyword('')
     setCancelTournamentReason('')
-    setActionMessage('Torneo cancelado correctamente. Se conserva el historial, pero deja de estar operativo.')
+    toast.success('Torneo cancelado correctamente. Se conserva el historial, pero deja de estar operativo.')
     await refreshTournamentExperience()
   }
 
@@ -3634,11 +3666,10 @@ export default function ClubTournamentDetailPage() {
 
     setSavingRegistrationId(registration.id)
     setMessage('')
-    setActionMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setSavingRegistrationId(null)
       return
     }
@@ -3655,12 +3686,12 @@ export default function ClubTournamentDetailPage() {
     setSavingRegistrationId(null)
 
     if (!res.ok) {
-      setMessage(json.error ?? 'No pude actualizar el pago de la pareja.')
+      toast.error(json.error ?? 'No pude actualizar el pago de la pareja.')
       return
     }
 
     setRegistrationPaymentModal(null)
-    setActionMessage(action === 'validate_payment' ? 'Pago validado manualmente.' : 'Pago en predio aprobado.')
+    toast.success(action === 'validate_payment' ? 'Pago validado manualmente.' : 'Pago en predio aprobado.')
     await refreshTournamentExperience()
   }
 
@@ -3669,11 +3700,10 @@ export default function ClubTournamentDetailPage() {
 
     setSavingRegistrationId(registration.id)
     setMessage('')
-    setActionMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setSavingRegistrationId(null)
       return
     }
@@ -3694,12 +3724,12 @@ export default function ClubTournamentDetailPage() {
         REGISTRATION_CLOSED: 'La inscripción de este torneo ya cerró.',
         TOURNAMENT_FULL: 'El torneo ya alcanzó el cupo máximo de parejas.',
       }
-      setMessage(json.code ? messages[json.code] ?? json.error ?? 'No pude confirmar la inscripción.' : json.error ?? 'No pude confirmar la inscripción.')
+      toast.error(json.code ? messages[json.code] ?? json.error ?? 'No pude confirmar la inscripción.' : json.error ?? 'No pude confirmar la inscripción.')
       return
     }
 
     setRegistrationDetailModal(null)
-    setActionMessage('Inscripción confirmada correctamente.')
+    toast.success('Inscripción confirmada correctamente.')
     await refreshTournamentExperience()
   }
 
@@ -3708,11 +3738,10 @@ export default function ClubTournamentDetailPage() {
 
     setSavingRegistrationId(registration.id)
     setMessage('')
-    setActionMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setSavingRegistrationId(null)
       return
     }
@@ -3729,7 +3758,7 @@ export default function ClubTournamentDetailPage() {
     setSavingRegistrationId(null)
 
     if (!res.ok) {
-      setMessage(json.error ?? 'No pude resolver el pago.')
+      toast.error(json.error ?? 'No pude resolver el pago.')
       return
     }
 
@@ -3748,11 +3777,10 @@ export default function ClubTournamentDetailPage() {
 
     setSavingRegistrationId(registration.id)
     setMessage('')
-    setActionMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setSavingRegistrationId(null)
       return
     }
@@ -3769,11 +3797,11 @@ export default function ClubTournamentDetailPage() {
     setSavingRegistrationId(null)
 
     if (!res.ok) {
-      setMessage(json.error ?? 'No pude resolver la baja.')
+      toast.error(json.error ?? 'No pude resolver la baja.')
       return
     }
 
-    setActionMessage(status === 'APPROVED' ? 'Baja aprobada y notificada.' : 'Baja rechazada y notificada.')
+    toast.success(status === 'APPROVED' ? 'Baja aprobada y notificada.' : 'Baja rechazada y notificada.')
     await refreshTournamentExperience()
   }
 
@@ -3781,12 +3809,11 @@ export default function ClubTournamentDetailPage() {
     if (!activeClub?.id || !tournamentId || !canGenerateSeed) return
 
     setGeneratingSeed(true)
-    setActionMessage('')
     setMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setGeneratingSeed(false)
       return
     }
@@ -3806,12 +3833,12 @@ export default function ClubTournamentDetailPage() {
         TOURNAMENT_NOT_FOUND: 'Torneo no encontrado para este club.',
         UNAUTHORIZED: 'No tenés permisos para generar seed.',
       }
-      setMessage(json.code ? messages[json.code] ?? json.error ?? 'No pude generar el seed.' : json.error ?? 'No pude generar el seed.')
+      toast.error(json.code ? messages[json.code] ?? json.error ?? 'No pude generar el seed.' : json.error ?? 'No pude generar el seed.')
       setGeneratingSeed(false)
       return
     }
 
-    setActionMessage(`Seed generado correctamente${json.seededTeamsCount ? `: ${json.seededTeamsCount} parejas` : ''}.`)
+    toast.success(json.seededTeamsCount ? `${json.seededTeamsCount} parejas quedaron ordenadas.` : 'Las parejas quedaron ordenadas.', { title: 'Seed generado correctamente' })
     setGeneratingSeed(false)
     await refreshTournamentExperience()
     setPairsView('seed')
@@ -3830,12 +3857,11 @@ export default function ClubTournamentDetailPage() {
     if (!activeClub?.id || !tournamentId || !canGenerateGroups) return
 
     setGeneratingGroups(true)
-    setActionMessage('')
     setMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setGeneratingGroups(false)
       return
     }
@@ -3855,12 +3881,12 @@ export default function ClubTournamentDetailPage() {
         TOURNAMENT_NOT_FOUND: 'Torneo no encontrado para este club.',
         UNAUTHORIZED: 'No tenés permisos para generar grupos.',
       }
-      setMessage(json.code ? messages[json.code] ?? json.error ?? 'No pude generar los grupos.' : json.error ?? 'No pude generar los grupos.')
+      toast.error(json.code ? messages[json.code] ?? json.error ?? 'No pude generar los grupos.' : json.error ?? 'No pude generar los grupos.')
       setGeneratingGroups(false)
       return
     }
 
-    setActionMessage(`Grupos generados correctamente${json.groupCount ? `: ${json.groupCount} grupos` : ''}${json.teamsAssigned ? ` · ${json.teamsAssigned} parejas` : ''}.`)
+    toast.success(`Grupos generados correctamente${json.groupCount ? `: ${json.groupCount} grupos` : ''}${json.teamsAssigned ? ` · ${json.teamsAssigned} parejas` : ''}.`)
     setGeneratingGroups(false)
     await refreshTournamentExperience()
     setActiveTab('groups')
@@ -3872,6 +3898,21 @@ export default function ClubTournamentDetailPage() {
       actionLabel: 'Ver Grupos',
       targetTab: 'groups',
     })
+  }
+
+  function renderFourTeamGroupDraw(group:TournamentGroup,matches:TournamentMatch[]){
+    if(group.size!==4)return null
+    const ordered=[...matches].sort((a,b)=>(a.group_match_number??a.match_order)-(b.group_match_number??b.match_order))
+    const label=(match:TournamentMatch,side:1|2)=>{
+      const teamId=side===1?match.team1_id:match.team2_id
+      const teamName=side===1?match.team1_name:match.team2_name
+      if(teamId)return teamName??teamNameById(group,teamId)
+      const sourceId=side===1?match.team1_source_match_id:match.team2_source_match_id
+      const outcome=side===1?match.team1_source_outcome:match.team2_source_outcome
+      const source=ordered.find(item=>item.id===sourceId)
+      return source?`${outcome==='LOSER'?'Perdedor':'Ganador'} ${getOpenGroupMatchDisplayCode(group.order,source.group_match_number??1)}`:'Participante pendiente'
+    }
+    return <section className="club-groupMiniDraw" aria-label={`Cruces del Grupo ${group.name}`}><strong>CRUCES DEL GRUPO</strong>{[['Iniciales',[1,2]],['Definición',[3,4]]].map(([title,numbers])=><div key={String(title)}><span>{String(title)}</span>{(numbers as number[]).map(number=>{const match=ordered.find(item=>(item.group_match_number??0)===number);return match?<article key={match.id}><b>{getOpenGroupMatchDisplayCode(group.order,number)}</b><p>{label(match,1)}<em>vs</em>{label(match,2)}</p></article>:<article key={number}><b>{getOpenGroupMatchDisplayCode(group.order,number)}</b><p>Por preparar</p></article>})}</div>)}</section>
   }
 
   function openPairs(view: TournamentPairsView) {
@@ -3923,12 +3964,11 @@ export default function ClubTournamentDetailPage() {
     if (!activeClub?.id || !tournamentId || !canGenerateGroupMatches) return
 
     setGeneratingGroupMatches(true)
-    setActionMessage('')
     setMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setGeneratingGroupMatches(false)
       return
     }
@@ -3956,12 +3996,12 @@ export default function ClubTournamentDetailPage() {
         TOURNAMENT_NOT_FOUND: 'Torneo no encontrado para este club.',
         UNAUTHORIZED: 'No tenés permisos para generar partidos.',
       }
-      setMessage(json.code ? messages[json.code] ?? json.error ?? 'No pude generar los partidos de grupos.' : json.error ?? 'No pude generar los partidos de grupos.')
+      toast.error(json.code ? messages[json.code] ?? json.error ?? 'No pude generar los partidos de grupos.' : json.error ?? 'No pude generar los partidos de grupos.')
       setGeneratingGroupMatches(false)
       return
     }
 
-    setActionMessage(
+    toast.success(
       `Partidos de grupos generados correctamente${json.matchesCreated ? `: ${json.matchesCreated} partidos` : ''}.` +
       (json.scheduleApplied ? ' La planificación automática quedó aplicada.' : '')
     )
@@ -3982,12 +4022,11 @@ export default function ClubTournamentDetailPage() {
     if (!activeClub?.id || !tournamentId || !canGenerateOpenPlayoff) return
 
     setGeneratingOpenPlayoff(true)
-    setActionMessage('')
     setMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setGeneratingOpenPlayoff(false)
       return
     }
@@ -4008,7 +4047,7 @@ export default function ClubTournamentDetailPage() {
         UNAUTHORIZED: 'No tenés permisos para generar el playoff OPEN.',
         OPEN_GENERATION_ROLLED_BACK: 'Falló la generación OPEN y se revirtieron los partidos creados.',
       }
-      setMessage(json.code ? messages[json.code] ?? json.error ?? 'No pude generar el playoff OPEN.' : json.error ?? 'No pude generar el playoff OPEN.')
+      toast.error(json.code ? messages[json.code] ?? json.error ?? 'No pude generar el playoff OPEN.' : json.error ?? 'No pude generar el playoff OPEN.')
       setGeneratingOpenPlayoff(false)
       return
     }
@@ -4020,7 +4059,7 @@ export default function ClubTournamentDetailPage() {
       json.meta?.assignedByes ? `${json.meta.assignedByes} byes` : null,
     ].filter(Boolean).join(' · ')
 
-    setActionMessage(
+    toast.success(
       `Playoff OPEN generado correctamente${details ? ` (${details})` : ''}.` +
       (warning ? ' Se generó el playoff, pero quedaron cruces entre equipos del mismo grupo.' : '')
     )
@@ -4038,11 +4077,26 @@ export default function ClubTournamentDetailPage() {
     })
   }
 
+  async function repairGroupFixture() {
+    if (!activeClub?.id || !tournamentId || repairingGroupFixture) return
+    const token = await getToken()
+    if (!token) { toast.error('Sesión inválida.'); return }
+    setRepairingGroupFixture(true)
+    const response = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}/groups/repair-fixture`, { method:'POST', headers:{ Authorization:`Bearer ${token}` } })
+    const json = await response.json().catch(()=>({})) as {error?:string;created?:number;scheduled?:number;scheduledMatches?:number;courtsCount?:number}
+    setRepairingGroupFixture(false)
+    if(!response.ok){toast.error(json.error??'No pudimos completar los cruces y el cronograma.');return}
+    toast.success(`${json.scheduledMatches ?? 0} partidos programados en ${json.courtsCount ?? 0} canchas.`,{title:'Cruces y cronograma listos'})
+    await refreshTournamentExperience()
+  }
+
   function requestGenerateOpenPlayoff() {
     requestConfirmation({
-      title: 'Generar playoff OPEN',
-      body: 'Se generará la primera ronda real del playoff OPEN con los standings actuales.',
-      confirmLabel: 'Generar playoff OPEN',
+      title: isDirectKnockout ? 'Generar cuadro directo' : 'Generar playoff OPEN',
+      body: isDirectKnockout
+        ? 'Se generará la primera ronda real con los seeds congelados. Los BYEs avanzan sin crear partidos ficticios.'
+        : 'Se generará la primera ronda real del playoff OPEN con los standings actuales.',
+      confirmLabel: isDirectKnockout ? 'Generar cuadro' : 'Generar playoff OPEN',
       onConfirm: generateOpenPlayoff,
     })
   }
@@ -4051,12 +4105,11 @@ export default function ClubTournamentDetailPage() {
     if (!activeClub?.id || !tournamentId || !canGeneratePlayoffFinal) return
 
     setGeneratingPlayoffFinal(true)
-    setActionMessage('')
     setMessage('')
 
     const token = await getToken()
     if (!token) {
-      setMessage('Sesión inválida.')
+      toast.error('Sesión inválida.')
       setGeneratingPlayoffFinal(false)
       return
     }
@@ -4071,12 +4124,12 @@ export default function ClubTournamentDetailPage() {
       const messages: Record<string, string> = {
         UNAUTHORIZED: 'No tenés permisos para generar la final.',
       }
-      setMessage(json.code ? messages[json.code] ?? json.error ?? 'No pude generar la final.' : json.error ?? 'No pude generar la final.')
+      toast.error(json.code ? messages[json.code] ?? json.error ?? 'No pude generar la final.' : json.error ?? 'No pude generar la final.')
       setGeneratingPlayoffFinal(false)
       return
     }
 
-    setActionMessage(`Final generada correctamente${typeof json.createdCount === 'number' ? `: ${json.createdCount} partido` : ''}.`)
+    toast.success(`Final generada correctamente${typeof json.createdCount === 'number' ? `: ${json.createdCount} partido` : ''}.`)
     setGeneratingPlayoffFinal(false)
     await refreshTournamentExperience()
     setPlayoffFocusPhase('FINAL')
@@ -4097,7 +4150,6 @@ export default function ClubTournamentDetailPage() {
       setManualModalOpen(false)
       setManualError('')
       setMessage('')
-      setActionMessage('')
       return
     }
 
@@ -4112,7 +4164,6 @@ export default function ClubTournamentDetailPage() {
     setManualError('')
     setManualModalOpen(true)
     setMessage('')
-    setActionMessage('')
   }
 
   function updateManualPlayerField(field: ManualPlayerField, value: string) {
@@ -4182,7 +4233,6 @@ export default function ClubTournamentDetailPage() {
     setCreatingManual(true)
     setManualError('')
     setMessage('')
-    setActionMessage('')
 
     const token = await getToken()
     if (!token) {
@@ -4235,7 +4285,7 @@ export default function ClubTournamentDetailPage() {
 
     setManualModalOpen(false)
     setManualError('')
-    setActionMessage('Pareja agregada correctamente.')
+    toast.success('Pareja agregada correctamente.')
     setActiveTab('pairs')
     setPairsView('registrations')
     await refreshTournamentExperience()
@@ -4273,7 +4323,6 @@ export default function ClubTournamentDetailPage() {
         setManualModalOpen(false)
         setManualError('')
         setMessage('')
-        setActionMessage('')
       })
     }
   }, [canAddPair, manualModalOpen])
@@ -4350,7 +4399,6 @@ export default function ClubTournamentDetailPage() {
           </div>
         </div>
 
-        {actionMessage ? <div className="club-actionMessage">{actionMessage}</div> : null}
 
         {!activeClub?.id ? (
           <div className="px-empty">Primero seleccioná un club activo.</div>
@@ -4368,7 +4416,7 @@ export default function ClubTournamentDetailPage() {
                   <span>{formatTournamentTypeLabel(summary.tournament.type ?? summary.tournament.tournament_type)}</span>
                   <span>{summary.tournament.category_name ?? 'Sin categoría'}</span>
                   <span>{formatBranchLabel(summary.tournament.gender)}</span>
-                  <span>{formatTournamentSystemLabel(summary.tournament.format ?? tournamentDisplayConfig.competitionSystem)}</span>
+                  <span className="club-formatBadge">{formatTournamentSystemLabel(tournamentDisplayConfig.competitionSystem)}</span>
                 </div>
                 <p className="club-detailSchedule">{formatDate(summary.tournament.start_date)}{summary.tournament.end_date ? ` · ${formatDate(summary.tournament.end_date)}` : ''} · {tournamentDisplayConfig.venueName ?? activeClub?.name ?? 'Sede por definir'}</p>
               </div>
@@ -4509,21 +4557,20 @@ export default function ClubTournamentDetailPage() {
 
                     {summary.champion ? (
                       <section className="club-championCard">
-                        <div className="club-podiumMain">
-                          <div className="club-podiumBadge">1°</div>
-                          <div className="club-championMain">
-                            <span className="club-kicker">Campeón</span>
-                            <h2>{summary.champion.name}</h2>
-                            <p>Final: {formatScore(summary.final?.score)}</p>
-                          </div>
+                        <span className="club-kicker">Resultado final</span>
+                        <div className="club-podiumRow club-podiumRow--champion">
+                          <b>1°</b>
+                          <div><span>Campeón</span><strong>{summary.champion.name}</strong><small>Final · {formatScore(summary.final?.score).replaceAll(' ', ' · ')}</small></div>
                         </div>
                         {runnerUp ? (
-                          <div className="club-runnerUp">
-                            <span>2° · Subcampeón</span>
-                            <strong>{runnerUp.name}</strong>
+                          <div className="club-podiumRow">
+                            <b>2°</b>
+                            <div><span>Subcampeón</span><strong>{runnerUp.name}</strong></div>
                           </div>
                         ) : null}
-                        {canFinalizeTournament ? (
+                        <footer className="club-finalResultAction">
+                          <div><strong>{isTournamentFinished ? '✓ Torneo finalizado' : 'Resultados deportivos completos'}</strong>{!isTournamentFinished ? <small>Falta el cierre formal.</small> : null}</div>
+                          {canFinalizeTournament ? (
                           <button
                             type="button"
                             className="club-nextAction"
@@ -4535,9 +4582,10 @@ export default function ClubTournamentDetailPage() {
                               onConfirm: finalizeTournament,
                             })}
                           >
-                            {finalizingTournament ? 'Finalizando…' : 'Finalizar torneo →'}
+                            {finalizingTournament ? 'Finalizando…' : 'Finalizar torneo'}
                           </button>
-                        ) : null}
+                          ) : null}
+                        </footer>
                       </section>
                     ) : null}
 
@@ -4583,7 +4631,6 @@ export default function ClubTournamentDetailPage() {
                             onClick={() => {
                               setCancelTournamentModal({ warning: hasCompetitiveActivity ? 'Este torneo tiene actividad competitiva cargada. El historial se conserva, pero dejará de estar operativo.' : null })
                               setMessage('')
-                              setActionMessage('')
                             }}
                           >
                             {cancellingTournament ? 'Cancelando...' : 'Cancelar / anular'}
@@ -4619,7 +4666,7 @@ export default function ClubTournamentDetailPage() {
                   </div>
                 ) : null}
 
-                {activeTab === 'pairs' && seedMeta.hasSeedSnapshot ? (
+                {activeTab === 'pairs' && (seedMeta.hasSeedSnapshot || seedPreviewRegistrations.length > 0) ? (
                   <div className="club-pairsSwitch" role="group" aria-label="Vista de Parejas">
                     <button type="button" className={pairsView === 'registrations' ? 'is-active' : ''} aria-pressed={pairsView === 'registrations'} onClick={() => setPairsView('registrations')}>Inscriptos</button>
                     <button type="button" className={pairsView === 'seed' ? 'is-active' : ''} aria-pressed={pairsView === 'seed'} onClick={() => setPairsView('seed')}>Seed</button>
@@ -4854,8 +4901,30 @@ export default function ClubTournamentDetailPage() {
                     {!seedMeta.hasSeedSnapshot ? (
                       <section className="club-placeholderPanel">
                         <span className="club-kicker">Seed</span>
-                        <h2>Todavía no se generó el seed del torneo</h2>
-                        <p>Cuando congeles el orden competitivo, acá vas a ver el armado base del torneo y la distribución por grupos.</p>
+                        <h2>Vista previa del orden competitivo</h2>
+                        <p>{seedMeta.seedSource === 'COMPETITION_SERIES_RANKING'
+                          ? 'Calculada con el ranking vigente de esta división del circuito. Revisala antes de congelar los seeds.'
+                          : 'Este torneo no tiene un ranking de circuito vinculado. Revisá el orden antes de congelar los seeds.'}</p>
+                        <div className="club-seededTeamsList">
+                          {seedPreviewRegistrations.map((registration) => {
+                            const players = registration.team?.players ?? []
+                            return (
+                              <article key={registration.id} className="club-seededTeamItem">
+                                <span className="club-seededTeamPosition">#{registration.estimated_seed}</span>
+                                <div>
+                                  <strong>{teamName(registration)}</strong>
+                                  <small>
+                                    {players[0]?.full_name ?? 'Jugador 1'}: {registration.estimated_player1_points} pts ·{' '}
+                                    {players[1]?.full_name ?? 'Jugador 2'}: {registration.estimated_player2_points} pts
+                                  </small>
+                                </div>
+                                <span className="club-groupMetaPill club-groupMetaPill--neutral">
+                                  {registration.estimated_team_score} pts
+                                </span>
+                              </article>
+                            )
+                          })}
+                        </div>
                         <button
                           type="button"
                           className="club-generateSeedBtn"
@@ -5026,6 +5095,7 @@ export default function ClubTournamentDetailPage() {
                             </section>
                           ) : null}
 
+                        {seedMeta.hasGroupMatches && groupFixtureRepairNeeded ? <div className="club-inlineNote"><strong>Fixture incompleto</strong><p>Completá A-03/A-04 y asigná el cronograma automático sin borrar resultados.</p><button type="button" className="club-generateSeedBtn" disabled={repairingGroupFixture} onClick={()=>void repairGroupFixture()}>{repairingGroupFixture?'Completando…':'Completar cruces y cronograma'}</button></div> : null}
                         <div className="club-matchList">
                           {sortedGroups.map((group) => {
                             const standingBlock = standingsByGroupId[group.id]
@@ -5052,11 +5122,12 @@ export default function ClubTournamentDetailPage() {
                                 </div>
 
                                 {renderTournamentGroupStandings(group, standingBlock)}
+                                {renderFourTeamGroupDraw(group, matches)}
                                 {group.size === 4 ? (
                                   <div className="club-groupFixtureHint">
                                     {secondRoundDefined
                                       ? 'Ganadores vs ganadores · Perdedores vs perdedores definidos.'
-                                      : 'Se definirán 2 cruces después de completar los partidos iniciales.'}
+                                      : 'A-03 y A-04 están reservados y completarán sus participantes al terminar A-01/A-02.'}
                                   </div>
                                 ) : null}
                                 {renderGroupOperationalNotices(group.id)}
@@ -5104,8 +5175,12 @@ export default function ClubTournamentDetailPage() {
                         <span className="club-kicker">Playoff</span>
                         <h2>Todavía no se generó el playoff</h2>
                         <p>{canGenerateOpenPlayoff
-                          ? 'Los grupos ya están completos y el torneo está listo para generar la primera ronda del playoff.'
-                          : 'Completá la fase de grupos para habilitar la generación del playoff y ver los cruces acá.'}</p>
+                          ? isDirectKnockout
+                            ? 'Los seeds congelados están listos para generar el cuadro directo.'
+                            : 'Los grupos ya están completos y el torneo está listo para generar la primera ronda del playoff.'
+                          : isDirectKnockout
+                            ? 'Generá el snapshot de seeds para habilitar el cuadro directo.'
+                            : 'Completá la fase de grupos para habilitar la generación del playoff y ver los cruces acá.'}</p>
                         {canGenerateOpenPlayoff ? (
                           <button
                             type="button"
@@ -5113,7 +5188,7 @@ export default function ClubTournamentDetailPage() {
                             disabled={!canGenerateOpenPlayoff || generatingOpenPlayoff}
                             onClick={requestGenerateOpenPlayoff}
                           >
-                            {generatingOpenPlayoff ? 'Generando...' : 'Generar playoff OPEN'}
+                            {generatingOpenPlayoff ? 'Generando...' : isDirectKnockout ? 'Generar cuadro' : 'Generar playoff OPEN'}
                           </button>
                         ) : null}
                       </section>
@@ -6260,18 +6335,24 @@ export default function ClubTournamentDetailPage() {
         .club-metric span { color: #64748b; font-size: 11px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-metric strong { color: #17253f; font-size: 17px; font-weight: 950; line-height: 1.1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-metric--deadline strong { overflow:visible; text-overflow:clip; white-space:normal; }
+        .club-formatBadge { display:inline-flex; align-items:center; max-width:100%; padding:4px 8px; border:1px solid var(--club-admin-accent); border-radius:999px; background:var(--club-admin-soft); overflow-wrap:anywhere; font-size:11px; line-height:1.3; }
         .club-metricButton { cursor: pointer; text-align: left; transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
         .club-metricButton:hover { background: color-mix(in srgb, var(--club-admin-accent) 7%, white); border-color: color-mix(in srgb, var(--club-admin-accent) 34%, transparent); box-shadow: 0 10px 24px var(--club-admin-glow); transform: translateY(-1px); }
         .club-metricButton strong { font-size: 15px; }
-        .club-championCard { align-items: stretch; background: linear-gradient(135deg, #f0fdf4 0%, #ecfeff 100%); border-color: rgba(22,163,74,.22); display: grid; gap: 10px; grid-template-columns: minmax(0, 1.45fr) minmax(220px, .55fr); margin-top: 12px; position: relative; }
-        .club-championCard::before { background: linear-gradient(180deg, #16a34a, var(--club-admin-accent)); border-radius: 999px; bottom: 12px; content: ''; left: 10px; position: absolute; top: 12px; width: 5px; }
-        .club-podiumMain { align-items: center; display: grid; gap: 12px; grid-template-columns: auto minmax(0, 1fr); min-width: 0; padding-left: 12px; }
-        .club-podiumBadge { align-items: center; background: #16a34a; border: 1px solid rgba(20,83,45,.12); border-radius: 14px; box-shadow: 0 10px 22px rgba(22,163,74,.14); color: #fff; display: inline-flex; font-size: 20px; font-weight: 950; height: 54px; justify-content: center; width: 54px; }
-        .club-championMain { min-width: 0; }
-        .club-championMain h2 { color: #14532d; font-size: 24px; line-height: 1.08; margin: 4px 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .club-runnerUp { align-self: center; background: rgba(255,255,255,.82); border: 1px solid rgba(15,23,42,.08); border-radius: 14px; box-shadow: 0 10px 24px rgba(15,23,42,.04); display: grid; gap: 4px; min-width: 0; padding: 12px; }
-        .club-runnerUp span { color: #64748b; font-size: 11px; font-weight: 950; text-transform: uppercase; }
-        .club-runnerUp strong { color: #17253f; font-size: 16px; font-weight: 950; line-height: 1.12; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .club-championCard { background:linear-gradient(135deg,#f6fcf1,#f5fbfc); border-color:rgba(22,163,74,.2); display:grid; gap:0; margin-top:8px; padding:10px 12px; }
+        .club-championCard>.club-kicker { margin-bottom:4px; }
+        .club-podiumRow { align-items:start; border-top:1px solid rgba(15,23,42,.08); display:grid; gap:8px; grid-template-columns:24px minmax(0,1fr); padding:7px 0; }
+        .club-podiumRow>b { color:#64748b; font-size:13px; line-height:1.25; }
+        .club-podiumRow>div { display:grid; gap:1px; min-width:0; }
+        .club-podiumRow span { color:#64748b; font-size:9px; font-weight:950; letter-spacing:.05em; text-transform:uppercase; }
+        .club-podiumRow strong { color:#17253f; display:-webkit-box; font-size:14px; font-weight:950; line-height:1.22; overflow:hidden; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+        .club-podiumRow small { color:#4f637a; font-size:11px; font-weight:800; }
+        .club-podiumRow--champion>b,.club-podiumRow--champion strong { color:#14532d; }
+        .club-finalResultAction { align-items:center; border-top:1px solid rgba(15,23,42,.09); display:flex; gap:10px; justify-content:space-between; padding-top:8px; }
+        .club-finalResultAction>div { display:grid; gap:1px; }
+        .club-finalResultAction strong { color:#17304e; font-size:11px; font-weight:950; }
+        .club-finalResultAction small { color:#64748b; font-size:10px; }
+        .club-finalResultAction .club-nextAction { flex:none; margin:0; min-height:36px; }
         .club-actionsCard { align-items: center; background: linear-gradient(135deg, #fff, #f8fafc); display: flex; gap: 12px; justify-content: space-between; margin-top: 12px; }
         .club-actionGrid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .club-tabsShell { margin: 14px -22px 0; }
@@ -6445,6 +6526,15 @@ export default function ClubTournamentDetailPage() {
         .club-matchPairCell { display: grid; gap: 2px; justify-items: center; text-align: center; }
         .club-groupMatchCode { color: #64748b; font-size: 9px; font-weight: 900; line-height: 1.1; min-height: 10px; text-transform: uppercase; }
         .club-groupFixtureHint { color: #0f766e; font-size: 11px; font-weight: 800; line-height: 1.2; margin-top: 1px; }
+        .club-groupDefinitionPending { background:#fff8e7; border:1px solid #ead299; border-radius:8px; color:#854d0e; font-size:11px; font-weight:800; margin:6px; padding:6px 8px; }
+        .club-groupMiniDraw { background:#f8fbfd; border:1px solid rgba(6,182,212,.22); border-radius:12px; display:grid; gap:8px; padding:9px; }
+        .club-groupMiniDraw>strong { color:#078095; font-size:9px; letter-spacing:.08em; }
+        .club-groupMiniDraw>div { display:grid; gap:5px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .club-groupMiniDraw>div>span { color:#64748b; font-size:10px; font-weight:900; grid-column:1/-1; }
+        .club-groupMiniDraw article { background:#fff; border:1px solid rgba(15,23,42,.09); border-radius:9px; min-width:0; padding:7px; }
+        .club-groupMiniDraw article b { color:#061b3a; font-size:11px; }
+        .club-groupMiniDraw article p { color:#334155; display:grid; font-size:10px; font-weight:750; gap:1px; line-height:1.25; margin:3px 0 0; overflow-wrap:anywhere; }
+        .club-groupMiniDraw article em { color:#078095; font-size:8px; font-style:normal; font-weight:950; text-transform:uppercase; }
         .club-mobileMatchScoreGrid { display: none; }
         .club-matchTeams { align-items: center; display: grid; gap: 2px; grid-template-rows: 10px 24px 1px 24px; justify-items: center; min-width: 0; width: 100%; }
         .club-matchTeams::before { content: ''; display: block; height: 10px; }
@@ -6545,6 +6635,7 @@ export default function ClubTournamentDetailPage() {
         .club-seededTeamItem { align-items: center; background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 11px; display: grid; gap: 8px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; padding: 8px 9px; }
         .club-seededTeamPosition { align-items: center; background: color-mix(in srgb, var(--club-admin-accent) 13%, white); border-radius: 8px; color: #061b3a; display: inline-flex; font-size: 12px; font-weight: 950; justify-content: center; min-height: 30px; min-width: 34px; padding: 0 6px; }
         .club-seededTeamItem strong { color: #17253f; font-size: 13px; font-weight: 900; line-height: 1.25; min-width: 0; overflow-wrap: anywhere; }
+        .club-seededTeamItem small { display: block; color: #64748b; font-size: 11px; line-height: 1.4; margin-top: 4px; overflow-wrap: anywhere; }
         .club-nextSeedStep { align-items: center; background: color-mix(in srgb, var(--club-admin-accent) 7%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 18%, transparent); border-radius: 12px; display: flex; gap: 10px; justify-content: space-between; margin-top: 10px; min-width: 0; padding: 9px 10px; }
         .club-nextSeedStep > div { display: grid; gap: 2px; min-width: 0; }
         .club-nextSeedStep span { color: var(--club-admin-accent); font-size: 10px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
@@ -6721,7 +6812,6 @@ export default function ClubTournamentDetailPage() {
         .club-publishBtn:hover:not(:disabled) { box-shadow: 0 16px 34px var(--club-admin-glow); }
         .club-publishBtn:disabled { cursor: not-allowed; opacity: .62; transform: none; }
         .club-message { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 24%, transparent); border-radius: 12px; color: #061b3a; font-weight: 850; padding: 10px 12px; }
-        .club-actionMessage { background: #ecfdf3; border: 1px solid rgba(22,163,74,.22); border-radius: 12px; color: #166534; font-size: 13px; font-weight: 900; margin-bottom: 12px; padding: 10px 12px; }
         .club-modalBackdrop { align-items: center; background: rgba(15,23,42,.42); display: flex; inset: 0; justify-content: center; padding: 18px; position: fixed; z-index: 80; }
         .club-pointsModal { background: #fff; border: 1px solid rgba(15,23,42,.10); border-radius: 16px; box-shadow: 0 24px 70px rgba(15,23,42,.24); display: grid; gap: 14px; max-width: 520px; min-width: 0; padding: 16px; width: min(520px, 100%); }
         .club-pointsHead { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; min-width: 0; }
@@ -6825,8 +6915,6 @@ export default function ClubTournamentDetailPage() {
         .club-flyerModalBody { min-width: 0; }
         @media (max-width: 900px) {
           .club-detailHero, .club-actionsCard { display: grid; }
-          .club-championCard { grid-template-columns: 1fr; }
-          .club-runnerUp { width: 100%; }
           .club-detailBadges, .club-actionGrid { align-items: flex-start; justify-content: flex-start; }
           .club-stepper { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .club-summaryGrid { grid-template-columns: 1fr; }
@@ -6964,6 +7052,9 @@ export default function ClubTournamentDetailPage() {
           .club-nextCard { border-radius:12px; padding:10px 11px; }
           .club-nextCard h2 { font-size:15px; }
           .club-nextAction { min-height:38px; width:100%; }
+          .club-championCard { border-radius:12px; padding:8px; }
+          .club-finalResultAction { align-items:stretch; flex-direction:column; gap:6px; }
+          .club-finalResultAction .club-nextAction { width:100%; }
           .club-sportConfigCard { border-radius:12px; padding:8px 10px; }
           .club-sportConfigGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }
           .club-sportConfigItem,.club-sportConfigItem:nth-child(even) { border-bottom:1px solid rgba(15,23,42,.07); padding:7px 8px 7px 0; }

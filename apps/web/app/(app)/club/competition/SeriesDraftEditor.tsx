@@ -1,5 +1,7 @@
 'use client'
 
+import { toast } from '@/lib/toastStore'
+
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Check, ChevronDown, Circle, Plus, RotateCcw, Trash2, TriangleAlert } from 'lucide-react'
@@ -72,11 +74,11 @@ export default function SeriesDraftEditor({ clubId, detail, request, reload }: P
 
   async function mutate(key: string, action: () => Promise<unknown>, success: string) {
     setBusy(key); setNotice(null)
-    try { await action(); setNotice({ kind: 'ok', text: success }); await reload() }
+    try { await action(); toast.success(success); await reload() }
     catch (cause) {
       const error = cause as Error & { status?: number; setupRequired?: boolean }
-      if (error.status === 412) { setNotice({ kind: 'error', text: 'El circuito cambió en otra sesión. Actualizamos los datos; revisá y volvé a guardar.' }); await reload() }
-      else setNotice({ kind: 'error', text: error.setupRequired ? 'Falta habilitar la estructura competitiva del club.' : error.message })
+      if (error.status === 412) { toast.warning('El circuito cambió en otra sesión. Actualizamos los datos; revisá y volvé a guardar.'); await reload() }
+      else toast.error(error.setupRequired ? 'Falta habilitar la estructura competitiva del club.' : error.message)
     } finally { setBusy('') }
   }
 

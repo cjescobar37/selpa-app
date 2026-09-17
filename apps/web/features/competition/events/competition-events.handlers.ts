@@ -4,6 +4,10 @@ import { eventErrorResponse,readEventJson } from './competition-events.http'
 import { eventRpc,getEventDetail,getEventDivisionCompletionPreflight,listEvents } from './competition-events.repository'
 import { toCompetitionEventAdminDto } from './competition-events.mapper'
 import { isUuid,parseIdempotencyKey,parseIfMatch,record,text,validateDivisionConfig,validateEventPatch } from './competition-events.validation'
+import { getConfiguredClubTimezone } from './competition-events.timezone'
+import { resolveCompetitionTimezone } from '@/lib/competitionTimezone'
+import { readTournamentOperationalConfiguration } from '@/lib/tournamentOperationalConfigurationServer'
+import { validateLinkedEventFieldChanges } from '@/lib/tournamentOperationalConfiguration'
 
 type Base={clubId:string;seriesId:string;eventId?:string;eventDivisionId?:string}
 const invalid=()=>NextResponse.json({error:'Identificador inválido.'},{status:400})
@@ -18,12 +22,36 @@ async function json(req:NextRequest){const r=await readEventJson(req);return 'er
 function concurrency(req:NextRequest,lifecycle=false){const revision=parseIfMatch(req.headers.get('if-match'));const key=lifecycle?parseIdempotencyKey(req.headers.get('idempotency-key')):null;return revision&&(!lifecycle||key)?{revision,key}:{error:NextResponse.json({error:lifecycle?'If-Match e Idempotency-Key son obligatorios.':'If-Match es obligatorio.'},{status:400})}}
 
 export async function eventsCollection(req:NextRequest,p:Base){const a=await auth(req,p,req.method==='GET'?'read':'write');if(a.error||!a.client)return a.error
-  try{if(req.method==='GET')return NextResponse.json({events:await listEvents(a.client,p.clubId,p.seriesId)});const b=await json(req);if('error'in b)return b.error;const name=text(b.value.name);if(!name)return NextResponse.json({error:'El nombre es obligatorio.'},{status:400});const event=await eventRpc<Record<string,unknown>>(a.client,'create_competition_series_event',{p_club_id:p.clubId,p_series_id:p.seriesId,p_name:name});return NextResponse.json({ok:true,event,revision:event.revision},{status:201})}catch(e){return eventErrorResponse(e)}}
+  try{if(req.method==='GET')return NextResponse.json({events:await listEvents(a.client,p.clubId,p.seriesId)});const b=await json(req);if('error'in b)return b.error;const name=text(b.value.name);if(!name)return NextResponse.json({error:'El nombre es obligatorio.'},{status:400});const timezone=resolveCompetitionTimezone({clubTimezone:await getConfiguredClubTimezone(a.client,p.clubId),deviceTimezone:b.value.timezone});if(!timezone)return NextResponse.json({error:'Elegí una zona horaria válida para crear la fecha.'},{status:400});const event=await eventRpc<Record<string,unknown>>(a.client,'create_competition_series_event_with_timezone',{p_club_id:p.clubId,p_series_id:p.seriesId,p_name:name,p_timezone:timezone});return NextResponse.json({ok:true,event,revision:event.revision},{status:201})}catch(e){return eventErrorResponse(e)}}
 export async function eventDetail(req:NextRequest,p:Base){const a=await auth(req,p,req.method==='GET'?'read':'write');if(a.error||!a.client||!p.eventId)return a.error??invalid()
-  try{if(req.method==='GET')return NextResponse.json(toCompetitionEventAdminDto(await getEventDetail(a.client,p.clubId,p.eventId),a.role,a.platform));const c=concurrency(req);if('error'in c)return c.error;const b=await json(req);if('error'in b)return b.error;const config=validateEventPatch(b.value);if(!config)return NextResponse.json({error:'Configuración inválida.'},{status:400});await eventRpc(a.client,'update_competition_series_event_draft',{p_club_id:p.clubId,p_event_id:p.eventId,p_revision:c.revision,p_config:config});return NextResponse.json(toCompetitionEventAdminDto(await getEventDetail(a.client,p.clubId,p.eventId),a.role,a.platform))}catch(e){return eventErrorResponse(e)}}
+  try{
+    if(req.method==='GET')return NextResponse.json(toCompetitionEventAdminDto(await getEventDetail(a.client,p.clubId,p.eventId),a.role,a.platform))
+    const c=concurrency(req);if('error'in c)return c.error
+    const b=await json(req);if('error'in b)return b.error
+    const config=validateEventPatch(b.value);if(!config)return NextResponse.json({error:'Configuración inválida.'},{status:400})
+    const current=await getEventDetail(a.client,p.clubId,p.eventId)
+    for(const division of current.divisions.filter(item=>item.is_active)){
+      const tournamentId=division.active_tournament_link?.tournament_id
+      if(!tournamentId)continue
+      const tournament=await readTournamentOperationalConfiguration(p.clubId,String(tournamentId))
+      if(!tournament)return NextResponse.json({error:'No pudimos verificar el torneo vinculado.'},{status:409})
+      const blocked=validateLinkedEventFieldChanges(current.event as unknown as Record<string,unknown>,config,tournament.capabilities)
+      if(blocked)return NextResponse.json({error:blocked,code:'CONFIGURATION_FROZEN'},{status:409})
+    }
+    await eventRpc(a.client,'update_competition_series_event_draft',{p_club_id:p.clubId,p_event_id:p.eventId,p_revision:c.revision,p_config:config})
+    return NextResponse.json(toCompetitionEventAdminDto(await getEventDetail(a.client,p.clubId,p.eventId),a.role,a.platform))
+  }catch(e){return eventErrorResponse(e)}}
 export async function divisionsCollection(req:NextRequest,p:Base){const a=await auth(req,p,'write');if(a.error||!a.client||!p.eventId)return a.error??invalid();const c=concurrency(req);if('error'in c)return c.error;const b=await json(req);if('error'in b)return b.error;if(!isUuid(b.value.series_division_id))return invalid();try{await eventRpc(a.client,'add_competition_series_event_division',{p_club_id:p.clubId,p_event_id:p.eventId,p_series_division_id:b.value.series_division_id,p_sort_order:Number(b.value.sort_order??0),p_event_revision:c.revision});return NextResponse.json(toCompetitionEventAdminDto(await getEventDetail(a.client,p.clubId,p.eventId),a.role,a.platform),{status:201})}catch(e){return eventErrorResponse(e)}}
 export async function divisionMutation(req:NextRequest,p:Base,action:'CONFIGURE'|'REMOVE'|'RESTORE'|'REFRESH_RULE'){const a=await auth(req,p,'write');if(a.error||!a.client||!p.eventId||!p.eventDivisionId)return a.error??invalid();const c=concurrency(req);if('error'in c)return c.error;const b=await json(req);if('error'in b)return b.error
-  try{if(action==='CONFIGURE'){const v=validateDivisionConfig(b.value);if(!v)return NextResponse.json({error:'Configuración inválida.'},{status:400});await eventRpc(a.client,'configure_competition_series_event_division',{p_club_id:p.clubId,p_event_id:p.eventId,p_division_id:p.eventDivisionId,p_event_revision:c.revision,p_scoring_mode:v.scoring_mode,p_event_tier_id:v.event_tier_id??null,p_scheme_override_id:v.points_scheme_override_id??null,p_multiplier_override:v.points_multiplier_override??null})}
+  try{
+    const event=await getEventDetail(a.client,p.clubId,p.eventId)
+    const division=event.divisions.find(item=>item.id===p.eventDivisionId)
+    const tournamentId=division?.active_tournament_link?.tournament_id
+    if(tournamentId){
+      const configuration=await readTournamentOperationalConfiguration(p.clubId,String(tournamentId))
+      if(!configuration?.capabilities.structure.editable)return NextResponse.json({error:configuration?.capabilities.structure.reason??'No pudimos verificar el torneo vinculado.',code:'CONFIGURATION_FROZEN'},{status:409})
+    }
+    if(action==='CONFIGURE'){const v=validateDivisionConfig(b.value);if(!v)return NextResponse.json({error:'Configuración inválida.'},{status:400});await eventRpc(a.client,'configure_competition_series_event_division',{p_club_id:p.clubId,p_event_id:p.eventId,p_division_id:p.eventDivisionId,p_event_revision:c.revision,p_scoring_mode:v.scoring_mode,p_event_tier_id:v.event_tier_id??null,p_scheme_override_id:v.points_scheme_override_id??null,p_multiplier_override:v.points_multiplier_override??null})}
     else if(action==='REFRESH_RULE')await eventRpc(a.client,'refresh_competition_series_event_division_rule',{p_club_id:p.clubId,p_event_id:p.eventId,p_division_id:p.eventDivisionId,p_event_revision:c.revision})
     else await eventRpc(a.client,'set_competition_series_event_division_active',{p_club_id:p.clubId,p_event_id:p.eventId,p_division_id:p.eventDivisionId,p_event_revision:c.revision,p_active:action==='RESTORE',p_reason:text(b.value.reason)||null})
     return NextResponse.json(toCompetitionEventAdminDto(await getEventDetail(a.client,p.clubId,p.eventId),a.role,a.platform))}catch(e){return eventErrorResponse(e)}}
@@ -34,5 +62,12 @@ export async function lifecycle(req:NextRequest,p:Base,operation:string,division
   await eventRpc(a.client,'transition_competition_series_event',{p_club_id:p.clubId,p_event_id:p.eventId,p_revision:c.revision,p_operation:operation,p_key:c.key,p_payload:payload});return NextResponse.json(toCompetitionEventAdminDto(await getEventDetail(a.client,p.clubId,p.eventId),a.role,a.platform))
 }catch(e){return eventErrorResponse(e)}}
 export async function tournamentLink(req:NextRequest,p:Base){const a=await auth(req,p,'write');if(a.error||!a.client||!p.eventId||!p.eventDivisionId)return a.error??invalid();const c=concurrency(req,true);if('error'in c)return c.error;const b=await json(req);if('error'in b)return b.error
-  try{if(req.method==='DELETE')await eventRpc(a.client,'unlink_competition_series_event_tournament',{p_club_id:p.clubId,p_event_id:p.eventId,p_division_id:p.eventDivisionId,p_event_revision:c.revision,p_key:c.key,p_reason:text(b.value.reason)});else{if(!isUuid(b.value.tournament_id))return invalid();await eventRpc(a.client,'link_competition_series_event_tournament',{p_club_id:p.clubId,p_event_id:p.eventId,p_division_id:p.eventDivisionId,p_tournament_id:b.value.tournament_id,p_event_revision:c.revision,p_key:c.key,p_replace:req.method==='PATCH',p_reason:text(b.value.reason)||null})}return NextResponse.json(toCompetitionEventAdminDto(await getEventDetail(a.client,p.clubId,p.eventId),a.role,a.platform))}catch(e){return eventErrorResponse(e)}}
+  try{
+    const current=await getEventDetail(a.client,p.clubId,p.eventId)
+    const tournamentId=current.divisions.find(division=>division.id===p.eventDivisionId)?.active_tournament_link?.tournament_id
+    if(tournamentId){
+      const configuration=await readTournamentOperationalConfiguration(p.clubId,String(tournamentId))
+      if(!configuration?.capabilities.structure.editable)return NextResponse.json({error:configuration?.capabilities.structure.reason??'No pudimos verificar el torneo vinculado.',code:'CONFIGURATION_FROZEN'},{status:409})
+    }
+    if(req.method==='DELETE')await eventRpc(a.client,'unlink_competition_series_event_tournament',{p_club_id:p.clubId,p_event_id:p.eventId,p_division_id:p.eventDivisionId,p_event_revision:c.revision,p_key:c.key,p_reason:text(b.value.reason)});else{if(!isUuid(b.value.tournament_id))return invalid();await eventRpc(a.client,'link_competition_series_event_tournament',{p_club_id:p.clubId,p_event_id:p.eventId,p_division_id:p.eventDivisionId,p_tournament_id:b.value.tournament_id,p_event_revision:c.revision,p_key:c.key,p_replace:req.method==='PATCH',p_reason:text(b.value.reason)||null})}return NextResponse.json(toCompetitionEventAdminDto(await getEventDetail(a.client,p.clubId,p.eventId),a.role,a.platform))}catch(e){return eventErrorResponse(e)}}
 export async function eventReadSubresource(req:NextRequest,p:Base,kind:'completeness'|'history'){const a=await auth(req,p,'read');if(a.error||!a.client||!p.eventId)return a.error??invalid();try{if(kind==='completeness')return NextResponse.json(await eventRpc(a.client,'get_competition_series_event_completeness',{p_club_id:p.clubId,p_event_id:p.eventId}));const d=await getEventDetail(a.client,p.clubId,p.eventId);return NextResponse.json({tournament_links:d.divisions.flatMap((x)=>x.link_history),schedule_history:d.schedule_history})}catch(e){return eventErrorResponse(e)}}

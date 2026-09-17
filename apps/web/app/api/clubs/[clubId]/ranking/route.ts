@@ -4,6 +4,8 @@ import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { withRankingPositions } from '@/lib/ranking'
 import { getCompetitionRanking, getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
 import { mapCompetitionRankingToLegacyContract } from '@/features/competition/ranking/competition-ranking.mapper'
+import { listEvents } from '@/features/competition/events/competition-events.repository'
+import { deriveCompetitionEventOperationalState, selectCompetitionFocusEvent } from '@/lib/competitionTournamentState'
 
 type PlayerRow = {
   id: string
@@ -163,6 +165,25 @@ async function isApprovedClubPlayer(userId: string, clubId: string) {
   return Boolean(data?.id)
 }
 
+async function getRankingPipeline(clubId: string) {
+  const { data, error } = await supabaseAdmin.from('competition_series')
+    .select('id,name,status,created_at').eq('club_id', clubId).in('status', ['SCHEDULED', 'ACTIVE', 'CLOSED']).order('created_at')
+  if (error) throw new Error('No pude leer el estado de publicación del ranking.')
+  const series = (data ?? []) as Array<{ id: string; name: string; status: string; created_at: string }>
+  const eventGroups = await Promise.all(series.map(async (item) => ({ series: item, events: await listEvents(supabaseAdmin, clubId, item.id) })))
+  const published = eventGroups.flatMap((group) => group.events).some((event) => deriveCompetitionEventOperationalState(event).key === 'SETTLED')
+  const pendingGroups = eventGroups.map((group) => ({ ...group, event: selectCompetitionFocusEvent(group.events) })).filter((group) => group.event)
+  const focus = pendingGroups.find((group) => deriveCompetitionEventOperationalState(group.event!).key !== 'SETTLED') ?? pendingGroups.at(-1) ?? null
+  const operational = focus?.event ? deriveCompetitionEventOperationalState(focus.event) : null
+  return {
+    status: published ? 'PUBLISHED' as const : focus ? 'PENDING' as const : 'EMPTY' as const,
+    hasPublishedSettlement: published,
+    eventName: focus?.event?.name ?? null,
+    eventStatus: operational?.key ?? null,
+    message: published ? null : focus?.event ? `${focus.event.name} está ${operational?.pointsLabel.toLocaleLowerCase('es-AR') ?? 'pendiente'}.` : 'Todavía no hay fechas liquidadas.',
+  }
+}
+
 export async function GET(req: NextRequest, context: { params: Promise<{ clubId: string }> }) {
   try {
     const user = await getTokenUser(req)
@@ -182,6 +203,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     }
 
     const warnings: string[] = []
+    const pipeline = await getRankingPipeline(clubId)
     const rankingEngineSource = getRankingEngineSource()
 
     const { data: playersData, error: playersError } = await supabaseAdmin
@@ -500,6 +522,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         pairSource: rankingEngineSource === 'competition' ? 'competition_pair_ranking_projection' : 'player_active_partnerships ACTIVE + club_players.ranking_points',
         generatedAt: new Date().toISOString(),
         warnings,
+        pipeline,
       },
       individual: rankedIndividual,
       pairs: rankedPairs,
