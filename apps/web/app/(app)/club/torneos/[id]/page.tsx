@@ -3986,16 +3986,41 @@ export default function ClubTournamentDetailPage() {
   function renderFourTeamGroupDraw(group:TournamentGroup,matches:TournamentMatch[]){
     if(group.size!==4)return null
     const ordered=[...matches].sort((a,b)=>(a.group_match_number??a.match_order)-(b.group_match_number??b.match_order))
-    const label=(match:TournamentMatch,side:1|2)=>{
+    const participant=(match:TournamentMatch|undefined,side:1|2,fallback:string)=>{
+      if(!match)return {name:fallback,reference:fallback}
       const teamId=side===1?match.team1_id:match.team2_id
       const teamName=side===1?match.team1_name:match.team2_name
-      if(teamId)return teamName??teamNameById(group,teamId)
+      if(teamId)return {name:teamName??teamNameById(group,teamId),reference:fallback}
       const sourceId=side===1?match.team1_source_match_id:match.team2_source_match_id
       const outcome=side===1?match.team1_source_outcome:match.team2_source_outcome
       const source=ordered.find(item=>item.id===sourceId)
-      return source?`${outcome==='LOSER'?'Perdedor':'Ganador'} ${getOpenGroupMatchDisplayCode(group.order,source.group_match_number??1)}`:'Participante pendiente'
+      const reference=source?`${outcome==='LOSER'?'Perdedor':'Ganador'} P${source.group_match_number??1}`:fallback
+      return {name:reference,reference}
     }
-    return <section className="club-groupMiniDraw" aria-label={`Cruces del Grupo ${group.name}`}><strong>CRUCES DEL GRUPO</strong>{[['Iniciales',[1,2]],['Definición',[3,4]]].map(([title,numbers])=><div key={String(title)}><span>{String(title)}</span>{(numbers as number[]).map(number=>{const match=ordered.find(item=>(item.group_match_number??0)===number);return match?<article key={match.id}><b>{getOpenGroupMatchDisplayCode(group.order,number)}</b><p>{label(match,1)}<em>vs</em>{label(match,2)}</p></article>:<article key={number}><b>{getOpenGroupMatchDisplayCode(group.order,number)}</b><p>Por preparar</p></article>})}</div>)}</section>
+    const references:Record<number,[string,string]>={3:['Ganador P1','Ganador P2'],4:['Perdedor P1','Perdedor P2']}
+    return (
+      <section className="club-groupMiniDraw" aria-label={`Partidos del Grupo ${group.name}`}>
+        <strong>PARTIDOS DEL GRUPO</strong>
+        <div className="club-groupMiniRows">
+          {[1,2,3,4].map(number=>{
+            const match=ordered.find(item=>(item.group_match_number??0)===number)
+            const fallback=references[number]
+            const left=participant(match,1,fallback?.[0]??'Equipo pendiente')
+            const right=participant(match,2,fallback?.[1]??'Equipo pendiente')
+            const played=match&&String(match.status??'').toUpperCase()==='PLAYED'
+            return (
+              <article key={match?.id??number} className="club-groupMiniRow">
+                <b>P{number}</b>
+                <div className="club-groupMiniTeam"><span>{left.name}</span>{fallback&&left.name!==left.reference?<small>{fallback[0]}</small>:null}</div>
+                <em>vs</em>
+                <div className="club-groupMiniTeam club-groupMiniTeam--right"><span>{right.name}</span>{fallback&&right.name!==right.reference?<small>{fallback[1]}</small>:null}</div>
+                <small className={`club-groupMiniStatus ${played?'club-groupMiniStatus--played':''}`}>{played?formatScore(match.score):match?'Pendiente':'Por definir'}</small>
+              </article>
+            )
+          })}
+        </div>
+      </section>
+    )
   }
 
   function openPairs(view: TournamentPairsView) {
@@ -5184,7 +5209,6 @@ export default function ClubTournamentDetailPage() {
                             const standingBlock = standingsByGroupId[group.id]
                             const matches = groupMatchesByGroup[group.id] ?? []
                             const projectedMatches = group.size === 4 ? 4 : group.size === 3 ? 3 : matches.length
-                            const secondRoundDefined = group.size === 4 && matches.filter((match) => Number(match.round) === 2).length === 2
                             const sectionKey = group.id
                             const isExpanded = expandedGroupMatches.includes(group.id)
 
@@ -5206,13 +5230,6 @@ export default function ClubTournamentDetailPage() {
 
                                 {renderTournamentGroupStandings(group, standingBlock)}
                                 {renderFourTeamGroupDraw(group, matches)}
-                                {group.size === 4 ? (
-                                  <div className="club-groupFixtureHint">
-                                    {secondRoundDefined
-                                      ? 'Ganadores vs ganadores · Perdedores vs perdedores definidos.'
-                                      : 'A-03 y A-04 están reservados y completarán sus participantes al terminar A-01/A-02.'}
-                                  </div>
-                                ) : null}
                                 {renderGroupOperationalNotices(group.id)}
 
                                 {!seedMeta.hasGroupMatches || matches.length === 0 ? (
@@ -6609,7 +6626,6 @@ export default function ClubTournamentDetailPage() {
         .club-matchInfoCell span { color: #64748b; font-size: 11px; font-weight: 850; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-matchPairCell { display: grid; gap: 2px; justify-items: center; text-align: center; }
         .club-groupMatchCode { color: #64748b; font-size: 9px; font-weight: 900; line-height: 1.1; min-height: 10px; text-transform: uppercase; }
-        .club-groupFixtureHint { color: #0f766e; font-size: 11px; font-weight: 800; line-height: 1.2; margin-top: 1px; }
         .club-groupDefinitionPending { background:#fff8e7; border:1px solid #ead299; border-radius:8px; color:#854d0e; font-size:11px; font-weight:800; margin:6px; padding:6px 8px; }
         .club-groupQualificationRule { color:#475569; font-size:11px; font-weight:850; margin:6px 8px 0; }
         .club-groupStandingTeam .club-groupStandingEliminated { background:#fee2e2; color:#991b1b; }
@@ -6631,14 +6647,19 @@ export default function ClubTournamentDetailPage() {
         .club-playoffPreviewSide--bye strong { color:#166534; }
         .club-playoffPreviewPair>p { background:#fff7df; border-radius:6px; color:#854d0e; font-size:9px; font-weight:800; margin:0; padding:4px 5px; }
         .club-playoffPreviewPending { border-top:1px solid rgba(15,23,42,.07); color:#854d0e; font-size:12px; font-weight:850; margin:0; padding:9px 10px; }
-        .club-groupMiniDraw { background:#f8fbfd; border:1px solid rgba(6,182,212,.22); border-radius:12px; display:grid; gap:8px; padding:9px; }
-        .club-groupMiniDraw>strong { color:#078095; font-size:9px; letter-spacing:.08em; }
-        .club-groupMiniDraw>div { display:grid; gap:5px; grid-template-columns:repeat(2,minmax(0,1fr)); }
-        .club-groupMiniDraw>div>span { color:#64748b; font-size:10px; font-weight:900; grid-column:1/-1; }
-        .club-groupMiniDraw article { background:#fff; border:1px solid rgba(15,23,42,.09); border-radius:9px; min-width:0; padding:7px; }
-        .club-groupMiniDraw article b { color:#061b3a; font-size:11px; }
-        .club-groupMiniDraw article p { color:#334155; display:grid; font-size:10px; font-weight:750; gap:1px; line-height:1.25; margin:3px 0 0; overflow-wrap:anywhere; }
-        .club-groupMiniDraw article em { color:#078095; font-size:8px; font-style:normal; font-weight:950; text-transform:uppercase; }
+        .club-groupMiniDraw { border-top:1px solid rgba(15,23,42,.07); display:grid; gap:4px; padding:7px 0 0; }
+        .club-groupMiniDraw>strong { color:#64748b; font-size:9px; font-weight:900; letter-spacing:.08em; padding:0 2px; }
+        .club-groupMiniRows { display:grid; }
+        .club-groupMiniRow { align-items:center; border-top:1px solid rgba(15,23,42,.055); display:grid; gap:5px; grid-template-columns:24px minmax(0,1fr) 18px minmax(0,1fr) auto; min-width:0; padding:6px 2px; }
+        .club-groupMiniRow:first-child { border-top:0; }
+        .club-groupMiniRow>b { color:#078095; font-size:10px; font-weight:950; }
+        .club-groupMiniRow>em { color:#94a3b8; font-size:9px; font-style:normal; font-weight:900; justify-self:center; text-transform:uppercase; }
+        .club-groupMiniTeam { display:grid; gap:1px; min-width:0; }
+        .club-groupMiniTeam>span { color:#17253f; font-size:11px; font-weight:850; line-height:1.15; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .club-groupMiniTeam>small { color:#94a3b8; font-size:8px; font-weight:800; line-height:1.1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .club-groupMiniTeam--right { text-align:right; }
+        .club-groupMiniStatus { background:#f1f5f9; border-radius:999px; color:#64748b; font-size:8px; font-weight:900; max-width:66px; overflow:hidden; padding:3px 5px; text-overflow:ellipsis; white-space:nowrap; }
+        .club-groupMiniStatus--played { background:#ecfdf3; color:#15803d; }
         .club-mobileMatchScoreGrid { display: none; }
         .club-matchTeams { align-items: center; display: grid; gap: 2px; grid-template-rows: 10px 24px 1px 24px; justify-items: center; min-width: 0; width: 100%; }
         .club-matchTeams::before { content: ''; display: block; height: 10px; }
@@ -7177,7 +7198,6 @@ export default function ClubTournamentDetailPage() {
           .club-groupPlanningActions { display: grid; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); width: 100%; }
           .club-groupPlanningActions > * { min-width: 0; }
           .club-groupPlanningActions .club-secondaryBtn { min-height: 40px; width: 100%; }
-          .club-groupFixtureHint { margin-top: 0; }
           .club-planningMobileLayout { display: grid; gap: 7px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .club-planningSummary { display: contents; }
           .club-planningMetric { border-radius: 10px; gap: 2px; padding: 8px; }
