@@ -28,6 +28,7 @@ import { TournamentPrimaryNav, type TournamentPrimaryTab } from '../_components/
 import { TournamentMilestoneNotice, type TournamentMilestone } from '../_components/TournamentMilestoneNotice'
 import { calculateTournamentGroupStandings, resolveTournamentClassificationRules } from '@/lib/tournamentStandings'
 import { getOpenGroupMatchDisplayCode } from '@/lib/tournamentOpen/groupFixtures'
+import { buildOpenPlayoffPreview, type OpenGeneralGroupStandings } from '@/lib/tournamentOpen/generalEngine'
 import { isValidNormalSet, isValidSuperTiebreak, validateStructuredMatchScore, type ScoreValidationResult, type StructuredMatchScore } from '@/lib/tournamentScore'
 import { buildTournamentOperationalNotices, type TournamentOperationalNoticeScope } from '@/lib/tournamentOperationalNotices'
 import {
@@ -972,6 +973,7 @@ export default function ClubTournamentDetailPage() {
   const [generatingGroupMatches, setGeneratingGroupMatches] = useState(false)
   const [repairingGroupFixture, setRepairingGroupFixture] = useState(false)
   const [generatingOpenPlayoff, setGeneratingOpenPlayoff] = useState(false)
+  const [showOpenPlayoffPreview, setShowOpenPlayoffPreview] = useState(false)
   const [generatingPlayoffFinal, setGeneratingPlayoffFinal] = useState(false)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
   const [confirmingAction, setConfirmingAction] = useState(false)
@@ -1923,12 +1925,54 @@ export default function ClubTournamentDetailPage() {
         team1_id: match.team1_id,
         team2_id: match.team2_id,
         winner_team_id: match.winner_team_id,
-        group_match_number: match.group_match_number,
+        round: match.round,
         score: match.score,
       })),
       classificationRules: resolveTournamentClassificationRules(null, tournamentRules),
     })
   }, [groupMatches, sortedGroups, tournamentId, tournamentRules])
+  const openPlayoffPreviewState = useMemo(() => {
+    if (isDirectKnockout || groupStandings.length === 0) {
+      return { preview: null, pendingMessage: 'Playoff pendiente · Completá la fase de grupos.' }
+    }
+    const unresolvedFourTeamGroup = groupStandings.find((group) => group.group.size === 4 && group.qualifiers.length !== 3)
+    if (unresolvedFourTeamGroup) {
+      return { preview: null, pendingMessage: `Playoff pendiente · Grupo ${unresolvedFourTeamGroup.group.name} todavía no tiene posiciones finales. Completá A-03 y A-04.` }
+    }
+    const hasIncompleteGroup = groupStandings.some((group) => group.group.size === 3 && group.qualifiers.length !== 2)
+    if (hasIncompleteGroup || !groupsComplete) {
+      return { preview: null, pendingMessage: 'Playoff pendiente · Completá la fase de grupos.' }
+    }
+
+    const usesResolvedGroupQuotas = groupStandings.some((group) => group.qualifiers.length !== 2)
+    const groups: OpenGeneralGroupStandings[] = groupStandings.map((group) => ({
+      groupId: group.group.id,
+      groupName: group.group.name,
+      groupOrder: group.group.order ?? null,
+      ...(usesResolvedGroupQuotas ? { qualifierCount: group.qualifiers.length } : {}),
+      standings: group.standings.map((row, index) => ({
+        teamId: row.team_id,
+        groupId: row.group_id,
+        groupName: group.group.name,
+        groupOrder: group.group.order ?? null,
+        groupPosition: index + 1,
+        seed: row.seed,
+        played: row.played,
+        wins: row.wins,
+        points: row.match_points,
+        setDiff: row.set_difference,
+        gameDiff: row.game_difference,
+        gamesFor: row.games_for,
+      })),
+    }))
+
+    try {
+      return { preview: buildOpenPlayoffPreview(groups), pendingMessage: null }
+    } catch {
+      return { preview: null, pendingMessage: 'Playoff pendiente · La clasificación todavía no produce un plan válido.' }
+    }
+  }, [groupStandings, groupsComplete, isDirectKnockout])
+  const canGenerateDefinitiveOpenPlayoff = canGenerateOpenPlayoff && (isDirectKnockout || Boolean(openPlayoffPreviewState.preview))
   const standingsByGroupId = useMemo(
     () =>
       groupStandings.reduce<Record<string, (typeof groupStandings)[number]>>((acc, item) => {
@@ -2654,12 +2698,12 @@ export default function ClubTournamentDetailPage() {
       return <div className="club-inlineNote">Todavía no hay standings calculables.</div>
     }
 
-    const definitionMatches = (groupMatchesByGroup[group.id] ?? []).filter(match => Number(match.group_match_number) === 3 || Number(match.group_match_number) === 4)
-    const definitionPending = group.size === 4 && (definitionMatches.length !== 2 || definitionMatches.some(match => String(match.status).toUpperCase() !== 'PLAYED'))
+    const definitionPending = group.size === 4 && standingBlock.qualifiers.length !== 3
     const qualifierIds = new Set(definitionPending ? [] : standingBlock.qualifiers.map((row) => row.team_id))
 
     return (
       <div className="club-groupStandings" role="table" aria-label={`Standings Grupo ${group.name}`}>
+        <p className="club-groupQualificationRule">{group.size === 4 ? 'Clasifican 3 · 4.º eliminado' : 'Clasifican 2'}</p>
         {definitionPending ? <p className="club-groupDefinitionPending">Definición pendiente · A-03 y A-04 determinan las posiciones finales.</p> : null}
         <div className="club-groupStandingRow club-groupStandingRow--head" role="row">
           <span role="columnheader">#</span>
@@ -2672,13 +2716,14 @@ export default function ClubTournamentDetailPage() {
           <span role="columnheader">DG</span>
         </div>
         {standingBlock.standings.map((row, index) => (
-          <div key={row.team_id} className={`club-groupStandingRow ${qualifierIds.has(row.team_id) ? 'club-groupStandingRow--qualified' : ''}`} role="row">
+          <div key={row.team_id} className={`club-groupStandingRow ${qualifierIds.has(row.team_id) ? 'club-groupStandingRow--qualified' : !definitionPending && group.size === 4 && index === 3 ? 'club-groupStandingRow--eliminated' : ''}`} role="row">
             <span className="club-groupStandingPosition" role="cell">{qualifierIds.has(row.team_id) ? <i aria-hidden="true">✓</i> : null}{index + 1}</span>
             <span className="club-groupStandingTeam" role="cell">
               <span className="club-groupStandingPlayerNames">
                 {splitTeamPlayerNames(teamNameById(group, row.team_id)).map((playerName) => <span key={playerName}>{playerName}</span>)}
               </span>
               {qualifierIds.has(row.team_id) ? <b>Clasifica</b> : null}
+              {!definitionPending && group.size === 4 && index === 3 ? <b className="club-groupStandingEliminated">Eliminado</b> : null}
             </span>
             <span role="cell">{row.played}</span>
             <span role="cell">{row.wins}</span>
@@ -3900,6 +3945,41 @@ export default function ClubTournamentDetailPage() {
     })
   }
 
+  function renderOpenPlayoffPreview() {
+    const preview = openPlayoffPreviewState.preview
+    return (
+      <section className="club-playoffPreview" aria-label="Previsualización del playoff">
+        <button type="button" className="club-playoffPreviewToggle" aria-expanded={showOpenPlayoffPreview} onClick={() => setShowOpenPlayoffPreview((current) => !current)}>
+          <span><small>Próxima fase</small><strong>Previsualizar playoff</strong></span>
+          <b>{preview ? `${preview.totalQualified} clasificados · ${preview.byes} BYEs` : 'Pendiente'}</b>
+        </button>
+        {showOpenPlayoffPreview ? (
+          preview ? (
+            <div className="club-playoffPreviewPairs">
+              {preview.pairs.map((pair) => {
+                const renderSide = (side: typeof pair.left) => side.isBye ? (
+                  <div className="club-playoffPreviewSide club-playoffPreviewSide--bye"><strong>BYE</strong><small>Slot libre</small></div>
+                ) : (
+                  <div className="club-playoffPreviewSide">
+                    <span>#{side.globalSeed} · {side.groupPosition}{side.groupName}</span>
+                    <strong title={teamNameLookup.get(side.teamId ?? '') ?? 'Pareja'}>{teamNameLookup.get(side.teamId ?? '') ?? 'Pareja'}</strong>
+                  </div>
+                )
+                return (
+                  <article key={pair.bracketPairOrder} className="club-playoffPreviewPair">
+                    <small>R16 · Par {pair.bracketPairOrder}</small>
+                    <div>{renderSide(pair.left)}<i>vs</i>{renderSide(pair.right)}</div>
+                    {pair.sameGroupWarning ? <p>{pair.sameGroupWarning}</p> : null}
+                  </article>
+                )
+              })}
+            </div>
+          ) : <p className="club-playoffPreviewPending">{openPlayoffPreviewState.pendingMessage}</p>
+        ) : null}
+      </section>
+    )
+  }
+
   function renderFourTeamGroupDraw(group:TournamentGroup,matches:TournamentMatch[]){
     if(group.size!==4)return null
     const ordered=[...matches].sort((a,b)=>(a.group_match_number??a.match_order)-(b.group_match_number??b.match_order))
@@ -3941,7 +4021,7 @@ export default function ClubTournamentDetailPage() {
     if (showGroupsTab && (!seedMeta.hasGroupMatches || summary.counts.groupMatches.played < summary.counts.groupMatches.total)) {
       return <button type="button" className="club-nextAction" onClick={() => setActiveTab('groups')}>{seedMeta.hasGroupMatches ? 'Completar partidos de grupos →' : 'Preparar partidos de grupos →'}</button>
     }
-    if (canGenerateOpenPlayoff) {
+    if (canGenerateDefinitiveOpenPlayoff) {
       return <button type="button" className="club-nextAction" disabled={generatingOpenPlayoff} onClick={requestGenerateOpenPlayoff}>{generatingOpenPlayoff ? 'Generando...' : 'Generar playoff →'}</button>
     }
     if (showPlayoffTab && playoffMatches.length > 0) {
@@ -4019,7 +4099,7 @@ export default function ClubTournamentDetailPage() {
   }
 
   async function generateOpenPlayoff() {
-    if (!activeClub?.id || !tournamentId || !canGenerateOpenPlayoff) return
+    if (!activeClub?.id || !tournamentId || !canGenerateDefinitiveOpenPlayoff) return
 
     setGeneratingOpenPlayoff(true)
     setMessage('')
@@ -4091,6 +4171,10 @@ export default function ClubTournamentDetailPage() {
   }
 
   function requestGenerateOpenPlayoff() {
+    if (!isDirectKnockout && !openPlayoffPreviewState.preview) {
+      toast.error(openPlayoffPreviewState.pendingMessage ?? 'Completá la fase de grupos antes de generar el playoff.')
+      return
+    }
     requestConfirmation({
       title: isDirectKnockout ? 'Generar cuadro directo' : 'Generar playoff OPEN',
       body: isDirectKnockout
@@ -5043,6 +5127,7 @@ export default function ClubTournamentDetailPage() {
                               </div>
                             </div>
                           </section>
+                          {showPlayoffTab && seedMeta.hasGroups ? renderOpenPlayoffPreview() : null}
                           {groupsComplete && showPlayoffTab ? (
                             <section className="club-nextGroupStep">
                               <div>
@@ -5053,10 +5138,10 @@ export default function ClubTournamentDetailPage() {
                               <button
                                 type="button"
                                 className="club-generateSeedBtn"
-                                disabled={generatingOpenPlayoff}
-                                onClick={canGenerateOpenPlayoff ? requestGenerateOpenPlayoff : () => setActiveTab('playoff')}
+                                disabled={generatingOpenPlayoff || (canGenerateOpenPlayoff && !canGenerateDefinitiveOpenPlayoff)}
+                                onClick={canGenerateDefinitiveOpenPlayoff ? requestGenerateOpenPlayoff : () => setActiveTab('playoff')}
                               >
-                                {generatingOpenPlayoff ? 'Generando...' : canGenerateOpenPlayoff ? 'Generar playoff' : 'Ver playoff'}
+                                {generatingOpenPlayoff ? 'Generando...' : canGenerateDefinitiveOpenPlayoff ? 'Generar playoff' : canGenerateOpenPlayoff ? 'Clasificación pendiente' : 'Ver playoff'}
                               </button>
                             </section>
                           ) : null}
@@ -5174,18 +5259,18 @@ export default function ClubTournamentDetailPage() {
                       <section className="club-placeholderPanel">
                         <span className="club-kicker">Playoff</span>
                         <h2>Todavía no se generó el playoff</h2>
-                        <p>{canGenerateOpenPlayoff
+                        <p>{canGenerateDefinitiveOpenPlayoff
                           ? isDirectKnockout
                             ? 'Los seeds congelados están listos para generar el cuadro directo.'
                             : 'Los grupos ya están completos y el torneo está listo para generar la primera ronda del playoff.'
                           : isDirectKnockout
                             ? 'Generá el snapshot de seeds para habilitar el cuadro directo.'
                             : 'Completá la fase de grupos para habilitar la generación del playoff y ver los cruces acá.'}</p>
-                        {canGenerateOpenPlayoff ? (
+                        {canGenerateDefinitiveOpenPlayoff ? (
                           <button
                             type="button"
                             className="club-generateSeedBtn"
-                            disabled={!canGenerateOpenPlayoff || generatingOpenPlayoff}
+                            disabled={!canGenerateDefinitiveOpenPlayoff || generatingOpenPlayoff}
                             onClick={requestGenerateOpenPlayoff}
                           >
                             {generatingOpenPlayoff ? 'Generando...' : isDirectKnockout ? 'Generar cuadro' : 'Generar playoff OPEN'}
@@ -6505,6 +6590,7 @@ export default function ClubTournamentDetailPage() {
         .club-groupStandingTeam > span { text-align: left; }
         .club-groupStandingPlayerNames > span + span::before { content: ' / '; }
         .club-groupStandingRow--qualified { background: #f3fcf5; box-shadow: inset 3px 0 0 #22c55e; }
+        .club-groupStandingRow--eliminated { background: #fff7f7; box-shadow: inset 3px 0 0 #ef4444; }
         .club-groupStandingPosition i { color: #15803d; display: none; font-size: 10px; font-style: normal; font-weight: 950; margin-right: 2px; }
         .club-groupStandingTeam b { background: #ecfdf3; border-radius: 999px; color: #166534; flex: 0 0 auto; font-size: 10px; font-weight: 950; padding: 3px 6px; white-space: nowrap; }
         .club-inlineNote { background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 9px; color: #64748b; font-size: 12px; font-weight: 850; padding: 8px 9px; }
@@ -6527,6 +6613,26 @@ export default function ClubTournamentDetailPage() {
         .club-groupMatchCode { color: #64748b; font-size: 9px; font-weight: 900; line-height: 1.1; min-height: 10px; text-transform: uppercase; }
         .club-groupFixtureHint { color: #0f766e; font-size: 11px; font-weight: 800; line-height: 1.2; margin-top: 1px; }
         .club-groupDefinitionPending { background:#fff8e7; border:1px solid #ead299; border-radius:8px; color:#854d0e; font-size:11px; font-weight:800; margin:6px; padding:6px 8px; }
+        .club-groupQualificationRule { color:#475569; font-size:11px; font-weight:850; margin:6px 8px 0; }
+        .club-groupStandingTeam .club-groupStandingEliminated { background:#fee2e2; color:#991b1b; }
+        .club-playoffPreview { background:#fff; border:1px solid rgba(15,23,42,.08); border-radius:12px; display:grid; min-width:0; overflow:hidden; }
+        .club-playoffPreviewToggle { align-items:center; background:#fff; border:0; color:#17253f; cursor:pointer; display:flex; gap:10px; justify-content:space-between; min-height:48px; padding:9px 10px; text-align:left; width:100%; }
+        .club-playoffPreviewToggle>span { display:grid; gap:1px; min-width:0; }
+        .club-playoffPreviewToggle small { color:#64748b; font-size:9px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; }
+        .club-playoffPreviewToggle strong { font-size:14px; font-weight:900; }
+        .club-playoffPreviewToggle>b { background:#ecfeff; border-radius:999px; color:#0e7490; flex:0 0 auto; font-size:10px; font-weight:900; padding:5px 8px; }
+        .club-playoffPreviewPairs { border-top:1px solid rgba(15,23,42,.07); display:grid; gap:6px; grid-template-columns:repeat(2,minmax(0,1fr)); min-width:0; padding:8px; }
+        .club-playoffPreviewPair { background:#f8fafc; border:1px solid rgba(15,23,42,.06); border-radius:9px; display:grid; gap:4px; min-width:0; padding:7px; }
+        .club-playoffPreviewPair>small { color:#64748b; font-size:9px; font-weight:900; text-transform:uppercase; }
+        .club-playoffPreviewPair>div { align-items:center; display:grid; gap:5px; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); min-width:0; }
+        .club-playoffPreviewPair i { color:#94a3b8; font-size:8px; font-style:normal; font-weight:950; text-transform:uppercase; }
+        .club-playoffPreviewSide { display:grid; gap:1px; min-width:0; }
+        .club-playoffPreviewSide span,.club-playoffPreviewSide small { color:#64748b; font-size:9px; font-weight:850; }
+        .club-playoffPreviewSide strong { color:#17253f; font-size:11px; font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .club-playoffPreviewSide--bye { background:#ecfdf3; border-radius:7px; padding:5px; }
+        .club-playoffPreviewSide--bye strong { color:#166534; }
+        .club-playoffPreviewPair>p { background:#fff7df; border-radius:6px; color:#854d0e; font-size:9px; font-weight:800; margin:0; padding:4px 5px; }
+        .club-playoffPreviewPending { border-top:1px solid rgba(15,23,42,.07); color:#854d0e; font-size:12px; font-weight:850; margin:0; padding:9px 10px; }
         .club-groupMiniDraw { background:#f8fbfd; border:1px solid rgba(6,182,212,.22); border-radius:12px; display:grid; gap:8px; padding:9px; }
         .club-groupMiniDraw>strong { color:#078095; font-size:9px; letter-spacing:.08em; }
         .club-groupMiniDraw>div { display:grid; gap:5px; grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -7009,6 +7115,9 @@ export default function ClubTournamentDetailPage() {
           .club-groupResultBtn { font-size: 11px; min-height: 34px; min-width: 0; padding-inline: 7px; }
         }
         @media (max-width: 560px) {
+          .club-playoffPreviewPairs { grid-template-columns:minmax(0,1fr); }
+          .club-playoffPreviewToggle { padding:8px 9px; }
+          .club-playoffPreviewToggle>b { max-width:42%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
           .club-nextSeedStep { align-items: stretch; flex-direction: column; }
           .club-nextSeedStep .club-generateGroupsBtn { width: 100%; }
           .club-nextGroupStep { align-items: stretch; flex-direction: column; gap: 8px; padding: 9px 10px; }

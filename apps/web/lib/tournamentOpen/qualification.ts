@@ -107,6 +107,47 @@ export function buildOpenQualificationPlan(groupStandings: GroupStandings[], max
   }
 
   const groupCount = groupStandings.length
+  const usesResolvedGroupQuotas = groupStandings.some((group) => group.qualifiers.length !== 2)
+  if (usesResolvedGroupQuotas) {
+    const manualResolutionReasons: OpenQualificationManualReason[] = []
+    const directQualifiedTeams = groupStandings.flatMap((group) =>
+      group.qualifiers.map((row, index) => toOpenRankedTeam(group, row, index + 1))
+    )
+    if (directQualifiedTeams.length === 0) {
+      throw new OpenTournamentEngineError('INSUFFICIENT_GROUP_STANDINGS', 'No hay qualifiers resueltos para construir el playoff OPEN.')
+    }
+    const bracketSize = nextPowerOfTwo(directQualifiedTeams.length)
+    const byes = bracketSize - directQualifiedTeams.length
+    const playoffTeamIds = new Set(directQualifiedTeams.map((team) => team.teamId))
+    const byeCandidatesOrdered = rankOpenByeCandidates(groupStandings).filter((team) => playoffTeamIds.has(team.teamId))
+    const selectedByes = byeCandidatesOrdered.slice(0, byes)
+    const byesCutTie = getCutTieReason({
+      rows: byeCandidatesOrdered,
+      count: byes,
+      code: 'BYES_CUT_TIE',
+      message: 'Hay empate total en el corte de byes y requiere resolución manual.',
+    })
+    if (byesCutTie) manualResolutionReasons.push(byesCutTie)
+    const byeTeamIds = new Set(selectedByes.map((team) => team.teamId))
+    return {
+      groupCount,
+      directQualifiers: directQualifiedTeams.length,
+      bracketSize,
+      vacancies: byes,
+      byeCount: byes,
+      bestThirdsCount: 0,
+      byes,
+      selectedBestThirds: [],
+      byeCandidatesOrdered,
+      selectedByes,
+      directQualifiedTeams,
+      playoffTeams: directQualifiedTeams,
+      teamsEnteringFirstRound: directQualifiedTeams.filter((team) => !byeTeamIds.has(team.teamId)),
+      startPhase: getOpenPlayoffStartPhase(bracketSize),
+      requiresManualResolution: manualResolutionReasons.length > 0,
+      manualResolutionReasons,
+    }
+  }
   const counts = determineOpenHybridCounts(groupCount, maxByes)
   const manualResolutionReasons: OpenQualificationManualReason[] = []
   const directQualifiedTeams = getDirectQualifiedTeams(groupStandings)

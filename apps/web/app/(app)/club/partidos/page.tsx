@@ -848,9 +848,13 @@ export default function ClubPartidosPage() {
 
   function renderGroupStandings(group: StandingGroup) {
     const qualifierIds = new Set(group.qualifiers.map((row) => row.team_id))
+    const isFourTeamGroup = group.group.size === 4
+    const definitionPending = isFourTeamGroup && group.qualifiers.length !== 3
 
     return (
       <div className="club-groupStandings" role="table" aria-label={`Standings ${group.group.name}`}>
+        <p className="club-groupQualificationRule">{isFourTeamGroup ? 'Clasifican 3 · 4.º eliminado' : 'Clasifican 2'}</p>
+        {definitionPending ? <p className="club-groupDefinitionPending">Definición pendiente · A-03 y A-04 determinan las posiciones finales.</p> : null}
         <div className="club-groupStandingRow club-groupStandingRow--head" role="row">
           <span role="columnheader">#</span>
           <span role="columnheader">Equipo</span>
@@ -862,11 +866,12 @@ export default function ClubPartidosPage() {
           <span role="columnheader">DG</span>
         </div>
         {group.standings.map((row, index) => (
-          <div key={row.team_id} className="club-groupStandingRow" role="row">
+          <div key={row.team_id} className={`club-groupStandingRow ${qualifierIds.has(row.team_id) ? 'club-groupStandingRow--qualified' : !definitionPending && isFourTeamGroup && index === 3 ? 'club-groupStandingRow--eliminated' : ''}`} role="row">
             <span role="cell">{index + 1}</span>
             <span className="club-groupStandingTeam" role="cell">
               <span>{teamNames.get(row.team_id) ?? `Equipo ${row.seed}`}</span>
               {qualifierIds.has(row.team_id) ? <b>Clasifica</b> : null}
+              {!definitionPending && isFourTeamGroup && index === 3 ? <b className="club-groupStandingEliminated">Eliminado</b> : null}
             </span>
             <span role="cell">{row.played}</span>
             <span role="cell">{row.wins}</span>
@@ -1458,6 +1463,11 @@ export default function ClubPartidosPage() {
         .club-groupStandingTeam { align-items: center; display: flex; gap: 4px; }
         .club-groupStandingTeam > span { text-align: left; }
         .club-groupStandingTeam b { background: #ecfdf3; border-radius: 999px; color: #166534; flex: 0 0 auto; font-size: 10px; font-weight: 950; padding: 3px 6px; white-space: nowrap; }
+        .club-groupStandingRow--qualified { background: #f3fcf5; box-shadow: inset 3px 0 0 #22c55e; }
+        .club-groupStandingRow--eliminated { background: #fff7f7; box-shadow: inset 3px 0 0 #ef4444; }
+        .club-groupQualificationRule { color:#475569; font-size:11px; font-weight:850; margin:6px 8px 0; }
+        .club-groupDefinitionPending { background:#fff8e7; border:1px solid #ead299; border-radius:8px; color:#854d0e; font-size:11px; font-weight:800; margin:6px; padding:6px 8px; }
+        .club-groupStandingTeam .club-groupStandingEliminated { background:#fee2e2; color:#991b1b; }
         .club-inlineNote { background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 9px; color: #64748b; font-size: 12px; font-weight: 850; padding: 8px 9px; }
         .club-inlineNote--warn { background: #fff7df; border-color: rgba(202,138,4,.22); color: #854d0e; }
         .club-matchTable { background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 11px; display: grid; justify-self: center; max-width: 760px; min-width: 0; overflow: hidden; width: min(100%, 760px); }

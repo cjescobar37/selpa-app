@@ -65,7 +65,7 @@ export type TournamentStandingMatch = {
   status?: string | null
   team1_id: string | null
   team2_id: string | null
-  group_match_number?: number | null
+  round?: number | null
   winner_team_id?: string | null
   score?: JsonObject | null
 }
@@ -489,18 +489,37 @@ export function calculateTournamentGroupStandings(input: {
         winPoints,
         lossPoints,
       })
-      const winnersFinal = group.size === 4 ? groupMatches.find(match => match.group_match_number === 3) : null
-      const losersFinal = group.size === 4 ? groupMatches.find(match => match.group_match_number === 4) : null
+      const orderedGroupTeams = [...groupTeams].sort((left, right) => left.seed - right.seed || left.team_id.localeCompare(right.team_id))
+      const pairKey = (team1Id: string, team2Id: string) => [team1Id, team2Id].sort().join(':')
+      const findMatch = (round: number, team1Id: string, team2Id: string) => groupMatches.find(match =>
+        Number(match.round) === round && match.team1_id && match.team2_id && pairKey(match.team1_id, match.team2_id) === pairKey(team1Id, team2Id)
+      )
+      const firstInitial = group.size === 4 && orderedGroupTeams.length === 4
+        ? findMatch(1, orderedGroupTeams[0]!.team_id, orderedGroupTeams[3]!.team_id)
+        : null
+      const secondInitial = group.size === 4 && orderedGroupTeams.length === 4
+        ? findMatch(1, orderedGroupTeams[1]!.team_id, orderedGroupTeams[2]!.team_id)
+        : null
+      const loserId = (match: TournamentStandingMatch | null | undefined) => match?.winner_team_id && match.team1_id && match.team2_id
+        ? match.winner_team_id === match.team1_id ? match.team2_id : match.winner_team_id === match.team2_id ? match.team1_id : null
+        : null
+      const firstLoser = loserId(firstInitial)
+      const secondLoser = loserId(secondInitial)
+      const winnersFinal = firstInitial?.winner_team_id && secondInitial?.winner_team_id
+        ? findMatch(2, firstInitial.winner_team_id, secondInitial.winner_team_id)
+        : null
+      const losersFinal = firstLoser && secondLoser ? findMatch(2, firstLoser, secondLoser) : null
       const finalOrder = winnersFinal?.winner_team_id && winnersFinal.team1_id && winnersFinal.team2_id && losersFinal?.winner_team_id && losersFinal.team1_id && losersFinal.team2_id
         ? [winnersFinal.winner_team_id, winnersFinal.winner_team_id === winnersFinal.team1_id ? winnersFinal.team2_id : winnersFinal.team1_id, losersFinal.winner_team_id, losersFinal.winner_team_id === losersFinal.team1_id ? losersFinal.team2_id : losersFinal.team1_id]
         : null
       const standings = finalOrder
         ? finalOrder.map(teamId => rows.get(teamId)).filter((row): row is GroupStandingRow => Boolean(row))
         : sorted.standings
+      const qualifierCount = group.size === 4 ? 3 : group.size === 3 ? 2 : Math.max(0, classifyPerGroup)
       return {
         group,
         standings,
-        qualifiers: standings.slice(0, Math.max(0, classifyPerGroup)),
+        qualifiers: group.size === 4 && !finalOrder ? [] : standings.slice(0, qualifierCount),
         tiebreakers: sorted.tiebreakers,
       }
     })

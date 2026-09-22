@@ -33,6 +33,7 @@ export type OpenGeneralGroupStandings = {
   groupId: string
   groupName?: string | null
   groupOrder?: number | null
+  qualifierCount?: number
   standings: OpenGeneralStandingRow[]
 }
 
@@ -84,6 +85,28 @@ export type OpenGeneralBracketPlan = {
   firstRoundMatches: OpenFirstRoundMatch[]
   bracketSlots: OpenGeneralBracketSlot[]
   warnings: string[]
+}
+
+export type OpenPlayoffPreviewSlot = {
+  globalSeed: number | null
+  teamId: string | null
+  groupName: string | null
+  groupPosition: number | null
+  isBye: boolean
+}
+
+export type OpenPlayoffPreviewPair = {
+  bracketPairOrder: number
+  left: OpenPlayoffPreviewSlot
+  right: OpenPlayoffPreviewSlot
+  sameGroupWarning: string | null
+}
+
+export type OpenPlayoffPreview = {
+  bracketSize: number
+  totalQualified: number
+  byes: number
+  pairs: OpenPlayoffPreviewPair[]
 }
 
 export const defaultOpenQualificationConfig: OpenQualificationConfig = {
@@ -236,16 +259,18 @@ export function buildQualificationPlan(
     throw new OpenTournamentEngineError('INVALID_INPUT', 'Se necesita al menos un grupo para clasificar.')
   }
 
+  const usesResolvedGroupQuotas = groups.every((group) => Number.isInteger(group.qualifierCount) && group.qualifierCount! >= 0)
   const fixedQualified = groups.flatMap((group) => {
     const rows = [...group.standings].sort((left, right) => left.groupPosition - right.groupPosition)
-    if (rows.length < config.fixedQualifiersPerGroup) {
+    const qualifierCount = usesResolvedGroupQuotas ? group.qualifierCount! : config.fixedQualifiersPerGroup
+    if (rows.length < qualifierCount) {
       throw new OpenTournamentEngineError(
         'INSUFFICIENT_GROUP_STANDINGS',
         `El grupo ${group.groupName ?? group.groupId} no tiene suficientes posiciones para clasificar.`
       )
     }
 
-    return rows.slice(0, config.fixedQualifiersPerGroup).map((row) => ({
+    return rows.slice(0, qualifierCount).map((row) => ({
       ...row,
       groupId: row.groupId || group.groupId,
       groupName: row.groupName ?? group.groupName ?? null,
@@ -254,8 +279,8 @@ export function buildQualificationPlan(
     }))
   })
 
-  const thirds = rankRows(getPositionRows(groups, 3), config)
-  const selectedThirds = thirds.slice(0, config.bestThirdsToQualify).map((row) => ({
+  const thirds = usesResolvedGroupQuotas ? [] : rankRows(getPositionRows(groups, 3), config)
+  const selectedThirds = thirds.slice(0, usesResolvedGroupQuotas ? 0 : config.bestThirdsToQualify).map((row) => ({
     ...row,
     qualificationReason: 'BEST_THIRD' as const,
   }))
@@ -265,7 +290,7 @@ export function buildQualificationPlan(
   const byes = calculateByes(totalQualified)
   const warnings: string[] = []
 
-  if (selectedThirds.length < config.bestThirdsToQualify) {
+  if (!usesResolvedGroupQuotas && selectedThirds.length < config.bestThirdsToQualify) {
     warnings.push(`Se pidieron ${config.bestThirdsToQualify} mejores terceros, pero solo hay ${selectedThirds.length}.`)
   }
 
@@ -398,6 +423,7 @@ export function buildCanonicalSeedLine(bracketSize: number): number[] {
 type PairPlanEntry = {
   kind: 'BYE' | 'PLAYABLE' | 'EMPTY'
   byeTeam: OpenGlobalSeed | null
+  protectedGlobalSeed: number | null
 }
 
 function buildPairPlan(input: {
@@ -410,6 +436,7 @@ function buildPairPlan(input: {
   const pairPlan: PairPlanEntry[] = Array.from({ length: firstRoundPairCount }, () => ({
     kind: 'EMPTY',
     byeTeam: null,
+    protectedGlobalSeed: null,
   }))
   const byeTeamBySeed = new Map(input.byeTeams.map((team) => [team.globalSeed, team]))
   const seedLine = buildCanonicalSeedLine(input.bracketSize)
@@ -420,6 +447,10 @@ function buildPairPlan(input: {
     const firstIsReal = firstSeed <= totalParticipants
     const secondIsReal = secondSeed <= totalParticipants
 
+    if (firstIsReal && secondIsReal) {
+      pairPlan[pairIndex] = { kind: 'PLAYABLE', byeTeam: null, protectedGlobalSeed: Math.min(firstSeed, secondSeed) }
+      continue
+    }
     if (firstIsReal === secondIsReal) continue
     const beneficiarySeed = firstIsReal ? firstSeed : secondSeed
     const byeTeam = byeTeamBySeed.get(beneficiarySeed)
@@ -430,7 +461,7 @@ function buildPairPlan(input: {
       )
     }
 
-    pairPlan[pairIndex] = { kind: 'BYE', byeTeam }
+    pairPlan[pairIndex] = { kind: 'BYE', byeTeam, protectedGlobalSeed: beneficiarySeed }
   }
 
   const assignedByeIds = new Set(
@@ -440,14 +471,7 @@ function buildPairPlan(input: {
     throw new OpenTournamentEngineError('INVALID_BYE_COUNT', 'La seed-line canónica no pudo ubicar todos los BYEs.')
   }
 
-  let remainingPlayablePairs = input.teamsEnteringFirstRound.length / 2
-  for (let pairIndex = 0; pairIndex < pairPlan.length && remainingPlayablePairs > 0; pairIndex += 1) {
-    if (pairPlan[pairIndex].kind !== 'EMPTY') continue
-    pairPlan[pairIndex] = { kind: 'PLAYABLE', byeTeam: null }
-    remainingPlayablePairs -= 1
-  }
-
-  if (remainingPlayablePairs !== 0) {
+  if (pairPlan.filter((entry) => entry.kind === 'PLAYABLE').length !== input.teamsEnteringFirstRound.length / 2) {
     throw new OpenTournamentEngineError('INVALID_BRACKET_PLAN', 'No alcanzan posiciones para ubicar todos los cruces jugables.')
   }
 
@@ -477,7 +501,7 @@ export function buildBracketSlots(input: {
   const pairPlan = buildPairPlan({ bracketSize, byeTeams, teamsEnteringFirstRound })
   const slots: OpenGeneralBracketSlot[] = []
   const firstRoundMatches: OpenFirstRoundMatch[] = []
-  let playablePairIndex = 0
+  const playablePairByProtectedSeed = new Map(playablePairs.map((pair) => [pair[0].globalSeed, pair]))
 
   pairPlan.forEach((entry, pairIndex) => {
     const pairOrder = pairIndex + 1
@@ -493,8 +517,7 @@ export function buildBracketSlots(input: {
     }
 
     if (entry.kind === 'PLAYABLE') {
-      const pair = playablePairs[playablePairIndex]
-      playablePairIndex += 1
+      const pair = entry.protectedGlobalSeed === null ? null : playablePairByProtectedSeed.get(entry.protectedGlobalSeed)
       if (!pair) {
         throw new OpenTournamentEngineError('INVALID_BRACKET_PLAN', 'Falta una pareja jugable para completar el cuadro.')
       }
@@ -594,5 +617,39 @@ export function buildGeneralOpenBracketPlan(
   return {
     ...plan,
     warnings: validation.warnings,
+  }
+}
+
+export function buildOpenPlayoffPreview(
+  groups: OpenGeneralGroupStandings[],
+  configInput?: Partial<OpenQualificationConfig> | null
+): OpenPlayoffPreview {
+  const plan = buildGeneralOpenBracketPlan(groups, configInput)
+  const pairs = Array.from({ length: plan.bracketSize / 2 }, (_, pairIndex): OpenPlayoffPreviewPair => {
+    const bracketPairOrder = pairIndex + 1
+    const [leftSlot, rightSlot] = plan.bracketSlots
+      .filter((slot) => slot.pairOrder === bracketPairOrder)
+      .sort((left, right) => left.pairSlot - right.pairSlot)
+    const toPreviewSlot = (slot: OpenGeneralBracketSlot | undefined): OpenPlayoffPreviewSlot => ({
+      globalSeed: slot?.team?.globalSeed ?? null,
+      teamId: slot?.team?.teamId ?? null,
+      groupName: slot?.team?.groupName ?? null,
+      groupPosition: slot?.team?.groupPosition ?? null,
+      isBye: slot?.isByeSlot ?? true,
+    })
+    const sameGroupConflict = Boolean(leftSlot?.team && rightSlot?.team && leftSlot.team.groupId === rightSlot.team.groupId)
+    return {
+      bracketPairOrder,
+      left: toPreviewSlot(leftSlot),
+      right: toPreviewSlot(rightSlot),
+      sameGroupWarning: sameGroupConflict ? `Cruce del mismo grupo: ${leftSlot?.team?.groupName ?? leftSlot?.team?.groupId}` : null,
+    }
+  })
+
+  return {
+    bracketSize: plan.bracketSize,
+    totalQualified: plan.totalQualified,
+    byes: plan.byes,
+    pairs,
   }
 }

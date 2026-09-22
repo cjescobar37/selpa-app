@@ -45,13 +45,21 @@ test('retry reconoce la estructura completa y no duplica cruces',()=>{
 test('resultado existente se conserva y posiciones finales son 1/2/3/4 deportivas',()=>{
   const played=[{...initial[0]!,winnerTeamId:'t1'},{...initial[1]!,winnerTeamId:'t2'}, {...dependent[0]!,team1Id:'t1',team2Id:'t2',winnerTeamId:'t2'}, {...dependent[1]!,team1Id:'t4',team2Id:'t3',winnerTeamId:'t3'}]
   assert.deepEqual(resolveFourTeamFinalOrder(played),['t2','t1','t3','t4'])
-  const standings=calculateTournamentGroupStandings({groups:[{id:'a',tournament_id:'x',name:'A',size:4}],groupTeams:[1,2,3,4].map(seed=>({group_id:'a',tournament_id:'x',team_id:`t${seed}`,seed})),matches:played.map(match=>({...match,group_id:'a',phase:'GROUP',status:'PLAYED',team1_id:match.team1Id,team2_id:match.team2Id,winner_team_id:match.winnerTeamId,group_match_number:match.groupMatchNumber,score:{}}))})
+  const standings=calculateTournamentGroupStandings({groups:[{id:'a',tournament_id:'x',name:'A',size:4}],groupTeams:[1,2,3,4].map(seed=>({group_id:'a',tournament_id:'x',team_id:`t${seed}`,seed})),matches:played.map(match=>({...match,group_id:'a',phase:'GROUP',status:'PLAYED',team1_id:match.team1Id,team2_id:match.team2Id,winner_team_id:match.winnerTeamId,score:{}}))})
   assert.deepEqual(standings[0]!.standings.map(row=>row.team_id),['t2','t1','t3','t4'])
+  assert.deepEqual(standings[0]!.qualifiers.map(row=>row.team_id),['t2','t1','t3'])
   assert.equal(played[0]!.winnerTeamId,'t1')
+})
+test('grupo de cuatro no inventa clasificados antes de completar A-03 y A-04',()=>{
+  const incomplete=[{...initial[0]!,winnerTeamId:'t1'},{...initial[1]!,winnerTeamId:'t2'}, {...dependent[0]!,team1Id:'t1',team2Id:'t2',winnerTeamId:'t2'}]
+  const standings=calculateTournamentGroupStandings({groups:[{id:'a',tournament_id:'x',name:'A',size:4}],groupTeams:[1,2,3,4].map(seed=>({group_id:'a',tournament_id:'x',team_id:`t${seed}`,seed})),matches:incomplete.map(match=>({...match,group_id:'a',phase:'GROUP',status:'PLAYED',team1_id:match.team1Id,team2_id:match.team2Id,winner_team_id:match.winnerTeamId,score:{}}))})
+  assert.equal(standings[0]!.qualifiers.length,0)
 })
 test('grupo de tres mantiene round-robin de tres partidos sin dependencias',()=>{
   const fixture=buildOpenGroupInitialFixture([1,2,3].map(seed=>({teamId:`g${seed}`,seed})))
   assert.equal(fixture.initialMatches.length,3);assert.ok(fixture.initialMatches.every(match=>match.team1Id&&match.team2Id))
+  const standings=calculateTournamentGroupStandings({groups:[{id:'g',tournament_id:'x',name:'G',size:3}],groupTeams:[1,2,3].map(seed=>({group_id:'g',tournament_id:'x',team_id:`g${seed}`,seed})),matches:[]})
+  assert.equal(standings[0]!.qualifiers.length,2)
 })
 test('scheduler asigna 19 partidos, respeta dependencias/descanso, usa dos complejos y es determinístico',()=>{
   const matches:GroupDependencyMatch[]=[...initial,...dependent]

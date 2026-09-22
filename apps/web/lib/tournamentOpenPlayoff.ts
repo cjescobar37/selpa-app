@@ -95,10 +95,12 @@ export class OpenPlayoffGenerationError extends Error {
 }
 
 function toGeneralOpenStandings(standings: GroupStandings[]): OpenGeneralGroupStandings[] {
+  const usesResolvedGroupQuotas = standings.some((group) => group.qualifiers.length !== 2)
   return standings.map((groupStandings) => ({
     groupId: groupStandings.group.id,
     groupName: groupStandings.group.name,
     groupOrder: groupStandings.group.order ?? null,
+    ...(usesResolvedGroupQuotas ? { qualifierCount: groupStandings.qualifiers.length } : {}),
     standings: groupStandings.standings.map((row, index) => ({
       teamId: row.team_id,
       groupId: row.group_id,
@@ -922,6 +924,18 @@ export async function generateOpenFirstRoundPlayoff(input: {
     clubId: input.clubId,
     standings,
   })
+  const usesResolvedGroupQuotas = standings.some((group) => group.qualifiers.length !== 2)
+  if (usesResolvedGroupQuotas && generalSelection.generalPlan) {
+    const fallbackTeamIds = qualificationPlan.playoffTeams.map((team) => team.teamId).sort()
+    const generalTeamIds = generalSelection.generalPlan.qualifiedTeams.map((team) => team.teamId).sort()
+    if (fallbackTeamIds.length !== generalTeamIds.length || fallbackTeamIds.some((teamId, index) => teamId !== generalTeamIds[index])) {
+      throw new OpenPlayoffGenerationError(
+        'OPEN_REQUIRES_MANUAL_RESOLUTION',
+        'El motor general y el fallback no coinciden en los qualifiers resueltos. No se generaron partidos.',
+        422
+      )
+    }
+  }
   const { data: circuitLink, error: circuitLinkError } = await supabaseAdmin
     .from('competition_series_event_tournament_links')
     .select('id')
