@@ -138,6 +138,10 @@ export function deriveWinnerSide(score: Pick<StructuredMatchScore, 'sets' | 'sup
   return wins.team1 > wins.team2 ? 'team1' : 'team2'
 }
 
+export function deriveWinnerTeamId(winnerSide: ScoreSide, team1Id: string | null, team2Id: string | null) {
+  return winnerSide === 'team1' ? team1Id : team2Id
+}
+
 export function validateStructuredMatchScore(
   score: unknown,
   phase: TournamentScorePhase

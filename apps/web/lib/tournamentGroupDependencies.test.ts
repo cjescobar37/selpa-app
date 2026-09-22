@@ -38,6 +38,14 @@ test('resultado A-02 completa A-03 y A-04',()=>{
   const resolved=resolveGroupDependencies([{...initial[0]!,winnerTeamId:'t1'},{...initial[1]!,winnerTeamId:'t2'},...dependent])
   assert.deepEqual(resolved.slice(2).map(match=>[match.team1Id,match.team2Id]),[['t1','t2'],['t4','t3']])
 })
+test('P3 recibe ganadores y P4 perdedores cuando gana team2 en ambos partidos iniciales',()=>{
+  const resolved=resolveGroupDependencies([{...initial[0]!,winnerTeamId:'t4'},{...initial[1]!,winnerTeamId:'t3'},...dependent])
+  assert.deepEqual(resolved.slice(2).map(match=>[match.team1Id,match.team2Id]),[['t4','t3'],['t1','t2']])
+})
+test('P3/P4 resuelven simétricamente ganadores team1/team2 y perdedores opuestos',()=>{
+  const resolved=resolveGroupDependencies([{...initial[0]!,winnerTeamId:'t4'},{...initial[1]!,winnerTeamId:'t2'},...dependent])
+  assert.deepEqual(resolved.slice(2).map(match=>[match.team1Id,match.team2Id]),[['t4','t2'],['t1','t3']])
+})
 test('retry reconoce la estructura completa y no duplica cruces',()=>{
   assert.equal(missingCanonicalFourTeamDependencies(initial as [GroupDependencyMatch,GroupDependencyMatch],[1,2,3,4]).length,0)
   assert.equal(missingCanonicalFourTeamDependencies(initial as [GroupDependencyMatch,GroupDependencyMatch],[1,2]).length,2)

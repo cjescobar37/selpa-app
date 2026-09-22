@@ -2601,7 +2601,7 @@ export default function ClubTournamentDetailPage() {
     const json = await res.json().catch(() => ({})) as {
       error?: string
       match?: Pick<TournamentMatch, 'id' | 'status' | 'score' | 'winner_team_id'>
-      groupDependency?: { status?: string }
+      groupDependency?: { status?: string; matches?: TournamentMatch[] }
       groupDependencyWarning?: string
     }
 
@@ -2618,15 +2618,22 @@ export default function ClubTournamentDetailPage() {
     setResultForm(null)
     setSavingResult(false)
     const winnerTeamId = validation.winnerSide === 'team1' ? match.team1_id : match.team2_id
-    setGroupMatches((current) => current.map((item) => item.id === match.id
-      ? {
-        ...item,
-        status: json.match?.status ?? 'PLAYED',
-        score: json.match?.score ?? validation.score,
-        winner_team_id: json.match?.winner_team_id ?? winnerTeamId,
+    setGroupMatches((current) => {
+      const updated = current.map((item) => item.id === match.id
+        ? {
+          ...item,
+          status: json.match?.status ?? 'PLAYED',
+          score: json.match?.score ?? validation.score,
+          winner_team_id: json.match?.winner_team_id ?? winnerTeamId,
+        }
+        : item
+      )
+      const byId = new Map(updated.map(item => [item.id, item]))
+      for (const dependent of json.groupDependency?.matches ?? []) {
+        byId.set(dependent.id, { ...byId.get(dependent.id), ...dependent })
       }
-      : item
-    ))
+      return [...byId.values()].sort((left, right) => left.round - right.round || left.match_order - right.match_order || left.id.localeCompare(right.id))
+    })
     setPlayoffMatches((current) => current.map((item) => item.id === match.id
       ? {
         ...item,
@@ -2644,7 +2651,6 @@ export default function ClubTournamentDetailPage() {
         ? 'La tabla se actualizó y ya se definieron Ganadores vs Ganadores y Perdedores vs Perdedores.'
         : 'La tabla y los cruces se actualizaron con este resultado.'),
     })
-    await refreshTournamentExperience()
     if (completesGroups) {
       setMilestone({
         id: `groups-complete-${match.id}`,
@@ -6986,13 +6992,13 @@ export default function ClubTournamentDetailPage() {
         .club-registrationAlerts { display: flex; flex-wrap: wrap; gap: 6px; }
         .club-registrationAlerts span { background: #fff7df; border: 1px solid rgba(202,138,4,.16); border-radius: 999px; color: #854d0e; font-size: 11px; font-weight: 900; padding: 5px 8px; }
         .club-paymentActionsGrid { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .club-resultModal { max-height: min(760px, calc(100vh - 28px)); max-width: 680px; overflow: auto; width: min(680px, 100%); }
+        .club-resultModal { max-height: min(760px, calc(100dvh - 28px)); max-width: 680px; overflow: hidden; width: min(680px, 100%); }
         .club-scheduleSwapModal { max-width: 620px; width: min(620px, 100%); }
         .club-scheduleSwapCurrent { background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 12px; display: grid; gap: 4px; min-width: 0; padding: 11px; }
         .club-scheduleSwapCurrent span { color: #64748b; font-size: 11px; font-weight: 950; text-transform: uppercase; }
         .club-scheduleSwapCurrent strong { color: #17253f; font-size: 14px; font-weight: 950; line-height: 1.2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .club-scheduleSwapCurrent small { color: #475569; font-size: 12px; font-weight: 850; line-height: 1.25; }
-        .club-resultForm { background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 12px; display: grid; gap: 10px; min-width: 0; padding: 10px; }
+        .club-resultForm { background: #f8fafc; border: 1px solid rgba(15,23,42,.07); border-radius: 12px; display: grid; gap: 10px; min-height: 0; min-width: 0; overflow: auto; padding: 10px; }
         .club-resultForm--danger { background: #fff7f7; border-color: rgba(220,38,38,.24); box-shadow: 0 0 0 1px rgba(220,38,38,.06); }
         .club-legacyScoreNotice { background: #fff7df; border: 1px solid rgba(202,138,4,.22); border-radius: 9px; color: #854d0e; font-size: 12px; font-weight: 850; padding: 8px 9px; }
         .club-legacyScoreNotice b { color: #713f12; }
@@ -7246,7 +7252,7 @@ export default function ClubTournamentDetailPage() {
           .club-playoffUpcomingRow { align-items: start; gap: 6px; grid-template-columns: 1fr; }
           .club-playoffUpcomingRow span[role="cell"]:nth-child(3) { flex-wrap: wrap; }
           .club-modalBackdrop { align-items: end; padding: 8px; }
-          .club-resultModal { border-radius: 16px 16px 10px 10px; gap: 10px; max-height: calc(100dvh - 8px); overflow: auto; padding: 12px; width: 100%; }
+          .club-resultModal { border-radius: 16px 16px 10px 10px; gap: 10px; max-height: calc(100dvh - 8px - env(safe-area-inset-top)); padding: 12px 12px max(8px, env(safe-area-inset-bottom)); width: 100%; }
           .club-resultModal .club-pointsHead { gap: 8px; }
           .club-resultModal .club-pointsHead h2 { font-size: 17px; }
           .club-resultForm { gap: 8px; padding: 8px; }
@@ -7255,7 +7261,7 @@ export default function ClubTournamentDetailPage() {
           .club-scoreRow > span { font-size: 11px; }
           .club-scoreInput { min-height: 44px; text-align: center; }
           .club-resultSummary { font-size: 11px; padding: 7px 8px; }
-          .club-resultActions { display: grid; grid-template-columns: 1fr; margin: 0 -8px -8px; padding: 8px; }
+          .club-resultActions { background: #f8fafc; bottom: 0; display: grid; grid-template-columns: 1fr; margin: 0 -8px -8px; padding: 8px 8px max(8px, env(safe-area-inset-bottom)); }
           .club-resultActions .club-primaryBtn { background: #061b3a; color: #fff; min-height: 46px; width: 100%; }
           .club-resultActions .club-editBtn { min-height: 40px; width: 100%; }
           .club-courtConfigModal { border-radius: 14px 14px 10px 10px; gap: 10px; max-height: min(88dvh, 720px); overflow: auto; padding: 12px; }

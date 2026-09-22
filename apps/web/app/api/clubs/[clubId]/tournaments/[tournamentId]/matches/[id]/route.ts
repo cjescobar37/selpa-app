@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { MatchResultUpdateError, updateMatchResult, type MatchScore } from '@/lib/tournamentMatches'
-import { validateStructuredMatchScore } from '@/lib/tournamentScore'
+import { deriveWinnerTeamId, validateStructuredMatchScore } from '@/lib/tournamentScore'
 
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
@@ -57,7 +57,7 @@ export async function PATCH(
       return NextResponse.json({ code: validation.code, error: validation.error }, { status: 400 })
     }
 
-    const derivedWinnerTeamId = validation.winnerSide === 'team1' ? current.team1_id : current.team2_id
+    const derivedWinnerTeamId = deriveWinnerTeamId(validation.winnerSide, current.team1_id, current.team2_id)
     const manualWinnerTeamId = typeof body?.winner_team_id === 'string' ? body.winner_team_id : null
 
     if (manualWinnerTeamId && manualWinnerTeamId !== derivedWinnerTeamId) {
