@@ -10,7 +10,7 @@ import ClubAdminHubNav from '@/components/club/ClubAdminHubNav'
 import ClubBackLink from '@/components/club/ClubBackLink'
 import { hasAnyClubPermission } from '@/lib/clubPermissions'
 import { supabase } from '@/lib/supabaseClient'
-import type { CompetitionSeries, CompetitionSeriesDetail } from '@/features/competition/series/competition-series.types'
+import type { CompetitionSeries, CompetitionSeriesDetail, CompetitionSeriesListItem } from '@/features/competition/series/competition-series.types'
 import { formatCompetitionDateRange } from '@/features/competition/series/competition-series-date'
 import type { CompetitionSeriesEvent } from '@/features/competition/events/competition-events.types'
 import { deriveCompetitionEventNextAction, deriveCompetitionEventOperationalState, deriveCompetitionEventPipelineState, selectCompetitionFocusEvent, selectNextCompetitionEvent, sortCompetitionPointsRules } from '@/lib/competitionTournamentState'
@@ -92,16 +92,6 @@ function seriesOperationalLine(item: CompetitionSeries) {
   return dates === 1 ? '1 fecha programada.' : `${dates} fechas planificadas.`
 }
 
-function seriesProgressLine(item: CompetitionSeries, events: CompetitionSeriesEvent[]) {
-  const focus = selectCompetitionFocusEvent(events)
-  const state = focus ? deriveCompetitionEventOperationalState(focus) : null
-  if (state?.key === 'TOURNAMENT_FINISHED') return 'Pendiente homologación'
-  if (state?.key === 'HOMOLOGATED') return 'Pendiente publicar puntos'
-  if (state?.key === 'SETTLED') return 'Ranking actualizado'
-  if (state) return state.label
-  return seriesOperationalLine(item)
-}
-
 function formatEventSportDate(startValue: string | null | undefined, endValue: string | null | undefined) {
   const start = startValue?.slice(0, 10) ?? null
   const end = endValue?.slice(0, 10) ?? start
@@ -112,11 +102,10 @@ export default function CompetitionAdmin({ screen, mode = 'hub' }: { screen: Scr
   const searchParams = useSearchParams()
   const { activeClub, clubRole } = useSession()
   const clubId = activeClub?.id
-  const [series, setSeries] = useState<CompetitionSeries[]>([])
+  const [series, setSeries] = useState<CompetitionSeriesListItem[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
   const [detail, setDetail] = useState<CompetitionSeriesDetail | null>(null)
   const [events, setEvents] = useState<CompetitionSeriesEvent[]>([])
-  const [seriesEvents, setSeriesEvents] = useState<Record<string, CompetitionSeriesEvent[]>>({})
   const [detailTab, setDetailTab] = useState<'general' | 'dates' | 'ranking' | 'points' | 'rules'>('general')
   const [showRuleEditor, setShowRuleEditor] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -148,18 +137,11 @@ export default function CompetitionAdmin({ screen, mode = 'hub' }: { screen: Scr
     try {
       if (screen.kind === 'list') {
         const [{ series: items }, seasonResult] = await Promise.all([
-          api<{ series: CompetitionSeries[] }>(`/api/clubs/${clubId}/competition/series`),
+          api<{ series: CompetitionSeriesListItem[] }>(`/api/clubs/${clubId}/competition/series`),
           supabase.from('competition_seasons').select('id,name,status').eq('club_id', clubId).order('starts_on', { ascending: false }),
         ])
         if (seasonResult.error) throw new Error('No pudimos leer las temporadas del club.')
         setSeries(items); setSeasons((seasonResult.data ?? []) as Season[])
-        if (mode === 'circuits') {
-          const eventEntries = await Promise.all(items.map(async (item) => {
-            const result = await api<{ events: CompetitionSeriesEvent[] }>(`/api/clubs/${clubId}/competition/series/${item.id}/events`)
-            return [item.id, result.events] as const
-          }))
-          setSeriesEvents(Object.fromEntries(eventEntries))
-        }
       } else if (screen.kind === 'detail') {
         const seriesDetail = await api<CompetitionSeriesDetail>(`/api/clubs/${clubId}/competition/series/${screen.seriesId}`)
         const [eventData, seasonResult] = await Promise.all([
@@ -326,7 +308,7 @@ export default function CompetitionAdmin({ screen, mode = 'hub' }: { screen: Scr
     ]
     return <div className={styles.page}>
       <Header title="Circuitos" detail="Fechas, puntos y ranking de cada competencia." back="/club/competition" action={canCreateCircuit ? <Link className={styles.headerAction} href="/club/competition/series/new">Crear circuito</Link> : null} />
-      {!series.length ? <div className={styles.empty}><Trophy size={26}/><strong>Todavía no hay circuitos</strong><p>Creá el primero para organizar varias fechas bajo un mismo ranking.</p></div> : <div className={styles.circuitGroups}>{groups.filter((group) => group.items.length).map((group) => <section key={group.key}><h2>{group.label}</h2><div>{group.items.map((entry) => { const entryEvents = seriesEvents[entry.id] ?? []; return <Link href={`/club/competition/series/${entry.id}`} className={styles.circuitRow} key={entry.id}><span><strong>{entry.name}</strong><small>{entry.planned_events_count ? `${entryEvents.length}/${entry.planned_events_count} fechas` : `${entryEvents.length} fechas`}</small></span><em>{seriesProgressLine(entry, entryEvents)}</em><ChevronRight size={17}/></Link> })}</div></section>)}</div>}
+      {!series.length ? <div className={styles.empty}><Trophy size={26}/><strong>Todavía no hay circuitos</strong><p>Creá el primero para organizar varias fechas bajo un mismo ranking.</p></div> : <div className={styles.circuitGroups}>{groups.filter((group) => group.items.length).map((group) => <section key={group.key}><h2>{group.label}</h2><div>{group.items.map((entry) => <Link href={`/club/competition/series/${entry.id}`} className={styles.circuitRow} key={entry.id}><span><strong>{entry.name}</strong><small>{entry.planned_events_count ? `${entry.summary.events_count}/${entry.planned_events_count} fechas` : `${entry.summary.events_count} fechas`}</small></span><em>{entry.summary.progress_label}</em><ChevronRight size={17}/></Link>)}</div></section>)}</div>}
     </div>
   }
 

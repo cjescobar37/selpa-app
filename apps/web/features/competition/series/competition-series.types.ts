@@ -16,6 +16,15 @@ export type CompetitionSeries = {
   archived_at: string | null; created_at: string; updated_at: string
 }
 
+export type CompetitionSeriesListSummary = {
+  events_count: number
+  progress_label: string
+}
+
+export type CompetitionSeriesListItem = CompetitionSeries & {
+  summary: CompetitionSeriesListSummary
+}
+
 export type CompetitionSeriesDivision = {
   id: string; club_id: string; series_id: string; division_id: string; sort_order: number
   is_active: boolean; division_snapshot: Record<string, unknown> | null; frozen_at: string | null
