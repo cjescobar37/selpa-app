@@ -37,6 +37,7 @@ type Tournament = {
     event_number: number | null
     planned_events_count: number | null
   } | null
+  summary?: TournamentListSummary | null
   created_at: string
   updated_at: string
 }
@@ -298,50 +299,18 @@ export default function ClubTorneosPage() {
     }
 
     const rows = (json?.tournaments ?? []) as Tournament[]
+    const nextSummaries: Record<string, TournamentListSummary> = {}
+    const nextStages: Record<string, OperationalStage> = {}
+    rows.forEach((tournament) => {
+      if (!tournament.summary) return
+      nextSummaries[tournament.id] = tournament.summary
+      nextStages[tournament.id] = tournament.summary.operationalStage
+    })
     setThemeKey((clubThemeResult.data?.theme_key as string | null) ?? null)
     setTournaments(rows)
-    setLoading(false)
-    void loadTournamentStages(rows, token)
-  }
-
-  async function loadTournamentStages(rows: Tournament[], token: string) {
-    if (!activeClub?.id || rows.length === 0) {
-      setStagesByTournamentId({})
-      setSummariesByTournamentId({})
-      return
-    }
-
-    const summaries = await Promise.allSettled(
-      rows.map(async (tournament) => {
-        const res = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournament.id}/summary`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        })
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok || !json?.operationalStage) return null
-        return [
-          tournament.id,
-          {
-            operationalStage: json.operationalStage as OperationalStage,
-            counts: json.counts,
-            final: json.final,
-            champion: json.champion,
-            currentPlayoffPhase: json.currentPlayoffPhase ?? null,
-          } satisfies TournamentListSummary,
-        ] as const
-      })
-    )
-
-    const nextStages: Record<string, OperationalStage> = {}
-    const nextSummaries: Record<string, TournamentListSummary> = {}
-    summaries.forEach((result) => {
-      if (result.status === 'fulfilled' && result.value) {
-        nextSummaries[result.value[0]] = result.value[1]
-        nextStages[result.value[0]] = result.value[1].operationalStage
-      }
-    })
     setStagesByTournamentId(nextStages)
     setSummariesByTournamentId(nextSummaries)
+    setLoading(false)
   }
 
   useEffect(() => {

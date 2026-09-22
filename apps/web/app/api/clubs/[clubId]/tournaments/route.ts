@@ -4,6 +4,13 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { mapTournamentError } from '@/lib/tournamentErrors'
 import { getTournamentCircuitContexts } from '@/features/competition/events/competition-events.repository'
+import {
+  buildTournamentListSummaries,
+  type TournamentListGroupRow,
+  type TournamentListMatchRow,
+  type TournamentListRegistrationRow,
+  type TournamentListSummary,
+} from '@/lib/tournamentListSummary'
 
 type TournamentRow = {
   id: string
@@ -93,6 +100,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     const rows = (tournaments ?? []) as TournamentRow[]
     const circuitContexts = await getTournamentCircuitContexts(supabaseAdmin, clubId, rows.map((row) => row.id))
     const categoryIds = Array.from(new Set(rows.map((row) => row.category_id ?? row.category).filter((id): id is number => Number.isFinite(id))))
+    const tournamentIds = rows.map((row) => row.id)
 
     let categories = new Map<number, string>()
     if (categoryIds.length > 0) {
@@ -106,6 +114,38 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
       }
 
       categories = new Map(((categoryRows ?? []) as CategoryRow[]).map((category) => [category.id, category.name]))
+    }
+
+    let listSummaries: Record<string, TournamentListSummary> = {}
+    if (tournamentIds.length > 0) {
+      const [registrationsResult, groupsResult, matchesResult] = await Promise.all([
+        supabaseAdmin
+          .from('tournament_registrations')
+          .select('tournament_id,status')
+          .eq('club_id', clubId)
+          .in('tournament_id', tournamentIds),
+        supabaseAdmin
+          .from('tournament_groups')
+          .select('id,tournament_id')
+          .in('tournament_id', tournamentIds),
+        supabaseAdmin
+          .from('tournament_matches')
+          .select('id,tournament_id,phase,status,winner_team_id,round,match_order,created_at')
+          .eq('club_id', clubId)
+          .in('tournament_id', tournamentIds),
+      ])
+
+      const batchError = registrationsResult.error ?? groupsResult.error ?? matchesResult.error
+      if (batchError) {
+        return NextResponse.json({ error: batchError.message }, { status: 500 })
+      }
+
+      listSummaries = buildTournamentListSummaries({
+        tournaments: rows.map((row) => ({ id: row.id, status: row.status })),
+        registrations: (registrationsResult.data ?? []) as TournamentListRegistrationRow[],
+        groups: (groupsResult.data ?? []) as TournamentListGroupRow[],
+        matches: (matchesResult.data ?? []) as TournamentListMatchRow[],
+      })
     }
 
     return NextResponse.json({
@@ -129,6 +169,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
           price_per_player: row.price_per_player,
           rules_json: row.rules_json ?? {},
           circuit: circuitContexts[row.id] ?? null,
+          summary: listSummaries[row.id] ?? null,
           created_at: row.created_at,
           updated_at: row.updated_at,
         }
