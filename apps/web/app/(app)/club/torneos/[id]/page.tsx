@@ -124,13 +124,6 @@ type TournamentSummary = {
   nextStep: string
 }
 
-type TournamentRulesLookup = {
-  tournaments?: Array<{
-    id: string
-    rules_json?: Record<string, unknown> | null
-  }>
-}
-
 type TournamentRuleSchedule = {
   scheduleConfig: ScheduleConfig
   tournamentCourts: TournamentCourtConfig[]
@@ -1027,6 +1020,7 @@ export default function ClubTournamentDetailPage() {
   const [savingCourtConfig, setSavingCourtConfig] = useState(false)
   const [loadingComplexes, setLoadingComplexes] = useState(false)
   const [complexOptions, setComplexOptions] = useState<ComplexOption[]>([])
+  const complexOptionsClubIdRef = useRef<string | null>(null)
   const [tournamentCourtsDraft, setTournamentCourtsDraft] = useState<TournamentCourtConfig[]>([])
   const [courtDraft, setCourtDraft] = useState<CourtDraft>({ complexId: '', courtName: '' })
   const [creatingManual, setCreatingManual] = useState(false)
@@ -2172,17 +2166,12 @@ export default function ClubTournamentDetailPage() {
       return
     }
 
-    setSummary(json as TournamentSummary)
-
-    const rulesRes = await fetch(`/api/clubs/${activeClub.id}/tournaments`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    })
-    const rulesJson = await rulesRes.json().catch(() => ({})) as TournamentRulesLookup
-    const currentTournament = (rulesJson.tournaments ?? []).find((item) => item.id === tournamentId)
-    setTournamentRules(currentTournament?.rules_json ?? null)
-    setFlyerConfig(readFlyerConfigFromRules(currentTournament?.rules_json))
-    setTournamentDisplayConfig(readTournamentDisplayConfig(currentTournament?.rules_json))
+    const nextSummary = json as TournamentSummary
+    const rules = nextSummary.tournament.rules_json ?? null
+    setSummary(nextSummary)
+    setTournamentRules(rules)
+    setFlyerConfig(readFlyerConfigFromRules(rules))
+    setTournamentDisplayConfig(readTournamentDisplayConfig(rules))
     setLoading(false)
   }
 
@@ -2211,10 +2200,16 @@ export default function ClubTournamentDetailPage() {
       return
     }
 
-    const res = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}/registrations`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    })
+    const [res, matchesRes] = await Promise.all([
+      fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}/registrations`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      }),
+      fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}/matches`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      }),
+    ])
     const json = await res.json().catch(() => ({}))
 
     if (!res.ok) {
@@ -2240,10 +2235,6 @@ export default function ClubTournamentDetailPage() {
       groupMatchesCount: Number(json?.meta?.groupMatchesCount ?? 0),
     })
 
-    const matchesRes = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}/matches`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    })
     const matchesJson = await matchesRes.json().catch(() => ({})) as { matches?: TournamentMatch[] }
     const matches = matchesRes.ok ? (matchesJson.matches ?? []) : []
     const sortedMatches = [...matches].sort((left, right) => {
@@ -2280,6 +2271,7 @@ export default function ClubTournamentDetailPage() {
   async function loadComplexOptions() {
     if (!activeClub?.id) {
       setComplexOptions([])
+      complexOptionsClubIdRef.current = null
       setLoadingComplexes(false)
       return
     }
@@ -2299,6 +2291,7 @@ export default function ClubTournamentDetailPage() {
 
     if (error) {
       setComplexOptions([fallbackOption])
+      complexOptionsClubIdRef.current = activeClub.id
       setLoadingComplexes(false)
       return
     }
@@ -2315,6 +2308,7 @@ export default function ClubTournamentDetailPage() {
     }
 
     setComplexOptions(nextOptions)
+    complexOptionsClubIdRef.current = activeClub.id
     setLoadingComplexes(false)
   }
 
@@ -2328,6 +2322,9 @@ export default function ClubTournamentDetailPage() {
       courtName: '',
     }))
     setCourtConfigModalOpen(true)
+    if (complexOptionsClubIdRef.current !== activeClub?.id && !loadingComplexes) {
+      void loadComplexOptions()
+    }
   }
 
   function addTournamentCourt() {
@@ -4395,11 +4392,6 @@ export default function ClubTournamentDetailPage() {
     void Promise.resolve().then(() => refreshTournamentExperience())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClub?.id, tournamentId])
-
-  useEffect(() => {
-    void Promise.resolve().then(() => loadComplexOptions())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClub?.id])
 
   useEffect(() => {
     if (manualModalOpen && !canAddPair) {

@@ -30,6 +30,7 @@ type TournamentRow = {
   max_pairs: number | null
   price_per_player: number | null
   points_total: number | null
+  rules_json: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }
@@ -181,7 +182,7 @@ export async function GET(
 
     const { data: tournament, error: tournamentError } = await supabaseAdmin
       .from('tournaments')
-      .select('id,club_id,name,status,type,tournament_type,format,gender,segment,category_id,category,fixed_category_id,category_rule,category_sum_target,age_category_id,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,points_total,created_at,updated_at')
+      .select('id,club_id,name,status,type,tournament_type,format,gender,segment,category_id,category,fixed_category_id,category_rule,category_sum_target,age_category_id,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,points_total,rules_json,created_at,updated_at')
       .eq('id', tournamentId)
       .eq('club_id', clubId)
       .maybeSingle()
@@ -350,6 +351,7 @@ export async function GET(
         max_pairs: tournamentRow.max_pairs,
         price_per_player: tournamentRow.price_per_player,
         points_total: tournamentRow.points_total,
+        rules_json: tournamentRow.rules_json,
         created_at: tournamentRow.created_at,
         updated_at: tournamentRow.updated_at,
         points_scheme: circuit?.points_scheme ?? null,
