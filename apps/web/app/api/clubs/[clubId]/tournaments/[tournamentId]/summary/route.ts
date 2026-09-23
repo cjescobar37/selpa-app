@@ -180,12 +180,41 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado para ver el torneo.' }, { status: 403 })
     }
 
-    const { data: tournament, error: tournamentError } = await supabaseAdmin
-      .from('tournaments')
-      .select('id,club_id,name,status,type,tournament_type,format,gender,segment,category_id,category,fixed_category_id,category_rule,category_sum_target,age_category_id,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,points_total,rules_json,created_at,updated_at')
-      .eq('id', tournamentId)
-      .eq('club_id', clubId)
-      .maybeSingle()
+    const [
+      { data: tournament, error: tournamentError },
+      circuitContexts,
+      { data: registrations, error: registrationsError },
+      { data: teams, error: teamsError },
+      { count: groupCount, error: groupsError },
+      { data: matches, error: matchesError },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('tournaments')
+        .select('id,club_id,name,status,type,tournament_type,format,gender,segment,category_id,category,fixed_category_id,category_rule,category_sum_target,age_category_id,start_date,starts_on,end_date,ends_on,registration_deadline,signup_deadline,min_pairs,max_pairs,price_per_player,points_total,rules_json,created_at,updated_at')
+        .eq('id', tournamentId)
+        .eq('club_id', clubId)
+        .maybeSingle(),
+      getTournamentCircuitContexts(supabaseAdmin, clubId, [tournamentId]),
+      supabaseAdmin
+        .from('tournament_registrations')
+        .select('status')
+        .eq('club_id', clubId)
+        .eq('tournament_id', tournamentId),
+      supabaseAdmin
+        .from('tournament_teams')
+        .select('id,player1_user_id,player2_user_id')
+        .eq('club_id', clubId)
+        .eq('tournament_id', tournamentId),
+      supabaseAdmin
+        .from('tournament_groups')
+        .select('id', { count: 'exact', head: true })
+        .eq('tournament_id', tournamentId),
+      supabaseAdmin
+        .from('tournament_matches')
+        .select('id,phase,status,team1_id,team2_id,winner_team_id,score,round,match_order,created_at')
+        .eq('club_id', clubId)
+        .eq('tournament_id', tournamentId),
+    ])
 
     if (tournamentError) {
       return NextResponse.json({ error: tournamentError.message }, { status: 500 })
@@ -195,8 +224,23 @@ export async function GET(
       return NextResponse.json({ error: 'Torneo no encontrado para este club.' }, { status: 404 })
     }
 
+    if (registrationsError) {
+      return NextResponse.json({ error: registrationsError.message }, { status: 500 })
+    }
+
+    if (teamsError) {
+      return NextResponse.json({ error: teamsError.message }, { status: 500 })
+    }
+
+    if (groupsError) {
+      return NextResponse.json({ error: groupsError.message }, { status: 500 })
+    }
+
+    if (matchesError) {
+      return NextResponse.json({ error: matchesError.message }, { status: 500 })
+    }
+
     const tournamentRow = tournament as TournamentRow
-    const circuitContexts = await getTournamentCircuitContexts(supabaseAdmin, clubId, [tournamentId])
     const circuit = circuitContexts[tournamentId] ?? null
     const categoryId = getCategoryId(tournamentRow)
 
@@ -211,16 +255,6 @@ export async function GET(
       if (category?.name) categoryName = category.name
     }
 
-    const { data: registrations, error: registrationsError } = await supabaseAdmin
-      .from('tournament_registrations')
-      .select('status')
-      .eq('club_id', clubId)
-      .eq('tournament_id', tournamentId)
-
-    if (registrationsError) {
-      return NextResponse.json({ error: registrationsError.message }, { status: 500 })
-    }
-
     const registrationRows = (registrations ?? []) as RegistrationRow[]
     const registrationCounts = {
       total: registrationRows.length,
@@ -229,37 +263,8 @@ export async function GET(
       cancelled: registrationRows.filter((row) => row.status === 'CANCELLED').length,
     }
 
-    const { data: teams, error: teamsError } = await supabaseAdmin
-      .from('tournament_teams')
-      .select('id,player1_user_id,player2_user_id')
-      .eq('club_id', clubId)
-      .eq('tournament_id', tournamentId)
-
-    if (teamsError) {
-      return NextResponse.json({ error: teamsError.message }, { status: 500 })
-    }
-
     const teamRows = (teams ?? []) as TeamRow[]
     const teamsById = new Map(teamRows.map((team) => [team.id, team]))
-
-    const { count: groupCount, error: groupsError } = await supabaseAdmin
-      .from('tournament_groups')
-      .select('id', { count: 'exact', head: true })
-      .eq('tournament_id', tournamentId)
-
-    if (groupsError) {
-      return NextResponse.json({ error: groupsError.message }, { status: 500 })
-    }
-
-    const { data: matches, error: matchesError } = await supabaseAdmin
-      .from('tournament_matches')
-      .select('id,phase,status,team1_id,team2_id,winner_team_id,score,round,match_order,created_at')
-      .eq('club_id', clubId)
-      .eq('tournament_id', tournamentId)
-
-    if (matchesError) {
-      return NextResponse.json({ error: matchesError.message }, { status: 500 })
-    }
 
     const matchRows = (matches ?? []) as MatchRow[]
     const groupMatches = matchRows.filter((match) => String(match.phase ?? '').toUpperCase() === 'GROUP')

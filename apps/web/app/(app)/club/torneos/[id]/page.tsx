@@ -13,6 +13,7 @@ import { bracketPath } from '../_components/playoffPresentation'
 import { hasClubCapability } from '@/lib/clubPermissions'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
+import SelpaLoader from '@/components/SelpaLoader'
 import { getClubTheme } from '@/lib/clubThemes'
 import { ActionFeedbackNotice, type ActionFeedbackTone } from '@/components/ui/ActionFeedbackNotice'
 import {
@@ -2127,7 +2128,7 @@ export default function ClubTournamentDetailPage() {
     return data?.session?.access_token ?? null
   }
 
-  async function loadSummary() {
+  async function loadSummary(token: string | null) {
     if (!activeClub?.id || !tournamentId) {
       setSummary(null)
       setTournamentRules(null)
@@ -2139,7 +2140,6 @@ export default function ClubTournamentDetailPage() {
     setLoading(true)
     setMessage('')
 
-    const token = await getToken()
     if (!token) {
       setMessage('Sesión inválida.')
       setTournamentRules(null)
@@ -2175,7 +2175,7 @@ export default function ClubTournamentDetailPage() {
     setLoading(false)
   }
 
-  async function loadRegistrations() {
+  async function loadRegistrations(token: string | null) {
     if (!activeClub?.id || !tournamentId) {
       setRegistrations([])
       setGroups([])
@@ -2188,7 +2188,6 @@ export default function ClubTournamentDetailPage() {
 
     setLoadingRegistrations(true)
 
-    const token = await getToken()
     if (!token) {
       setRegistrations([])
       setGroups([])
@@ -2257,7 +2256,8 @@ export default function ClubTournamentDetailPage() {
   }
 
   async function refreshTournamentExperience() {
-    await Promise.all([loadSummary(), loadRegistrations()])
+    const token = activeClub?.id && tournamentId ? await getToken() : null
+    await Promise.all([loadSummary(token), loadRegistrations(token)])
   }
 
   function scrollToTournamentMatch(matchId: string) {
@@ -4510,7 +4510,7 @@ export default function ClubTournamentDetailPage() {
         {!activeClub?.id ? (
           <div className="px-empty">Primero seleccioná un club activo.</div>
         ) : loading ? (
-          <div className="px-empty">Cargando torneo...</div>
+          <SelpaLoader title="Cargando torneo..." subtitle="Preparando la información" />
         ) : message ? (
           <div className="club-message">{message}</div>
         ) : summary ? (
