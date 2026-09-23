@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
+import { isApprovedMembership, isClubAdminRole } from '@/lib/clubMembershipRules'
 
 type ManualPlayerInput = {
   club_player_id?: string
@@ -238,23 +239,38 @@ export async function GET(
       playersQuery = playersQuery.eq('category', tournamentCategory)
     }
 
-    const [{ data: players, error: playersError }, { data: teams, error: teamsError }] = await Promise.all([
+    const [
+      { data: players, error: playersError },
+      { data: teams, error: teamsError },
+      { data: memberships, error: membershipsError },
+    ] = await Promise.all([
       playersQuery,
       supabaseAdmin
         .from('tournament_teams')
         .select('player1_user_id,player2_user_id')
         .eq('tournament_id', tournamentId)
         .eq('club_id', clubId),
+      supabaseAdmin
+        .from('club_memberships')
+        .select('user_id,role,status,approved_at')
+        .eq('club_id', clubId),
     ])
 
     if (playersError) return NextResponse.json({ error: playersError.message }, { status: 500 })
     if (teamsError) return NextResponse.json({ error: teamsError.message }, { status: 500 })
+    if (membershipsError) return NextResponse.json({ error: membershipsError.message }, { status: 500 })
 
     const usedPlayerIds = new Set(
       ((teams ?? []) as TeamRow[]).flatMap((team) => [team.player1_user_id, team.player2_user_id]).filter(Boolean)
     )
+    const clubAdminUserIds = new Set(
+      (memberships ?? [])
+        .filter((membership) => isApprovedMembership(membership) && isClubAdminRole(membership.role))
+        .map((membership) => String(membership.user_id))
+    )
     const playerRows = ((players ?? []) as ClubPlayerRow[])
       .filter((player) => !usedPlayerIds.has(player.user_id))
+      .filter((player) => !clubAdminUserIds.has(player.user_id))
       .filter((player) => genderMatchesTournament(player.gender, tournamentRow.gender))
 
     const userIds = playerRows.map((player) => player.user_id)
@@ -528,6 +544,28 @@ export async function POST(
     if (player1.userId === player2.userId) {
       await cleanupCreatedAuthUsers(createdAuthUserIds)
       return NextResponse.json({ error: 'Los jugadores de la pareja deben ser distintos.', code: 'SAME_PLAYER' }, { status: 400 })
+    }
+
+    const { data: playerMemberships, error: playerMembershipsError } = await supabaseAdmin
+      .from('club_memberships')
+      .select('user_id,role,status,approved_at')
+      .eq('club_id', clubId)
+      .in('user_id', [player1.userId, player2.userId])
+
+    if (playerMembershipsError) {
+      await cleanupCreatedAuthUsers(createdAuthUserIds)
+      return NextResponse.json({ error: playerMembershipsError.message }, { status: 500 })
+    }
+
+    const includesClubAdmin = (playerMemberships ?? []).some(
+      (membership) => isApprovedMembership(membership) && isClubAdminRole(membership.role)
+    )
+    if (includesClubAdmin) {
+      await cleanupCreatedAuthUsers(createdAuthUserIds)
+      return NextResponse.json({
+        error: 'Los administradores del club organizador no pueden participar en sus torneos.',
+        code: 'CLUB_ADMIN_CANNOT_REGISTER',
+      }, { status: 409 })
     }
 
     const { data: existingTeams, error: existingTeamsError } = await supabaseAdmin

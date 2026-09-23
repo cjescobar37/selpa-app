@@ -21,6 +21,10 @@ export function isClubStaffRole(role: string | null | undefined) {
   return STAFF_ROLES.includes(role as (typeof STAFF_ROLES)[number])
 }
 
+export function isClubAdminRole(role: string | null | undefined) {
+  return role === 'OWNER' || role === 'ADMIN'
+}
+
 export function isInternalClubRole(role: string | null | undefined) {
   return STAFF_ROLES.includes(role as (typeof STAFF_ROLES)[number])
 }

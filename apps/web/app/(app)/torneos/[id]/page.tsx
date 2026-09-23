@@ -88,6 +88,7 @@ type PublicTournamentDetail = {
   }
   viewer: {
     isAuthenticated: boolean
+    isClubAdmin: boolean
     isPlayerInClub: boolean
     isRegisteredInTournament: boolean
     myTeam: null | {
@@ -551,10 +552,10 @@ export default function TorneoDetallePage() {
         ]}
         themeKey={detail.club?.themeKey}
         coverUrl={detail.flyerUrl}
-        variant={detail.viewer.isAuthenticated ? 'player-tournament' : 'default'}
+        variant={detail.viewer.isAuthenticated && !detail.viewer.isClubAdmin ? 'player-tournament' : 'default'}
       />
 
-      <section id="estado-jugador" className={`tournamentPublicDetail__landingPitch${registrationClosed ? ' is-registrationClosed' : ''}`}>
+      {!detail.viewer.isClubAdmin ? <section id="estado-jugador" className={`tournamentPublicDetail__landingPitch${registrationClosed ? ' is-registrationClosed' : ''}`}>
         {detail.viewer.isRegisteredInTournament && detail.viewer.myTeam ? (
           <div className="tournamentPublicDetail__registeredBlock">
             <div className="tournamentPublicDetail__registeredIntro">
@@ -648,9 +649,9 @@ export default function TorneoDetallePage() {
             </div>
           </div>
         )}
-      </section>
+      </section> : null}
 
-      <section className="tournamentPublicDetail__personalBoard">
+      {!detail.viewer.isClubAdmin ? <section className="tournamentPublicDetail__personalBoard">
         <div className="tournamentPublicDetail__cardHeader">
           <span>Tu torneo</span>
           <Users size={18} />
@@ -688,7 +689,7 @@ export default function TorneoDetallePage() {
             </div>
           </>
         )}
-      </section>
+      </section> : null}
 
       <section className="tournamentPublicDetail__progressCard">
         <div className="tournamentPublicDetail__cardHeader">

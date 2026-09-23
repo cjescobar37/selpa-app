@@ -313,13 +313,14 @@ function debugGeneralOpenPlanFallback(reason: string | null | undefined) {
   })
 }
 
-function isOpenCompatibleTournament(tournament: TournamentRow) {
+export function isOpenCompatibleTournament(tournament: TournamentRow) {
+  const rules = normalizeObject(tournament.rules_json ?? tournament.rules)
   const format = String(tournament.format ?? '').toUpperCase()
-  const type = tournament.type ? String(tournament.type).toUpperCase() : null
-  const legacyType = tournament.tournament_type ? String(tournament.tournament_type).toUpperCase() : null
-  const compatibleFormat = format === 'ZONE_PLAYOFF' || format === 'GROUPS_ELIMINATION' || format === 'GROUPS_ELIM'
-  const declaredTypes = [type, legacyType].filter(Boolean)
-  return compatibleFormat && declaredTypes.length > 0 && declaredTypes.every((value) => value === 'OPEN')
+  const competitionSystem = String(rules.competition_system ?? '').toUpperCase()
+  return competitionSystem === 'ZONE_PLAYOFF' ||
+    format === 'ZONE_PLAYOFF' ||
+    format === 'GROUPS_ELIMINATION' ||
+    format === 'GROUPS_ELIM'
 }
 
 function isDirectKnockoutTournament(tournament: TournamentRow) {
@@ -663,7 +664,7 @@ export async function regenerateOpenPlayoffWithGeneralEngine(input: {
   if (!isOpenCompatibleTournament(tournamentRow)) {
     throw new OpenPlayoffGenerationError(
       'UNSUPPORTED_TOURNAMENT_FORMAT',
-      'La regeneración OPEN requiere un torneo OPEN con formato de grupos y eliminación.',
+      'La regeneración requiere un torneo con formato de grupos y eliminación.',
       422
     )
   }
@@ -808,7 +809,7 @@ export async function generateOpenFirstRoundPlayoff(input: {
   if (!isOpenCompatibleTournament(tournamentRow)) {
     throw new OpenPlayoffGenerationError(
       'UNSUPPORTED_TOURNAMENT_FORMAT',
-      'La generación OPEN requiere un torneo OPEN con formato de grupos y eliminación.',
+      'La generación requiere un torneo con formato de grupos y eliminación.',
       422
     )
   }

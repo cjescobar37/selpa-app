@@ -195,7 +195,7 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
             <div><dt>Puntos</dt><dd>{settlement ? labels[status(settlement)] ?? status(settlement) : 'Pendiente'}</dd></div>
           </dl>
           {visiblePreflightBlockers.length ? <div className={styles.preflight}>{visiblePreflightBlockers.map(item => <small key={item.code}><AlertCircle size={13} />{item.message}</small>)}</div> : null}
-          {link ? <Link className={styles.tournament} href={`/club/torneos/${String(link.tournament_id)}`}>Gestionar torneo<ArrowRight size={16} aria-hidden="true" /></Link> : null}
+          {link ? <Link className={styles.tournament} href={`/club/torneos/${String(link.tournament_id)}`}>Abrir centro de control<ArrowRight size={16} aria-hidden="true" /></Link> : null}
         </article>
       })}</div>}
     </section>

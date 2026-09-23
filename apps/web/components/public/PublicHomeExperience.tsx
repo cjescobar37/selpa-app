@@ -14,6 +14,7 @@ import PampraxHero from '@/components/ui/PampraxHero'
 import PublicRankingClubCard from '@/components/public/PublicRankingClubCard'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import { useSession } from '@/components/session/SessionProvider'
+import { isClubAdminRole } from '@/lib/clubMembershipRules'
 
 type NewsItem = {
   id: string
@@ -317,6 +318,7 @@ export default function PublicHomeExperience({
 }) {
   const router = useRouter()
   const session = useSession()
+  const hidePlayerHero = hideHero || isClubAdminRole(session.clubRole)
   const heroPrimaryAction = useMemo(() => {
     if (session.role === 'player') {
       return { label: 'Ir a mi espacio', href: '/player' }
@@ -442,7 +444,7 @@ export default function PublicHomeExperience({
 
   return (
     <div className="px-publicHome">
-      {!hideHero ? (
+      {!hidePlayerHero ? (
         <PampraxHero
           kicker={`${BRAND.name} público`}
           title={'Viví tu carrera\ndeportiva'}

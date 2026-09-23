@@ -1678,6 +1678,12 @@ button.px-playerClubCta:disabled{
   width: min(292px, 100%);
 }
 
+.selpaLoader{
+  align-self: center;
+  justify-self: center;
+  margin-inline: auto;
+}
+
 .px-loginLoading__mark{
   align-items: center;
   background:

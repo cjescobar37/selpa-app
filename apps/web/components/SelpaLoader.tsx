@@ -11,7 +11,7 @@ type SelpaLoaderProps = {
 export default function SelpaLoader({ title, subtitle, className = '' }: SelpaLoaderProps) {
   const spinnerRef = useRef<HTMLSpanElement>(null)
   const barRef = useRef<HTMLSpanElement>(null)
-  const classes = ['px-loginLoading', className].filter(Boolean).join(' ')
+  const classes = ['px-loginLoading', 'selpaLoader', className].filter(Boolean).join(' ')
 
   useEffect(() => {
     const spinner = spinnerRef.current

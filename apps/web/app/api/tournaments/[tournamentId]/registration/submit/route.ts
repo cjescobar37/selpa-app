@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
 import { getTournamentRegistrationIneligibility } from '@/lib/tournamentRegistrationEligibility'
+import { isApprovedMembership, isClubAdminRole } from '@/lib/clubMembershipRules'
 
 type RegistrationSubmitContext = {
   params: Promise<{ tournamentId: string }>
@@ -135,7 +136,7 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
   }
 
   const [{ data: memberships, error: membershipsError }, { data: profiles, error: profilesError }] = await Promise.all([
-    supabaseAdmin.from('club_memberships').select('user_id,status,approved_at').eq('club_id', tournament.club_id).in('user_id', [user.id, partnerUserId]),
+    supabaseAdmin.from('club_memberships').select('user_id,role,status,approved_at').eq('club_id', tournament.club_id).in('user_id', [user.id, partnerUserId]),
     supabaseAdmin.from('profiles').select('user_id,status,birth_date').in('user_id', [user.id, partnerUserId]),
   ])
   if (membershipsError || profilesError) return NextResponse.json({ error: 'No pudimos validar la elegibilidad de la pareja. Intentá nuevamente.' }, { status: 500 })
@@ -144,6 +145,14 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
   for (const [player, label] of [[me, 'Tu perfil'], [partner, 'La categoría de tu compañero']] as const) {
     const membership = membershipByUserId.get(String(player.user_id))
     const profile = profileByUserId.get(String(player.user_id))
+    if (isApprovedMembership(membership) && isClubAdminRole(membership?.role)) {
+      return NextResponse.json({
+        error: player.user_id === user.id
+          ? 'Los administradores del club organizador no pueden inscribirse en sus torneos.'
+          : 'El compañero seleccionado administra el club organizador y no puede participar en este torneo.',
+        code: 'CLUB_ADMIN_CANNOT_REGISTER',
+      }, { status: 409 })
+    }
     const ineligibility = getTournamentRegistrationIneligibility(
       { category: tournament.category, gender: tournament.gender, startDate: tournament.startDate, endDate: tournament.endDate },
       {

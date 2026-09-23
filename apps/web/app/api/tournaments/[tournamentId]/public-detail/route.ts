@@ -9,6 +9,7 @@ import {
   groupTiebreakerFinalOptions,
   normalizeGroupTiebreakerConfig,
 } from '@/lib/tournamentTiebreakers'
+import { isApprovedMembership, isClubAdminRole } from '@/lib/clubMembershipRules'
 
 type PublicDetailContext = {
   params: Promise<{ tournamentId: string }>
@@ -221,6 +222,7 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
   if (!user) {
     return {
       isAuthenticated: false,
+      isClubAdmin: false,
       isPlayerInClub: false,
       isRegisteredInTournament: false,
       myTeam: null,
@@ -228,12 +230,32 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
     }
   }
 
-  const { data: clubPlayer } = await supabaseAdmin
-    .from('club_players')
-    .select('id,user_id,display_name,category,gender,approved_at')
-    .eq('club_id', clubId)
-    .eq('user_id', user.id)
-    .maybeSingle()
+  const [{ data: clubPlayer }, { data: membership }] = await Promise.all([
+    supabaseAdmin
+      .from('club_players')
+      .select('id,user_id,display_name,category,gender,approved_at')
+      .eq('club_id', clubId)
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('club_memberships')
+      .select('role,status,approved_at')
+      .eq('club_id', clubId)
+      .eq('user_id', user.id)
+      .maybeSingle(),
+  ])
+
+  const isClubAdmin = isApprovedMembership(membership) && isClubAdminRole(membership?.role)
+  if (isClubAdmin) {
+    return {
+      isAuthenticated: true,
+      isClubAdmin: true,
+      isPlayerInClub: false,
+      isRegisteredInTournament: false,
+      myTeam: null,
+      activePartnership: null,
+    }
+  }
 
   const isPlayerInClub = Boolean(clubPlayer?.id && clubPlayer?.approved_at)
   const ownProfileMap = await getProfilesByUserId([user.id])
@@ -452,6 +474,7 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
 
   return {
     isAuthenticated: true,
+    isClubAdmin: false,
     isPlayerInClub,
     clubPlayer: clubPlayer
       ? {
