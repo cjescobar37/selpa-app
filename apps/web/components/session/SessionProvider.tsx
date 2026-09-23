@@ -11,6 +11,7 @@ import {
   type ClubRole,
   type MembershipStatus,
 } from '@/lib/clubMembershipRules'
+import { resolveFastAuthorization, type FastAuthorization, type SessionMembership } from '@/lib/sessionFastAuthorization'
 
 export type AppRole = 'guest' | 'player' | 'club' | 'platform'
 export type PostLoginDestination = '/login' | '/completar-perfil' | '/seleccionar-club' | '/club' | '/player' | '/platform' | `/clubs/${string}`
@@ -98,24 +99,24 @@ function getNameFromUser(u: AuthUserLike, profile: GlobalProfile | null) {
   )
 }
 
-type MembershipRow = {
-  club_id: string
-  role: ClubRole
-  status: MembershipStatus
-  approved_at: string | null
-}
-
-function getPostLoginDestination(ctx: Pick<SessionCtx, 'role' | 'user' | 'globalProfile' | 'activeClub' | 'isApprovedMember'>): PostLoginDestination {
+function getPostLoginDestination(ctx: Pick<SessionCtx, 'role' | 'user' | 'globalProfile' | 'activeClubId' | 'isApprovedMember'>): PostLoginDestination {
   if (!ctx.user) return '/login'
   if (ctx.role === 'player' && !isGlobalProfileComplete(ctx.globalProfile)) return '/completar-perfil'
   if (ctx.role === 'platform') return '/platform'
   if (ctx.role === 'player') return '/player'
-  if (!ctx.activeClub || !ctx.isApprovedMember) return '/seleccionar-club'
+  if (!ctx.activeClubId || !ctx.isApprovedMember) return '/seleccionar-club'
   if (ctx.role === 'club') return '/club'
   return '/player'
 }
 
-async function resolveContext() {
+type AuthorizationReadyContext = FastAuthorization & {
+  isPlatformAdmin: boolean
+  user: NonNullable<SessionCtx['user']>
+  globalProfile: GlobalProfile | null
+  postLoginDestination: PostLoginDestination
+}
+
+async function resolveContext(onAuthorizationReady?: (context: AuthorizationReadyContext) => void) {
   const { data: s } = await getCurrentSession()
   const user = s?.session?.user
 
@@ -148,12 +149,12 @@ async function resolveContext() {
   const isPlatformAdmin = !!pa?.user_id
   const configuredActiveClubId = (us?.active_club_id as string | null) ?? null
 
-  const membershipRows = ((memberships ?? []) as Partial<MembershipRow>[]).map((m) => ({
+  const membershipRows = ((memberships ?? []) as Partial<SessionMembership>[]).map((m) => ({
     club_id: m.club_id as string,
     role: m.role as ClubRole,
     status: m.status as MembershipStatus,
     approved_at: (m.approved_at as string | null) ?? null,
-  })) satisfies MembershipRow[]
+  })) satisfies SessionMembership[]
 
   const approvedMemberships = membershipRows.filter(isApprovedMembership)
   const approvedAdministrativeMemberships = approvedMemberships.filter((membership) =>
@@ -161,6 +162,31 @@ async function resolveContext() {
   )
 
   const approvedClubIds = approvedMemberships.map((m) => m.club_id)
+
+  const fastAuthorization = resolveFastAuthorization({
+    configuredActiveClubId,
+    memberships: membershipRows,
+    isPlatformAdmin,
+  })
+  const resolvedUser = {
+    id: userId,
+    name: getNameFromUser(user, profile as GlobalProfile | null),
+    email: user.email,
+    avatarUrl: buildAssetProxyUrl((profile as GlobalProfile | null)?.avatar_url ?? (user.user_metadata?.avatar_url as string | null) ?? null),
+  }
+
+  if (fastAuthorization && onAuthorizationReady) {
+    const authorizationContext = {
+      ...fastAuthorization,
+      isPlatformAdmin,
+      user: resolvedUser,
+      globalProfile: (profile as GlobalProfile | null) ?? null,
+    }
+    onAuthorizationReady({
+      ...authorizationContext,
+      postLoginDestination: getPostLoginDestination(authorizationContext),
+    })
+  }
 
   let clubs: ClubMini[] = []
 
@@ -224,8 +250,9 @@ async function resolveContext() {
       ? approvedAdministrativeMemberships[0].club_id
       : null
 
-  let effectiveActiveClubId =
-    soleAdministrativeClubId ?? (hasValidConfiguredClub ? configuredActiveClubId : null)
+  let effectiveActiveClubId = fastAuthorization?.activeClubId
+    ?? soleAdministrativeClubId
+    ?? (hasValidConfiguredClub ? configuredActiveClubId : null)
 
   if (!effectiveActiveClubId && clubs.length > 0) {
     effectiveActiveClubId = clubs[0].id
@@ -257,15 +284,10 @@ async function resolveContext() {
   const result = {
     role,
     isPlatformAdmin,
-    user: {
-      id: userId,
-      name: getNameFromUser(user, profile as GlobalProfile | null),
-      email: user.email,
-      avatarUrl: buildAssetProxyUrl((profile as GlobalProfile | null)?.avatar_url ?? (user.user_metadata?.avatar_url as string | null) ?? null),
-    },
+    user: resolvedUser,
     globalProfile: (profile as GlobalProfile | null) ?? null,
     activeClub,
-    activeClubId: activeClub?.id ?? null,
+    activeClubId: effectiveActiveClubId,
     clubs,
     isApprovedMember,
     clubRole,
@@ -303,7 +325,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     const promise = (async () => {
       try {
-        const r = await resolveContext()
+        const allowFastAuthorization = !hasResolvedContextRef.current
+        const applyAuthorization = (r: AuthorizationReadyContext) => {
+          setRole(r.role)
+          setIsPlatformAdmin(r.isPlatformAdmin)
+          setUser(r.user)
+          setGlobalProfile(r.globalProfile)
+          setActiveClubId(r.activeClubId)
+          setIsApprovedMember(r.isApprovedMember)
+          setClubRole(r.clubRole)
+          setMembershipStatus(r.membershipStatus)
+          setMembershipApprovedAt(r.membershipApprovedAt)
+          setPostLoginDestination(r.postLoginDestination)
+          hasResolvedContextRef.current = true
+          setStatus('ready')
+        }
+        const r = await resolveContext(allowFastAuthorization ? applyAuthorization : undefined)
         setRole(r.role)
         setIsPlatformAdmin(r.isPlatformAdmin)
         setUser(r.user)
