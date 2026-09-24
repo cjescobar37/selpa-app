@@ -26,7 +26,14 @@ import { OpenTournamentEngineError, type OpenBracketPlan, type OpenPersistableMa
 import { getTournamentRegistrationEligibilityGate } from '@/lib/tournamentRegistrationEligibility'
 import { evaluatePlayoffSchedulingPlan } from '@/lib/tournamentPlayoffSchedulingDiagnostics'
 import { normalizeScheduleConfig, normalizeTournamentCourts, readMatchScheduleAssignments, type MatchScheduleAssignment } from '@/lib/tournamentSchedule'
-import { clearPlayoffScheduleReservationsFromRules } from '@/lib/tournamentPlayoffScheduleReservations'
+import {
+  clearPlayoffScheduleReservationsFromRules,
+  readPlayoffScheduleReservations,
+  resolveTournamentPlayoffScheduleCategory,
+  upsertPlayoffScheduleReservationInRules,
+  type PlayoffSchedulePhase,
+} from '@/lib/tournamentPlayoffScheduleReservations'
+import { buildCompletePlayoffSchedule, type PlayoffAutoScheduleFixedSlot } from '@/lib/tournamentPlayoffAutoScheduler'
 import { buildCircuitDirectPlayoffPlan } from '@/lib/tournamentCircuitDraw'
 
 type OpenPlayoffErrorCode =
@@ -43,6 +50,7 @@ type OpenPlayoffErrorCode =
   | 'OPEN_GENERATION_ROLLED_BACK'
   | 'PLAYOFF_REGENERATION_BLOCKED'
   | 'DIRECT_SEEDS_NOT_READY'
+  | 'PLAYOFF_SCHEDULE_CAPACITY_INSUFFICIENT'
 
 type TournamentRow = {
   id: string
@@ -55,6 +63,8 @@ type TournamentRow = {
   start_date: string | null
   end_date: string | null
   registration_deadline?: string | null
+  category_id?: number | null
+  category?: string | null
   rules_json: Record<string, unknown> | null
   rules: Record<string, unknown> | null
 }
@@ -323,6 +333,76 @@ export function isOpenCompatibleTournament(tournament: TournamentRow) {
     format === 'GROUPS_ELIM'
 }
 
+type PersistedPlayoffPlan = {
+  bracket_size?: number
+  bracket_slots?: Array<{ pair_order?: number; is_bye_slot?: boolean }>
+  first_round_matches?: Array<{ match_order?: number; bracket_pair_order?: number }>
+}
+
+function appendCompletePlayoffReservations(input: {
+  rules: Record<string, unknown>
+  tournament: TournamentRow
+  plan: PersistedPlayoffPlan
+  createdAssignments: MatchScheduleAssignment[]
+  courts: ReturnType<typeof normalizeTournamentCourts>
+  scheduleConfig: ReturnType<typeof normalizeScheduleConfig>
+}) {
+  const category = resolveTournamentPlayoffScheduleCategory(input.tournament)
+  const bracketSize = Number(input.plan.bracket_size)
+  const phaseBySize: Partial<Record<number, PlayoffSchedulePhase>> = {
+    64: 'ROUND_OF_32', 32: 'ROUND_OF_16', 16: 'EIGHTHS', 8: 'QUARTER', 4: 'SEMI', 2: 'FINAL',
+  }
+  const phase = phaseBySize[bracketSize]
+  if (!category || !phase) return input.rules
+
+  const existingReservations = Object.values(readPlayoffScheduleReservations(input.rules.playoff_schedule_reservations))
+  const fixedSlots: PlayoffAutoScheduleFixedSlot[] = [
+    ...input.createdAssignments.map((assignment, index) => ({
+      phase,
+      matchOrder: index + 1,
+      scheduledAt: assignment.scheduled_at,
+      courtName: assignment.court_name,
+      courtId: assignment.court_id,
+      courtSource: assignment.court_source,
+    })),
+    ...existingReservations.map((reservation) => ({
+      phase: reservation.phase,
+      matchOrder: reservation.match_order,
+      scheduledAt: reservation.scheduled_at,
+      courtName: reservation.court_name,
+      courtId: reservation.court_id,
+      courtSource: reservation.court_source,
+    })),
+  ]
+  const byePairOrders = new Set<number>()
+  for (const slot of input.plan.bracket_slots ?? []) {
+    if (slot.is_bye_slot && Number.isInteger(Number(slot.pair_order))) byePairOrders.add(Number(slot.pair_order))
+  }
+  const result = buildCompletePlayoffSchedule({
+    category,
+    bracketSize,
+    date: input.scheduleConfig.playoff.date,
+    startTime: input.scheduleConfig.playoff.start_time,
+    endTime: input.scheduleConfig.playoff.end_time,
+    matchDurationMinutes: input.scheduleConfig.match_duration_minutes,
+    courts: input.courts,
+    firstRoundPairOrders: (input.plan.first_round_matches ?? [])
+      .map((match) => Number(match.bracket_pair_order))
+      .filter(Number.isInteger),
+    byePairOrders: [...byePairOrders],
+    fixedSlots,
+  })
+  if (result.blocker) {
+    throw new OpenPlayoffGenerationError(
+      result.blocker.code,
+      `El playoff completo no entra en la ventana configurada. Pendientes: ${result.blocker.pendingSlots.join(', ')}.`,
+      409,
+      result.blocker as unknown as Record<string, unknown>
+    )
+  }
+  return result.reservations.reduce(upsertPlayoffScheduleReservationInRules, input.rules)
+}
+
 function isDirectKnockoutTournament(tournament: TournamentRow) {
   const rules = normalizeObject(tournament.rules_json ?? tournament.rules)
   const format = String(tournament.format ?? '').toUpperCase()
@@ -551,10 +631,20 @@ async function generateDirectFirstRound(input: {
     }
     const nextAssignments = { ...readMatchScheduleAssignments(currentRules.match_schedule_assignments) }
     for (const assignment of createdAssignments) nextAssignments[assignment.match_id] = assignment
-    const nextRules = {
+    let nextRules: Record<string, unknown> = {
       ...currentRules,
       playoff_plan: plan.persistedPlan,
       ...(createdAssignments.length ? { match_schedule_assignments: nextAssignments } : {}),
+    }
+    if (schedulingDecision.shouldApplySchedule) {
+      nextRules = appendCompletePlayoffReservations({
+        rules: nextRules,
+        tournament: input.tournament,
+        plan: plan.persistedPlan,
+        createdAssignments,
+        courts: normalizeTournamentCourts(currentRules.tournament_courts),
+        scheduleConfig,
+      })
     }
     const { error } = await supabaseAdmin.from('tournaments')
       .update({ rules_json: nextRules, rules: nextRules })
@@ -562,6 +652,7 @@ async function generateDirectFirstRound(input: {
     if (error) throw new Error(error.message)
   } catch (error: unknown) {
     await rollbackCreatedMatches(createdMatchIds)
+    if (error instanceof OpenPlayoffGenerationError) throw error
     throw new OpenPlayoffGenerationError('OPEN_GENERATION_ROLLED_BACK',
       `Falló la generación directa y se revirtieron los partidos creados. ${error instanceof Error ? error.message : 'Error desconocido.'}`, 500)
   }
@@ -650,7 +741,7 @@ export async function regenerateOpenPlayoffWithGeneralEngine(input: {
 
   const { data: tournament, error: tournamentError } = await supabaseAdmin
     .from('tournaments')
-    .select('id,club_id,name,format,type,tournament_type,classification_rules,start_date,end_date,rules_json,rules')
+    .select('id,club_id,name,format,type,tournament_type,classification_rules,start_date,end_date,category_id,category,rules_json,rules')
     .eq('id', input.tournamentId)
     .eq('club_id', input.clubId)
     .maybeSingle()
@@ -788,7 +879,7 @@ export async function generateOpenFirstRoundPlayoff(input: {
 
   const { data: tournament, error: tournamentError } = await supabaseAdmin
     .from('tournaments')
-    .select('id,club_id,name,format,type,tournament_type,classification_rules,start_date,end_date,registration_deadline,rules_json,rules')
+    .select('id,club_id,name,format,type,tournament_type,classification_rules,start_date,end_date,registration_deadline,category_id,category,rules_json,rules')
     .eq('id', input.tournamentId)
     .eq('club_id', input.clubId)
     .maybeSingle()
@@ -1016,7 +1107,7 @@ export async function generateOpenFirstRoundPlayoff(input: {
     }
 
     if (createdAssignments.length > 0 || selectedPlayoffPlan) {
-      const nextRules: Record<string, unknown> = {
+      let nextRules: Record<string, unknown> = {
         ...currentRules,
         ...(selectedPlayoffPlan ? { playoff_plan: selectedPlayoffPlan } : {}),
       }
@@ -1028,6 +1119,17 @@ export async function generateOpenFirstRoundPlayoff(input: {
           nextAssignments[assignment.match_id] = assignment
         }
         nextRules.match_schedule_assignments = nextAssignments
+      }
+
+      if (selectedPlayoffPlan && schedulingDecision.shouldApplySchedule) {
+        nextRules = appendCompletePlayoffReservations({
+          rules: nextRules,
+          tournament: tournamentRow,
+          plan: selectedPlayoffPlan,
+          createdAssignments,
+          courts: tournamentCourts,
+          scheduleConfig,
+        })
       }
 
       const { error: schedulePersistError } = await supabaseAdmin
@@ -1045,6 +1147,7 @@ export async function generateOpenFirstRoundPlayoff(input: {
     }
   } catch (error: unknown) {
     await rollbackCreatedMatches(createdMatchIds)
+    if (error instanceof OpenPlayoffGenerationError) throw error
     const detail = error instanceof Error ? error.message : 'Error desconocido.'
     throw new OpenPlayoffGenerationError(
       'OPEN_GENERATION_ROLLED_BACK',

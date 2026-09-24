@@ -8,7 +8,14 @@ const submitResultSource = pageSource.slice(pageSource.indexOf('async function s
 test('guardar resultado actualiza estado local sin refresh completo', () => {
   assert.match(submitResultSource, /setGroupMatches/)
   assert.match(submitResultSource, /groupDependency\?\.matches/)
+  assert.match(submitResultSource, /setPlayoffMatches/)
+  assert.match(submitResultSource, /playoffDependency\?\.matches/)
   assert.doesNotMatch(submitResultSource, /refreshTournamentExperience\s*\(/)
+})
+
+test('el PATCH devuelve la llave propagada para reemplazar placeholders mobile', () => {
+  const routeSource = readFileSync(new URL('../app/api/clubs/[clubId]/tournaments/[tournamentId]/matches/[id]/route.ts', import.meta.url), 'utf8')
+  assert.match(routeSource, /playoffDependency:\s*result\.playoffDependency/)
 })
 
 test('modal mobile conserva Cancelar y acciones sticky con safe-area', () => {

@@ -5,9 +5,10 @@ import Link from 'next/link'
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { ChevronLeft, ChevronRight, MoreVertical, Repeat2 } from 'lucide-react'
+import { CalendarClock, ChevronLeft, ChevronRight, MoreVertical, Repeat2, X } from 'lucide-react'
 import MobilePlayoff from '../_components/MobilePlayoff'
 import TournamentExportMenu from '../_components/TournamentExportMenu'
+import TournamentScheduleManager from '../_components/TournamentScheduleManager'
 import { tournamentExportData } from '../_components/tournamentExportData'
 import { bracketPath } from '../_components/playoffPresentation'
 import { hasClubCapability } from '@/lib/clubPermissions'
@@ -990,6 +991,11 @@ export default function ClubTournamentDetailPage() {
   const [resultForm, setResultForm] = useState<ResultForm | null>(null)
   const [savingResult, setSavingResult] = useState(false)
   const [scheduleSwapModal, setScheduleSwapModal] = useState<ScheduleSwapModal>(null)
+  const [scheduleManagerOpen, setScheduleManagerOpen] = useState(false)
+  const [scheduleManagerMatchId, setScheduleManagerMatchId] = useState<string | null>(null)
+  const [completingSchedule, setCompletingSchedule] = useState(false)
+  const [scheduleRevision, setScheduleRevision] = useState(0)
+  const autoScheduleEnsureRef = useRef<string | null>(null)
   const [savingScheduleSwap, setSavingScheduleSwap] = useState(false)
   const playoffBracketViewportRef = useRef<HTMLDivElement | null>(null)
   const playoffBracketScrollRef = useRef<HTMLDivElement | null>(null)
@@ -2058,6 +2064,15 @@ export default function ClubTournamentDetailPage() {
       }),
     [summary?.tournament.end_date, summary?.tournament.start_date, tournamentRules]
   )
+  const canManageSchedule = isPlatformAdmin || hasClubCapability(clubRole, 'matches:schedule')
+  const pendingAutoScheduleKey = useMemo(
+    () => playoffMatches
+      .filter((match) => String(match.status).toUpperCase() === 'PENDING' && (!match.scheduled_at || !match.court_name))
+      .map((match) => match.id)
+      .sort()
+      .join('|'),
+    [playoffMatches]
+  )
   const expectedGroupMatchesCount = useMemo(
     () =>
       sortedGroups.reduce((total, group) => total + (group.size === 4 ? 4 : group.size === 3 ? 3 : 0), 0),
@@ -2489,7 +2504,7 @@ export default function ClubTournamentDetailPage() {
         targetMatchId: scheduleSwapModal.targetMatchId,
       }),
     })
-    const json = await res.json().catch(() => ({})) as { error?: string }
+    const json = await res.json().catch(() => ({})) as { error?: string; assignments?: Record<string, { scheduled_at: string; court_name: string; court_id?: string; court_source: string }> }
 
     if (!res.ok) {
       setSavingScheduleSwap(false)
@@ -2499,8 +2514,9 @@ export default function ClubTournamentDetailPage() {
 
     setSavingScheduleSwap(false)
     setScheduleSwapModal(null)
+    applyScheduleAssignments(json.assignments ?? {})
+    setScheduleRevision((current) => current + 1)
     toast.success('Horario/cancha intercambiados correctamente.')
-    await refreshTournamentExperience()
   }
 
   function renderGroupMatchSchedule(match: TournamentMatch) {
@@ -2605,6 +2621,7 @@ export default function ClubTournamentDetailPage() {
     const json = await res.json().catch(() => ({})) as {
       error?: string
       match?: Pick<TournamentMatch, 'id' | 'status' | 'score' | 'winner_team_id'>
+      playoffDependency?: { matches?: TournamentMatch[] }
       groupDependency?: { status?: string; matches?: TournamentMatch[] }
       groupDependencyWarning?: string
     }
@@ -2638,15 +2655,21 @@ export default function ClubTournamentDetailPage() {
       }
       return [...byId.values()].sort((left, right) => left.round - right.round || left.match_order - right.match_order || left.id.localeCompare(right.id))
     })
-    setPlayoffMatches((current) => current.map((item) => item.id === match.id
-      ? {
-        ...item,
-        status: json.match?.status ?? 'PLAYED',
-        score: json.match?.score ?? validation.score,
-        winner_team_id: json.match?.winner_team_id ?? winnerTeamId,
+    setPlayoffMatches((current) => {
+      const updated = current.map((item) => item.id === match.id
+        ? {
+          ...item,
+          status: json.match?.status ?? 'PLAYED',
+          score: json.match?.score ?? validation.score,
+          winner_team_id: json.match?.winner_team_id ?? winnerTeamId,
+        }
+        : item)
+      const byId = new Map(updated.map((item) => [item.id, item]))
+      for (const dependent of json.playoffDependency?.matches ?? []) {
+        byId.set(dependent.id, { ...byId.get(dependent.id), ...dependent })
       }
-      : item
-    ))
+      return [...byId.values()].sort((left, right) => left.round - right.round || left.match_order - right.match_order || left.id.localeCompare(right.id))
+    })
     setActionFeedback({
       tone: json.groupDependencyWarning ? 'warning' : 'success',
       title: 'Resultado guardado',
@@ -2697,6 +2720,65 @@ export default function ClubTournamentDetailPage() {
       })
     } else {
       scrollToTournamentMatch(match.id)
+    }
+  }
+
+  function applyScheduleAssignments(assignments: Record<string, { scheduled_at: string; court_name: string; court_id?: string; court_source: string }>) {
+    const apply = (matches: TournamentMatch[]) => matches.map((match) => {
+      const assignment = assignments[match.id]
+      return assignment ? { ...match, scheduled_at: assignment.scheduled_at, court_name: assignment.court_name, court_id: assignment.court_id ?? null, court_source: assignment.court_source } : match
+    })
+    setGroupMatches(apply)
+    setPlayoffMatches(apply)
+  }
+
+  async function completeTournamentSchedule() {
+    if (!activeClub?.id || !tournamentId || completingSchedule) return
+    setCompletingSchedule(true)
+    const token = await getToken()
+    const endpoint = `/api/clubs/${activeClub.id}/tournaments/${tournamentId}/playoff/schedule`
+    const preview = await fetch(endpoint, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ preview: true }) })
+    const previewJson = await preview.json().catch(() => ({}))
+    if (!preview.ok) { setCompletingSchedule(false); setActionFeedback({ tone: 'error', title: 'No pudimos completar el calendario', message: previewJson.error ?? 'Revisá la configuración de horarios.' }); return }
+    setCompletingSchedule(false)
+    requestConfirmation({
+      title: 'Completar calendario',
+      body: `SELPA programará ${previewJson.willSchedule} partidos. ${previewJson.preservedCount} horarios existentes se conservarán.`,
+      confirmLabel: 'Completar calendario',
+      tone: 'cyan',
+      onConfirm: async () => {
+        setCompletingSchedule(true)
+        const response = await fetch(endpoint, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: '{}' })
+        const json = await response.json().catch(() => ({}))
+        setCompletingSchedule(false)
+        if (!response.ok) { setActionFeedback({ tone: 'error', title: 'No pudimos completar el calendario', message: json.error ?? 'Reintentá.' }); return }
+        applyScheduleAssignments(json.assignments ?? {})
+        setScheduleRevision((current) => current + 1)
+        setActionFeedback({ tone: 'success', title: 'Calendario actualizado', message: `${json.scheduledCount} partidos programados.` })
+      },
+    })
+  }
+
+  async function ensureAutoTournamentSchedule() {
+    if (!activeClub?.id || !tournamentId || completingSchedule) return
+    setCompletingSchedule(true)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const response = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}/playoff/schedule`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ensure: true }),
+      })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok) return
+      applyScheduleAssignments(json.assignments ?? {})
+      setScheduleRevision((current) => current + 1)
+      if (Number(json.scheduledCount) > 0) {
+        setActionFeedback({ tone: 'success', title: 'Calendario ajustado automáticamente.', message: 'Los próximos cruces ya tienen horario y cancha.' })
+      }
+    } finally {
+      setCompletingSchedule(false)
     }
   }
 
@@ -3085,6 +3167,7 @@ export default function ClubTournamentDetailPage() {
               </div>
               <div className="club-matchInfoCell" role="cell">
                 {renderGroupMatchSchedule(match)}
+                {!played ? <button type="button" className="club-inlineScheduleBtn" onClick={() => { setScheduleManagerMatchId(match.id); setScheduleManagerOpen(true) }}>{match.scheduled_at ? 'Reprogramar' : 'Programar'}</button> : null}
               </div>
               <div className="club-matchPairCell" role="cell">
                 <span className="club-groupMatchCode">{getOpenGroupMatchDisplayCode(group.order, match.group_match_number ?? matchIndex + 1)}{dependentLabel ? ` · ${dependentLabel}` : ''}</span>
@@ -3171,13 +3254,6 @@ export default function ClubTournamentDetailPage() {
           <div className="club-playoffCardHeadActions">
             <button
               type="button"
-              className={`club-groupResultBtn club-groupResultBtn--mini ${played ? 'club-groupResultBtn--secondary' : 'club-groupResultBtn--primary'}`}
-              onClick={() => openResultForm(match)}
-            >
-              {played ? 'Editar' : 'Cargar'}
-            </button>
-            <button
-              type="button"
               className="club-scheduleSwapBtn club-scheduleSwapBtn--playoff"
               title={scheduleSwapOpenDisabledReason || 'Cambiar horario/cancha'}
               aria-label={`Cambiar horario/cancha de ${getMatchTeamsLabel(match)}`}
@@ -3185,6 +3261,15 @@ export default function ClubTournamentDetailPage() {
               onClick={() => openScheduleSwapModal(match)}
             >
               <Repeat2 size={13} aria-hidden="true" />
+              <span>Cambiar</span>
+            </button>
+            {!played ? <button type="button" className="club-playoffReprogramBtn" onClick={() => { setScheduleManagerMatchId(match.id); setScheduleManagerOpen(true) }}><CalendarClock size={13} aria-hidden="true" />{match.scheduled_at ? 'Reprogramar' : 'Programar'}</button> : null}
+            <button
+              type="button"
+              className={`club-groupResultBtn club-groupResultBtn--mini ${played ? 'club-groupResultBtn--secondary' : 'club-groupResultBtn--primary'}`}
+              onClick={() => openResultForm(match)}
+            >
+              {played ? 'Editar' : 'Cargar'}
             </button>
           </div>
         </div>
@@ -3457,6 +3542,7 @@ export default function ClubTournamentDetailPage() {
     const team2Name = match.team2_name ?? teamNameLookup.get(match.team2_id) ?? 'Equipo 2'
     const scoreSets = extractStructuredScoreSets(match.score)
     const hasStructuredScore = scoreSets.length > 0
+    const scheduleSwapOpenDisabledReason = getScheduleSwapOpenDisabledReason(match)
 
     return (
       <article key={`compact-${match.id}`} className="club-playoffCompactMatch">
@@ -3466,6 +3552,18 @@ export default function ClubTournamentDetailPage() {
             <span className={`club-statusBadge club-statusBadge--${played ? 'played' : 'pending'}`}>
               {matchStatusLabel(match.status)}
             </span>
+            <button
+              type="button"
+              className="club-scheduleSwapBtn club-scheduleSwapBtn--playoff"
+              title={scheduleSwapOpenDisabledReason || 'Cambiar horario/cancha'}
+              aria-label="Cambiar horario/cancha"
+              disabled={Boolean(scheduleSwapOpenDisabledReason)}
+              onClick={() => openScheduleSwapModal(match)}
+            >
+              <Repeat2 size={13} aria-hidden="true" />
+              <span>Cambiar</span>
+            </button>
+            {!played ? <button type="button" className="club-playoffReprogramBtn" onClick={() => { setScheduleManagerMatchId(match.id); setScheduleManagerOpen(true) }}><CalendarClock size={13} aria-hidden="true" />{match.scheduled_at ? 'Reprogramar' : 'Programar'}</button> : null}
             <button
               type="button"
               className={`club-groupResultBtn club-groupResultBtn--mini ${played ? 'club-groupResultBtn--secondary' : 'club-groupResultBtn--primary'}`}
@@ -4387,6 +4485,25 @@ export default function ClubTournamentDetailPage() {
   }, [activeClub?.id, tournamentId])
 
   useEffect(() => {
+    if (
+      loading ||
+      activeTab !== 'playoff' ||
+      tournamentRuleSchedule.scheduleConfig.mode !== 'AUTO' ||
+      !canManageSchedule ||
+      completingSchedule ||
+      !activeClub?.id ||
+      !tournamentId ||
+      !pendingAutoScheduleKey
+    ) return
+    const ensureKey = `${tournamentId}:${pendingAutoScheduleKey}`
+    if (autoScheduleEnsureRef.current === ensureKey) return
+    autoScheduleEnsureRef.current = ensureKey
+    void ensureAutoTournamentSchedule()
+    // El key cambia sólo cuando aparece un conjunto nuevo de partidos materializados sin agenda.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClub?.id, activeTab, canManageSchedule, completingSchedule, loading, pendingAutoScheduleKey, tournamentId, tournamentRuleSchedule.scheduleConfig.mode])
+
+  useEffect(() => {
     if (manualModalOpen && !canAddPair) {
       queueMicrotask(() => {
         setManualModalOpen(false)
@@ -4569,6 +4686,15 @@ export default function ClubTournamentDetailPage() {
                           onPublish={isDraft ? () => requestConfirmation({ title: 'Publicar torneo', body: 'Esto abre las inscripciones del torneo. Podés seguir gestionándolo desde este centro de control.', confirmLabel: 'Publicar torneo', onConfirm: publishTournament }) : undefined}
                           onOpenGroups={() => setActiveTab('groups')}
                         />
+
+                        {(isPlatformAdmin || hasClubCapability(clubRole, 'matches:schedule')) && (groupMatches.length > 0 || playoffMatches.length > 0) ? (
+                          <section className="club-nextCard">
+                            <span className="club-kicker">Operación del torneo</span>
+                            <h2>Programación</h2>
+                            <p>Consultá grupos y playoff por día, reprogramá partidos o completá los horarios faltantes.</p>
+                            <button type="button" className="club-nextAction" onClick={() => { setScheduleManagerMatchId(null); setScheduleManagerOpen(true) }}>Abrir programación</button>
+                          </section>
+                        ) : null}
 
                         <section className="club-metrics club-metrics--detail">
                           <div className="club-metric"><span>Inicio</span><strong>{formatDate(summary.tournament.start_date)}</strong></div>
@@ -5274,6 +5400,12 @@ export default function ClubTournamentDetailPage() {
                       </section>
                     ) : (
                       <>
+                        {tournamentRuleSchedule.scheduleConfig.mode === 'AUTO' && playoffMatches.some((match) => String(match.status).toUpperCase() === 'PENDING' && !match.scheduled_at) ? (
+                          <div className="club-playoffScheduleRepair">
+                            <span>Hay partidos del cuadro sin horario o cancha.</span>
+                            <button type="button" disabled={completingSchedule} onClick={() => void completeTournamentSchedule()}>{completingSchedule ? 'Completando…' : 'Completar calendario'}</button>
+                          </div>
+                        ) : null}
                         {playoffRounds.length > 0 && <MobilePlayoff
                           exportAction={<TournamentExportMenu data={printableTournament} kind="playoff" />}
                           rounds={playoffRounds}
@@ -5283,10 +5415,20 @@ export default function ClubTournamentDetailPage() {
                           teamNames={teamNameLookup}
                           teamSeeds={teamSeedLookup}
                           canEditResults={isPlatformAdmin || hasClubCapability(clubRole, 'matches:update')}
-                          canSchedule={isPlatformAdmin || hasClubCapability(clubRole, 'matches:schedule')}
+                          canSchedule={canManageSchedule}
                           onResult={openResultForm}
                           onSchedule={openScheduleSwapModal}
                           scheduleDisabledReason={getScheduleSwapOpenDisabledReason}
+                          onScheduleChanged={(matchId, assignment) => {
+                            const apply = (matches: TournamentMatch[]) => matches.map((match) => match.id !== matchId
+                              ? match
+                              : assignment
+                                ? { ...match, scheduled_at: assignment.scheduled_at, court_name: assignment.court_name, court_id: assignment.court_id ?? null, court_source: assignment.court_source }
+                                : { ...match, scheduled_at: null, court_name: null, court_id: null, court_source: null })
+                            setGroupMatches(apply)
+                            setPlayoffMatches(apply)
+                          }}
+                          scheduleRevision={scheduleRevision}
                         />}
                         <div className="club-playoffDesktop">
                         <div className="club-exportRow"><TournamentExportMenu data={printableTournament} kind="playoff" /></div>
@@ -5660,16 +5802,17 @@ export default function ClubTournamentDetailPage() {
             <div className="club-pointsHead">
               <div>
                 <span className="club-kicker">Agenda operativa</span>
-                <h2 id="schedule-swap-title">Cambiar horario/cancha</h2>
-                <p>Intercambiá este turno con otro partido pendiente del torneo.</p>
+                <h2 id="schedule-swap-title">Intercambiar horario/cancha</h2>
+                <p>Intercambiá la programación de este partido con otro partido pendiente.</p>
               </div>
               <button
                 type="button"
                 className="club-editBtn"
+                aria-label="Cerrar"
                 disabled={savingScheduleSwap}
                 onClick={() => setScheduleSwapModal(null)}
               >
-                Cerrar
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 
@@ -5709,7 +5852,7 @@ export default function ClubTournamentDetailPage() {
 
             <div className="club-modalActions">
               <button type="button" className="club-editBtn" disabled={savingScheduleSwap} onClick={() => setScheduleSwapModal(null)}>
-                Cancelar
+                Cerrar
               </button>
               <button
                 type="button"
@@ -6043,10 +6186,13 @@ export default function ClubTournamentDetailPage() {
       {confirmAction ? (
         <div className="club-modalBackdrop" role="presentation" onMouseDown={() => !confirmingAction && setConfirmAction(null)}>
           <section className="club-confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div>
-              <span className="club-kicker">Confirmación</span>
-              <h2 id="confirm-modal-title">{confirmAction.title}</h2>
-              <p>{confirmAction.body}</p>
+            <div className="club-pointsHead">
+              <div>
+                <span className="club-kicker">Confirmación</span>
+                <h2 id="confirm-modal-title">{confirmAction.title}</h2>
+                <p>{confirmAction.body}</p>
+              </div>
+              <button type="button" className="club-editBtn" aria-label="Cerrar" disabled={confirmingAction} onClick={() => setConfirmAction(null)}><X size={18} aria-hidden="true" /></button>
             </div>
             {confirmAction.confirmationKeyword ? (
               <label className="club-confirmField">
@@ -6199,9 +6345,41 @@ export default function ClubTournamentDetailPage() {
         </div>
       ) : null}
 
+      {summary && activeClub?.id && tournamentId ? (
+        <TournamentScheduleManager
+          open={scheduleManagerOpen}
+          clubId={activeClub.id}
+          tournamentId={tournamentId}
+          matches={[...groupMatches, ...playoffMatches]}
+          startDate={summary.tournament.start_date ?? ''}
+          endDate={summary.tournament.end_date ?? summary.tournament.start_date ?? ''}
+          autoMode={tournamentRuleSchedule.scheduleConfig.mode === 'AUTO'}
+          initialMatch={[...groupMatches, ...playoffMatches].find((match) => match.id === scheduleManagerMatchId) ?? null}
+          onClose={() => { setScheduleManagerOpen(false); setScheduleManagerMatchId(null) }}
+          onSwap={(candidate) => {
+            const match = [...groupMatches, ...playoffMatches].find((item) => item.id === candidate.id)
+            if (!match) return
+            setScheduleManagerOpen(false)
+            openScheduleSwapModal(match)
+          }}
+          onMatchScheduled={(matchId, assignment) => {
+            const apply = (matches: TournamentMatch[]) => matches.map((match) => match.id === matchId
+              ? { ...match, scheduled_at: assignment.scheduled_at, court_name: assignment.court_name, court_id: assignment.court_id ?? null, court_source: assignment.court_source }
+              : match)
+            setGroupMatches(apply)
+            setPlayoffMatches(apply)
+          }}
+          onCompleteSchedule={() => { setScheduleManagerOpen(false); void completeTournamentSchedule() }}
+        />
+      ) : null}
+
       <style>{`
         .club-playoffDesktop { display: contents; }
         .club-exportRow { display: flex; justify-content: flex-end; }
+        .club-playoffScheduleRepair { align-items:center; background:#eefaf3; border:1px solid #b9e6c9; border-radius:10px; display:flex; gap:10px; justify-content:space-between; margin-bottom:8px; padding:8px 10px; }
+        .club-playoffScheduleRepair span { color:#17633c; font-size:12px; font-weight:750; }
+        .club-playoffScheduleRepair button { background:#061b3a; border:0; border-radius:8px; color:#fff; font-weight:850; min-height:38px; padding:7px 12px; white-space:nowrap; }
+        .club-inlineScheduleBtn { background:#eef9fb; border:1px solid #a8dce6; border-radius:7px; color:#087d9b; font-size:11px; font-weight:850; margin-top:4px; min-height:32px; padding:5px 8px; white-space:nowrap; }
         .club-groupPlanningActions { align-items: center; display: flex; flex: 0 0 auto; gap: 8px; justify-content: flex-end; }
         .club-playoffTracking { display: flex; align-items: center; gap: 12px; padding: 6px 10px; background: #edf8f8; color: #286577; border-radius: 8px; font-size: 12px; }
         .club-playoffTracking small { display: block; font-size: 11px; margin-top: 3px; }
@@ -6866,7 +7044,8 @@ export default function ClubTournamentDetailPage() {
         .club-playoffInlineSet { align-items: center; background: #fff; border: 1px solid #dbe3ea; border-radius: 6px; color: #475569; display: inline-flex; font-size: 11px; font-weight: 850; height: 22px; justify-content: center; width: 22px; }
         .club-playoffInlineSet--empty { background: #f8fafc; color: #cbd5e1; }
         .club-playoffInlineSet--won { background: rgba(22,163,74,.08); color: #166534; font-weight: 950; }
-        .club-scheduleSwapBtn--playoff { flex: 0 0 auto; height: 26px; width: 26px; }
+        .club-scheduleSwapBtn--playoff { flex: 0 0 auto; gap: 4px; height: 30px; padding: 0 8px; width: auto; }
+        .club-playoffReprogramBtn { align-items:center; background:#e8f8fb; border:1px solid #87d4e1; border-radius:8px; color:#087d9b; cursor:pointer; display:inline-flex; font-size:10px; font-weight:850; gap:4px; min-height:30px; padding:5px 8px; white-space:nowrap; }
         .club-playoffBracketMeta { align-items: center; display: flex; gap: 8px; justify-content: space-between; min-width: 0; }
         .club-playoffPhase { background: color-mix(in srgb, var(--club-admin-accent) 10%, white); border: 1px solid color-mix(in srgb, var(--club-admin-accent) 24%, transparent); border-radius: 999px; color: #061b3a; display: inline-flex; font-size: 11px; font-weight: 950; padding: 6px 9px; text-transform: uppercase; white-space: nowrap; }
         .club-playoffBracketActions { display: flex; justify-content: flex-end; }
@@ -7110,6 +7289,12 @@ export default function ClubTournamentDetailPage() {
           .club-groupResultBtn { font-size: 11px; min-height: 34px; min-width: 0; padding-inline: 7px; }
         }
         @media (max-width: 560px) {
+          .club-scheduleSwapModal .club-modalActions,
+          .club-confirmModal .club-confirmActions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+          .club-scheduleSwapModal .club-modalActions button,
+          .club-confirmModal .club-confirmActions button { min-width:0; width:100%; }
+          .club-playoffScheduleRepair { align-items:stretch; flex-direction:column; }
+          .club-playoffScheduleRepair button { width:100%; }
           .club-playoffPreviewPairs { grid-template-columns:minmax(0,1fr); }
           .club-playoffPreviewToggle { padding:8px 9px; }
           .club-playoffPreviewToggle>b { max-width:42%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

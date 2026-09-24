@@ -6,9 +6,9 @@ import { supabase } from '@/lib/supabaseClient';
 type SearchRow = {
   club_player_id: string;
   user_id: string;
-  email: string;
   first_name: string | null;
   last_name: string | null;
+  display_name: string | null;
 };
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
@@ -40,7 +40,7 @@ export default function PartnerSearch({
     (async () => {
       setError(null);
 
-      if (!clubId || qDebounced.length < 1) {
+      if (!clubId || qDebounced.length < 2) {
         setResults([]);
         return;
       }
@@ -50,7 +50,7 @@ export default function PartnerSearch({
         p_club_id: clubId,
         p_query: qDebounced,
         p_limit: 20,
-      });
+      }).select('club_player_id,user_id,first_name,last_name,display_name');
 
       if (cancelled) return;
 
@@ -71,11 +71,11 @@ export default function PartnerSearch({
   return (
     <div style={{ display: 'grid', gap: 10 }}>
       <label style={{ display: 'grid', gap: 6 }}>
-        <span>Buscar compañero (email / apellido / nombre)</span>
+        <span>Buscar compañero por nombre o apellido</span>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Ej: juan@gmail.com o Pérez"
+          placeholder="Ej: Pérez"
           style={{ padding: 10, border: '1px solid #ccc', borderRadius: 8 }}
         />
       </label>
@@ -100,15 +100,14 @@ export default function PartnerSearch({
               }}
             >
               <div style={{ fontWeight: 600 }}>
-                {(r.last_name ?? '').trim()} {(r.first_name ?? '').trim()}
+                {([r.last_name, r.first_name].filter(Boolean).join(' ').trim() || r.display_name || 'Jugador')}
               </div>
-              <div style={{ opacity: 0.8 }}>{r.email}</div>
             </button>
           ))}
         </div>
       )}
 
-      {!loading && qDebounced.length >= 1 && results.length === 0 && !error && (
+      {!loading && qDebounced.length >= 2 && results.length === 0 && !error && (
         <div>No se encontraron resultados.</div>
       )}
     </div>

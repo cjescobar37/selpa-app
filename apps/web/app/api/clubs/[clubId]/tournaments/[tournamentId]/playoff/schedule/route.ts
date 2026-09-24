@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   normalizeTournamentCourts,
   readMatchScheduleAssignments,
+  type MatchScheduleAssignment,
   type TournamentCourtConfig,
 } from '@/lib/tournamentSchedule'
 import {
@@ -15,9 +16,12 @@ import {
   normalizePlayoffScheduledAt,
   readPlayoffScheduleReservations,
   removePlayoffScheduleReservationFromRules,
+  setMatchScheduleAssignmentInRules,
   upsertPlayoffScheduleReservationInRules,
   type PlayoffScheduleReservation,
 } from '@/lib/tournamentPlayoffScheduleReservations'
+import { buildCompletePlayoffSchedule, type PlayoffAutoScheduleFixedSlot } from '@/lib/tournamentPlayoffAutoScheduler'
+import { normalizeScheduleConfig } from '@/lib/tournamentSchedule'
 import {
   cleanupFuturePlayoffReservationForRealMatch,
   persistTournamentPlayoffSchedulingRulesIfCurrent,
@@ -114,9 +118,157 @@ export async function GET(
       category: scheduleContext.category,
       reservations: filtered,
       courts: normalizeTournamentCourts(scheduleContext.rules.tournament_courts),
+      assignments: readMatchScheduleAssignments(scheduleContext.rules.match_schedule_assignments),
     })
   } catch (error: unknown) {
     return NextResponse.json({ error: getErrorMessage(error, 'Error leyendo reservas del playoff.') }, { status: 500 })
+  }
+}
+
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ clubId: string; tournamentId: string }> }
+) {
+  try {
+    const { clubId, tournamentId } = await context.params
+    const auth = await authorize(req, clubId)
+    if ('response' in auth) return auth.response
+    const body = await req.json().catch(() => ({}))
+    const scheduleContext = await readTournamentPlayoffSchedulingContext({ clubId, tournamentId })
+    const config = normalizeScheduleConfig(scheduleContext.rules.schedule_config, {
+      startDate: scheduleContext.startDate,
+      endDate: scheduleContext.endDate,
+    })
+    if (config.mode !== 'AUTO') return NextResponse.json({ error: 'Completar calendario sólo está disponible en modo AUTO.' }, { status: 400 })
+    const plan = scheduleContext.rules.playoff_plan as {
+      bracket_size?: number
+      bracket_slots?: Array<{ pair_order?: number; is_bye_slot?: boolean }>
+      first_round_matches?: Array<{ match_order?: number; bracket_pair_order?: number }>
+    } | undefined
+    const bracketSize = Number(plan?.bracket_size)
+    const phase = ({ 64: 'ROUND_OF_32', 32: 'ROUND_OF_16', 16: 'EIGHTHS', 8: 'QUARTER', 4: 'SEMI', 2: 'FINAL' } as const)[bracketSize as 64 | 32 | 16 | 8 | 4 | 2]
+    if (!phase || !scheduleContext.category) return NextResponse.json({ error: 'El cuadro no tiene un plan compatible para completar.' }, { status: 409 })
+    const { data: matches, error: matchesError } = await supabaseAdmin
+      .from('tournament_matches')
+      .select('id,phase,match_order,status,scheduled_at,team1_id,team2_id')
+      .eq('club_id', clubId)
+      .eq('tournament_id', tournamentId)
+    if (matchesError) throw new Error(matchesError.message)
+    const assignments = readMatchScheduleAssignments(scheduleContext.rules.match_schedule_assignments)
+    const reservations = readPlayoffScheduleReservations(scheduleContext.rules.playoff_schedule_reservations)
+    const fixedSlots: PlayoffAutoScheduleFixedSlot[] = []
+    for (const match of matches ?? []) {
+      const assignment = assignments[match.id]
+      const normalizedPhase = normalizePlayoffSchedulePhase(match.phase)
+      if (!normalizedPhase || !match.scheduled_at || !assignment) continue
+      fixedSlots.push({ phase: normalizedPhase, matchOrder: Number(match.match_order), scheduledAt: match.scheduled_at, courtName: assignment.court_name, courtId: assignment.court_id, courtSource: assignment.court_source })
+    }
+    for (const reservation of Object.values(reservations)) {
+      fixedSlots.push({ phase: reservation.phase, matchOrder: reservation.match_order, scheduledAt: reservation.scheduled_at, courtName: reservation.court_name, courtId: reservation.court_id, courtSource: reservation.court_source })
+    }
+    const byePairOrders = (plan?.bracket_slots ?? []).filter((slot) => slot.is_bye_slot).map((slot) => Number(slot.pair_order)).filter(Number.isInteger)
+    const result = buildCompletePlayoffSchedule({
+      category: scheduleContext.category,
+      bracketSize,
+      date: config.playoff.date,
+      startTime: config.playoff.start_time,
+      endTime: config.playoff.end_time,
+      matchDurationMinutes: config.match_duration_minutes,
+      courts: normalizeTournamentCourts(scheduleContext.rules.tournament_courts),
+      firstRoundPairOrders: (plan?.first_round_matches ?? []).map((match) => Number(match.bracket_pair_order)).filter(Number.isInteger),
+      byePairOrders,
+      fixedSlots,
+    })
+    if (result.blocker) return NextResponse.json({ error: 'El playoff completo no entra en la ventana configurada.', ...result.blocker }, { status: 409 })
+    const durationMs = config.match_duration_minutes * 60_000
+    const configuredCourts = normalizeTournamentCourts(scheduleContext.rules.tournament_courts)
+    const occupied = new Set<string>()
+    const teamStarts = new Map<string, number[]>()
+    for (const match of matches ?? []) {
+      if (!match.scheduled_at) continue
+      const assignment = assignments[match.id]
+      if (assignment) occupied.add(`${assignment.court_id ?? assignment.court_name}:${match.scheduled_at}`)
+      for (const teamId of [match.team1_id, match.team2_id]) {
+        const starts = teamStarts.get(teamId) ?? []
+        starts.push(Date.parse(match.scheduled_at))
+        teamStarts.set(teamId, starts)
+      }
+    }
+    for (const reservation of Object.values(reservations)) occupied.add(`${reservation.court_id ?? reservation.court_name}:${reservation.scheduled_at}`)
+    const [groupYear, groupMonth, groupDay] = config.groups.date.split('-').map(Number)
+    const [groupHour, groupMinute] = config.groups.start_time.split(':').map(Number)
+    const [endHour, endMinute] = config.groups.end_time.split(':').map(Number)
+    const groupStart = new Date(groupYear, groupMonth - 1, groupDay, groupHour, groupMinute).getTime()
+    const groupEnd = new Date(groupYear, groupMonth - 1, groupDay, endHour, endMinute).getTime()
+    const groupAssignments: MatchScheduleAssignment[] = []
+    for (const match of (matches ?? []).filter((candidate) => candidate.phase === 'GROUP' && candidate.status === 'PENDING' && !candidate.scheduled_at)) {
+      let selected: MatchScheduleAssignment | null = null
+      for (let time = groupStart; time + durationMs <= groupEnd && !selected; time += durationMs) {
+        const teamsReady = [match.team1_id, match.team2_id].every((teamId) => (teamStarts.get(teamId) ?? []).every((start) => Math.abs(start - time) >= durationMs * 2))
+        if (!teamsReady) continue
+        for (const court of configuredCourts) {
+          const scheduledAt = new Date(time).toISOString()
+          if (occupied.has(`${court.id ?? court.name}:${scheduledAt}`)) continue
+          selected = { match_id: match.id, scheduled_at: scheduledAt, court_name: court.name, ...(court.id ? { court_id: court.id } : {}), court_source: court.source, schedule_origin: 'AUTO' }
+          occupied.add(`${court.id ?? court.name}:${scheduledAt}`)
+          for (const teamId of [match.team1_id, match.team2_id]) teamStarts.set(teamId, [...(teamStarts.get(teamId) ?? []), time])
+          break
+        }
+      }
+      if (!selected) return NextResponse.json({ error: 'Los partidos de grupos faltantes no entran en la ventana configurada.', code: 'PLAYOFF_SCHEDULE_CAPACITY_INSUFFICIENT' }, { status: 409 })
+      groupAssignments.push(selected)
+    }
+    const realBySlot = new Map((matches ?? []).map((match) => [`${match.phase}:${match.match_order}`, match]))
+    const missing = result.reservations.filter((reservation) => {
+      const real = realBySlot.get(`${reservation.phase}:${reservation.match_order}`)
+      return real ? !real.scheduled_at : !reservations[buildPlayoffScheduleReservationKey({ category: reservation.category, phase: reservation.phase, matchOrder: reservation.match_order })]
+    })
+    const preservedCount = (matches ?? []).filter((match) => Boolean(match.scheduled_at)).length + Object.keys(reservations).length
+    if (body?.preview === true) return NextResponse.json({ ok: true, willSchedule: missing.length + groupAssignments.length, preservedCount })
+    if (missing.length === 0 && groupAssignments.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        scheduledCount: 0,
+        preservedCount,
+        assignments,
+        reservations,
+      })
+    }
+    let nextRules = scheduleContext.rules
+    const updates: Array<{ id: string; scheduled_at: string; previous: string | null }> = []
+    for (const reservation of missing) {
+      const real = realBySlot.get(`${reservation.phase}:${reservation.match_order}`)
+      if (real) {
+        const assignment: MatchScheduleAssignment = { match_id: real.id, scheduled_at: reservation.scheduled_at, court_name: reservation.court_name, ...(reservation.court_id ? { court_id: reservation.court_id } : {}), court_source: reservation.court_source, schedule_origin: 'AUTO' }
+        nextRules = setMatchScheduleAssignmentInRules({ rules: nextRules, assignment, playoffIdentity: { category: scheduleContext.category, phase: reservation.phase, matchOrder: reservation.match_order } })
+        updates.push({ id: real.id, scheduled_at: reservation.scheduled_at, previous: real.scheduled_at })
+      } else {
+        nextRules = upsertPlayoffScheduleReservationInRules(nextRules, { ...reservation, schedule_origin: 'AUTO' })
+      }
+    }
+    for (const assignment of groupAssignments) {
+      nextRules = setMatchScheduleAssignmentInRules({ rules: nextRules, assignment })
+      const real = (matches ?? []).find((match) => match.id === assignment.match_id)
+      updates.push({ id: assignment.match_id, scheduled_at: assignment.scheduled_at, previous: real?.scheduled_at ?? null })
+    }
+    for (const update of updates) {
+      const { error } = await supabaseAdmin.from('tournament_matches').update({ scheduled_at: update.scheduled_at }).eq('id', update.id).eq('club_id', clubId).eq('tournament_id', tournamentId).eq('status', 'PENDING')
+      if (error) throw new Error(error.message)
+    }
+    const persisted = await persistTournamentPlayoffSchedulingRulesIfCurrent({ tournamentId, clubId, expectedUpdatedAt: scheduleContext.updatedAt, rules: nextRules })
+    if (!persisted) {
+      await Promise.all(updates.map((update) => supabaseAdmin.from('tournament_matches').update({ scheduled_at: update.previous }).eq('id', update.id)))
+      return NextResponse.json({ error: 'La programación cambió en paralelo; reintentá.' }, { status: 409 })
+    }
+    return NextResponse.json({
+      ok: true,
+      scheduledCount: missing.length + groupAssignments.length,
+      preservedCount,
+      assignments: readMatchScheduleAssignments(nextRules.match_schedule_assignments),
+      reservations: readPlayoffScheduleReservations(nextRules.playoff_schedule_reservations),
+    })
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error, 'Error completando el calendario.') }, { status: 500 })
   }
 }
 
@@ -142,6 +294,10 @@ export async function PUT(
       const scheduleContext = await readTournamentPlayoffSchedulingContext({ clubId, tournamentId })
       if (!scheduleContext.category || category !== scheduleContext.category) {
         return NextResponse.json({ error: 'La categoría no corresponde a este torneo.' }, { status: 400 })
+      }
+      const requestedDay = scheduledAt.slice(0, 10)
+      if (!scheduleContext.startDate || !scheduleContext.endDate || requestedDay < scheduleContext.startDate || requestedDay > scheduleContext.endDate) {
+        return NextResponse.json({ error: 'Ampliá primero las fechas del torneo para programar este partido.' }, { status: 400 })
       }
 
       const expectedMatches = getExpectedPlayoffMatchCountFromRules(scheduleContext.rules, phase)
@@ -176,6 +332,7 @@ export async function PUT(
         court_name: court.name,
         ...(court.id ? { court_id: court.id } : {}),
         court_source: court.source,
+        schedule_origin: 'MANUAL',
       }
       const key = buildPlayoffScheduleReservationKey({ category, phase, matchOrder })
       const existingReservations = readPlayoffScheduleReservations(scheduleContext.rules.playoff_schedule_reservations)

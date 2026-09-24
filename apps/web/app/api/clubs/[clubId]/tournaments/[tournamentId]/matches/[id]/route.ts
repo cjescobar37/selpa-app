@@ -77,6 +77,7 @@ export async function PATCH(
     return NextResponse.json({
       ok: true,
       match: result.match,
+      playoffDependency: result.playoffDependency,
       groupDependency: result.groupDependency,
       groupDependencyWarning: result.groupDependencyWarning,
     })

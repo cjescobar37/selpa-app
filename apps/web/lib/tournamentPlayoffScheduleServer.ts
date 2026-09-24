@@ -15,6 +15,8 @@ type TournamentPlayoffSchedulingRow = {
   rules_json: Record<string, unknown> | null
   rules: Record<string, unknown> | null
   updated_at: string
+  start_date: string | null
+  end_date: string | null
 }
 
 function normalizeRules(value: unknown) {
@@ -28,7 +30,7 @@ export async function readTournamentPlayoffSchedulingContext(input: {
 }) {
   const { data, error } = await supabaseAdmin
     .from('tournaments')
-    .select('id,club_id,category_id,category,rules_json,rules,updated_at')
+    .select('id,club_id,category_id,category,rules_json,rules,updated_at,start_date,end_date')
     .eq('id', input.tournamentId)
     .eq('club_id', input.clubId)
     .maybeSingle()
@@ -41,6 +43,8 @@ export async function readTournamentPlayoffSchedulingContext(input: {
     category: resolveTournamentPlayoffScheduleCategory(row),
     rules: normalizeRules(row.rules_json ?? row.rules ?? {}),
     updatedAt: row.updated_at,
+    startDate: row.start_date,
+    endDate: row.end_date ?? row.start_date,
   }
 }
 

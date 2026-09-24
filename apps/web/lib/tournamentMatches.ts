@@ -839,6 +839,20 @@ export async function updateMatchResult(input: UpdateMatchResultInput) {
       playoffPlan,
     })
     : null
+  const playoffDependency = isPlayoffPhase(currentMatch.phase)
+    ? await supabaseAdmin
+        .from('tournament_matches')
+        .select('*')
+        .eq('tournament_id', currentMatch.tournament_id)
+        .eq('club_id', currentMatch.club_id)
+        .in('phase', playoffPhaseOrder)
+        .order('round', { ascending: true })
+        .order('match_order', { ascending: true })
+        .then(({ data: matches, error: dependencyError }) => {
+          if (dependencyError) throw new Error(`No pude refrescar la llave propagada: ${dependencyError.message}`)
+          return { matches: matches ?? [] }
+        })
+    : null
 
   // La carga del resultado ya fue persistida. Los cruces dependientes son un
   // paso posterior y opcional: un fallo allí nunca puede convertir un guardado
@@ -861,7 +875,7 @@ export async function updateMatchResult(input: UpdateMatchResultInput) {
     }
   }
 
-  return { match: data, propagation, groupDependency, groupDependencyWarning }
+  return { match: data, propagation, playoffDependency, groupDependency, groupDependencyWarning }
 }
 
 export async function listMatchesByTournament(input: ListMatchesByTournamentInput) {

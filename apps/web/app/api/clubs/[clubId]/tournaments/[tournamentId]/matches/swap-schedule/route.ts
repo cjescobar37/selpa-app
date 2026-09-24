@@ -227,6 +227,10 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       matches: [sourceUpdate.data, targetUpdate.data],
+      assignments: {
+        [sourceMatchId]: nextAssignments[sourceMatchId],
+        [targetMatchId]: nextAssignments[targetMatchId],
+      },
     })
   } catch (error: unknown) {
     return NextResponse.json({ error: getErrorMessage(error, 'Error intercambiando horario/cancha.') }, { status: 500 })

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams } from 'next/navigation'
-import { Check, Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react'
+import { CalendarClock, Check, Maximize2, Minus, Plus, Repeat2, RotateCcw, X } from 'lucide-react'
 import { useBracketViewport } from './useBracketViewport'
 import styles from './MobilePlayoff.module.css'
 import { useSession } from '@/components/session/SessionProvider'
@@ -29,6 +29,8 @@ type Props = {
   onResult: (match: MobilePlayoffMatch) => void
   onSchedule: (match: MobilePlayoffMatch) => void
   scheduleDisabledReason: (match: MobilePlayoffMatch) => string
+  onScheduleChanged?: (matchId: string, assignment: MatchScheduleAssignment | null) => void
+  scheduleRevision?: number
 }
 
 type FutureScheduleState = {
@@ -144,7 +146,7 @@ function Overlay({ children, title, fullscreen = false, initialScrollY, onClose 
 }
 
 export default function MobilePlayoff(props: Props) {
-  const { rounds, teamNames, teamSeeds, canEditResults, canSchedule, onResult } = props
+  const { rounds, teamNames, teamSeeds, canEditResults, canSchedule, onResult, onSchedule, scheduleDisabledReason, onScheduleChanged, scheduleRevision } = props
   const params = useParams<{ id: string }>()
   const tournamentId = params?.id
   const { activeClub } = useSession()
@@ -159,6 +161,7 @@ export default function MobilePlayoff(props: Props) {
   const [futureSchedule, setFutureSchedule] = useState<FutureScheduleState>({ category: null, reservations: {}, courts: [] })
   const [realScheduleOverrides, setRealScheduleOverrides] = useState<Record<string, MatchScheduleAssignment | null>>({})
   const [scheduleEditor, setScheduleEditor] = useState<ScheduleEditorState | null>(null)
+  const [shortRestWarning, setShortRestWarning] = useState('')
   const root = useRef<HTMLDivElement>(null)
   const nav = useRef<HTMLDivElement>(null)
   const bracketApi = useRef<{ go: (index: number) => void; reset: () => void } | null>(null)
@@ -179,7 +182,7 @@ export default function MobilePlayoff(props: Props) {
     const { data } = await supabase.auth.getSession()
     const token = data.session?.access_token
     if (!token) return
-    const response = await fetch(`/api/clubs/${activeClubId}/tournaments/${tournamentId}/playoff/schedule`, {
+    const response = await fetch(`/api/clubs/${activeClubId}/tournaments/${tournamentId}/playoff/schedule?revision=${scheduleRevision ?? 0}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     })
@@ -190,7 +193,7 @@ export default function MobilePlayoff(props: Props) {
       reservations: json.reservations ?? {},
       courts: Array.isArray(json.courts) ? json.courts : [],
     })
-  }, [activeClubId, canSchedule, tournamentId])
+  }, [activeClubId, canSchedule, scheduleRevision, tournamentId])
 
   useEffect(() => { queueMicrotask(() => void loadFutureSchedule()) }, [loadFutureSchedule])
 
@@ -310,7 +313,7 @@ export default function MobilePlayoff(props: Props) {
       saving: false,
     })
   }
-  const saveScheduleEditor = async () => {
+  const saveScheduleEditor = async (confirmShortRest = false) => {
     if (!scheduleEditor || !activeClub?.id || !tournamentId) return
     const court = futureSchedule.courts.find((item) => courtKey(item) === scheduleEditor.courtKey)
     const date = scheduleEditor.dateTime ? new Date(scheduleEditor.dateTime) : null
@@ -327,7 +330,7 @@ export default function MobilePlayoff(props: Props) {
       ? `/api/clubs/${activeClub.id}/tournaments/${tournamentId}/matches/${scheduleEditor.matchId}/schedule`
       : `/api/clubs/${activeClub.id}/tournaments/${tournamentId}/playoff/schedule`
     const body = realMatch
-      ? { scheduled_at: date.toISOString(), court_id: court.id, court_name: court.name, court_source: court.source }
+      ? { scheduled_at: date.toISOString(), court_id: court.id, court_name: court.name, court_source: court.source, confirm_short_rest: confirmShortRest }
       : {
           category: futureSchedule.category,
           phase: scheduleEditor.phase,
@@ -343,18 +346,25 @@ export default function MobilePlayoff(props: Props) {
       body: JSON.stringify(body),
     })
     const json = await response.json().catch(() => ({}))
+    if (response.status === 409 && ['SHORT_REST_WARNING', 'SCHEDULE_WARNING'].includes(json.code) && !confirmShortRest) {
+      setScheduleEditor((current) => current ? { ...current, saving: false } : current)
+      setShortRestWarning(json.warning ?? 'El descanso será menor al recomendado. ¿Guardar igualmente?')
+      return
+    }
     if (!response.ok) {
       setScheduleEditor((current) => current ? { ...current, saving: false, error: json.error ?? 'No pude guardar la programación.' } : current)
       return
     }
     if (realMatch && scheduleEditor.matchId && json.assignment) {
       setRealScheduleOverrides((current) => ({ ...current, [scheduleEditor.matchId!]: json.assignment }))
+      onScheduleChanged?.(scheduleEditor.matchId, json.assignment)
     } else if (json.key && json.reservation) {
       setFutureSchedule((current) => ({
         ...current,
         reservations: { ...current.reservations, [json.key]: json.reservation },
       }))
     }
+    setShortRestWarning('')
     setScheduleEditor(null)
   }
   const deleteScheduleEditor = async () => {
@@ -379,6 +389,7 @@ export default function MobilePlayoff(props: Props) {
     }
     if (realMatch && scheduleEditor.matchId) {
       setRealScheduleOverrides((current) => ({ ...current, [scheduleEditor.matchId!]: null }))
+      onScheduleChanged?.(scheduleEditor.matchId, null)
     } else if (futureSchedule.category) {
       const key = buildPlayoffScheduleReservationKey({ category: futureSchedule.category, phase: scheduleEditor.phase, matchOrder: scheduleEditor.matchOrder })
       setFutureSchedule((current) => {
@@ -414,6 +425,7 @@ export default function MobilePlayoff(props: Props) {
   const card = (slot: DisplaySlot, compact = false, overview = false) => {
     const state = stateFor(slot)
     const when = scheduleFor(slot)
+    const scheduleSwapReason = slot.match && slot.kind !== 'bye' ? scheduleDisabledReason(slot.match) : ''
     return <article id={compact ? undefined : `playoff-match-${slot.match?.id ?? slot.id}`}
       className={`${styles.card} ${compact ? styles.bracketCard : ''} ${slot.kind === 'bye' ? styles.bye : slot.kind === 'placeholder' ? styles.future : ''} ${followTeam && compact ? path.has(slot.id) ? styles.following : styles.dimmed : ''}`}
       data-slot={slot.code}>
@@ -422,9 +434,20 @@ export default function MobilePlayoff(props: Props) {
           {compact ? slot.code : `${info(rounds[slot.roundIndex]).label} · ${slot.code}`}
         </button>
         <span className={styles.state} data-state={state.tone}>{state.label}{slot.kind === 'bye' && ' ✓'}</span>
-        {!compact && actionable(slot) && <button type="button" className={styles.action} onClick={() => editResult(slot.match!)}>{slot.match?.status === 'PLAYED' ? 'Editar' : 'Cargar'}</button>}
       </div>
-      {!compact && slot.kind !== 'bye' && (when || canSchedule) && <button className={styles.schedule} type="button" onClick={() => when ? setSelectedId(slot.id) : openScheduleEditor(slot)}>{when ? `${when.date} · ${when.time} · ${when.court}` : 'Programar horario/cancha'}</button>}
+      {!compact && slot.kind !== 'bye' && when && <span className={styles.scheduleInfo}>{when.date} · {when.time} · {when.court}</span>}
+      {!compact && slot.kind !== 'bye' && (slot.match || canSchedule) && <div className={styles.cardActions}>
+        {slot.match && <button
+          type="button"
+          className={styles.swapAction}
+          disabled={Boolean(scheduleSwapReason)}
+          title={scheduleSwapReason || 'Cambiar horario/cancha'}
+          aria-label={`Cambiar horario/cancha de ${slot.code}`}
+          onClick={() => onSchedule(slot.match!)}
+        ><Repeat2 size={14} aria-hidden="true" /><span>Cambiar</span></button>}
+        {canSchedule && (!slot.match || canEditMatchSchedule(slot.match)) && <button className={styles.schedule} type="button" onClick={() => openScheduleEditor(slot)}><CalendarClock size={14} aria-hidden="true" />{when ? 'Reprogramar' : 'Programar'}</button>}
+        {actionable(slot) && <button type="button" className={styles.action} onClick={() => editResult(slot.match!)}>{slot.match?.status === 'PLAYED' ? 'Editar' : 'Cargar'}</button>}
+      </div>}
       {teams(slot, compact, false, overview)}
       {!compact && slot.kind === 'placeholder' && <span className={styles.waitingNote}>Se define al completar {slot.roundIndex > 0 ? info(rounds[slot.roundIndex - 1]).label : 'la ronda anterior'}.</span>}
       {compact && <button type="button" className={styles.cardSurface} aria-label={`Abrir partido ${slot.code}`} onClick={() => setSelectedId(slot.id)} tabIndex={-1} />}
@@ -478,11 +501,11 @@ export default function MobilePlayoff(props: Props) {
         {selected.kind === 'bye' && <p className={styles.sourceNote}>Esta pareja pasa a la siguiente ronda sin jugar este cruce.</p>}
         {(selected.match && actionable(selected) || canSchedule && selected.kind !== 'bye' && (!selected.match || canEditMatchSchedule(selected.match))) && <div className={styles.sheetActions}>
           {selected.match && actionable(selected) && <button type="button" className={styles.primary} onClick={() => editResult(selected.match!)}>{selected.match.status === 'PLAYED' ? 'Editar resultado' : 'Cargar resultado'}</button>}
-          {canSchedule && selected.kind !== 'bye' && (!selected.match || canEditMatchSchedule(selected.match)) && <button type="button" className={styles.secondary} onClick={() => openScheduleEditor(selected)}>{scheduleFor(selected) ? 'Cambiar horario/cancha' : 'Programar horario/cancha'}</button>}
+          {canSchedule && selected.kind !== 'bye' && (!selected.match || canEditMatchSchedule(selected.match)) && <button type="button" className={styles.secondary} onClick={() => openScheduleEditor(selected)}>{scheduleFor(selected) ? 'Reprogramar horario/cancha' : 'Programar horario/cancha'}</button>}
         </div>}
       </div>
     </Overlay>}
-    {scheduleEditor && <Overlay title={`Programar ${scheduleEditor.phase} · ${scheduleEditor.matchOrder}`} onClose={() => !scheduleEditor.saving && setScheduleEditor(null)}>
+    {scheduleEditor && <Overlay title={`${scheduleEditor.hasSchedule ? 'Reprogramar' : 'Programar'} partido`} onClose={() => !scheduleEditor.saving && setScheduleEditor(null)}>
       <div className={styles.sheetBody}>
         <label style={{ display: 'grid', gap: 6, fontSize: 13, fontWeight: 800 }}>
           <span>Fecha y hora</span>
@@ -508,8 +531,18 @@ export default function MobilePlayoff(props: Props) {
         </label>
         {scheduleEditor.error && <p style={{ margin: 0, color: '#b91c1c', fontSize: 13, fontWeight: 750 }}>{scheduleEditor.error}</p>}
         <div className={styles.sheetActions}>
-          <button type="button" className={styles.primary} disabled={scheduleEditor.saving} onClick={() => void saveScheduleEditor()}>{scheduleEditor.saving ? 'Guardando…' : 'Guardar programación'}</button>
-          {scheduleEditor.hasSchedule && <button type="button" className={styles.secondary} disabled={scheduleEditor.saving} onClick={() => void deleteScheduleEditor()}>Quitar programación</button>}
+          <button type="button" className={styles.secondary} disabled={scheduleEditor.saving} onClick={() => setScheduleEditor(null)}>Cancelar</button>
+          <button type="button" className={styles.primary} disabled={scheduleEditor.saving} onClick={() => void saveScheduleEditor()}>{scheduleEditor.saving ? 'Guardando…' : 'Guardar'}</button>
+        </div>
+        {scheduleEditor.hasSchedule && <button type="button" className={styles.secondary} disabled={scheduleEditor.saving} onClick={() => void deleteScheduleEditor()}>Quitar programación</button>}
+      </div>
+    </Overlay>}
+    {scheduleEditor && shortRestWarning && <Overlay title="Confirmar programación" onClose={() => setShortRestWarning('')}>
+      <div className={styles.sheetBody}>
+        <p className={styles.scheduleWarning}>{shortRestWarning}</p>
+        <div className={styles.sheetActions}>
+          <button type="button" className={styles.secondary} onClick={() => setShortRestWarning('')}>Cancelar</button>
+          <button type="button" className={styles.primary} onClick={() => { setShortRestWarning(''); void saveScheduleEditor(true) }}>Guardar igualmente</button>
         </div>
       </div>
     </Overlay>}

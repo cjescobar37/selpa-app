@@ -31,6 +31,8 @@ type MatchRow = {
   score: Record<string, unknown> | null
   winner_team_id: string | null
   scheduled_at: string | null
+  team1_id: string
+  team2_id: string
 }
 
 async function getTokenUser(req: NextRequest) {
@@ -93,7 +95,7 @@ async function authorize(req: NextRequest, clubId: string) {
 async function readMatch(input: { clubId: string; tournamentId: string; matchId: string }) {
   const { data, error } = await supabaseAdmin
     .from('tournament_matches')
-    .select('id,club_id,tournament_id,phase,match_order,status,score,winner_team_id,scheduled_at')
+    .select('id,club_id,tournament_id,phase,match_order,status,score,winner_team_id,scheduled_at,team1_id,team2_id')
     .eq('id', input.matchId)
     .eq('club_id', input.clubId)
     .eq('tournament_id', input.tournamentId)
@@ -170,6 +172,12 @@ export async function PUT(
         court_name: court.name,
         ...(court.id ? { court_id: court.id } : {}),
         court_source: court.source,
+        schedule_origin: 'MANUAL',
+      }
+      const requestedDay = scheduledAt.slice(0, 10)
+      const scheduleWarnings: string[] = []
+      if (!scheduleContext.startDate || !scheduleContext.endDate || requestedDay < scheduleContext.startDate || requestedDay > scheduleContext.endDate) {
+        scheduleWarnings.push('La fecha elegida queda fuera de las fechas habituales del torneo.')
       }
       const phase = normalizePlayoffSchedulePhase(match.phase)
       const playoffIdentity = phase && scheduleContext.category && match.match_order
@@ -180,17 +188,55 @@ export async function PUT(
         : null
       const currentAssignments = readMatchScheduleAssignments(scheduleContext.rules.match_schedule_assignments)
       const reservations = readPlayoffScheduleReservations(scheduleContext.rules.playoff_schedule_reservations)
-      const assignmentCollision = Object.values(currentAssignments).find((assignment) =>
-        assignment.match_id !== match.id && assignment.scheduled_at === scheduledAt && sameCourt(assignment, nextAssignment)
-      )
       const reservationCollision = Object.entries(reservations).find(([reservationKey, reservation]) =>
         reservationKey !== ownReservationKey &&
         reservation.scheduled_at === scheduledAt &&
         sameCourt(reservation, nextAssignment)
       )
-      if (assignmentCollision || reservationCollision) {
+      if (reservationCollision) {
         await restoreScheduledAtIfStill({ clubId, tournamentId, matchId, expectedCurrent: scheduledAt, restore: originalScheduledAt })
-        return NextResponse.json({ error: 'La cancha ya está ocupada en ese horario.' }, { status: 409 })
+        return NextResponse.json({ code: 'SCHEDULE_SLOT_OCCUPIED', error: 'Esa cancha ya está asignada a otro partido en ese horario.' }, { status: 409 })
+      }
+
+      const { data: otherMatches, error: otherMatchesError } = await supabaseAdmin
+        .from('tournament_matches')
+        .select('id,team1_id,team2_id,scheduled_at,status')
+        .eq('club_id', clubId)
+        .eq('tournament_id', tournamentId)
+        .neq('id', match.id)
+        .not('scheduled_at', 'is', null)
+      if (otherMatchesError) return NextResponse.json({ error: otherMatchesError.message }, { status: 500 })
+      const activeStatuses = new Set(['PENDING', 'IN_PROGRESS', 'LIVE', 'SCHEDULED'])
+      const activeOtherMatches = (otherMatches ?? []).filter((candidate) => activeStatuses.has(String(candidate.status ?? '').toUpperCase()))
+      const assignmentCollision = activeOtherMatches.find((candidate) => {
+        const assignment = currentAssignments[candidate.id]
+        return assignment?.scheduled_at === scheduledAt && sameCourt(assignment, nextAssignment)
+      })
+      if (assignmentCollision) {
+        return NextResponse.json({ code: 'SCHEDULE_SLOT_OCCUPIED', error: 'Esa cancha ya está asignada a otro partido en ese horario.' }, { status: 409 })
+      }
+      const teamIds = new Set([match.team1_id, match.team2_id])
+      const sameTeamMatches = activeOtherMatches.filter((candidate) =>
+        teamIds.has(candidate.team1_id) || teamIds.has(candidate.team2_id)
+      )
+      if (sameTeamMatches.some((candidate) => candidate.scheduled_at === scheduledAt)) {
+        scheduleWarnings.push('Una de las parejas ya juega otro partido en ese horario.')
+      }
+      const durationMinutes = Number(scheduleContext.rules.schedule_config && typeof scheduleContext.rules.schedule_config === 'object'
+        ? (scheduleContext.rules.schedule_config as Record<string, unknown>).match_duration_minutes
+        : 90) || 90
+      const shortRest = sameTeamMatches.find((candidate) => {
+        const difference = Math.abs(Date.parse(String(candidate.scheduled_at)) - Date.parse(scheduledAt)) / 60_000
+        return difference > 0 && difference < durationMinutes * 2
+      })
+      if (shortRest) {
+        scheduleWarnings.push('El descanso entre partidos será menor al recomendado.')
+      }
+      if (scheduleWarnings.length > 0 && body?.confirm_short_rest !== true) {
+        return NextResponse.json({
+          code: 'SCHEDULE_WARNING',
+          warning: `${scheduleWarnings.join(' ')} ¿Querés guardar igualmente?`,
+        }, { status: 409 })
       }
 
       const nextRules = setMatchScheduleAssignmentInRules({

@@ -22,6 +22,7 @@ export type PlayoffScheduleReservation = {
   court_name: string
   court_id?: string
   court_source: 'OWN_CLUB' | 'EXTERNAL_COMPLEX'
+  schedule_origin?: 'AUTO' | 'MANUAL'
 }
 
 type PlayoffSlotIdentity = {
@@ -105,6 +106,9 @@ export function readPlayoffScheduleReservations(value: unknown) {
       court_source: normalizeText(entry.court_source) === 'EXTERNAL_COMPLEX'
         ? 'EXTERNAL_COMPLEX'
         : 'OWN_CLUB',
+      ...(normalizeText(entry.schedule_origin)
+        ? { schedule_origin: normalizeText(entry.schedule_origin) === 'MANUAL' ? 'MANUAL' as const : 'AUTO' as const }
+        : {}),
     }
     return acc
   }, {})
@@ -216,6 +220,7 @@ export function promotePlayoffScheduleReservationInRules(input: {
     court_name: reservation.court_name,
     ...(reservation.court_id ? { court_id: reservation.court_id } : {}),
     court_source: reservation.court_source,
+    ...(reservation.schedule_origin ? { schedule_origin: reservation.schedule_origin } : {}),
   }
   const rawAssignments = isPlainRecord(removal.rules.match_schedule_assignments)
     ? removal.rules.match_schedule_assignments

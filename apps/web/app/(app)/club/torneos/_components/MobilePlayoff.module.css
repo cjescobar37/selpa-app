@@ -45,9 +45,14 @@
 .state[data-state="played"], .state[data-state="bye"] { color: #27754f; }
 .state[data-state="live"] { color: #ad4b37; }
 .state[data-state="wo"] { color: #8b6519; background: #fffae3; border-radius: 4px; padding: 2px 4px; }
-.action { position: relative; border: 0; background: transparent; min-height: 44px; padding: 0 7px; color: #087d9b; font-size: 11px !important; font-weight: 650 !important; z-index: 0; }
-.action::before { content: ''; position: absolute; inset: 7px 0; border: 1px solid #b2d9e1; border-radius: 7px; background: #f0fafc; z-index: -1; }
-.schedule { display: block; color: #66798c; font-size: 10px !important; font-weight: 450; border: 0; padding: 0 0 3px; text-align: left; background: transparent; line-height: 1.45; }
+.cardActions { display:flex; gap:6px; margin:5px 0 3px; min-width:0; }
+.cardActions > button { align-items:center; border-radius:7px; display:inline-flex; flex:1 1 0; font-size:10px !important; font-weight:750 !important; gap:4px; justify-content:center; min-height:38px; min-width:0; padding:5px 4px; white-space:nowrap; }
+.swapAction { background:#f6fafb; border:1px solid #c8d8df; color:#426678; }
+.swapAction:disabled { border-color: #d7e0e6; color: #9aa8b4; cursor: not-allowed; opacity: .58; }
+.action { background:#061b3a; border:1px solid #061b3a; color:#fff; }
+.scheduleInfo { color:#536a80; display:block; font-size:11px; line-height:1.35; }
+.schedule { background:#e8f8fb; border:1px solid #87d4e1; color:#087d9b; }
+.schedule:disabled { color:#748694; opacity:.72; }
 .teams { min-width: 0; }
 .scoreLabels, .teamRow { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 22px); align-items: center; column-gap: 3px; }
 .scoreLabels { color: #8a98a7; font-size: 8px; text-align: center; height: 12px; }
@@ -118,7 +123,8 @@
 .sources { padding: 12px 0; display: grid; gap: 5px; color: #6c7f91; font-size: 11px; }
 .sources b { color: #475f73; font-weight: 600; }
 .sourceNote { color: #526d7d; font-size: 12px; }
-.sheetActions { display: flex; gap: 8px; padding-top: 12px; }
+.sheetActions { display: grid; gap: 8px; grid-template-columns:1fr 1fr; padding-top: 12px; }
+.scheduleWarning { color:#5d4a22; font-size:13px; font-weight:700; line-height:1.45; margin:8px 0 0; }
 .primary, .secondary { min-height: 44px; border-radius: 9px; font-size: 12px !important; padding: 8px 12px; flex: 1; border: 1px solid #c8dfe5; }
 .primary { background: #087e97; color: #fff; border-color: #087e97; }
 .secondary { background: #f6fafb; color: #296779; }
