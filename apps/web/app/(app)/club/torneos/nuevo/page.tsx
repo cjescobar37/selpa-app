@@ -165,7 +165,7 @@ type CompetitionDateContext = {
   allowed_actions: { create_date?: boolean }
   divisions: CompetitionDateDivision[]
 }
-type EventTierOption = { id: string; name: string; code: string; is_active: boolean }
+type EventTierOption = { id: string; name: string; code: string; is_active: boolean; default_points_scheme_id: string | null }
 
 function tournamentTypeFromEventTier(tier: EventTierOption | undefined): TournamentType | null {
   if (!tier) return null
@@ -489,6 +489,7 @@ export default function ClubNuevoTorneoPage() {
   const [selectedCompetitionDivisionId, setSelectedCompetitionDivisionId] = useState('')
   const [eventTiers, setEventTiers] = useState<EventTierOption[]>([])
   const [selectedEventTierId, setSelectedEventTierId] = useState('')
+  const [eventTierSchemeNames, setEventTierSchemeNames] = useState<Record<string, string>>({})
   const [loadingCompetitionContext, setLoadingCompetitionContext] = useState(Boolean(competitionSeriesId))
   const [competitionContextError, setCompetitionContextError] = useState('')
   const [competitionIdempotencyKey, setCompetitionIdempotencyKey] = useState('')
@@ -515,6 +516,12 @@ export default function ClubNuevoTorneoPage() {
   const draftKey = activeClub?.id ? `selpa:tournament-wizard:v${tournamentWizardDraftVersion}:${activeClub.id}:${competitionSeriesId ? `series:${competitionSeriesId}` : 'independent'}` : null
   const isCompetitionDate = Boolean(competitionSeriesId)
   const selectedCompetitionDivision = competitionContext?.divisions.find((division) => division.series_division_id === selectedCompetitionDivisionId) ?? null
+  const selectedEventTier = eventTiers.find((tier) => tier.id === selectedEventTierId)
+  const selectedEventTierSchemeName = selectedEventTier?.default_points_scheme_id
+    ? eventTierSchemeNames[selectedEventTier.default_points_scheme_id] ?? 'Esquema predeterminado'
+    : selectedCompetitionDivision?.points_scheme_id
+      ? 'Esquema del circuito'
+      : 'Sin puntos'
   const primaryCourtVenue = useMemo(
     () => venueOptions.find((venue) => venue.isPrimary) ?? null,
     [venueOptions]
@@ -1012,8 +1019,13 @@ export default function ClubNuevoTorneoPage() {
       })
       const payload = await response.json().catch(() => ({})) as { eventTiers?: EventTierOption[] }
       const tiers = response.ok ? (payload.eventTiers ?? []).filter((tier) => tier.is_active) : []
+      const schemeIds = [...new Set(tiers.map(tier => tier.default_points_scheme_id).filter((id): id is string => Boolean(id)))]
+      const schemeResult = schemeIds.length
+        ? await supabase.from('points_schemes').select('id,name').in('id', schemeIds)
+        : { data: [], error: null }
       if (!cancelled) {
         setEventTiers(tiers)
+        setEventTierSchemeNames(Object.fromEntries((schemeResult.data ?? []).map(scheme => [scheme.id, scheme.name])))
         setSelectedEventTierId((current) => {
           const next = tiers.some((tier) => tier.id === current) ? current : tiers[0]?.id ?? ''
           const type = tournamentTypeFromEventTier(tiers.find((tier) => tier.id === next))
@@ -1239,7 +1251,7 @@ export default function ClubNuevoTorneoPage() {
           {loadingCompetitionContext ? <strong>Preparando contexto…</strong> : competitionContextError ? <><strong>No se puede crear esta fecha</strong><p>{competitionContextError}</p></> : competitionContext && selectedCompetitionDivision ? <>
             <strong>{competitionContext.series_name}</strong>
             <p>{selectedCompetitionDivision.branch_name} · {selectedCompetitionDivision.segment_name} · {selectedCompetitionDivision.age_category_name ?? selectedCompetitionDivision.category_name ?? 'Categoría'}</p>
-            {selectedCompetitionDivision.points_scheme_id && eventTiers.length ? <label><span>Jerarquía</span><select value={selectedEventTierId} onChange={(event) => selectEventTier(event.target.value)}>{eventTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></label> : null}
+            {selectedCompetitionDivision.points_scheme_id && eventTiers.length ? <label><span>Tipo de fecha</span><select value={selectedEventTierId} onChange={(event) => selectEventTier(event.target.value)}>{eventTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select><small>Esquema de puntos: {selectedEventTierSchemeName}</small></label> : null}
           </> : null}
         </aside> : null}
 
@@ -1385,7 +1397,7 @@ export default function ClubNuevoTorneoPage() {
               <div className="club-field--wide">
                 <ChoiceChips label="Formato" value={form.competitionSystem} options={competitionSystemOptions} onChange={(competitionSystem) => updateField('competitionSystem', competitionSystem)} />
               </div>
-              {isCompetitionDate ? <div className="club-inheritedPoints club-field--wide"><strong>Tabla de puntos</strong><span>{selectedCompetitionDivision?.points_scheme_id ? 'Esta fecha usa la tabla efectiva del circuito.' : 'Esta fecha no asigna puntos.'}</span><small>Los ajustes por fecha se realizan sobre una fecha ya creada; al crearla mantiene la regla del circuito.</small></div> : <details className="club-mobileSecondary club-field--wide">
+              {isCompetitionDate ? <div className="club-inheritedPoints club-field--wide"><strong>Esquema de puntos</strong><span>{selectedCompetitionDivision?.points_scheme_id ? selectedEventTierSchemeName : 'Esta fecha no asigna puntos.'}</span><small>La fecha usa el default de su tipo; después podés elegir un override explícito desde la configuración.</small></div> : <details className="club-mobileSecondary club-field--wide">
                 <summary>Tabla de puntos <small>{form.pointsEnabled ? 'Activa' : 'Sin puntos'}</small></summary>
                 <div className="club-mobileSecondaryContent">
                   <label className="club-checkRow club-checkRow--wide"><input type="checkbox" checked={form.pointsEnabled} onChange={(event) => updateField('pointsEnabled', event.target.checked)} /><span>Este torneo asigna puntos</span></label>
@@ -1807,7 +1819,7 @@ export default function ClubNuevoTorneoPage() {
               </ReviewBlock>
               <ReviewBlock title="Configuración deportiva" step={3} onEdit={beginContextualEdit} issue={reviewIssueByStep.get(3)}>
                 <strong>{typeOptions.find((option) => option.value === form.type)?.label} · {competitionSystemOptions.find((option) => option.value === form.competitionSystem)?.label}</strong>
-                <span>{isCompetitionDate ? (selectedCompetitionDivision?.points_scheme_id ? 'Tabla efectiva del circuito' : 'No asigna puntos') : (form.pointsEnabled ? 'Tabla de puntos activa' : 'No asigna puntos')}</span>
+                <span>{isCompetitionDate ? (selectedCompetitionDivision?.points_scheme_id ? `Esquema ${selectedEventTierSchemeName}` : 'No asigna puntos') : (form.pointsEnabled ? 'Tabla de puntos activa' : 'No asigna puntos')}</span>
               </ReviewBlock>
               <ReviewBlock title="Fechas e inscripción" step={4} onEdit={beginContextualEdit} issue={reviewIssueByStep.get(4)} multiline>
                 <strong>{reviewDateRange}</strong>

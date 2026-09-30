@@ -9,6 +9,7 @@ const manager = readFileSync(new URL('../app/(app)/club/torneos/_components/Tour
 const scheduleRoute = readFileSync(new URL('../app/api/clubs/[clubId]/tournaments/[tournamentId]/matches/[id]/schedule/route.ts', import.meta.url), 'utf8')
 const playoffRoute = readFileSync(new URL('../app/api/clubs/[clubId]/tournaments/[tournamentId]/playoff/schedule/route.ts', import.meta.url), 'utf8')
 const mobilePlayoff = readFileSync(new URL('../app/(app)/club/torneos/_components/MobilePlayoff.tsx', import.meta.url), 'utf8')
+const mobilePlayoffCss = readFileSync(new URL('../app/(app)/club/torneos/_components/MobilePlayoff.module.css', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../app/(app)/club/torneos/_components/TournamentScheduleManager.module.css', import.meta.url), 'utf8')
 
 test('reprogramación individual sólo cambia schedule y conserva origen MANUAL', () => {
@@ -66,6 +67,12 @@ test('mobile separa programación individual de intercambio y actualiza estado l
   assert.match(mobilePlayoff, /onSchedule\(slot\.match!\)/)
   assert.match(mobilePlayoff, />Cambiar<\/span>/)
   assert.match(mobilePlayoff, /'Reprogramar' : 'Programar'/)
+  assert.match(mobilePlayoff, /scheduleActionRow/)
+  assert.match(mobilePlayoffCss, /\.scheduleActionRow/)
+  assert.match(mobilePlayoff, /scoreHeader/)
+  assert.match(mobilePlayoff, /slot\.kind !== 'bye'/)
+  assert.match(mobilePlayoffCss, /\.scoreHeader \{ background:#061b3a/)
+  assert.match(mobilePlayoffCss, /@media \(max-width: 350px\)/)
   assert.match(mobilePlayoff, /Confirmar programación/)
   assert.doesNotMatch(mobilePlayoff, /window\.confirm/)
 })

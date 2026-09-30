@@ -19,7 +19,7 @@ type TransitionResponse = { state: WorkflowState }
 type RuleCode = 'CHAMPION' | 'RUNNER_UP' | 'SEMIFINALIST' | 'QUARTERFINALIST' | 'EIGHTH_FINALIST' | 'SIXTEENTH_FINALIST' | 'PARTICIPANT'
 const labels: Record<string, string> = { DRAFT: 'Preparando', CALCULATED: 'Vista previa', SUBMITTED: 'En revisión', APPROVED: 'Lista para publicar', PUBLISHED: 'Publicada', REJECTED: 'Rechazada', SUPERSEDED: 'Reemplazada' }
 const ruleCodes: RuleCode[] = ['CHAMPION', 'RUNNER_UP', 'SEMIFINALIST', 'QUARTERFINALIST', 'EIGHTH_FINALIST', 'SIXTEENTH_FINALIST', 'PARTICIPANT']
-const resultLabels: Record<string, string> = { CHAMPION: 'Campeón', RUNNER_UP: 'Subcampeón', SEMIFINALIST: 'Semifinalista', QUARTERFINALIST: 'Cuartofinalista', EIGHTH_FINALIST: 'Octavos', SIXTEENTH_FINALIST: 'Dieciseisavos', ROUND_OF_16: 'Octavos de final', PARTICIPANT: 'Participación', PARTICIPATION: 'Participación' }
+const resultLabels: Record<string, string> = { CHAMPION: 'Campeón', RUNNER_UP: 'Finalista', SEMIFINALIST: 'Semifinal', QUARTERFINALIST: 'Cuartos', EIGHTH_FINALIST: 'Octavos', SIXTEENTH_FINALIST: 'Dieciseisavos', ROUND_OF_16: 'Octavos de final', PARTICIPANT: 'Participación', PARTICIPATION: 'Participación' }
 
 async function token() { return (await supabase.auth.getSession()).data.session?.access_token ?? '' }
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -156,14 +156,19 @@ export default function EventSettlementPanel({ clubId, seriesId, eventId, eventD
 
   const preview = useMemo(() => {
     if (!detail) return []
-    const unique = new Map<string, { label: string; points: number; position: number }>()
-    for (const award of detail.awards) {
+    return detail.awards.map((award, sourceIndex) => {
       const code = String(award.result_code ?? 'PARTICIPATION').toUpperCase()
-      const points = Number(award.total_points ?? 0)
-      const key = `${code}:${points}`
-      if (!unique.has(key)) unique.set(key, { label: resultLabels[code] ?? code.toLowerCase().replaceAll('_', ' '), points, position: Number(award.final_position ?? 999) })
-    }
-    return [...unique.values()].sort((left, right) => left.position - right.position || right.points - left.points)
+      const calculationDetail = record(award.calculation_detail)
+      return {
+        id: String(award.id ?? `${code}-${sourceIndex}`),
+        name: String(award.player_name ?? 'Jugador'),
+        code,
+        label: resultLabels[code] ?? code.toLowerCase().replaceAll('_', ' '),
+        points: Number(award.total_points ?? 0),
+        position: Number(award.final_position ?? 999),
+        ruleFound: calculationDetail.rule_found !== false,
+      }
+    }).sort((left, right) => left.position - right.position || ruleCodes.indexOf(left.code as RuleCode) - ruleCodes.indexOf(right.code as RuleCode) || left.name.localeCompare(right.name, 'es'))
   }, [detail])
 
   const calculationSnapshot = record(detail?.settlement.calculation_snapshot)
@@ -179,7 +184,7 @@ export default function EventSettlementPanel({ clubId, seriesId, eventId, eventD
     {loading ? <p className={styles.loading}><RefreshCw size={15} />Preparando vista previa…</p> : detail ? <>
       <div className={styles.totals}><div><strong>{detail.totals.awards}</strong><small>Asignaciones</small></div><div><strong>{detail.totals.calculated.toLocaleString('es-AR')}</strong><small>Puntos calculados</small></div><div><strong>{detail.totals.movements}</strong><small>Movimientos publicados</small></div></div>
       <dl className={styles.source}><div><dt>Esquema usado</dt><dd>{schemeName}</dd></div><div><dt>Fuente</dt><dd>Snapshot de {sourceName}</dd></div></dl>
-      {preview.length ? <div className={styles.preview}><small>DISTRIBUCIÓN</small>{preview.map(item => <div key={`${item.label}-${item.points}`}><span>{item.label}</span><strong>{item.points.toLocaleString('es-AR')} pts</strong></div>)}</div> : null}
+      {preview.length ? <div className={styles.preview}><small>DISTRIBUCIÓN</small>{preview.map(item => <div key={item.id}><span><strong>{item.name}</strong><small>{item.label}</small></span><strong className={item.ruleFound ? undefined : styles.missingRule}>{item.ruleFound ? `${item.points.toLocaleString('es-AR')} pts` : 'Sin puntaje configurado'}</strong></div>)}</div> : null}
       {adjusting && canAdjust ? <div className={styles.adjust}><div><strong>Ajustar puntos de esta fecha</strong><p>Se creará una copia privada. La tabla general del circuito no cambiará.</p></div>{pointsValidation ? <p role="alert">{pointsValidation}</p> : null}{ruleCodes.map(code => <label key={code}><span>{resultLabels[code]}</span><input min="0" step="1" inputMode="numeric" type="number" value={pointValues[code]} onChange={event => { setPointsValidation(''); setPointValues(current => ({ ...current, [code]: Number(event.target.value) })) }} /></label>)}<div className={styles.adjustActions}><button type="button" onClick={() => setAdjusting(false)}>Cancelar</button><button type="button" disabled={busy === 'adjust'} onClick={() => void saveAdjustment()}>{busy === 'adjust' ? 'Recalculando…' : 'Guardar y recalcular'}</button></div></div> : null}
       {detail.preflight.blockers.length || detail.preflight.warnings.length ? <div className={styles.issues}>{detail.preflight.blockers.map((issue, index) => <p className={styles.blocker} key={`blocker-${index}`}><AlertCircle size={14} />{issueText(issue)}</p>)}{detail.preflight.warnings.map((issue, index) => <p key={`warning-${index}`}><AlertCircle size={14} />{issueText(issue)}</p>)}</div> : null}
       {detail.settlement.status === 'PUBLISHED' ? <><p className={styles.published}><Check size={16} /><span><strong>Puntos publicados</strong><small>Para modificarlos, creá una corrección. La versión publicada no se edita.</small></span></p>{confirmingCorrection ? <div className={styles.correction}><p>La corrección revertirá los movimientos actuales y creará una nueva versión para revisar.</p><div><button type="button" onClick={() => setConfirmingCorrection(false)}>Cancelar</button><button type="button" disabled={busy === 'correction'} onClick={() => void createCorrection()}>{busy === 'correction' ? 'Creando…' : 'Confirmar corrección'}</button></div></div> : <button className={styles.secondary} type="button" onClick={() => setConfirmingCorrection(true)}>Crear corrección</button>}<Link className={styles.rankingLink} href={`/club/competition/series/${seriesId}?tab=ranking`}>Ver ranking</Link></> : <div className={styles.actions}>{canAdjust ? <button className={styles.secondary} type="button" disabled={Boolean(busy)} onClick={beginAdjustment}><SlidersHorizontal size={15} />Ajustar puntos</button> : null}<button className={styles.publish} type="button" disabled={Boolean(busy) || detail.preflight.blockers.length > 0 || detail.settlement.status === 'DRAFT'} onClick={() => void publishPoints()}>{busy === 'publish' ? 'Publicando…' : 'Publicar puntos'}</button></div>}

@@ -14,7 +14,7 @@ import {
 } from '@/lib/tournamentPlayoffScheduleReservations'
 import type { MatchScheduleAssignment, TournamentCourtConfig } from '@/lib/tournamentSchedule'
 
-import { displayBracket, bracketPath, info, schedule, matchState, scoreColumns, type MobilePlayoffMatch, type Slot, type Round, type DisplaySlot, type DisplayRound } from './playoffPresentation'
+import { displayBracket, bracketPath, findAmbiguousCourtNames, formatPlayoffSchedule, info, matchState, scoreColumns, type MobilePlayoffMatch, type ScheduleCourtReference, type Slot, type Round, type DisplaySlot, type DisplayRound } from './playoffPresentation'
 export type { MobilePlayoffMatch } from './playoffPresentation'
 type Props = {
   rounds: Round[]
@@ -22,6 +22,7 @@ type Props = {
   currentPhase?: string
   champion?: string | null
   nextMatch?: MobilePlayoffMatch | null
+  courtContext?: readonly ScheduleCourtReference[]
   teamNames: ReadonlyMap<string, string>
   teamSeeds: ReadonlyMap<string, number>
   canEditResults: boolean
@@ -62,17 +63,6 @@ function toLocalDateTimeInput(value?: string | null) {
   if (Number.isNaN(date.getTime())) return ''
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
   return local.toISOString().slice(0, 16)
-}
-
-function formatScheduleValues(scheduledAt?: string | null, courtName?: string | null) {
-  if (!scheduledAt) return null
-  const date = new Date(scheduledAt)
-  if (Number.isNaN(date.getTime())) return null
-  return {
-    date: new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit' }).format(date),
-    time: new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date),
-    court: courtName || 'Cancha sin asignar',
-  }
 }
 
 let openOverlayCount = 0
@@ -147,6 +137,10 @@ function Overlay({ children, title, fullscreen = false, initialScrollY, onClose 
 
 export default function MobilePlayoff(props: Props) {
   const { rounds, teamNames, teamSeeds, canEditResults, canSchedule, onResult, onSchedule, scheduleDisabledReason, onScheduleChanged, scheduleRevision } = props
+  const ambiguousCourtNames = useMemo(() => findAmbiguousCourtNames([
+    ...(props.courtContext ?? []),
+    ...rounds.flatMap((round) => round.slots.flatMap((slot) => slot.match ? [slot.match] : [])),
+  ]), [props.courtContext, rounds])
   const params = useParams<{ id: string }>()
   const tournamentId = params?.id
   const { activeClub } = useSession()
@@ -268,12 +262,18 @@ export default function MobilePlayoff(props: Props) {
     if (slot.match) {
       const hasOverride = Object.prototype.hasOwnProperty.call(realScheduleOverrides, slot.match.id)
       const override = hasOverride ? realScheduleOverrides[slot.match.id] : undefined
-      return override === null
-        ? null
-        : formatScheduleValues(override?.scheduled_at ?? slot.match.scheduled_at, override?.court_name ?? slot.match.court_name)
+      if (override === null) return null
+      const match = {
+        ...slot.match,
+        scheduled_at: override?.scheduled_at ?? slot.match.scheduled_at,
+        court_name: override?.court_name ?? slot.match.court_name,
+        court_id: override?.court_id ?? slot.match.court_id,
+        court_complex_name: override?.court_complex_name ?? slot.match.court_complex_name,
+      }
+      return match.scheduled_at ? formatPlayoffSchedule(match, ambiguousCourtNames) : null
     }
     const reservation = reservationFor(slot)
-    return formatScheduleValues(reservation?.scheduled_at, reservation?.court_name)
+    return reservation ? formatPlayoffSchedule(reservation, ambiguousCourtNames) : null
   }
   const stateFor = (slot: DisplaySlot) => {
     if (slot.kind === 'placeholder' && scheduleFor(slot)) {
@@ -404,8 +404,8 @@ export default function MobilePlayoff(props: Props) {
 
   const teams = (slot: DisplaySlot, compact = false, detail = false, overview = false) => {
     const columns = scoreColumns(slot.match)
-    return <div className={`${styles.teams} ${compact ? styles.compactTeams : ''} ${detail ? styles.detailTeams : ''}`}>
-      {slot.kind === 'match' && <div className={styles.scoreLabels}><span />{columns.map((column) => <span key={column.label}>{column.label}</span>)}</div>}
+    return <div className={`${styles.teams} ${!compact && slot.kind !== 'bye' ? styles.matchTable : ''} ${compact ? styles.compactTeams : ''} ${detail ? styles.detailTeams : ''}`}>
+      {slot.kind !== 'bye' && <div className={`${styles.scoreLabels} ${!compact ? styles.scoreHeader : ''}`}><span>{compact ? '' : 'Equipo'}</span>{columns.map((column) => <span key={column.label}>{column.label}</span>)}</div>}
       {slot.teams.map((team, side) => {
         const winner = slot.kind === 'bye' || Boolean(team.id && slot.match?.winner_team_id === team.id)
         const overviewName = team.id ? team.name.split(' / ').map((name) => name.trim().split(/\s+/).at(-1)).join(' / ') : team.name
@@ -413,7 +413,7 @@ export default function MobilePlayoff(props: Props) {
         return <div className={`${styles.teamRow} ${winner ? styles.winner : ''} ${!team.id ? styles.unknown : ''}`} key={`${slot.id}-${side}`}>
           {compact && team.id ? <button type="button" className={styles.teamButton} aria-pressed={followTeam === team.id} aria-label={`Seguir a ${team.name}`} onClick={() => follow(team.id!)}>{content}</button>
             : <span className={styles.teamIdentity}>{content}</span>}
-          {slot.kind === 'match' && columns.map((column) => {
+          {slot.kind !== 'bye' && columns.map((column) => {
             const value = side === 0 ? column.first : column.second
             const other = side === 0 ? column.second : column.first
             return <span className={`${styles.score} ${value !== null && other !== null && value > other ? styles.wonSet : ''}`} key={column.label}>{value ?? '—'}</span>
@@ -435,21 +435,25 @@ export default function MobilePlayoff(props: Props) {
         </button>
         <span className={styles.state} data-state={state.tone}>{state.label}{slot.kind === 'bye' && ' ✓'}</span>
       </div>
-      {!compact && slot.kind !== 'bye' && when && <span className={styles.scheduleInfo}>{when.date} · {when.time} · {when.court}</span>}
-      {!compact && slot.kind !== 'bye' && (slot.match || canSchedule) && <div className={styles.cardActions}>
-        {slot.match && <button
-          type="button"
-          className={styles.swapAction}
-          disabled={Boolean(scheduleSwapReason)}
-          title={scheduleSwapReason || 'Cambiar horario/cancha'}
-          aria-label={`Cambiar horario/cancha de ${slot.code}`}
-          onClick={() => onSchedule(slot.match!)}
-        ><Repeat2 size={14} aria-hidden="true" /><span>Cambiar</span></button>}
-        {canSchedule && (!slot.match || canEditMatchSchedule(slot.match)) && <button className={styles.schedule} type="button" onClick={() => openScheduleEditor(slot)}><CalendarClock size={14} aria-hidden="true" />{when ? 'Reprogramar' : 'Programar'}</button>}
-        {actionable(slot) && <button type="button" className={styles.action} onClick={() => editResult(slot.match!)}>{slot.match?.status === 'PLAYED' ? 'Editar' : 'Cargar'}</button>}
+      {!compact && slot.kind !== 'bye' && <div className={styles.scheduleActionRow}>
+        {when && <span className={styles.scheduleInfo}>
+          <span>{when.date} · {when.time}</span>
+          <span className={styles.scheduleLocation} title={when.court}>{when.court}</span>
+        </span>}
+        {(slot.match || canSchedule) && <div className={styles.cardActions}>
+          {slot.match && <button
+            type="button"
+            className={styles.swapAction}
+            disabled={Boolean(scheduleSwapReason)}
+            title={scheduleSwapReason || 'Cambiar horario/cancha'}
+            aria-label={`Cambiar horario/cancha de ${slot.code}`}
+            onClick={() => onSchedule(slot.match!)}
+          ><Repeat2 size={13} aria-hidden="true" /><span>Cambiar</span></button>}
+          {canSchedule && (!slot.match || canEditMatchSchedule(slot.match)) && <button className={styles.schedule} type="button" onClick={() => openScheduleEditor(slot)}><CalendarClock size={13} aria-hidden="true" />{when ? 'Reprogramar' : 'Programar'}</button>}
+          {actionable(slot) && <button type="button" className={styles.action} onClick={() => editResult(slot.match!)}>{slot.match?.status === 'PLAYED' ? 'Editar' : 'Cargar'}</button>}
+        </div>}
       </div>}
       {teams(slot, compact, false, overview)}
-      {!compact && slot.kind === 'placeholder' && <span className={styles.waitingNote}>Se define al completar {slot.roundIndex > 0 ? info(rounds[slot.roundIndex - 1]).label : 'la ronda anterior'}.</span>}
       {compact && <button type="button" className={styles.cardSurface} aria-label={`Abrir partido ${slot.code}`} onClick={() => setSelectedId(slot.id)} tabIndex={-1} />}
     </article>
   }
@@ -457,7 +461,7 @@ export default function MobilePlayoff(props: Props) {
     {rounds.map((round, index) => <button type="button" key={round.phase} data-path={round.slots.some((slot) => path.has(slot.id)) || undefined} aria-current={index === activeIndex ? 'step' : undefined} onClick={() => selectRound(index)} aria-label={info(round).label}>{mini ? info(round).short : info(round).label}</button>)}
   </nav>
   const tracking = followTeam && <div className={styles.tracking}><span>Siguiendo a <b>{followedName}</b><small>{journey.eliminatedAt ? `Terminó en ${journey.eliminatedAt}` : 'Camino posible'} · {journey.steps.join(' → ')}</small></span><button type="button" onClick={() => setFollowTeam(null)} aria-label="Quitar seguimiento"><X size={18} /></button></div>
-  const nextWhen = schedule(props.nextMatch ?? undefined)
+  const nextWhen = formatPlayoffSchedule(props.nextMatch ?? undefined, ambiguousCourtNames)
   const nextSlot = displayRounds.flatMap((round) => round.slots).find((slot) => slot.match?.id === props.nextMatch?.id)
   const matches = rounds.flatMap((round) => round.slots).flatMap((slot) => slot.match ? [slot.match] : [])
   const renderBracket = (full: boolean) => <MobileBracket rounds={displayRounds} activeIndex={activeIndex} onRound={(index) => setPhase(rounds[index].phase)}
@@ -470,7 +474,7 @@ export default function MobilePlayoff(props: Props) {
       <div className={styles.exportAction}>{props.exportAction}</div>
       <div className={styles.summaryDetails}>
         <div className={styles.champion}><span>Campeón</span><b>{props.champion || 'Por definirse'}</b></div>
-        {props.nextMatch && nextSlot ? <button className={styles.next} type="button" onClick={() => { setPhase(rounds[nextSlot.roundIndex].phase); setSelectedId(nextSlot.id) }}><span>Próximo · {nextSlot.code}</span><b>{nextWhen.date} · {nextWhen.time} · {nextWhen.court}</b></button> : <span className={styles.next}><span>Próximo partido</span><b>Sin pendientes</b></span>}
+        {props.nextMatch && nextSlot ? <button className={styles.next} type="button" onClick={() => { setPhase(rounds[nextSlot.roundIndex].phase); setSelectedId(nextSlot.id) }}><span>Próximo · {nextSlot.code}</span><b><span>{nextWhen.date} · {nextWhen.time}</span><span title={nextWhen.court}>{nextWhen.court}</span></b></button> : <span className={styles.next}><span>Próximo partido</span><b>Sin pendientes</b></span>}
       </div>
     </section>
     <div className={styles.navigation} ref={nav}>

@@ -6,6 +6,7 @@ export type MobilePlayoffMatch = {
   scheduled_at?: string | null
   court_name?: string | null
   court_id?: string | null
+  court_complex_name?: string | null
   court_source?: string | null
   team1_id: string
   team2_id: string
@@ -39,14 +40,55 @@ const phaseInfo: Record<string, { label: string; short: string; prefix: string }
 }
 export const info = (round: Round) => phaseInfo[round.phase] ?? { label: round.label, short: round.label, prefix: 'M' }
 export const code = (round: Round, slot: Slot) => `${info(round).prefix}${slot.slotOrder}`
-export function schedule(match?: MobilePlayoffMatch) {
+export type ScheduleCourtReference = Pick<MobilePlayoffMatch, 'court_id' | 'court_name' | 'court_complex_name'>
+
+const normalizeCourtName = (name?: string | null) => name?.trim().toLocaleLowerCase('es-AR') ?? ''
+const normalizeComplexName = (name?: string | null) => name?.trim().toLocaleLowerCase('es-AR') ?? ''
+
+export function findAmbiguousCourtNames(courts: readonly ScheduleCourtReference[]) {
+  const locationsByCourtName = new Map<string, Map<string, string>>()
+  courts.forEach((court) => {
+    const courtName = normalizeCourtName(court.court_name)
+    const courtId = court.court_id?.trim()
+    const complexName = normalizeComplexName(court.court_complex_name)
+    if (!courtName || !courtId || !complexName) return
+    const courtLocations = locationsByCourtName.get(courtName) ?? new Map<string, string>()
+    courtLocations.set(courtId, complexName)
+    locationsByCourtName.set(courtName, courtLocations)
+  })
+  return new Set([...locationsByCourtName.entries()]
+    .filter(([, courtLocations]) => new Set(courtLocations.values()).size > 1)
+    .map(([courtName]) => courtName))
+}
+
+export function formatPlayoffSchedule(
+  match?: Pick<MobilePlayoffMatch, 'scheduled_at' | 'court_name' | 'court_id' | 'court_complex_name'> | null,
+  ambiguousCourtNames: ReadonlySet<string> = new Set(),
+) {
   const date = match?.scheduled_at ? new Date(match.scheduled_at) : null
   const valid = date && !Number.isNaN(date.getTime())
+  const day = valid ? new Intl.DateTimeFormat('es-AR', { day: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' }).format(date) : null
+  const month = valid ? new Intl.DateTimeFormat('es-AR', { month: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }).format(date) : null
   return {
-    date: valid ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit' }).format(date) : 'Sin fecha',
-    time: valid ? new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date) : 'Sin hora',
-    court: match?.court_name || 'Cancha sin asignar',
+    date: day && month ? `Día ${day}/${month}` : 'Sin fecha',
+    time: valid ? `${new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/Argentina/Buenos_Aires' }).format(date)} hs` : 'Sin hora',
+    court: match?.court_name && ambiguousCourtNames.has(normalizeCourtName(match.court_name)) && match.court_complex_name?.trim()
+      ? `${match.court_complex_name.trim()} · ${match.court_name.trim()}`
+      : match?.court_name?.trim() || 'Cancha sin asignar',
   }
+}
+
+export const schedule = (match?: MobilePlayoffMatch) => formatPlayoffSchedule(match)
+
+export function resolveTeamDisplayName(
+  match: Pick<MobilePlayoffMatch, 'team1_id' | 'team2_id' | 'team1_name' | 'team2_name'>,
+  side: 'team1' | 'team2',
+  teamNames: ReadonlyMap<string, string>,
+) {
+  const teamId = side === 'team1' ? match.team1_id : match.team2_id
+  const directName = side === 'team1' ? match.team1_name : match.team2_name
+  const knownName = teamNames.get(teamId)
+  return directName?.trim() || knownName?.trim() || (side === 'team1' ? 'Equipo 1' : 'Equipo 2')
 }
 export function matchState(slot: Slot) {
   const status = slot.match?.status?.toUpperCase()

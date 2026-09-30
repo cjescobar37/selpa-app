@@ -10,7 +10,7 @@ import MobilePlayoff from '../_components/MobilePlayoff'
 import TournamentExportMenu from '../_components/TournamentExportMenu'
 import TournamentScheduleManager from '../_components/TournamentScheduleManager'
 import { tournamentExportData } from '../_components/tournamentExportData'
-import { bracketPath } from '../_components/playoffPresentation'
+import { bracketPath, resolveTeamDisplayName } from '../_components/playoffPresentation'
 import { hasClubCapability } from '@/lib/clubPermissions'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
@@ -2901,6 +2901,8 @@ export default function ClubTournamentDetailPage() {
   function renderResultForm(match: TournamentMatch) {
     if (!resultForm || resultForm.matchId !== match.id) return null
 
+    const team1Name = resolveTeamDisplayName(match, 'team1', teamNameLookup)
+    const team2Name = resolveTeamDisplayName(match, 'team2', teamNameLookup)
     const validation = getResultValidation(match)
     const thirdState = getThirdPartialState(resultForm)
     const group = String(match.phase ?? '').toUpperCase() === 'GROUP'
@@ -2916,8 +2918,8 @@ export default function ClubTournamentDetailPage() {
     const legacyScore = match.status === 'PLAYED' && !isStructuredScore(match.score) && typeof match.score?.text === 'string' && match.score.text.trim()
     const winnerName = validation?.ok
       ? validation.winnerSide === 'team1'
-        ? match.team1_name ?? 'Equipo 1'
-        : match.team2_name ?? 'Equipo 2'
+        ? team1Name
+        : team2Name
       : null
 
     return (
@@ -2944,7 +2946,7 @@ export default function ClubTournamentDetailPage() {
           )}>{group ? 'Super TB' : 'Set 3'}</span>
 
           <div className="club-scoreRow">
-            <span title={match.team1_name ?? 'Equipo 1'}>{match.team1_name ?? 'Equipo 1'}</span>
+            <span title={team1Name}>{team1Name}</span>
             {[0, 1].map((index) => (
               <input
                 key={`team1-set-${index}`}
@@ -2989,7 +2991,7 @@ export default function ClubTournamentDetailPage() {
           </div>
 
           <div className="club-scoreRow">
-            <span title={match.team2_name ?? 'Equipo 2'}>{match.team2_name ?? 'Equipo 2'}</span>
+            <span title={team2Name}>{team2Name}</span>
             {[0, 1].map((index) => (
               <input
                 key={`team2-set-${index}`}
@@ -5412,6 +5414,7 @@ export default function ClubTournamentDetailPage() {
                           currentPhase={playoffFocusPhase ?? currentPlayoffRound?.phase}
                           champion={summary.champion?.name}
                           nextMatch={nextPlayoffMatch}
+                          courtContext={allScheduledMatches}
                           teamNames={teamNameLookup}
                           teamSeeds={teamSeedLookup}
                           canEditResults={isPlatformAdmin || hasClubCapability(clubRole, 'matches:update')}
@@ -5880,7 +5883,7 @@ export default function ClubTournamentDetailPage() {
               <div>
                 <span className="club-kicker">{resultMatch.status === 'PLAYED' ? 'Editar resultado' : 'Cargar resultado'}</span>
                 <h2 id="result-match-title">
-                  {resultMatch.team1_name ?? 'Equipo 1'} vs {resultMatch.team2_name ?? 'Equipo 2'}
+                  {resolveTeamDisplayName(resultMatch, 'team1', teamNameLookup)} vs {resolveTeamDisplayName(resultMatch, 'team2', teamNameLookup)}
                 </h2>
               </div>
               <button
