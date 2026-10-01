@@ -2028,9 +2028,7 @@ select.px-input option{
   color: rgba(23,37,63,.76);
 }
 
-.px-card a,
-.club-panel a,
-.px-wrap a{
+:where(.px-card a, .club-panel a, .px-wrap a){
   color: inherit;
 }
 

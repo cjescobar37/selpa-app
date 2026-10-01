@@ -10,8 +10,8 @@ const homologationStyles = readFileSync(join(process.cwd(), 'app/(app)/club/comp
 const settlement = readFileSync(join(process.cwd(), 'app/(app)/club/competition/EventSettlementPanel.tsx'), 'utf8')
 
 test('operation exposes one human post-tournament action instead of technical lifecycle buttons', () => {
-  assert.match(operations, /'Cerrar fecha'/)
-  assert.match(operations, />Revisar resultados<\/Link>/)
+  assert.match(operations, /continueTournamentCompetitionClosure\(/)
+  assert.match(operations, /Revisar y homologar resultados →/)
   assert.match(operations, />Publicar puntos<\/Link>/)
   assert.doesNotMatch(operations, />Preparar fecha<\/button>/)
   assert.doesNotMatch(operations, />Cerrar fecha deportiva<\/button>/)

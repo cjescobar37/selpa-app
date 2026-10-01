@@ -9,12 +9,15 @@ import { AlertCircle, ArrowRight, CalendarDays, Check, Circle, MapPin, RefreshCw
 import { useSession } from '@/components/session/SessionProvider'
 import ClubBackLink from '@/components/club/ClubBackLink'
 import { supabase } from '@/lib/supabaseClient'
+import { hasClubCapability } from '@/lib/clubPermissions'
+import { continueTournamentCompetitionClosure } from '@/lib/continueTournamentCompetitionClosure'
+import { competitionEventDivisionName, formatCompetitionEventOperationDate, summarizeCompetitionEventHistory } from '@/lib/competitionEventOperationsPresentation'
 import { formatTournamentSystemLabel } from '@/lib/tournamentLabels'
 import { deriveCompetitionEventOperationalState } from '@/lib/competitionTournamentState'
 import type { TournamentConfigurationDetail } from '@/lib/tournamentOperationalConfiguration'
 import { getCompetitionConfigurationAction, getCompetitionEventOperationPresentation } from '@/lib/competitionEventOperationPresentation'
 import type { CompetitionEventDetail } from '@/features/competition/events/competition-events.types'
-import { closeCompetitionEvent, CompetitionEventClosureBlocked, type ClosureHomologation, type ClosureHomologationDetail } from '@/lib/competitionEventClosure'
+import { CompetitionEventClosureBlocked } from '@/lib/competitionEventClosure'
 import { competitionEventIssueCode, competitionEventIssueLabel, isActionableCompetitionEventIssue, uniqueCompetitionEventIssues } from '@/lib/competitionEventIssues'
 import styles from './EventOperationsDashboard.module.css'
 
@@ -33,17 +36,12 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   if (!response.ok) throw Object.assign(new Error(response.status >= 500 ? 'No pudimos completar la operación.' : body.error || 'No pudimos cargar el evento.'), { status: response.status })
   return body
 }
-function snapshotName(row: RecordRow) {
-  const snapshot = row.configuration_snapshot as RecordRow | null
-  const division = snapshot?.division as RecordRow | undefined
-  return String(division?.division_name ?? division?.division_label ?? snapshot?.division_name ?? `División ${Number(row.sort_order ?? 0) + 1}`)
-}
 function latest(rows: RecordRow[]) { return rows[0] ?? null }
 function status(row: RecordRow | null) { return row ? String(row.status ?? '') : '' }
 function homologationStatusLabel(row: RecordRow | null) { return status(row) === 'DRAFT' ? 'Pendiente de aprobación' : labels[status(row)] ?? status(row) }
 
 export default function EventOperationsDashboard({ seriesId, eventId }: { seriesId: string; eventId: string }) {
-  const { activeClub } = useSession()
+  const { activeClub, clubRole, isPlatformAdmin } = useSession()
   const router = useRouter()
   const clubId = activeClub?.id
   const [detail, setDetail] = useState<EventDetail | null>(null)
@@ -76,24 +74,13 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
   }, [base, clubId])
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer) }, [load])
 
-  async function closeDate() {
-    if (!clubId || busy) return
+  async function continueClosure(eventDivisionId: string, tournamentId: string) {
+    if (!clubId || busy || !(isPlatformAdmin || hasClubCapability(clubRole, 'competition:manage'))) return
     setBusy('close')
     try {
-      const result = await closeCompetitionEvent({
-        getEvent: () => api<EventDetail>(base),
-        activateSeries: async revision => { await api(`/api/clubs/${clubId}/competition/series/${seriesId}/lifecycle`, { method: 'POST', body: JSON.stringify({ action: 'ACTIVATE', revision, confirm: true }) }) },
-        scheduleEvent: async revision => { await api(`${base}/schedule`, { method: 'POST', headers: { 'If-Match': String(revision), 'Idempotency-Key': crypto.randomUUID() }, body: '{}' }) },
-        getDivisionPreflight: divisionId => api<CompletionPreflight>(`${base}/divisions/${divisionId}/complete`),
-        completeDivision: async (divisionId, revision) => { await api(`${base}/divisions/${divisionId}/complete`, { method: 'POST', headers: { 'If-Match': String(revision), 'Idempotency-Key': crypto.randomUUID() }, body: '{}' }) },
-        completeEvent: async revision => { await api(`${base}/complete`, { method: 'POST', headers: { 'If-Match': String(revision), 'Idempotency-Key': crypto.randomUUID() }, body: '{}' }) },
-        listHomologations: async divisionId => (await api<{ homologations: ClosureHomologation[] }>(`${base}/divisions/${divisionId}/homologations`)).homologations,
-        createHomologation: async divisionId => (await api<{ homologation: ClosureHomologation }>(`${base}/divisions/${divisionId}/homologations`, { method: 'POST', body: JSON.stringify({ notes: 'Generada al cerrar la fecha.' }) })).homologation,
-        getHomologation: (divisionId, homologationId) => api<ClosureHomologationDetail>(`${base}/divisions/${divisionId}/homologations/${homologationId}`),
-        extractHomologation: async (divisionId, homologationId, revision) => { await api(`${base}/divisions/${divisionId}/homologations/${homologationId}/extract`, { method: 'POST', headers: { 'If-Match': String(revision), 'Idempotency-Key': crypto.randomUUID() }, body: '{}' }) },
-      })
+      const result = await continueTournamentCompetitionClosure({ clubId, seriesId, eventId, eventDivisionId, tournamentId, token: await accessToken() })
       sessionStorage.setItem('selpa:competition-close-feedback', JSON.stringify({ eventId, participants: result.participants, results: result.results }))
-      router.push(`/club/competition/series/${seriesId}/events/${eventId}/divisions/${result.eventDivisionId}/homologation`)
+      router.push(result.href)
     } catch (cause) {
       toast.error(cause instanceof CompetitionEventClosureBlocked ? cause.message : cause instanceof Error ? cause.message : 'No pudimos cerrar la fecha.')
       await load()
@@ -101,17 +88,18 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
   }
 
   const activeDivisions = useMemo(() => detail?.divisions.filter(item => item.is_active) ?? [], [detail])
+  const canManageClosure = isPlatformAdmin || hasClubCapability(clubRole, 'competition:manage')
   const summary = useMemo(() => {
-    let linked = 0, ready = 0, pendingHomologations = 0, pendingSettlements = 0, pendingPublications = 0
+    let linked = 0, ready = 0
     for (const division of activeDivisions) {
-      const id = String(division.id), ops = operations[id], homologation = latest(ops?.homologations ?? []), settlement = latest(ops?.settlements ?? [])
       if (division.active_tournament_link) linked++
       if (division.scoring_mode && division.rule) ready++
-      if (division.active_tournament_link && status(homologation) !== 'APPROVED') pendingHomologations++
-      if (status(homologation) === 'APPROVED' && !settlement) pendingSettlements++
-      if (settlement && status(settlement) !== 'PUBLISHED') pendingPublications++
     }
-    return { linked, ready, pendingHomologations, pendingSettlements, pendingPublications }
+    const history = summarizeCompetitionEventHistory(activeDivisions.map(division => {
+      const ops = operations[String(division.id)]
+      return { homologations: ops?.homologations ?? [], settlements: ops?.settlements ?? [] }
+    }))
+    return { linked, ready, ...history }
   }, [activeDivisions, operations])
 
   if (!clubId) return <main className={styles.page}><div className={styles.state}>Seleccioná un club para continuar.</div></main>
@@ -138,7 +126,13 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
       return Boolean(division.active_tournament_link && preflight?.tournament?.status === 'FINISHED' && preflight.blockers.every(item => automaticPreflightCodes.has(item.code)))
     })
     && blockerIssues.every(issue => automaticPreflightCodes.has(competitionEventIssueCode(issue)))
-  const reviewDivision = activeDivisions.find(division => String(division.status) === 'COMPLETED' && !['APPROVED'].includes(status(latest(operations[String(division.id)]?.homologations ?? []))))
+  const closureDivision = activeDivisions.find(division => {
+    const ops = operations[String(division.id)]
+    const tournamentStatus = String(division.tournament_status ?? ops?.preflight?.tournament?.status ?? '')
+    return Boolean(division.active_tournament_link) && ['FINISHED', 'COMPLETED'].includes(tournamentStatus)
+      && (String(division.status) === 'COMPLETED' || (String(division.status) === 'SCHEDULED' && ops?.preflight?.ready))
+      && status(latest(ops?.homologations ?? [])) !== 'APPROVED'
+  })
   const pointsDivision = activeDivisions.find(division => status(latest(operations[String(division.id)]?.homologations ?? [])) === 'APPROVED' && status(latest(operations[String(division.id)]?.settlements ?? [])) !== 'PUBLISHED')
   const allPublished = activeDivisions.length > 0 && activeDivisions.every(division => status(latest(operations[String(division.id)]?.settlements ?? [])) === 'PUBLISHED')
   const operationalState = deriveCompetitionEventOperationalState({ ...event, circuit_context: { settlement_status: allPublished ? 'PUBLISHED' : null } })
@@ -149,10 +143,8 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
     ? <Link className={styles.primary} href={`/club/competition/series/${seriesId}?tab=ranking`}>Ver ranking</Link>
     : pointsDivision
       ? <Link className={styles.primary} href={`/club/competition/series/${seriesId}/events/${eventId}/divisions/${String(pointsDivision.id)}/homologation`}>Publicar puntos</Link>
-      : reviewDivision
-        ? <Link className={styles.primary} href={`/club/competition/series/${seriesId}/events/${eventId}/divisions/${String(reviewDivision.id)}/homologation`}>Revisar resultados</Link>
-        : canCloseDate
-          ? <button className={styles.primary} type="button" disabled={busy === 'close'} onClick={() => void closeDate()}>{busy === 'close' ? 'Cerrando…' : 'Cerrar fecha'}</button>
+      : closureDivision && canManageClosure
+        ? <button className={styles.primary} type="button" disabled={busy === 'close'} onClick={() => void continueClosure(String(closureDivision.id), String(closureDivision.active_tournament_link?.tournament_id))}>{busy === 'close' ? 'Preparando resultados…' : 'Revisar y homologar resultados →'}</button>
           : null
   const operationPresentation = getCompetitionEventOperationPresentation({
     eventStatus:event.status,operationalState:operationalState.key,canCloseDate,
@@ -166,11 +158,11 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
 
   return <main className={styles.page}>
     <ClubBackLink href={`/club/competition/series/${seriesId}?tab=dates`} label="Volver al circuito" />
-    <header className={styles.hero}><div className={styles.eyebrow}><span>OPERACIÓN DE FECHA</span><b className={`${styles.badge} ${styles[`status_${operationalState.key === 'OPEN' ? 'SCHEDULED' : event.status}`]} ${operationalState.tone==='success'?styles.badgeSuccess:''}`}>{operationalState.label}</b></div><div className={styles.title}><div><h1>{event.name}</h1><p><CalendarDays size={14} />{event.planned_starts_at ? new Date(event.planned_starts_at).toLocaleString('es-AR', { dateStyle: 'medium', timeStyle: 'short' }) : 'Sin fecha'}{event.venue_name ? <><MapPin size={14} />{event.venue_name}</> : null}</p></div>{primaryAction}</div><div className={styles.meta}><div className={styles.metaChips}><span>{eventTypes[event.event_type]}</span>{event.tournament_status ? <span>{['OPEN', 'RUNNING', 'FINISHED'].includes(event.tournament_status) ? 'Torneo publicado' : 'Torneo sin publicar'}</span> : <span>{event.is_public ? 'Pública' : 'Privada'}</span>}<span>Rev. {event.revision}</span></div><Link className={styles.secondary} href={eventEditorHref}>{configurationAction.label}</Link></div></header>
+    <header className={styles.hero}><div className={styles.eyebrow}><span>OPERACIÓN DE FECHA</span><b className={`${styles.badge} ${styles[`status_${operationalState.key === 'OPEN' ? 'SCHEDULED' : event.status}`]} ${operationalState.tone==='success'?styles.badgeSuccess:''}`}>{operationalState.label}</b></div><div className={styles.title}><div><h1>{event.name}</h1><p><CalendarDays size={14} />{formatCompetitionEventOperationDate(event)}{event.venue_name ? <><MapPin size={14} />{event.venue_name}</> : null}</p></div>{primaryAction}</div><div className={styles.meta}><div className={styles.metaChips}><span>{eventTypes[event.event_type]}</span>{event.tournament_status ? <span>{['OPEN', 'RUNNING', 'FINISHED'].includes(event.tournament_status) ? 'Torneo publicado' : 'Torneo sin publicar'}</span> : <span>{event.is_public ? 'Pública' : 'Privada'}</span>}<span>Rev. {event.revision}</span></div><Link className={styles.secondary} href={eventEditorHref}>{configurationAction.label}</Link></div></header>
 
     <section className={styles.kpis}><div><strong>{activeDivisions.length}</strong><small>Divisiones</small></div><div><strong>{summary.ready}</strong><small>Listas</small></div><div><strong>{summary.linked}</strong><small>Torneos</small></div></section>
     {issues.length ? <section className={styles.alerts}>{issues.map(item => <p key={competitionEventIssueCode(item) || String(item)}><AlertCircle size={15} />{competitionEventIssueLabel(item)}</p>)}</section> : null}
-    <section className={styles.pending}><span><b>{summary.pendingHomologations}</b> revisiones</span><span><b>{summary.pendingSettlements}</b> cierres de puntos</span><span><b>{summary.pendingPublications}</b> publicaciones</span></section>
+    <section className={styles.pending} aria-label="Historial de la fecha"><span title="Versiones de homologación de resultados"><b>{summary.resultVersions}</b> {summary.resultVersions === 1 ? 'revisión' : 'revisiones'}</span><span title="Versiones de liquidación de puntos"><b>{summary.settlementVersions}</b> {summary.settlementVersions === 1 ? 'liquidación' : 'liquidaciones'}</span><span title="Liquidaciones actualmente publicadas"><b>{summary.publications}</b> {summary.publications === 1 ? 'publicación' : 'publicaciones'}</span></section>
 
     <section className={styles.section}><div className={styles.sectionTitle}><div><span>DIVISIONES</span><h2>Operación deportiva</h2></div></div>
       {!activeDivisions.length ? <div className={styles.empty}><Trophy size={22} /><strong>Esta fecha no tiene divisiones</strong><p>Agregalas desde la configuración del circuito.</p>{detail.allowed_actions.edit ? <Link href={`/club/competition/series/${seriesId}`}>Configurar divisiones</Link> : null}</div> : <div className={styles.list}>{activeDivisions.map(division => {
@@ -178,9 +170,10 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
         const divisionOperationalState = deriveCompetitionEventOperationalState({ status: String(division.status), tournament_status: typeof division.tournament_status === 'string' ? division.tournament_status : ops.preflight?.tournament?.status, tournament_registration_deadline: typeof division.tournament_registration_deadline === 'string' ? division.tournament_registration_deadline : null, circuit_context: { homologation_status: status(homologation), settlement_status: status(settlement) } })
         const visiblePreflightBlockers = ops.preflight?.blockers.filter(issue => isActionableCompetitionEventIssue(issue, event)) ?? []
         const progress = status(settlement)==='PUBLISHED' ? 'Puntos publicados · Ranking actualizado' : status(homologation)==='APPROVED' ? 'Resultados aprobados' : completed ? 'Resultados listos para revisar' : ops.preflight?.ready ? 'Listo para cerrar' : null
+        const canReview = canManageClosure && String(closureDivision?.id ?? '') === id
         return <article className={styles.division} key={id}>
           <div className={styles.divisionHead}>
-            <div><strong>{snapshotName(division)}</strong><small>
+            <div><strong>{competitionEventDivisionName(division)}</strong><small>
               {division.scoring_mode === 'POINTS' ? 'Con puntos' : division.scoring_mode === 'NON_SCORING' ? 'Sin puntos' : 'Puntuación pendiente'}
               {' · '}{String(division.tier?.name ?? 'Nivel por definir')}
               {' · '}{formatTournamentSystemLabel(typeof division.competition_system === 'string' ? division.competition_system : null)}
@@ -195,6 +188,7 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
             <div><dt>Puntos</dt><dd>{settlement ? labels[status(settlement)] ?? status(settlement) : 'Pendiente'}</dd></div>
           </dl>
           {visiblePreflightBlockers.length ? <div className={styles.preflight}>{visiblePreflightBlockers.map(item => <small key={item.code}><AlertCircle size={13} />{item.message}</small>)}</div> : null}
+          {canReview && link ? <button className={styles.action} type="button" disabled={busy === 'close'} onClick={() => void continueClosure(id, String(link.tournament_id))}>{busy === 'close' ? 'Preparando resultados…' : 'Revisar y homologar resultados →'}<ArrowRight size={16} aria-hidden="true" /></button> : null}
           {link ? <Link className={styles.tournament} href={`/club/torneos/${String(link.tournament_id)}`}>Abrir centro de control<ArrowRight size={16} aria-hidden="true" /></Link> : null}
         </article>
       })}</div>}
@@ -203,7 +197,7 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
     <section className={styles.timeline}><div className={styles.sectionTitle}><div><span>PROGRESO DE LA FECHA</span><h2>Timeline operativo</h2></div></div>
       <div className={`${styles.nextStep} ${operationPresentation.complete?styles.nextStepComplete:''}`}><small>{operationPresentation.complete?'Todo al día':operationPresentation.cancelled?'Operación detenida':'Siguiente paso recomendado'}</small><strong>{operationPresentation.recommendation}</strong></div>
       <ol className={styles.steps}>{operationPresentation.steps.map(step=><li key={step.label} className={step.state==='pending'?styles.stepPending:styles[step.state]} data-state={step.state} aria-current={step.state==='current'?'step':undefined} aria-label={`${step.label}: ${step.state==='done'?'completado':step.state==='current'?'paso actual':'pendiente'}`}>
-        <span className={styles.stepIcon}>{step.state==='done'?<Check size={14} aria-hidden="true"/>:step.state==='current'?<ArrowRight size={14} aria-hidden="true"/>:<Circle size={12} aria-hidden="true"/>}</span><span>{step.label}</span>{step.state==='current'?<small>Ahora</small>:null}
+        {step.state === 'current' && step.label === 'Revisar resultados' && closureDivision && canManageClosure ? <button className={styles.timelineAction} type="button" disabled={busy === 'close'} onClick={() => void continueClosure(String(closureDivision.id), String(closureDivision.active_tournament_link?.tournament_id))}><span className={styles.stepIcon}><ArrowRight size={14} aria-hidden="true" /></span><span>{busy === 'close' ? 'Preparando resultados…' : step.label}</span><small>Ahora</small></button> : <><span className={styles.stepIcon}>{step.state==='done'?<Check size={14} aria-hidden="true"/>:step.state==='current'?<ArrowRight size={14} aria-hidden="true"/>:<Circle size={12} aria-hidden="true"/>}</span><span>{step.label}</span>{step.state==='current'?<small>Ahora</small>:null}</>}
       </li>)}</ol>
     </section>
   </main>

@@ -6,7 +6,9 @@ import { AlertCircle, Check, Coins, RefreshCw, SlidersHorizontal } from 'lucide-
 import { ActionFeedbackNotice, type ActionFeedbackTone } from '@/components/ui/ActionFeedbackNotice'
 import { supabase } from '@/lib/supabaseClient'
 import type { Settlement, SettlementDetail } from '@/features/competition/settlement/competition-settlement.types'
+import type { PointsScheme, PointsSchemeRule } from '@/features/competition/points-schemes/points-schemes.types'
 import { prepareCompetitionPointsPreview, publishCompetitionPoints, type WorkflowState } from '@/lib/competitionPostTournamentFlow'
+import { getTournamentClosureState } from '@/lib/competitionTournamentState'
 import styles from './EventSettlementPanel.module.css'
 
 type SettlementAdminDetail = SettlementDetail & {
@@ -68,7 +70,18 @@ export default function EventSettlementPanel({ clubId, seriesId, eventId, eventD
       } else await readLatest()
       previewBaseline.current = latestDetail ? settlementState(latestDetail) : null
       setDetail(latestDetail)
-    } catch (cause) { setFeedback({ tone: 'error', title: 'No pudimos preparar la vista previa', message: cause instanceof Error ? cause.message : 'Intentá nuevamente.' }) }
+    } catch (cause) {
+      // A blocked correction must remain visible so its configured table can be applied.
+      let mismatchMessage = ''
+      try {
+        const settlements = (await request<{ settlements: Settlement[] }>(collection)).settlements
+        const current = settlements[0] ? await getDetail(settlements[0].id) : null
+        previewBaseline.current = current ? settlementState(current) : null
+        setDetail(current)
+        mismatchMessage = String(current?.preflight.blockers.find(issue => issue.code === 'POINTS_SCHEME_SNAPSHOT_MISMATCH')?.message ?? '')
+      } catch { /* Keep the original error and any previously loaded detail. */ }
+      setFeedback({ tone: 'error', title: mismatchMessage ? 'Tabla de puntos desincronizada' : 'No pudimos preparar la vista previa', message: mismatchMessage || (cause instanceof Error ? cause.message : 'Intentá nuevamente.') })
+    }
     finally { setLoading(false) }
   }, [collection, getDetail])
   useEffect(() => { const timer = window.setTimeout(() => void load(true), 0); return () => window.clearTimeout(timer) }, [load])
@@ -142,8 +155,8 @@ export default function EventSettlementPanel({ clubId, seriesId, eventId, eventD
     try {
       await request(`${collection}/${detail.settlement.id}/correction`, { method: 'POST', headers: { 'If-Match': String(detail.settlement.revision), 'Idempotency-Key': crypto.randomUUID() }, body: '{}' })
       setConfirmingCorrection(false)
-      await load(true)
-      setFeedback({ tone: 'warning', title: 'Corrección creada', message: 'Revisá la nueva vista previa antes de volver a publicar.' })
+      await load(false)
+      setFeedback({ tone: 'warning', title: 'Corrección creada', message: 'El ledger anterior fue revertido. Aplicá la tabla configurada y revisá el nuevo cálculo antes de publicar.' })
     } catch (cause) {
       const error = cause as ApiError
       if (error.status === 412) {
@@ -152,6 +165,37 @@ export default function EventSettlementPanel({ clubId, seriesId, eventId, eventD
       } else setFeedback({ tone: 'error', title: 'No pudimos crear la corrección', message: error.message })
     }
     finally { setBusy('') }
+  }
+
+  async function applyConfiguredScheme() {
+    if (!detail || busy || detail.settlement.status !== 'DRAFT' || !detail.settlement.corrected_from_id) return
+    const schemeId = String(detail.eventDivision.points_scheme_override_id ?? '')
+    if (!schemeId) return
+    setBusy('configured-scheme'); setFeedback(null)
+    try {
+      const { scheme, rules } = await request<{ scheme: PointsScheme; rules: PointsSchemeRule[] }>(
+        `/api/clubs/${clubId}/competition/points-schemes/${schemeId}`
+      )
+      const activeRules = rules.filter(rule => rule.is_active)
+      if (!scheme.is_active || scheme.id !== schemeId || activeRules.length < 5 || activeRules.length > 7) {
+        throw new Error('La tabla configurada no está disponible o no tiene reglas válidas.')
+      }
+      const tournamentName = String(detail.tournament?.name ?? 'esta fecha')
+      await request(`${collection}/${detail.settlement.id}/adjust-points`, {
+        method: 'POST',
+        headers: { 'If-Match': String(detail.settlement.revision), 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({
+          name: `${scheme.display_name || scheme.name} · ${tournamentName}`,
+          rules: activeRules.map(rule => ({ rule_key: rule.rule_key, points: rule.points })),
+        }),
+      })
+      await load(false)
+      setFeedback({ tone: 'success', title: 'Tabla configurada aplicada', message: 'Revisá los puntos recalculados antes de publicar la corrección.' })
+    } catch (cause) {
+      const error = cause as ApiError
+      if (error.status === 412) await load(false)
+      setFeedback({ tone: 'error', title: 'No pudimos aplicar la tabla', message: error.message })
+    } finally { setBusy('') }
   }
 
   const preview = useMemo(() => {
@@ -172,22 +216,33 @@ export default function EventSettlementPanel({ clubId, seriesId, eventId, eventD
   }, [detail])
 
   const calculationSnapshot = record(detail?.settlement.calculation_snapshot)
+  const configuredSchemeId = String(detail?.eventDivision.points_scheme_override_id ?? '')
+  const schemeMismatch = Boolean(detail?.preflight.blockers.some(issue => issue.code === 'POINTS_SCHEME_SNAPSHOT_MISMATCH'))
+  const correctionNeedsConfiguredScheme = Boolean(schemeMismatch && detail?.settlement.status === 'DRAFT' && detail.settlement.corrected_from_id)
   const adjustmentSnapshot = record(calculationSnapshot.points_adjustment)
-  const futureSchemeId = String(adjustmentSnapshot.source_points_scheme_id ?? detail?.settlement.points_scheme_id ?? '')
+  const futureSchemeId = schemeMismatch ? configuredSchemeId : String(adjustmentSnapshot.source_points_scheme_id ?? detail?.settlement.points_scheme_id ?? '')
   const schemeName = String(detail?.pointsScheme?.display_name ?? detail?.pointsScheme?.name ?? 'Sin esquema')
   const sourceName = String(detail?.tournament?.name ?? 'torneo vinculado')
-  const canAdjust = Boolean(detail && ['DRAFT', 'CALCULATED'].includes(detail.settlement.status))
+  const canAdjust = Boolean(detail && !schemeMismatch && ['DRAFT', 'CALCULATED'].includes(detail.settlement.status))
+  const publishedClosureState = detail?.settlement.status === 'PUBLISHED' ? getTournamentClosureState({
+    tournamentStatus: String(detail.tournament?.status ?? 'FINISHED'),
+    settlementStatus: detail.settlement.status,
+    linked: true,
+    canManage: false,
+    canView: true,
+  }) : null
 
   return <section className={styles.panel}>
     {feedback ? <ActionFeedbackNotice {...feedback} onDismiss={() => setFeedback(null)} /> : null}
     <header><div><small>PUNTOS</small><h2>Revisar antes de publicar</h2></div>{detail ? <span>{labels[detail.settlement.status] ?? detail.settlement.status}</span> : null}</header>
     {loading ? <p className={styles.loading}><RefreshCw size={15} />Preparando vista previa…</p> : detail ? <>
       <div className={styles.totals}><div><strong>{detail.totals.awards}</strong><small>Asignaciones</small></div><div><strong>{detail.totals.calculated.toLocaleString('es-AR')}</strong><small>Puntos calculados</small></div><div><strong>{detail.totals.movements}</strong><small>Movimientos publicados</small></div></div>
-      <dl className={styles.source}><div><dt>Esquema usado</dt><dd>{schemeName}</dd></div><div><dt>Fuente</dt><dd>Snapshot de {sourceName}</dd></div></dl>
+      <dl className={styles.source}><div><dt>Esquema usado (tabla efectiva)</dt><dd>{schemeName}</dd></div><div><dt>Fuente</dt><dd>Snapshot de {sourceName}</dd></div></dl>
       {preview.length ? <div className={styles.preview}><small>DISTRIBUCIÓN</small>{preview.map(item => <div key={item.id}><span><strong>{item.name}</strong><small>{item.label}</small></span><strong className={item.ruleFound ? undefined : styles.missingRule}>{item.ruleFound ? `${item.points.toLocaleString('es-AR')} pts` : 'Sin puntaje configurado'}</strong></div>)}</div> : null}
       {adjusting && canAdjust ? <div className={styles.adjust}><div><strong>Ajustar puntos de esta fecha</strong><p>Se creará una copia privada. La tabla general del circuito no cambiará.</p></div>{pointsValidation ? <p role="alert">{pointsValidation}</p> : null}{ruleCodes.map(code => <label key={code}><span>{resultLabels[code]}</span><input min="0" step="1" inputMode="numeric" type="number" value={pointValues[code]} onChange={event => { setPointsValidation(''); setPointValues(current => ({ ...current, [code]: Number(event.target.value) })) }} /></label>)}<div className={styles.adjustActions}><button type="button" onClick={() => setAdjusting(false)}>Cancelar</button><button type="button" disabled={busy === 'adjust'} onClick={() => void saveAdjustment()}>{busy === 'adjust' ? 'Recalculando…' : 'Guardar y recalcular'}</button></div></div> : null}
       {detail.preflight.blockers.length || detail.preflight.warnings.length ? <div className={styles.issues}>{detail.preflight.blockers.map((issue, index) => <p className={styles.blocker} key={`blocker-${index}`}><AlertCircle size={14} />{issueText(issue)}</p>)}{detail.preflight.warnings.map((issue, index) => <p key={`warning-${index}`}><AlertCircle size={14} />{issueText(issue)}</p>)}</div> : null}
-      {detail.settlement.status === 'PUBLISHED' ? <><p className={styles.published}><Check size={16} /><span><strong>Puntos publicados</strong><small>Para modificarlos, creá una corrección. La versión publicada no se edita.</small></span></p>{confirmingCorrection ? <div className={styles.correction}><p>La corrección revertirá los movimientos actuales y creará una nueva versión para revisar.</p><div><button type="button" onClick={() => setConfirmingCorrection(false)}>Cancelar</button><button type="button" disabled={busy === 'correction'} onClick={() => void createCorrection()}>{busy === 'correction' ? 'Creando…' : 'Confirmar corrección'}</button></div></div> : <button className={styles.secondary} type="button" onClick={() => setConfirmingCorrection(true)}>Crear corrección</button>}<Link className={styles.rankingLink} href={`/club/competition/series/${seriesId}?tab=ranking`}>Ver ranking</Link></> : <div className={styles.actions}>{canAdjust ? <button className={styles.secondary} type="button" disabled={Boolean(busy)} onClick={beginAdjustment}><SlidersHorizontal size={15} />Ajustar puntos</button> : null}<button className={styles.publish} type="button" disabled={Boolean(busy) || detail.preflight.blockers.length > 0 || detail.settlement.status === 'DRAFT'} onClick={() => void publishPoints()}>{busy === 'publish' ? 'Publicando…' : 'Publicar puntos'}</button></div>}
+      {correctionNeedsConfiguredScheme ? <button className={styles.secondary} type="button" disabled={Boolean(busy)} onClick={() => void applyConfiguredScheme()}>{busy === 'configured-scheme' ? 'Aplicando tabla…' : 'Aplicar tabla configurada y recalcular'}</button> : null}
+      {detail.settlement.status === 'PUBLISHED' ? <><p className={styles.published}><Check size={16} /><span><strong>{publishedClosureState?.title ?? 'Fecha liquidada'}</strong><small>{publishedClosureState?.message ?? 'Los puntos fueron publicados y el ranking quedó actualizado.'} Para modificarlos, creá una corrección. La versión publicada no se edita.</small></span></p>{confirmingCorrection ? <div className={styles.correction}><p>La corrección revertirá los movimientos actuales y creará una nueva versión para revisar.</p><div><button type="button" onClick={() => setConfirmingCorrection(false)}>Cancelar</button><button type="button" disabled={busy === 'correction'} onClick={() => void createCorrection()}>{busy === 'correction' ? 'Creando…' : 'Confirmar corrección'}</button></div></div> : <button className={styles.secondary} type="button" onClick={() => setConfirmingCorrection(true)}>Crear corrección</button>}<Link className={styles.rankingLink} href={`/club/competition/series/${seriesId}?tab=ranking`}>{publishedClosureState?.nextAction?.label ?? 'Ver ranking →'}</Link></> : <div className={styles.actions}>{canAdjust ? <button className={styles.secondary} type="button" disabled={Boolean(busy)} onClick={beginAdjustment}><SlidersHorizontal size={15} />Ajustar puntos</button> : null}<button className={styles.publish} type="button" disabled={Boolean(busy) || detail.preflight.blockers.length > 0 || detail.settlement.status === 'DRAFT'} onClick={() => void publishPoints()}>{busy === 'publish' ? 'Publicando…' : 'Publicar puntos'}</button></div>}
       {futureSchemeId ? <Link className={styles.futureLink} href={`/club/competition/points-schemes/${futureSchemeId}`}>Editar tabla del circuito para próximas fechas</Link> : null}
     </> : <div className={styles.empty}><Coins size={21} /><div><strong>No pudimos generar la vista previa</strong><p>Reintentá para preparar los puntos homologados.</p></div><button type="button" onClick={() => void load(true)}>Reintentar</button></div>}
   </section>

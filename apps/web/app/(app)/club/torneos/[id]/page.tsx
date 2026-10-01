@@ -12,6 +12,10 @@ import TournamentScheduleManager from '../_components/TournamentScheduleManager'
 import { tournamentExportData } from '../_components/tournamentExportData'
 import { bracketPath, resolveTeamDisplayName } from '../_components/playoffPresentation'
 import { hasClubCapability } from '@/lib/clubPermissions'
+import { getTournamentClosureState } from '@/lib/competitionTournamentState'
+import { continueTournamentCompetitionClosure } from '@/lib/continueTournamentCompetitionClosure'
+import { CompetitionEventClosureBlocked } from '@/lib/competitionEventClosure'
+import { competitionEventIssueCode } from '@/lib/competitionEventIssues'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import SelpaLoader from '@/components/SelpaLoader'
@@ -79,6 +83,12 @@ type TournamentSummary = {
       series_id: string
       series_name: string
       event_id: string
+      event_division_id: string
+      event_status: string
+      event_division_status: string
+      scoring_mode: string | null
+      homologation_status: string | null
+      settlement_status: string | null
       event_number: number | null
       planned_events_count: number | null
     } | null
@@ -947,11 +957,13 @@ export default function ClubTournamentDetailPage() {
   const tournamentId = params?.id
   const { activeClub, clubRole, isPlatformAdmin } = useSession()
   const [summary, setSummary] = useState<TournamentSummary | null>(null)
+  const [closureBlocker, setClosureBlocker] = useState<string | null>(null)
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const [flyerConfig, setFlyerConfig] = useState<FlyerConfig>(defaultFlyerConfig)
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
   const [finalizingTournament, setFinalizingTournament] = useState(false)
+  const [continuingClosure, setContinuingClosure] = useState(false)
   const [deletingTournament, setDeletingTournament] = useState(false)
   const [pausingTournament, setPausingTournament] = useState(false)
   const [activeTab, setActiveTab] = useState<TournamentPrimaryTab>('general')
@@ -1253,6 +1265,27 @@ export default function ClubTournamentDetailPage() {
   })
   const isTournamentFinished =
     ['FINALIZADO', 'FINISHED', 'COMPLETED'].includes(summary?.tournament.status?.toUpperCase() ?? '')
+  const closureState = getTournamentClosureState({
+    tournamentStatus: summary?.tournament.status,
+    eventStatus: summary?.tournament.circuit?.event_status,
+    divisionStatus: summary?.tournament.circuit?.event_division_status,
+    scoringMode: summary?.tournament.circuit?.scoring_mode,
+    homologationStatus: summary?.tournament.circuit?.homologation_status,
+    settlementStatus: summary?.tournament.circuit?.settlement_status,
+    canManage: isPlatformAdmin || hasClubCapability(clubRole, 'competition:manage'),
+    canView: isPlatformAdmin || hasClubCapability(clubRole, 'competition:view'),
+    linked: Boolean(summary?.tournament.circuit?.event_division_id),
+    blocker: closureBlocker,
+  })
+  const closureHref = closureState?.nextAction?.target === 'COMPETITION'
+    ? '/club/competition'
+    : closureState?.nextAction && summary?.tournament.circuit
+    ? closureState.nextAction.target === 'RANKING'
+      ? `/club/competition/series/${summary.tournament.circuit.series_id}?tab=ranking`
+      : closureState.nextAction.target === 'OPERATIONS'
+        ? `/club/competition/series/${summary.tournament.circuit.series_id}/events/${summary.tournament.circuit.event_id}`
+        : `/club/competition/series/${summary.tournament.circuit.series_id}/events/${summary.tournament.circuit.event_id}/divisions/${summary.tournament.circuit.event_division_id}/homologation`
+    : null
   const canFinalizeTournament = Boolean(summary?.champion) && !isTournamentFinished &&
     ['OPEN', 'RUNNING'].includes(String(summary?.tournament.status ?? '').toUpperCase())
   const canAddPair = Boolean(summary) && isTournamentOpen && !isTournamentFinished && !seedMeta.hasSeedSnapshot
@@ -1568,6 +1601,7 @@ export default function ClubTournamentDetailPage() {
     : null
   const operationalNextStep = useMemo(() => {
     if (!summary) return ''
+    if (closureState) return closureState.title
     if (summary.competitionState) return summary.competitionState.title
     if (isDraft) return 'Publicá el torneo para abrir las inscripciones.'
     if (!seedMeta.hasSeedSnapshot) return canGenerateSeed
@@ -1580,7 +1614,7 @@ export default function ClubTournamentDetailPage() {
     if (showPlayoffTab && currentPlayoffRoundLabel === 'Final') return 'Cargá el resultado de la Final para definir al campeón.'
     if (showPlayoffTab && currentPlayoffRoundLabel) return `Completá ${currentPlayoffRoundLabel} para abrir la siguiente ronda.`
     return summary.nextStep
-  }, [canGenerateSeed, currentPlayoffRoundLabel, isDraft, playoffMatches.length, seedMeta.hasGroupMatches, seedMeta.hasGroups, seedMeta.hasSeedSnapshot, showGroupsTab, showPlayoffTab, summary])
+  }, [canGenerateSeed, closureState, currentPlayoffRoundLabel, isDraft, playoffMatches.length, seedMeta.hasGroupMatches, seedMeta.hasGroups, seedMeta.hasSeedSnapshot, showGroupsTab, showPlayoffTab, summary])
   const tournamentOperationalBadge = useMemo(() => {
     if (!summary) return getTournamentOperationalStatus({ operationalStage: 'INSCRIPCIONES', status: 'OPEN' })
 
@@ -2146,6 +2180,7 @@ export default function ClubTournamentDetailPage() {
   async function loadSummary(token: string | null) {
     if (!activeClub?.id || !tournamentId) {
       setSummary(null)
+      setClosureBlocker(null)
       setTournamentRules(null)
       setThemeKey(null)
       setLoading(false)
@@ -2175,6 +2210,7 @@ export default function ClubTournamentDetailPage() {
 
     if (!res.ok) {
       setSummary(null)
+      setClosureBlocker(null)
       setTournamentRules(null)
       setMessage(json?.error ?? 'No pude cargar el resumen del torneo.')
       setLoading(false)
@@ -2182,12 +2218,23 @@ export default function ClubTournamentDetailPage() {
     }
 
     const nextSummary = json as TournamentSummary
+    const circuit = nextSummary.tournament.circuit
+    setClosureBlocker(null)
+    if ((isPlatformAdmin || hasClubCapability(clubRole, 'competition:manage')) && ['FINISHED', 'COMPLETED'].includes(nextSummary.tournament.status) && circuit?.event_division_id && !circuit.homologation_status) {
+      const preflight = await fetch(`/api/clubs/${activeClub.id}/competition/series/${circuit.series_id}/events/${circuit.event_id}/divisions/${circuit.event_division_id}/complete`, {
+        headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+      }).then(response => response.ok ? response.json() as Promise<{ blockers?: Array<{ code?: string; message?: string }> }> : null).catch(() => null)
+      const automatic = new Set(['DIVISION_NOT_SCHEDULED', 'EVENT_NOT_SCHEDULED', 'SERIES_NOT_ACTIVE'])
+      const blocker = preflight?.blockers?.find(item => !automatic.has(competitionEventIssueCode(item)))
+      setClosureBlocker(blocker?.message?.trim() || (blocker ? 'Revisá los pendientes de la fecha antes de continuar.' : null))
+    }
     const rules = nextSummary.tournament.rules_json ?? null
     setSummary(nextSummary)
     setTournamentRules(rules)
     setFlyerConfig(readFlyerConfigFromRules(rules))
     setTournamentDisplayConfig(readTournamentDisplayConfig(rules))
     setLoading(false)
+    return nextSummary
   }
 
   async function loadRegistrations(token: string | null) {
@@ -2703,6 +2750,9 @@ export default function ClubTournamentDetailPage() {
         targetPhase: nextRound.phase,
       })
     } else if (completesPlayoffRound && phase === 'FINAL') {
+      // The match PATCH may also advance tournament status; read that one canonical summary now.
+      const refreshedSummary = await loadSummary(token)
+      const finishedOnSave = ['FINISHED', 'COMPLETED'].includes(String(refreshedSummary?.tournament.status ?? '').toUpperCase())
       const championName = winnerTeamId === match.team1_id
         ? match.team1_name ?? teamNameLookup.get(match.team1_id) ?? 'Pareja ganadora'
         : match.team2_name ?? teamNameLookup.get(match.team2_id) ?? 'Pareja ganadora'
@@ -2714,8 +2764,8 @@ export default function ClubTournamentDetailPage() {
         id: `tournament-complete-${match.id}`,
         eyebrow: 'Resultados deportivos completos',
         title: `Campeón: ${championName}`,
-        message: `Subcampeón: ${runnerUpName}. Falta finalizar formalmente el torneo.`,
-        actionLabel: 'Ver resumen del torneo',
+        message: finishedOnSave ? `Subcampeón: ${runnerUpName}. Continuá con la homologación.` : `Subcampeón: ${runnerUpName}. Falta finalizar formalmente el torneo.`,
+        actionLabel: finishedOnSave ? 'Continuar cierre' : 'Ir a finalizar torneo',
         targetTab: 'general',
       })
     } else {
@@ -3730,7 +3780,8 @@ export default function ClubTournamentDetailPage() {
     }
     setActionFeedback({ tone: 'success', title: 'Torneo finalizado', message: 'Ahora podés homologar los resultados desde Competition.' })
     setFinalizingTournament(false)
-    await refreshTournamentExperience()
+    setMilestone(null)
+    await loadSummary(token)
   }
 
   async function setTournamentPaused(paused: boolean) {
@@ -4090,8 +4141,41 @@ export default function ClubTournamentDetailPage() {
     setActiveTab('pairs')
   }
 
+  async function runClosureAction() {
+    if (!closureState?.nextAction || continuingClosure) return
+    if (closureState.key !== 'HOMOLOGATE') {
+      if (closureHref) router.push(closureHref)
+      return
+    }
+    const circuit = summary?.tournament.circuit
+    if (!activeClub?.id || !tournamentId || !circuit) return
+    setContinuingClosure(true)
+    setActionFeedback(null)
+    const token = await getToken()
+    if (!token) {
+      setActionFeedback({ tone: 'error', title: 'Sesión vencida', message: 'Volvé a ingresar para continuar el cierre.' })
+      setContinuingClosure(false)
+      return
+    }
+    try {
+      const result = await continueTournamentCompetitionClosure({ clubId: activeClub.id, seriesId: circuit.series_id, eventId: circuit.event_id, eventDivisionId: circuit.event_division_id, tournamentId, token })
+      sessionStorage.setItem('selpa:competition-close-feedback', JSON.stringify({ eventId: circuit.event_id, participants: result.participants, results: result.results }))
+      router.push(result.href)
+    } catch (cause) {
+      setActionFeedback({ tone: 'error', title: 'No pudimos preparar los resultados', message: cause instanceof CompetitionEventClosureBlocked ? cause.message : cause instanceof Error && (cause as Error & { status?: number }).status === 403 ? 'El cierre competitivo debe ser realizado por un administrador.' : cause instanceof Error ? cause.message : 'Revisá los pendientes de la fecha e intentá nuevamente.' })
+      await loadSummary(token)
+    } finally { setContinuingClosure(false) }
+  }
+
+  function renderClosureAction(label?: string) {
+    if (!closureState?.nextAction) return null
+    return <button type="button" className="club-nextAction" disabled={continuingClosure} onClick={() => void runClosureAction()}>{continuingClosure ? 'Preparando resultados…' : label ?? closureState.nextAction.label}</button>
+  }
+
   function renderPrimaryNextAction() {
     if (!summary || isTournamentPaused) return null
+
+    if (closureState) return renderClosureAction()
 
     if (isDraft) {
       return <button type="button" className="club-nextAction" onClick={() => requestConfirmation({ title: 'Publicar torneo', body: 'Esto abre las inscripciones del torneo. Podés seguir gestionándolo desde este centro de control.', confirmLabel: 'Publicar torneo', onConfirm: publishTournament })} disabled={publishing || loading || deletingTournament || cancellingTournament}>{publishing ? 'Publicando...' : 'Publicar ahora →'}</button>
@@ -4100,7 +4184,7 @@ export default function ClubTournamentDetailPage() {
       return <button type="button" className="club-nextAction" disabled={finalizingTournament} onClick={() => requestConfirmation({ title: 'Finalizar torneo', body: 'Confirmá que todos los resultados están cargados. Se guardará el campeón y recién entonces quedará habilitado el siguiente paso Competition.', confirmLabel: 'Finalizar torneo', onConfirm: finalizeTournament })}>{finalizingTournament ? 'Finalizando…' : 'Finalizar torneo →'}</button>
     }
     if (summary.champion) {
-      return <button type="button" className="club-nextAction" onClick={() => document.querySelector('.club-championCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Ver campeón y cierre →</button>
+      return <button type="button" className="club-nextAction" onClick={() => document.querySelector('.club-championCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Ver resultado final →</button>
     }
     if (!seedMeta.hasSeedSnapshot) {
       return <button type="button" className="club-nextAction" onClick={() => openPairs('registrations')}>{canGenerateSeed ? 'Generar seed en Parejas →' : 'Revisar parejas →'}</button>
@@ -4673,7 +4757,9 @@ export default function ClubTournamentDetailPage() {
                         <article className="club-nextCard">
                           <span className="club-kicker">Próximo paso</span>
                           <h2>{isTournamentPaused ? 'Este torneo está pausado.' : operationalNextStep}</h2>
-                          <p>{isTournamentPaused ? 'Nadie puede inscribirse hasta que lo reanudes.' : isDraft ? 'Publicalo para abrir las inscripciones.' : summary.competitionState?.message ?? 'Seguimos el estado operativo del torneo en tiempo real.'}</p>
+                          <p>{isTournamentPaused ? 'Nadie puede inscribirse hasta que lo reanudes.' : closureState ? closureState.message : isDraft ? 'Publicalo para abrir las inscripciones.' : summary.competitionState?.message ?? 'Seguimos el estado operativo del torneo en tiempo real.'}</p>
+                          {closureState?.waitingForApproval ? <small className="club-closureWaiting">Esperando a un administrador para continuar.</small> : null}
+                          {closureState?.key === 'REVIEW_POINTS' && pointRules.length > 0 ? <div className="club-closurePoints" aria-label="Puntos por resultado">{pointRules.map(rule => <span key={rule.rule_key}>{({ CHAMPION: 'Campeón', RUNNER_UP: 'Finalista', SEMIFINALIST: 'Semifinal', QUARTERFINALIST: 'Cuartos', EIGHTH_FINALIST: 'Octavos', SIXTEENTH_FINALIST: '16avos', PARTICIPANT: 'Participación' } as Record<string, string>)[rule.rule_key] ?? rule.rule_key} <b>{rule.points}</b></span>)}</div> : null}
                           {renderPrimaryNextAction()}
                         </article>
 
@@ -4766,7 +4852,8 @@ export default function ClubTournamentDetailPage() {
                           </div>
                         ) : null}
                         <footer className="club-finalResultAction">
-                          <div><strong>{isTournamentFinished ? '✓ Torneo finalizado' : 'Resultados deportivos completos'}</strong>{!isTournamentFinished ? <small>Falta el cierre formal.</small> : null}</div>
+                          <div><strong>{isTournamentFinished ? '✓ Resultado deportivo confirmado' : 'Resultados deportivos completos'}</strong>{closureState && closureState.key !== 'SETTLED' ? <small>Siguiente: {closureState.title}</small> : !isTournamentFinished ? <small>Falta el cierre formal.</small> : null}</div>
+                          {closureState?.nextAction && closureState.key !== 'SETTLED' ? renderClosureAction('Continuar cierre →') : null}
                           {canFinalizeTournament ? (
                           <button
                             type="button"
@@ -6545,7 +6632,11 @@ export default function ClubTournamentDetailPage() {
         .club-nextCard p, .club-flyerSlot p, .club-championCard p { color: #64748b; font-size: 13px; font-weight: 750; line-height: 1.35; margin: 0; }
         .club-nextCard h2 { font-size: 14px; line-height: 1.14; margin: 1px 0 0; max-width: 28ch; }
         .club-nextCard p { font-size: 10px; line-height: 1.28; max-width: 48ch; }
-        .club-nextAction { background:#061b3a; border:1px solid color-mix(in srgb,var(--club-admin-accent) 42%,transparent); border-radius:9px; box-shadow:0 10px 22px var(--club-admin-glow); color:#fff; cursor:pointer; font:inherit; font-size:12px; font-weight:950; justify-self:start; margin-top:5px; min-height:36px; padding:7px 11px; }
+        .club-tournamentDetail .club-nextAction { align-items:center; background:#061b3a; border:1px solid color-mix(in srgb,var(--club-admin-accent) 42%,transparent); border-radius:9px; box-shadow:0 10px 22px var(--club-admin-glow); color:#fff !important; -webkit-text-fill-color:#fff !important; cursor:pointer; display:inline-flex; font:inherit; font-size:12px; font-weight:950; justify-content:center; justify-self:start; margin-top:5px; min-height:44px; padding:7px 11px; text-decoration:none; }
+        .club-closureWaiting { color:#795b11; font-size:12px; font-weight:700; }
+        .club-closurePoints { display:flex; flex-wrap:wrap; gap:4px 9px; margin-top:2px; }
+        .club-closurePoints span { color:#455875; font-size:11px; white-space:nowrap; }
+        .club-closurePoints b { color:#061b3a; }
         .club-flyerSlot { align-content:center; align-self:stretch; background:linear-gradient(135deg,#f8fafc,color-mix(in srgb,var(--club-admin-accent) 8%,white)); border:1px solid rgba(15,23,42,.08); border-radius:14px; display:grid; gap:11px; grid-template-columns:116px minmax(0,1fr); min-height:0; padding:10px; }
         .club-flyerSlotCopy { align-content:center; display:grid; gap:3px; min-width:0; }
         .club-flyerSlotCopy strong { color:#17253f; font-size:14px; line-height:1.2; }

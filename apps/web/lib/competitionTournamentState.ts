@@ -12,6 +12,62 @@ export type CompetitionPipelineState = {
   message: string
 }
 
+export type TournamentClosureState = {
+  key: 'LINK_DATE' | 'BLOCKED' | 'HOMOLOGATE' | 'REVIEW_HOMOLOGATION' | 'APPROVE_HOMOLOGATION' | 'CALCULATE_POINTS' | 'CONTINUE_SETTLEMENT' | 'REVIEW_POINTS' | 'APPROVE_SETTLEMENT' | 'PUBLISH_POINTS' | 'SETTLED'
+  title: string
+  message: string
+  nextAction: { label: string; target: 'COMPETITION' | 'OPERATIONS' | 'HOMOLOGATION' | 'RANKING' } | null
+  waitingForApproval: boolean
+}
+
+/** Presentation only: the persisted tournament, homologation and settlement remain authoritative. */
+export function getTournamentClosureState(input: {
+  tournamentStatus: string | null | undefined
+  eventStatus?: string | null
+  divisionStatus?: string | null
+  scoringMode?: string | null
+  homologationStatus?: string | null
+  settlementStatus?: string | null
+  canManage: boolean
+  canView: boolean
+  linked: boolean
+  blocker?: string | null
+}): TournamentClosureState | null {
+  if (!isPersistedTournamentFinished(input.tournamentStatus)) return null
+  if (!input.linked) return {
+    key: 'LINK_DATE', title: 'Vincular una fecha',
+    message: 'El torneo terminó. Vinculalo a una fecha del circuito para revisar los resultados y adjudicar puntos.',
+    nextAction: input.canManage ? { label: 'Abrir Competition →', target: 'COMPETITION' } : null,
+    waitingForApproval: !input.canManage,
+  }
+  if (input.blocker && !input.homologationStatus && !input.settlementStatus) return {
+    key: 'BLOCKED', title: 'No podemos continuar todavía', message: input.blocker,
+    nextAction: input.canManage ? { label: 'Resolver pendientes →', target: 'OPERATIONS' } : null,
+    waitingForApproval: !input.canManage,
+  }
+  const homologation = String(input.homologationStatus ?? '').toUpperCase()
+  const settlement = String(input.settlementStatus ?? '').toUpperCase()
+  const needsOperations = !['COMPLETED'].includes(String(input.eventStatus ?? '').toUpperCase()) ||
+    !['COMPLETED'].includes(String(input.divisionStatus ?? '').toUpperCase())
+  const state = (key: TournamentClosureState['key'], title: string, message: string, label: string, target: NonNullable<TournamentClosureState['nextAction']>['target']): TournamentClosureState => ({
+    key, title, message,
+    nextAction: (key === 'SETTLED' ? input.canView : input.canManage) ? { label, target } : null,
+    waitingForApproval: key !== 'SETTLED' && !input.canManage,
+  })
+  if (settlement === 'PUBLISHED') return state('SETTLED', 'Fecha liquidada', 'Los puntos fueron publicados y el ranking quedó actualizado.', 'Ver ranking →', 'RANKING')
+  if (settlement === 'APPROVED') return state('PUBLISH_POINTS', 'Liquidación aprobada', 'Falta publicar los puntos para actualizar el ranking.', 'Publicar puntos →', 'HOMOLOGATION')
+  if (settlement === 'SUBMITTED') return state('APPROVE_SETTLEMENT', input.canManage ? 'Liquidación lista para aprobar' : 'Esperando aprobación', input.canManage ? 'Revisá la liquidación antes de aprobarla.' : 'Un administrador debe aprobar la liquidación.', 'Revisar y aprobar →', 'HOMOLOGATION')
+  if (settlement === 'CALCULATED') return state('REVIEW_POINTS', 'Puntos calculados', 'Revisá la distribución antes de confirmarla.', 'Revisar puntos →', 'HOMOLOGATION')
+  if (settlement === 'DRAFT') return state('CONTINUE_SETTLEMENT', 'Liquidación pendiente', 'Prepará la distribución de puntos de esta fecha.', 'Continuar liquidación →', 'HOMOLOGATION')
+  if (homologation === 'APPROVED') {
+    if (String(input.scoringMode ?? '').toUpperCase() === 'NON_SCORING') return state('SETTLED', 'Resultados homologados', 'Esta fecha no reparte puntos.', 'Ver resultado final →', 'OPERATIONS')
+    return state('CALCULATE_POINTS', 'Resultados homologados', 'Ya podés calcular los puntos de esta fecha.', 'Calcular puntos →', 'HOMOLOGATION')
+  }
+  if (homologation === 'SUBMITTED') return state('APPROVE_HOMOLOGATION', input.canManage ? 'Resultados listos para aprobar' : 'Esperando aprobación', input.canManage ? 'Revisá las posiciones antes de aprobarlas.' : 'Un administrador debe aprobar los resultados.', 'Revisar y aprobar →', 'HOMOLOGATION')
+  if (homologation === 'DRAFT') return state('REVIEW_HOMOLOGATION', 'Revisando resultados', 'Verificá posiciones y participantes antes de confirmar.', 'Continuar homologación →', 'HOMOLOGATION')
+  return state('HOMOLOGATE', 'Homologar resultados', 'El torneo terminó correctamente. Revisá las posiciones antes de adjudicar los puntos.', 'Homologar resultados →', needsOperations ? 'OPERATIONS' : 'HOMOLOGATION')
+}
+
 export type CompetitionEventPipelineInput = {
   status: string
   tournament_status?: string | null

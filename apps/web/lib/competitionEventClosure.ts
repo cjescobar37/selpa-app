@@ -56,8 +56,11 @@ function activeDivisions(detail: ClosureEventDetail) {
   return detail.divisions.filter((division) => division.is_active !== false)
 }
 
-export async function closeCompetitionEvent(adapter: CompetitionEventClosureAdapter) {
+export async function closeCompetitionEvent(adapter: CompetitionEventClosureAdapter, targetDivisionId?: string) {
   let detail = await adapter.getEvent()
+  if (targetDivisionId && !activeDivisions(detail).some((division) => String(division.id) === targetDivisionId)) {
+    throw new CompetitionEventClosureBlocked([{ code: 'DIVISION_NOT_LINKED', message: 'La división vinculada al torneo ya no está disponible.' }])
+  }
   const seriesStatus = String(detail.series.status ?? '')
   if (seriesStatus === 'SCHEDULED') {
     await adapter.activateSeries(Number(detail.series.revision))
@@ -93,7 +96,16 @@ export async function closeCompetitionEvent(adapter: CompetitionEventClosureAdap
   const generated: Array<{ divisionId: string; detail: ClosureHomologationDetail }> = []
   for (const division of activeDivisions(detail).filter((item) => String(item.status) === 'COMPLETED')) {
     const divisionId = String(division.id)
-    const current = (await adapter.listHomologations(divisionId)).find((item) => !['REJECTED', 'SUPERSEDED'].includes(item.status)) ?? await adapter.createHomologation(divisionId)
+    let current = (await adapter.listHomologations(divisionId)).find((item) => !['REJECTED', 'SUPERSEDED'].includes(item.status))
+    if (!current) {
+      try {
+        current = await adapter.createHomologation(divisionId)
+      } catch (cause) {
+        // A concurrent request may have created the active draft after our list.
+        current = (await adapter.listHomologations(divisionId)).find((item) => !['REJECTED', 'SUPERSEDED'].includes(item.status))
+        if (!current) throw cause
+      }
+    }
     let homologation = await adapter.getHomologation(divisionId, current.id)
     if (homologation.homologation.status === 'DRAFT' && !homologation.homologation.source_results_revision) {
       await adapter.extractHomologation(divisionId, current.id, homologation.homologation.revision)
@@ -103,9 +115,11 @@ export async function closeCompetitionEvent(adapter: CompetitionEventClosureAdap
   }
 
   if (!generated.length) throw new CompetitionEventClosureBlocked([{ code: 'HOMOLOGATION_MISSING', message: 'No hay una división cerrada para revisar.' }])
+  const selected = targetDivisionId ? generated.find((item) => item.divisionId === targetDivisionId) : generated[0]
+  if (!selected) throw new CompetitionEventClosureBlocked([{ code: 'HOMOLOGATION_MISSING', message: 'No pudimos preparar los resultados de esta división.' }])
   return {
-    eventDivisionId: generated[0].divisionId,
-    homologationId: generated[0].detail.homologation.id,
+    eventDivisionId: selected.divisionId,
+    homologationId: selected.detail.homologation.id,
     participants: generated.reduce((sum, item) => sum + item.detail.participants.length, 0),
     results: generated.reduce((sum, item) => sum + item.detail.results.length, 0),
   }

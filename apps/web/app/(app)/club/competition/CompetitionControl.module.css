@@ -295,6 +295,48 @@
 .circuitRow svg { color:#748399; }
 .headerAction { display:inline-flex; min-height:40px; flex:0 0 auto; align-items:center; justify-content:center; border-radius:11px; background:#071c3b; color:#fff; -webkit-text-fill-color:#fff; font-size:11px; font-weight:900; padding:0 12px; text-decoration:none; white-space:nowrap; }
 .headerActionShort { display:none; }
+
+/* Circuit index: compact, mobile-first and separate from the event control center. */
+.circuitsPage { max-width:900px; padding:14px 16px 28px; }
+.circuitsHeader { padding:0 1px 13px; border-bottom:1px solid #dce5ed; }
+.circuitsBack { display:inline-flex; align-items:center; gap:3px; min-height:44px; color:#50627a; font-size:12px; font-weight:800; text-decoration:none; }
+.circuitsBack:hover { color:#071c3b; }
+.circuitsHeading { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+.circuitsHeading > div { min-width:0; }
+.circuitsHeading > div > span { color:#568500; font-size:10px; font-weight:900; letter-spacing:.1em; }
+.circuitsHeading h1 { margin:2px 0 0; color:#071c3b; font-size:27px; line-height:1.08; letter-spacing:-.035em; }
+.circuitsHeading p { margin:5px 0 0; color:#62718a; font-size:12px; line-height:1.3; }
+.circuitsCreate { display:inline-flex; align-items:center; justify-content:center; gap:4px; flex:none; min-height:44px; padding:0 12px; border-radius:11px; background:#071c3b; color:#fff; font-size:12px; font-weight:850; text-decoration:none; white-space:nowrap; }
+.circuitsCreate:hover { background:#173454; }
+.circuitsBack:focus-visible,.circuitsCreate:focus-visible,.circuitRow:focus-visible { outline:2px solid #00aeca; outline-offset:2px; }
+.circuitsPage .circuitGroups { gap:17px; margin-top:17px; }
+.circuitGroupHeading { display:flex; align-items:center; gap:7px; margin-bottom:7px; }
+.circuitsPage .circuitGroupHeading h2 { margin:0; color:#40536e; font-size:12px; font-weight:850; text-transform:uppercase; letter-spacing:.055em; }
+.circuitGroupHeading > span { min-width:20px; padding:2px 5px; border-radius:999px; background:#e9eef3; color:#50627a; font-size:10px; font-weight:800; text-align:center; }
+.circuitsPage .circuitGroups section > div:last-child { gap:7px; }
+.circuitsPage .circuitRow { grid-template-columns:minmax(0,1fr) 18px; min-height:68px; gap:7px; padding:10px 12px; border-radius:12px; box-shadow:0 2px 9px rgba(15,35,60,.025); }
+.circuitsPage .circuitRow_active { border-left:3px solid #69a60b; padding-left:10px; background:linear-gradient(90deg,#f9fcf4,#fff 30%); }
+.circuitsPage .circuitRow_draft { background:#fbfcfd; }
+.circuitsPage .circuitRowBody { display:grid; gap:6px; min-width:0; }
+.circuitsPage .circuitRowBody > strong { overflow:visible; color:#122945; font-size:15px; font-weight:800; line-height:1.18; text-overflow:clip; white-space:normal; overflow-wrap:anywhere; }
+.circuitsPage .circuitRowMeta { display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; min-width:0; }
+.circuitsPage .circuitRowMeta small { margin:0; color:#667994; font-size:11px; font-weight:700; white-space:nowrap; }
+.circuitsPage .circuitRowMeta em { max-width:100%; overflow-wrap:anywhere; padding:3px 7px; border-radius:6px; background:#f0f4f7; color:#516680; font-size:10px; line-height:1.25; font-weight:750; text-align:left; }
+.circuitsPage .circuitRow_active .circuitRowMeta em { background:#f2f8e9; color:#52770e; }
+.circuitsPage .circuitRow > svg { justify-self:end; }
+@media(max-width:430px) {
+  .circuitsPage { padding:9px 14px 24px; }
+  .circuitsHeading h1 { font-size:25px; }
+  .circuitsHeading p { max-width:210px; font-size:11px; }
+  .circuitsCreate span { display:none; }
+  .circuitsPage .circuitGroups { margin-top:14px; gap:15px; }
+}
+@media(max-width:350px) {
+  .circuitsPage { padding-right:12px; padding-left:12px; }
+  .circuitsCreate { padding:0 9px; }
+  .circuitsHeading h1 { font-size:23px; }
+  .circuitsHeading p { max-width:180px; }
+}
 .controlPanel > .primary {
   margin-top: 10px;
   background: var(--club-accent, #568500);

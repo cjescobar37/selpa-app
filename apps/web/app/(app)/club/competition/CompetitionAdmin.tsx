@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Activity, CalendarDays, ChevronRight, CircleAlert, ListChecks, Medal, RefreshCw, Trophy } from 'lucide-react'
+import { Activity, CalendarDays, ChevronLeft, ChevronRight, CircleAlert, ListChecks, Medal, Plus, RefreshCw, Trophy } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import { ActionFeedbackNotice } from '@/components/ui/ActionFeedbackNotice'
 import ClubAdminHubNav from '@/components/club/ClubAdminHubNav'
@@ -306,9 +306,12 @@ export default function CompetitionAdmin({ screen, mode = 'hub' }: { screen: Scr
       { key: 'draft', label: 'Borradores', items: series.filter((item) => item.status === 'DRAFT') },
       { key: 'closed', label: 'Finalizados', items: series.filter((item) => item.status === 'CLOSED' || item.status === 'CANCELLED') },
     ]
-    return <div className={styles.page}>
-      <Header title="Circuitos" detail="Elegí un circuito para configurar sus fechas, puntos y ranking." back="/club/competition" action={canCreateCircuit ? <Link className={styles.headerAction} href="/club/competition/series/new"><span className={styles.headerActionFull}>Crear circuito</span><span className={styles.headerActionShort}>+ Crear</span></Link> : null} />
-      {!series.length ? <div className={styles.empty}><Trophy size={26}/><strong>Todavía no hay circuitos</strong><p>Creá el primero para organizar varias fechas bajo un mismo ranking.</p></div> : <div className={styles.circuitGroups}>{groups.filter((group) => group.items.length).map((group) => <section key={group.key}><h2>{group.label}</h2><div>{group.items.map((entry) => <Link href={`/club/competition/series/${entry.id}`} className={styles.circuitRow} key={entry.id}><span><strong>{entry.name}</strong><small>{entry.planned_events_count ? `${entry.summary.events_count}/${entry.planned_events_count} fechas` : `${entry.summary.events_count} fechas`}</small></span><em>{entry.summary.progress_label}</em><ChevronRight size={17}/></Link>)}</div></section>)}</div>}
+    return <div className={`${styles.page} ${styles.circuitsPage}`}>
+      <header className={styles.circuitsHeader}>
+        <Link className={styles.circuitsBack} href="/club/competition"><ChevronLeft size={16} aria-hidden="true" />Competencia</Link>
+        <div className={styles.circuitsHeading}><div><span>CIRCUITOS</span><h1>Mis circuitos</h1><p>Fechas, puntos y ranking en un solo lugar.</p></div>{canCreateCircuit ? <Link className={styles.circuitsCreate} href="/club/competition/series/new"><Plus size={17} aria-hidden="true" />Crear<span> circuito</span></Link> : null}</div>
+      </header>
+      {!series.length ? <div className={styles.empty}><Trophy size={26}/><strong>Todavía no hay circuitos</strong><p>Creá el primero para organizar varias fechas bajo un mismo ranking.</p></div> : <div className={styles.circuitGroups}>{groups.filter((group) => group.items.length).map((group) => <section key={group.key} aria-label={group.label}><div className={styles.circuitGroupHeading}><h2>{group.label}</h2><span>{group.items.length}</span></div><div>{group.items.map((entry) => <Link href={`/club/competition/series/${entry.id}`} className={`${styles.circuitRow} ${styles[`circuitRow_${group.key}`]}`} key={entry.id}><span className={styles.circuitRowBody}><strong>{entry.name}</strong><span className={styles.circuitRowMeta}><small>{entry.planned_events_count ? `${entry.summary.events_count}/${entry.planned_events_count} fechas` : `${entry.summary.events_count} fechas`}</small><em>{entry.summary.progress_label}</em></span></span><ChevronRight size={17} aria-hidden="true" /></Link>)}</div></section>)}</div>}
     </div>
   }
 

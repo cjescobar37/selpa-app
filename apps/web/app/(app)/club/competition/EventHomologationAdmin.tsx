@@ -6,9 +6,9 @@ import { AlertCircle, Check, CircleAlert, FileCheck2, LoaderCircle, RefreshCw, S
 import { useSession } from '@/components/session/SessionProvider'
 import ClubBackLink from '@/components/club/ClubBackLink'
 import { supabase } from '@/lib/supabaseClient'
+import { hasClubCapability } from '@/lib/clubPermissions'
 import type { Homologation } from '@/features/competition/homologation/competition-homologation.types'
 import { ActionFeedbackNotice } from '@/components/ui/ActionFeedbackNotice'
-import { approveCompetitionResults, type WorkflowState } from '@/lib/competitionPostTournamentFlow'
 import { competitionEventIssueCode, uniqueCompetitionEventIssues } from '@/lib/competitionEventIssues'
 import { buildHomologationTeamResults, type HomologationTeamResult } from '@/features/competition/homologation/competition-homologation-review'
 import EventSettlementPanel from './EventSettlementPanel'
@@ -30,11 +30,11 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 function value(row: Row, keys: string[], fallback = 'Sin datos') { for (const key of keys) if (typeof row[key] === 'string' || typeof row[key] === 'number') return String(row[key]); return fallback }
 function issueText(row: Row) { return value(row, ['message', 'detail', 'description', 'code'], 'Revisá esta condición.') }
 function participantName(row: Row) { const snapshot = row.participant_snapshot as Row | undefined; return value(row, ['display_name', 'pair_name', 'entry_name'], value(snapshot ?? {}, ['display_name', 'pair_name', 'name'], 'Participante')) }
-function reviewState(detail: Detail): WorkflowState { return { id: detail.homologation.id, revision: detail.homologation.revision, status: detail.homologation.status, blockers: detail.blockers, allowedActions: detail.allowed_actions, sourceResultsRevision: detail.homologation.source_results_revision } }
 
 export default function EventHomologationAdmin({ seriesId, eventId, eventDivisionId }: { seriesId: string; eventId: string; eventDivisionId: string }) {
-  const { activeClub } = useSession()
+  const { activeClub, clubRole, isPlatformAdmin } = useSession()
   const clubId = activeClub?.id
+  const canManage = isPlatformAdmin || hasClubCapability(clubRole, 'competition:manage')
   const [detail, setDetail] = useState<Detail | null>(null)
   const [loading, setLoading] = useState(true)
   const [fatal, setFatal] = useState(false)
@@ -47,6 +47,7 @@ export default function EventHomologationAdmin({ seriesId, eventId, eventDivisio
   const [tab, setTab] = useState<ReviewTab>('results')
   const [dismissedBanner, setDismissedBanner] = useState('')
   const [pointsPublished, setPointsPublished] = useState(false)
+  const [sportContext, setSportContext] = useState('')
   const collection = clubId ? `/api/clubs/${clubId}/competition/series/${seriesId}/events/${eventId}/divisions/${eventDivisionId}/homologations` : ''
   const handleSettlementStatus = useCallback((status: string | null) => setPointsPublished(status === 'PUBLISHED'), [])
 
@@ -55,13 +56,20 @@ export default function EventHomologationAdmin({ seriesId, eventId, eventDivisio
     if (!silent) setLoading(true)
     setFatal(false); setError(null)
     try {
-      const list = await api<{ homologations: Homologation[] }>(collection)
+      const [list, eventContext] = await Promise.all([
+        api<{ homologations: Homologation[] }>(collection),
+        api<{ series: Row; divisions: Row[] }>(`/api/clubs/${clubId}/competition/series/${seriesId}/events/${eventId}`).catch(() => null),
+      ])
+      const division = eventContext?.divisions.find(item => String(item.id) === eventDivisionId)
+      const snapshot = division?.configuration_snapshot as Row | undefined
+      const snapshotDivision = snapshot?.division as Row | undefined
+      setSportContext([eventContext?.series.name, (division?.tier as Row | undefined)?.name, snapshotDivision?.branch_name ?? snapshotDivision?.division_name].filter(value => typeof value === 'string' && value.trim()).join(' · '))
       const next = list.homologations.length ? await api<Detail>(`${collection}/${list.homologations[0].id}`) : null
       setDetail(next)
       return next
     } catch (cause) { setFatal(true); setError(cause as ApiError); return null }
     finally { if (!silent) setLoading(false) }
-  }, [clubId, collection])
+  }, [clubId, collection, eventDivisionId, eventId, seriesId])
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer) }, [load])
   useEffect(() => {
@@ -88,20 +96,15 @@ export default function EventHomologationAdmin({ seriesId, eventId, eventDivisio
     finally { setBusy('') }
   }
 
-  async function approveResults() {
+  async function transitionResults(operation: 'submit' | 'approve') {
     if (!detail || busy) return
-    setBusy('approve'); setError(null)
+    setBusy(operation); setError(null)
     try {
       const detailUrl = `${collection}/${detail.homologation.id}`
-      await approveCompetitionResults({
-        get: async () => reviewState(await api<Detail>(detailUrl)),
-        extract: async current => { await api(`${detailUrl}/extract`, { method: 'POST', headers: { 'If-Match': String(current.revision), 'Idempotency-Key': crypto.randomUUID() }, body: '{}' }) },
-        submit: async current => { await api(`${detailUrl}/submit`, { method: 'POST', headers: { 'If-Match': String(current.revision), 'Idempotency-Key': crypto.randomUUID() }, body: '{}' }) },
-        approve: async current => { await api(`${detailUrl}/approve`, { method: 'POST', headers: { 'If-Match': String(current.revision), 'Idempotency-Key': crypto.randomUUID() }, body: '{}' }) },
-      })
-      setNotice('Resultados homologados|Revisá la distribución de puntos antes de publicarla.')
+      await api(`${detailUrl}/${operation}`, { method: 'POST', headers: { 'If-Match': String(detail.homologation.revision), 'Idempotency-Key': crypto.randomUUID() }, body: '{}' })
+      setNotice(operation === 'submit' ? 'Resultados enviados|Un administrador debe revisarlos y aprobarlos.' : 'Resultados homologados|Revisá la distribución de puntos antes de publicarla.')
       await load(true)
-    } catch (cause) { toast.error(cause instanceof Error ? cause.message : 'No pudimos aprobar los resultados.'); const current = await load(true); if (current?.blockers.length) setTab('issues') }
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : 'No pudimos avanzar con los resultados.'); const current = await load(true); if (current?.blockers.length) setTab('issues') }
     finally { setBusy('') }
   }
 
@@ -145,7 +148,7 @@ export default function EventHomologationAdmin({ seriesId, eventId, eventDivisio
   if (!clubId) return <main className={styles.page}><div className={styles.state}>Seleccioná un club.</div></main>
   if (loading) return <main className={styles.page}><div className={styles.skeleton}><LoaderCircle />Cargando homologación…</div></main>
   if (error && fatal && !detail) { const message = error.status === 401 ? 'Volvé a iniciar sesión.' : error.status === 403 ? 'Tu rol no puede acceder a la homologación.' : error.status === 404 ? 'La división ya no existe.' : error.status === 409 ? 'El estado actual no permite esta operación.' : error.status === 412 ? 'La revisión cambió. Recargamos los datos.' : error.message; return <main className={styles.page}><div className={styles.state}><CircleAlert /><strong>No pudimos abrir la homologación</strong><p>{message}</p><button type="button" onClick={() => void load()}><RefreshCw size={16} />Reintentar</button></div></main> }
-  if (!detail) return <main className={styles.page}><ClubBackLink href={back} label="Volver a la fecha" /><header className={styles.hero}><div><span>HOMOLOGACIÓN</span><h1>Revisar resultados</h1><p>Detectá participantes y posiciones del torneo vinculado.</p></div></header>{error ? <p className={styles.error}><AlertCircle size={15} />{error.status === 409 ? 'Primero cerrá la fecha desde Operación de fecha.' : error.message}</p> : null}<div className={styles.empty}><FileCheck2 /><strong>Resultados todavía no detectados</strong><p>SELPA preparará la revisión usando el torneo vinculado.</p><button type="button" disabled={Boolean(busy)} onClick={() => void createDraft()}>{busy ? 'Preparando…' : 'Revisar resultados'}</button></div></main>
+  if (!detail) return <main className={styles.page}><ClubBackLink href={back} label="Volver a la fecha" /><header className={styles.hero}><div><span>HOMOLOGACIÓN</span><h1>Revisar resultados</h1><p>Detectá participantes y posiciones del torneo vinculado.</p></div></header>{error ? <p className={styles.error}><AlertCircle size={15} />{error.status === 409 ? 'Primero cerrá la fecha desde Operación de fecha.' : error.message}</p> : null}<div className={styles.empty}><FileCheck2 /><strong>Resultados todavía no detectados</strong><p>{canManage ? 'SELPA preparará la revisión usando el torneo vinculado.' : 'Esperando que un administrador prepare la revisión.'}</p>{canManage ? <button type="button" disabled={Boolean(busy)} onClick={() => void createDraft()}>{busy ? 'Preparando…' : 'Revisar resultados'}</button> : null}</div></main>
 
   const h = detail.homologation
   const extracted = Boolean(h.source_results_revision)
@@ -155,22 +158,24 @@ export default function EventHomologationAdmin({ seriesId, eventId, eventDivisio
   const banner = h.status === 'APPROVED'
     ? { title: 'Resultados homologados', message: 'Ya podés calcular los puntos.' }
     : h.status === 'SUBMITTED'
-      ? { title: 'Resultados en revisión', message: detail.blockers.length ? 'Hay problemas que deben corregirse antes de aprobar.' : 'Todo está listo para aprobar.' }
+      ? { title: 'Resultados en revisión', message: detail.blockers.length ? 'Hay problemas que deben corregirse antes de aprobar.' : detail.allowed_actions.approve ? 'Revisá y aprobá las posiciones.' : 'Esperando aprobación de un administrador.' }
       : extracted
         ? { title: 'Resultados preparados', message: detail.blockers.length ? 'Revisá las incidencias antes de aprobar.' : 'Revisá participantes y posiciones.' }
         : { title: 'Resultados detectados', message: 'Prepará la revisión de participantes y posiciones.' }
   const chooseTab = (next: ReviewTab) => setTab(next)
-  const primary = h.status === 'DRAFT' && !extracted
+  const primary = h.status === 'DRAFT' && !extracted && canManage
     ? { label: busy === 'review' ? 'Preparando…' : 'Revisar resultados', action: () => void prepareResults() }
     : h.status === 'DRAFT' && blockerCount > 0
       ? { label: 'Revisar incidencias', action: () => setTab('issues') }
       : h.status === 'DRAFT' && extracted && blockerCount === 0 && detail.allowed_actions.submit
-        ? { label: busy === 'approve' ? 'Aprobando…' : 'Aprobar resultados', action: () => void approveResults() }
-        : null
+        ? { label: busy === 'submit' ? 'Enviando…' : 'Enviar a aprobación', action: () => void transitionResults('submit') }
+        : h.status === 'SUBMITTED' && blockerCount === 0 && detail.allowed_actions.approve
+          ? { label: busy === 'approve' ? 'Aprobando…' : 'Aprobar resultados', action: () => void transitionResults('approve') }
+          : null
 
   return <main className={styles.page}>
     <ClubBackLink href={back} label="Volver a la fecha" />
-    <div className={styles.reviewHeader}><header className={styles.hero}><div className={styles.heroTop}><span>HOMOLOGACIÓN</span><b className={`${styles.badge} ${styles[`status_${h.status}`]}`}>{statusLabel[h.status]}</b></div><div className={styles.heading}><div><h1>{value(detail.tournament, ['name'], 'Torneo')}</h1><p>{detail.participants.length} participantes · {teamResults.length} resultados · {blockerCount} problemas</p></div><ShieldCheck size={24} /></div></header>
+    <div className={styles.reviewHeader}><header className={styles.hero}><div className={styles.heroTop}><span>REVISIÓN DE RESULTADOS</span><b className={`${styles.badge} ${styles[`status_${h.status}`]}`}>{statusLabel[h.status]}</b></div><div className={styles.heading}><div><h1>{value(detail.tournament, ['name'], 'Torneo')}</h1>{sportContext ? <p title={sportContext}>{sportContext}</p> : null}<p>{detail.participants.length} participantes · {teamResults.length} resultados · {blockerCount} problemas</p></div><ShieldCheck size={24} /></div></header>
       <nav className={styles.reviewTabs} aria-label="Revisión de homologación">
         <button type="button" className={tab === 'participants' ? styles.activeTab : ''} onClick={() => chooseTab('participants')}>Participantes <span>{detail.participants.length}</span></button>
         <button type="button" className={tab === 'results' ? styles.activeTab : ''} onClick={() => chooseTab('results')}>Resultados <span>{teamResults.length}</span></button>

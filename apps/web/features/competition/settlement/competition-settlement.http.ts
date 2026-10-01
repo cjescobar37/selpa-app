@@ -3,6 +3,7 @@ import{classifySettlementInfrastructureError}from'./competition-settlement.error
 type Coded=Error&{code?:string;details?:string;hint?:string;supabaseMessage?:string}
 export async function readSettlementJson(request:Request,max=32768){const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>max)return{error:NextResponse.json({error:'Solicitud demasiado grande.'},{status:413})};try{return{value:raw?JSON.parse(raw):{}}}catch{return{error:NextResponse.json({error:'JSON inválido.'},{status:400})}}}
 export function settlementError(error:unknown){const value=error instanceof Error?error as Coded:null;const message=value?.message??''
+ if(message.includes('POINTS_SCHEME_SNAPSHOT_MISMATCH'))return NextResponse.json({error:'La tabla de puntos congelada no coincide con la configuración actual. Corregí la fecha antes de liquidar.',code:'POINTS_SCHEME_SNAPSHOT_MISMATCH'},{status:409})
  if(value?.code==='40001'||message.includes('PRECONDITION_FAILED'))return NextResponse.json({error:'El settlement fue modificado en otra sesión.',code:'PRECONDITION_FAILED'},{status:412})
  if(value?.code==='23505'||message.includes('IDEMPOTENCY_CONFLICT'))return NextResponse.json({error:'Conflicto de estado o idempotencia.',code:'CONFLICT'},{status:409})
  if(value?.code==='22023'||value?.code==='23514')return NextResponse.json({error:'El settlement no cumple las precondiciones.',code:message.split(':').at(-1)?.trim()},{status:400})
