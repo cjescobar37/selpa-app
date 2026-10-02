@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getApprovedMembership, userHasClubCapability } from '@/lib/clubMembershipServer'
 import { getCompetitionSeedScope } from '@/lib/tournamentTeamSeeding'
@@ -19,6 +20,26 @@ type RegistrationRow = {
   created_by: string
   created_at: string
   updated_at: string | null
+}
+
+type FinanceProjection = {
+  obligation_id: string | null
+  original_amount: number
+  allocated_net: number
+  balance: number
+  currency_code: string | null
+  financial_status: 'NO_CHARGE' | 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'CANCELLED'
+  due_date: string | null
+}
+
+const noChargeFinance: FinanceProjection = {
+  obligation_id: null,
+  original_amount: 0,
+  allocated_net: 0,
+  balance: 0,
+  currency_code: null,
+  financial_status: 'NO_CHARGE',
+  due_date: null,
 }
 
 type TeamRow = {
@@ -212,9 +233,10 @@ export async function GET(
     }
 
     const { clubId, tournamentId } = await context.params
-    const [membership, canManage] = await Promise.all([
+    const [membership, canManage, canViewFinance] = await Promise.all([
       getApprovedMembership(user.user.id, clubId),
       userHasClubCapability(user.user.id, clubId, 'registrations:view'),
+      userHasClubCapability(user.user.id, clubId, 'finance:view'),
     ])
     if (!membership || !canManage) {
       return NextResponse.json({ error: 'No autorizado para ver inscripciones.' }, { status: 403 })
@@ -240,6 +262,30 @@ export async function GET(
     const rows = (registrations ?? []) as RegistrationRow[]
     const teamIds = Array.from(new Set(rows.map((row) => row.team_id).filter(Boolean)))
     const registrationIds = rows.map((row) => row.id)
+
+    const financeByRegistration = new Map<string, FinanceProjection>()
+    if (canViewFinance && registrationIds.length > 0) {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (!url || !anonKey) {
+        return NextResponse.json({ error: 'Falta configuración de Supabase.' }, { status: 500 })
+      }
+      const userSupabase = createClient(url, anonKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { Authorization: `Bearer ${user.accessToken}` } },
+      })
+      const { data: financeRows, error: financeError } = await userSupabase
+        .rpc('get_tournament_registration_finance_f1b', {
+          p_club_id: clubId,
+          p_tournament_id: tournamentId,
+        })
+      if (financeError) {
+        return NextResponse.json({ error: 'No se pudo consultar el estado financiero.' }, { status: 500 })
+      }
+      for (const row of (financeRows ?? []) as Array<{ registration_id: string; finance: FinanceProjection }>) {
+        financeByRegistration.set(row.registration_id, row.finance)
+      }
+    }
 
     let teams = new Map<string, TeamRow>()
     if (teamIds.length > 0) {
@@ -507,6 +553,7 @@ export async function GET(
           club_id: registration.club_id,
           team_id: registration.team_id,
           status: registration.status,
+          finance: canViewFinance ? financeByRegistration.get(registration.id) ?? noChargeFinance : null,
           admission_status: registration.admission_status,
           admission_reason: registration.admission_reason,
           admission_by: registration.admission_by,

@@ -72,6 +72,29 @@ export async function PATCH(req: NextRequest, context: ClubPaymentContext) {
     updatePayload.approved_by = user.id
   }
 
+  // Confirm the sporting registration first. Its F1B trigger creates the
+  // obligation atomically; a failure leaves the legacy request retryable.
+  if (status === 'APPROVED' && current.registration_id) {
+    const { error: confirmationError } = await supabaseAdmin.rpc(
+      'transition_tournament_registration_finance_f1b',
+      {
+        p_club_id: clubId,
+        p_tournament_id: current.tournament_id,
+        p_registration_id: current.registration_id,
+        p_status: 'CONFIRMED',
+        p_actor_id: user.id,
+        p_legacy_payment_id: paymentId,
+      }
+    )
+    if (confirmationError) {
+      return NextResponse.json({
+        error: 'No se pudo confirmar la inscripción. La solicitud de pago sigue pendiente.',
+        detail: confirmationError.message,
+        code: 'REGISTRATION_CONFIRMATION_FAILED',
+      }, { status: 409 })
+    }
+  }
+
   const { data: payment, error: updateError } = await supabaseAdmin
     .from('tournament_payments')
     .update(updatePayload)
@@ -84,11 +107,17 @@ export async function PATCH(req: NextRequest, context: ClubPaymentContext) {
 
   if (current.registration_id) {
     const registrationUpdate: Record<string, unknown> = { payment_status: status }
-    if (status === 'APPROVED') registrationUpdate.status = 'CONFIRMED'
-    await supabaseAdmin
+    const { error: registrationUpdateError } = await supabaseAdmin
       .from('tournament_registrations')
       .update(registrationUpdate)
       .eq('id', current.registration_id)
+    if (registrationUpdateError) {
+      return NextResponse.json({
+        error: 'La solicitud de pago se resolvió, pero no se pudo actualizar su estado operativo en la inscripción.',
+        detail: registrationUpdateError.message,
+        code: 'REGISTRATION_PAYMENT_STATUS_FAILED',
+      }, { status: 409 })
+    }
   }
 
   if (current.team_id) {
@@ -105,9 +134,9 @@ export async function PATCH(req: NextRequest, context: ClubPaymentContext) {
       tournamentId: current.tournament_id,
       actorId: user.id,
       type: status === 'APPROVED' ? 'payment_approved' : status === 'REJECTED' ? 'payment_rejected' : 'payment_cancelled',
-      title: status === 'APPROVED' ? 'Pago aprobado' : status === 'REJECTED' ? 'Pago rechazado' : 'Pago cancelado',
+      title: status === 'APPROVED' ? 'Solicitud de pago aprobada' : status === 'REJECTED' ? 'Solicitud de pago rechazada' : 'Solicitud de pago cancelada',
       body: status === 'APPROVED'
-        ? 'El club aprobó el pago de tu inscripción.'
+        ? 'El club aprobó la solicitud de pago de tu inscripción.'
         : status === 'REJECTED'
           ? 'El club rechazó el pago de tu inscripción. Revisá el torneo para elegir otro método.'
           : 'El club canceló la solicitud de pago.',

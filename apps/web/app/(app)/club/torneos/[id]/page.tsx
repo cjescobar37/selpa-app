@@ -146,6 +146,15 @@ type TournamentPairsView = 'registrations' | 'seed'
 type Registration = {
   id: string
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED'
+  finance?: null | {
+    obligation_id: string | null
+    original_amount: number
+    allocated_net: number
+    balance: number
+    currency_code: string | null
+    financial_status: 'NO_CHARGE' | 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'CANCELLED'
+    due_date: string | null
+  }
   admission_status: 'NONE' | 'MANUAL_PAYMENT_VALIDATED' | 'PAY_AT_VENUE_APPROVED' | 'EXCEPTION_APPROVED' | 'BLOCKED'
   admission_reason: string | null
   payment_status: 'SIN_PAGO' | 'PENDIENTE' | 'PAGADO' | 'FALLIDO'
@@ -438,10 +447,33 @@ const paymentLabels: Record<Registration['payment_status'], string> = {
 }
 
 function paymentLabel(registration: Registration) {
+  const requestStatus = String(registration.operational_payment?.status ?? '').toUpperCase()
+  if (requestStatus === 'APPROVED') return 'Solicitud aprobada'
+  if (requestStatus === 'PAID') return 'Solicitud marcada pagada'
+  if (requestStatus === 'REJECTED') return 'Solicitud rechazada'
+  if (requestStatus === 'CANCELLED') return 'Solicitud cancelada'
   if (registration.payment_status === 'PENDIENTE' && registration.payment_method === 'CASH_ON_SITE_REQUEST') {
-    return 'Pago en club pendiente'
+    return 'Pago en club solicitado'
   }
-  return paymentLabels[registration.payment_status]
+  return `Operativo: ${paymentLabels[registration.payment_status].toLowerCase()}`
+}
+
+function financeLabel(finance: NonNullable<Registration['finance']>) {
+  switch (finance.financial_status) {
+    case 'PENDING': return `Pendiente · ${formatMoney(finance.balance)}`
+    case 'PARTIAL': return `Parcial · faltan ${formatMoney(finance.balance)}`
+    case 'PAID': return 'Pagado'
+    case 'OVERDUE': return `Vencido · ${formatMoney(finance.balance)}`
+    case 'CANCELLED': return 'Cargo cancelado'
+    default: return 'Sin cargo'
+  }
+}
+
+function financeTone(finance: NonNullable<Registration['finance']>) {
+  if (finance.financial_status === 'PAID') return 'paid'
+  if (finance.financial_status === 'OVERDUE') return 'failed'
+  if (finance.financial_status === 'NO_CHARGE' || finance.financial_status === 'CANCELLED') return 'empty'
+  return 'pending'
 }
 
 function paymentMethodLabel(method?: string | null) {
@@ -1159,10 +1191,15 @@ export default function ClubTournamentDetailPage() {
     pending: registrations.filter((row) => row.status === 'PENDING').length,
     confirmed: registrations.filter((row) => row.status === 'CONFIRMED').length,
     eligible: registrations.filter((row) => row.eligible).length,
-    withoutPayment: registrations.filter((row) => row.payment_status === 'SIN_PAGO').length,
-    paymentPending: registrations.filter((row) => row.payment_status === 'PENDIENTE').length,
+    withoutPayment: registrations.filter((row) => row.finance
+      ? row.finance.financial_status === 'NO_CHARGE'
+      : row.payment_status === 'SIN_PAGO').length,
+    paymentPending: registrations.filter((row) => row.finance
+      ? ['PENDING', 'PARTIAL', 'OVERDUE'].includes(row.finance.financial_status)
+      : row.payment_status === 'PENDIENTE').length,
     blocked: registrations.filter((row) => row.admission_status === 'BLOCKED').length,
   }), [registrations])
+  const hasFinanceVisibility = registrations.some((row) => Boolean(row.finance))
   const pendingOperationalPayments = useMemo(
     () => registrations.filter((row) => String(row.operational_payment?.status ?? '').toUpperCase() === 'PENDING'),
     [registrations]
@@ -4982,11 +5019,11 @@ export default function ClubTournamentDetailPage() {
                           <b>{summary.counts.registrations.confirmed}</b>
                         </div>
                         <div className={`club-readinessItem ${registrationStats.withoutPayment > 0 ? 'club-readinessItem--attention' : ''}`}>
-                          <span>Sin pago</span>
+                          <span>{hasFinanceVisibility ? 'Sin cargo' : 'Sin solicitud'}</span>
                           <b>{registrationStats.withoutPayment}</b>
                         </div>
                         <div className={`club-readinessItem ${registrationStats.paymentPending > 0 ? 'club-readinessItem--attention' : ''}`}>
-                          <span>Pendientes</span>
+                          <span>{hasFinanceVisibility ? 'Por cobrar' : 'Solicitudes pendientes'}</span>
                           <b>{registrationStats.paymentPending}</b>
                         </div>
                         <div className={`club-readinessItem ${registrationStats.blocked > 0 ? 'club-readinessItem--blocked' : ''}`}>
@@ -5137,9 +5174,15 @@ export default function ClubTournamentDetailPage() {
                                 <span className={`club-statusBadge club-statusBadge--${statusTone(registration.status)}`}>
                                   {statusLabels[registration.status] ?? registration.status}
                                 </span>
-                                <span className={`club-paymentBadge club-paymentBadge--${paymentTone(registration.payment_status)}`}>
-                                  {paymentLabel(registration)}
-                                </span>
+                                {registration.finance ? (
+                                  <span className={`club-paymentBadge club-paymentBadge--${financeTone(registration.finance)}`}>
+                                    {financeLabel(registration.finance)}
+                                  </span>
+                                ) : (
+                                  <span className={`club-paymentBadge club-paymentBadge--${paymentTone(registration.payment_status)}`}>
+                                    {paymentLabel(registration)}
+                                  </span>
+                                )}
                                 {registration.registration_change_request?.status === 'PENDING' ? (
                                   <span className="club-statusBadge club-statusBadge--pending">
                                     Baja solicitada
@@ -6381,9 +6424,15 @@ export default function ClubTournamentDetailPage() {
                 <strong>{statusLabels[registrationDetailModal.registration.status] ?? registrationDetailModal.registration.status}</strong>
               </div>
               <div className="club-registrationDetailCard">
-                <span>Pago</span>
+                <span>Solicitud de pago (operativa)</span>
                 <strong>{paymentLabel(registrationDetailModal.registration)}</strong>
               </div>
+              {registrationDetailModal.registration.finance ? (
+                <div className="club-registrationDetailCard">
+                  <span>Estado financiero</span>
+                  <strong>{financeLabel(registrationDetailModal.registration.finance)}</strong>
+                </div>
+              ) : null}
               <div className="club-registrationDetailCard">
                 <span>Medio de pago</span>
                 <strong>{admissionLabels[registrationDetailModal.registration.admission_status]}</strong>

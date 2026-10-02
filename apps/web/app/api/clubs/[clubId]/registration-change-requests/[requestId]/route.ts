@@ -140,11 +140,16 @@ export async function PATCH(req: NextRequest, context: Context) {
     : null
 
   if (status === 'APPROVED' && current.registration_id) {
-    const { error: registrationUpdateError } = await supabaseAdmin
-      .from('tournament_registrations')
-      .update({ status: 'CANCELLED', updated_at: now })
-      .eq('id', current.registration_id)
-      .eq('club_id', clubId)
+    const { error: registrationUpdateError } = await supabaseAdmin.rpc(
+      'transition_tournament_registration_finance_f1b',
+      {
+        p_club_id: clubId,
+        p_tournament_id: current.tournament_id,
+        p_registration_id: current.registration_id,
+        p_status: 'CANCELLED',
+        p_actor_id: user.id,
+      }
+    )
 
     if (registrationUpdateError) {
       await supabaseAdmin

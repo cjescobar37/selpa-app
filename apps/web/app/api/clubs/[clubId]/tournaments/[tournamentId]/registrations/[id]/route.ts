@@ -191,14 +191,16 @@ export async function PATCH(
       }
     }
 
-    const { data: updated, error: updateError } = await supabaseAdmin
-      .from('tournament_registrations')
-      .update({ status: nextStatus })
-      .eq('id', id)
-      .eq('club_id', clubId)
-      .eq('tournament_id', tournamentId)
-      .select('id,tournament_id,club_id,team_id,status,admission_status,admission_reason,admission_by,admission_at,eligibility_blocked_reason,created_by,created_at,updated_at')
-      .maybeSingle()
+    const { data: updated, error: updateError } = await supabaseAdmin.rpc(
+      'transition_tournament_registration_finance_f1b',
+      {
+        p_club_id: clubId,
+        p_tournament_id: tournamentId,
+        p_registration_id: id,
+        p_status: nextStatus,
+        p_actor_id: user.id,
+      }
+    )
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 })

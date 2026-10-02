@@ -621,7 +621,7 @@ export async function POST(
         tournament_id: tournamentId,
         club_id: clubId,
         team_id: team.id,
-        status: payload.auto_confirm ? 'CONFIRMED' : 'PENDING',
+        status: 'PENDING',
         created_by: user.id,
         ...admission,
       })
@@ -637,8 +637,26 @@ export async function POST(
       return NextResponse.json({ error: registrationError.message }, { status: 500 })
     }
 
+    // The server-only RPC attributes the confirmation to this authenticated
+    // admin and commits status, obligation and journal in one DB transaction.
+    let confirmedRegistration = registration
+    if (payload.auto_confirm) {
+      const { data, error } = await supabaseAdmin.rpc(
+        'transition_tournament_registration_finance_f1b',
+        {
+          p_club_id: clubId,
+          p_tournament_id: tournamentId,
+          p_registration_id: registration.id,
+          p_status: 'CONFIRMED',
+          p_actor_id: user.id,
+        }
+      )
+      if (error || !data) throw new Error(error?.message ?? 'MANUAL_REGISTRATION_CONFIRMATION_FAILED')
+      confirmedRegistration = data
+    }
+
     return NextResponse.json({
-      registration,
+      registration: confirmedRegistration,
       team,
       players: [
         { club_player_id: player1.clubPlayerId ?? null, user_id: player1.userId, full_name: player1.fullName, created: player1.createdAuthUser },
