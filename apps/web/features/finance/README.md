@@ -1,4 +1,4 @@
-# Club Finance F1A–F1B
+# Club Finance F1A–F1C
 
 Club Finance registra dinero cuyo acreedor es el club. SELPA Billing (club → SELPA),
 pagos administrativos de inscripción y puntos de Competition son dominios distintos.
@@ -64,3 +64,23 @@ de dos sesiones están en `supabase/qa/20261001153611_club_finance_core_*`.
   `tournament_payments` sigue siendo una solicitud operativa legacy:
   `tournament_payments.APPROVED` **no significa**
   `club_finance_payments.POSTED`. No hay conversión ni backfill de pagos.
+
+## F1C · experiencia operativa
+
+- `/club/contabilidad` conserva la URL de entrada pero muestra «Finanzas» con
+  resumen, obligaciones y movimientos canónicos. `/club/finanzas` sigue como
+  alias. La pantalla nueva no consulta `/api/clubs/finance` ni suma
+  `club_receivables`, `club_receivable_payments`,
+  `club_financial_transactions` o `tournament_payments`.
+- La API `/api/clubs/finance/core` usa el JWT del usuario. Las tres lecturas
+  F1C son batch, paginadas y requieren `finance:view`; el resumen suma sólo
+  pagos `POSTED`, por lo que una reversión deja de contar como cobrado. Las
+  obligaciones canceladas no cuentan como pendientes. Los nombres de parejas
+  se resuelven con joins dentro del read model, sin consultas por jugador.
+- Sólo `finance:manage` ve acciones de escritura. Registrar y revertir usan
+  exclusivamente los RPC F1A y una clave idempotente estable por intento.
+  Ante `40001`, el backend reintenta una vez con la misma clave en una nueva
+  transacción. Journals, postings y allocations no se muestran ni se editan.
+- La antigua API y sus tablas siguen disponibles físicamente para procesos
+  anteriores, pero se retiraron de la experiencia principal. No se migran ni
+  reinterpretan sus importes como efectivo real.
