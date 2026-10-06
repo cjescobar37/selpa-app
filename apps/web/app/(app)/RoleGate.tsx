@@ -60,6 +60,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
       '/notificaciones',
       '/mensajes',
       '/player/mensajes',
+      '/player/pagos',
     ],
     []
   )

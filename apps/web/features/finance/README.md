@@ -1,4 +1,4 @@
-# Club Finance F1A–F1C
+# Club Finance F1A–F1D
 
 Club Finance registra dinero cuyo acreedor es el club. SELPA Billing (club → SELPA),
 pagos administrativos de inscripción y puntos de Competition son dominios distintos.
@@ -84,3 +84,33 @@ de dos sesiones están en `supabase/qa/20261001153611_club_finance_core_*`.
 - La antigua API y sus tablas siguen disponibles físicamente para procesos
   anteriores, pero se retiraron de la experiencia principal. No se migran ni
   reinterpretan sus importes como efectivo real.
+
+## F1D · jugador / Mis pagos
+
+- `/player/pagos` sigue la home global de jugador: reúne cargos visibles de todos
+  sus clubes y los agrupa por club. El acceso está en «Mi espacio», móvil y desktop.
+  No cambia el club activo ni exige membresía administrativa para consultar un
+  cargo propio histórico. `/player/[clubId]` sigue siendo el espacio deportivo del club.
+- Es sólo lectura. Cada RPC deriva `auth.uid()` del JWT: `USER` exige ser el deudor;
+  `TEAM` exige ser player1 o player2 del `debtor_team_id`, con el mismo `club_id`.
+  No acepta identidad de usuario ni selector de obligación arbitrario. Un filtro
+  de club sólo reduce el conjunto autorizado. No requiere `finance:view`, no
+  amplía las policies/grants F1A y no usa service_role para las consultas.
+- La obligación TEAM es compartida: ambos integrantes ven el importe completo
+  y los mismos cobros. No se divide automáticamente 50/50 ni se atribuye a cada
+  jugador una mitad. La UI distingue «Pendiente de la pareja» de «Pendiente personal».
+- «Pagado» suma allocations visibles de pagos `POSTED`; `REVERSED` conserva su
+  historia y deja de contar como cobro neto. `CANCELLED` no aporta saldo pendiente.
+  `open_obligations` exige `OPEN` y saldo neto > 0. F1D muestra ARS exclusivamente.
+- La API `/api/player/finance` verifica el JWT y ejecuta tres RPC batch al inicio;
+  las páginas siguientes usan una consulta. Nombres de club, torneo y pareja se
+  resuelven dentro de DB. Cursors compuestos evitan perder filas con la misma fecha.
+  Movimientos usan el ID de allocation como cursor y sólo muestran el importe
+  aplicado a la obligación visible, sin revelar otras partes del pago.
+- Legacy queda excluido: ningún `tournament_payments` histórico entra en el
+  resumen o se convierte en dinero F1A. No hay backfill. Mercado Pago todavía no
+  está conectado; no hay checkout, comprobantes, solicitudes de pago ni refunds.
+- Migration: `20261006165334_20261006152334_player_finance_f1d_read_model.sql`. QA reversible:
+  `supabase/qa/20261006152334_player_finance_f1d_read_model_validation.sql`.
+  Las funciones y cuatro índices de lookup son aditivos; no cambian lifecycles
+  ni las migrations aplicadas de F1A/F1B/F1C.

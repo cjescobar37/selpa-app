@@ -22,6 +22,7 @@ import {
   Settings,
   Trophy,
   UserRoundPen,
+  WalletCards,
   X,
 } from 'lucide-react'
 
@@ -714,6 +715,7 @@ export default function AppNavbarClient() {
           <Link className="px-ddItem" href="/mis-datos" onClick={closeAllMenus}><UserRoundPen size={18} />Mis datos</Link>
           <Link className="px-ddItem" href="/player/torneos" onClick={closeAllMenus}><Trophy size={18} />Mis torneos</Link>
           <Link className="px-ddItem" href="/player/ranking" onClick={closeAllMenus}><Medal size={18} />Mi ranking</Link>
+          <Link className="px-ddItem" href="/player/pagos" onClick={closeAllMenus}><WalletCards size={18} />Mis pagos</Link>
           <Link className="px-ddItem" href="/actividad" onClick={closeAllMenus}><Activity size={18} />Mi actividad</Link>
           <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}><Settings size={18} />Preferencias</Link>
           <div className="px-ddSep" />
@@ -758,6 +760,7 @@ export default function AppNavbarClient() {
         <Link className="px-ddItem" href="/perfil">Mi perfil</Link>
         <Link className="px-ddItem" href="/mis-datos">Mis datos</Link>
         <Link className="px-ddItem" href="/actividad">Mi actividad</Link>
+        {role === 'player' ? <Link className="px-ddItem" href="/player/pagos" onClick={closeAllMenus}><WalletCards size={18} />Mis pagos</Link> : null}
         <Link className="px-ddItem" href="/ajustes">Preferencias</Link>
         <button className="px-ddItem px-ddItem--danger" onClick={signOut}>Cerrar sesión</button>
       </div>
