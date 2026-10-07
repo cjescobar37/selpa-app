@@ -740,6 +740,7 @@ export default function AppNavbarClient() {
           <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}>Preferencias</Link>
           <Link className="px-ddItem" href="/mis-datos" onClick={closeAllMenus}>Seguridad</Link>
           <Link className="px-ddItem" href={clubPublicHomeHref} onClick={closeAllMenus}>Ver home pública del club</Link>
+          {clubRole === 'OWNER' || clubRole === 'ADMIN' ? <Link className="px-ddItem" href="/club/facturacion" onClick={closeAllMenus}>Facturación SELPA</Link> : null}
           <button className="px-ddItem px-ddItem--danger" onClick={() => { closeAllMenus(); void signOut() }}>Cerrar sesión</button>
         </div>
       )
@@ -749,6 +750,7 @@ export default function AppNavbarClient() {
       return (
         <div className="px-navDropdown px-navDropdown--right" role="menu">
           <Link className="px-ddItem" href="/platform/configuracion">Configuración de la plataforma</Link>
+          <Link className="px-ddItem" href="/platform/facturacion" onClick={closeAllMenus}>Facturación SELPA</Link>
           <Link className="px-ddItem" href="/platform/logs">Auditoría</Link>
           <button className="px-ddItem px-ddItem--danger" onClick={signOut}>Cerrar sesión</button>
         </div>

@@ -109,7 +109,7 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
       {
         label: 'Club',
         href: '/club/admin',
-        activePrefixes: ['/club/admin', '/club/configuracion', '/club/equipo', '/club/usuarios', '/club/perfil', '/club/finanzas', '/club/contabilidad', '/club/estadisticas', '/club/reportes', '/club/mensajes'],
+        activePrefixes: ['/club/admin', '/club/configuracion', '/club/equipo', '/club/usuarios', '/club/perfil', '/club/finanzas', '/club/contabilidad', '/club/facturacion', '/club/estadisticas', '/club/reportes', '/club/mensajes'],
         requiredAnyCapabilities: ['club:update', 'club:branding', 'club:profile_manage', 'roles:view', 'roles:manage', 'finance:view', 'finance:manage', 'reports:operational_view', 'messages:view', 'audit:view', 'security:manage'],
       },
       {
@@ -142,8 +142,9 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
       },
       {
         label: 'Finanzas',
-        href: '/platform/pagos',
+        href: '/platform/facturacion',
         children: [
+          { label: 'Facturación SELPA', href: '/platform/facturacion' },
           { label: 'Pagos / comisiones', href: '/platform/pagos' },
           { label: 'Liquidaciones', href: '/platform/liquidaciones' },
         ],

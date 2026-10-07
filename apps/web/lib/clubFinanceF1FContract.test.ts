@@ -9,7 +9,7 @@ import { financePeriodRange, reconciliationReason, validFinanceRange, type Finan
 import { financeCsv, financeExportTables, financeXlsx } from './clubFinanceF1FExport'
 
 const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
-const sql = read('../supabase/migrations/20261007013543_club_finance_f1f_reports_reconciliation.sql')
+const sql = read('../supabase/migrations/20261007094742_20261007013543_club_finance_f1f_reports_reconciliation.sql')
 const qa = read('../supabase/qa/20261007013543_club_finance_f1f_validation.sql')
 const report: FinanceReport = {
   from: '2026-10-02', to: '2026-10-04', generated_at: '2026-10-04T18:00:00Z',

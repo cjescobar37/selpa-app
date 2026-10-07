@@ -340,7 +340,25 @@ Guías de panel: [Detalles/PKCE](https://www.mercadopago.com.ar/developers/es/do
 
 ## F1F · Reportes, exports y conciliación administrativa
 
-Migration aditiva: `20261007013543_club_finance_f1f_reports_reconciliation.sql`.
+Migration aditiva: `20261007094742_20261007013543_club_finance_f1f_reports_reconciliation.sql`.
+
+## F2 — SELPA Billing (club → SELPA)
+
+Migration: `20261007100803_platform_billing_f2_core.sql`. Contexto independiente: diez tablas `platform_billing_*`, ledger propio; jamás suma ni escribe Club Finance, provider F1E ni legacy `payments/commissions/settlements/settlement_items/platformFinance.ts`. Ese circuito legacy queda separado/deprecated, intacto, sin backfill.
+
+Catálogo ARS configurable por Platform Admin, sin precios comerciales seed. FREE exige $0 y genera período sin factura. MONTHLY/ANNUAL admiten $0: comprobante PAID derivado, sin revenue. Primer período comienza en fecha explícita; siguientes consecutivos con fin exclusivo, sumando mes/año de calendario. TRIAL cambia a ACTIVE al generar su primer período. No cron ni prorrateo. Cancelación al cierre se efectiviza al pedir el siguiente período; suspensión sólo explícita, no bloquea actividad deportiva ni cancela deuda.
+
+`execute_platform_billing_f2(operation,key,payload)` es el único gateway de escritura: JWT humano `auth.uid()`, Platform Admin validado en DB, command único actor/key y payload exacto. El backend usa anon key + Authorization del usuario, nunca service-role para escrituras ni actor libre. Las mutaciones de catálogo/suscripción exigen revision. Cambio de plan por defecto queda en `next_plan_id`; se consume al siguiente período, incluso si se programó antes de la primera emisión. Opción explícita inmediata cambia el plan para próximas emisiones sin reescribir períodos ni facturas ya emitidos. Precio del período se lee del snapshot; modificaciones del catálogo no reescriben deuda.
+
+Cada período tiene una única invoice con número estable `SELPA-…`; puede haber gaps normales por rollback de secuencia. Interna, no fiscal AFIP/ARCA. Líneas PLAN/PLATFORM_FEE/ADJUSTMENT preparadas; F2 emite sólo PLAN, no calcula comisión ni marketplace_fee. No cobros automáticos. Vencimiento explícito del admin. La confirmación UI muestra plan/importe de emisión y transmite expected plan/price/interval: DB los contrasta bajo lock antes de generar, evitando cargos diferentes a los confirmados. Estado financiero y `paid_at` derivados de allocations de payments POSTED: parcial/pagada/vencida; PAST_DUE de subscription también derivado. Los saldos no se persisten manualmente.
+
+Pago confirmado distribuible en hasta 100 invoices del mismo club. Locks invoice UUID ascendente + revision evitan sobreasignación RC/RR; reintentar transacción completa con misma key ante 40001. Reversión compensatoria reabre saldos. VOID exige cero cobro neto (revertir primero), compensa revenue/AR y conserva invoice. Journals/postings/allocations/lines/periods inmutables; command respuesta congelada, source guards y constraint triggers diferidos validan dos cuentas exactas, importes/source/actor, sum allocations y presencia de journals. Pago $0 no admitido.
+
+RLS en diez tablas y ACL RPC-only: ni authenticated ni service_role tienen escritura directa. Helpers/views/sequence no Data API. Club OWNER/ADMIN aprobado sólo lee su propia overview/invoices/payments/periods; jugador/OPERADOR/PLANILLERO/club ajeno no acceden. Catálogo, reportes globales, command audit y gestión sólo Platform Admin. API `/api/platform/billing`, `/api/clubs/billing`, export Platform Admin; UI `/platform/facturacion` y `/club/facturacion` accesibles en navbar.
+
+Dashboard agrega cobrado neto del rango (pagos de ese rango que aún están POSTED), pendiente/vencido actuales y clubes activos/con deuda; no reconstrucción histórica ni MRR inventado. Reportes paginados por plan (facturado no VOID del rango; clubes vigentes actuales) y deuda por club. Listas keyset `(created_at,id)`, 20 UI / 100 export. Export CSV/XLSX invoices/payments/subscriptions/saldo por club reutiliza F1F, tipos numéricos/fechas/BOM y protección de fórmulas; cartera e historial completos del scope actual, límite explícito 20.000 filas, nunca truncamiento silencioso. Índices para scopes, keyset, allocations y ledger. No PDF ni proveedor.
+
+QA real pendiente en DB **descartable**: `20261007100803_platform_billing_f2_validation.sql` (rollback y constraints IMMEDIATE antes de rollback) y `20261007100803_platform_billing_f2_two_session.md` (RC/RR, pago/VOID/reversal, command, período, plan). Contratos TypeScript comprueban arquitectura, ACL, lifecycles/snapshots SQL y ejecutan adapters reales con doubles de auth/RPC; no equivalen a probar locks/RLS en PostgreSQL. Visual offline usa fixtures sin DB. No ejecutar F2 en producción sin ese QA real y revisión SQL.
 QA descartable con rollback: `supabase/qa/20261007013543_club_finance_f1f_validation.sql`.
 No modifica SQL, lifecycles, permisos ni datos existentes F1A–F1E; no habilita MP.
 

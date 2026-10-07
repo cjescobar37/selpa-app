@@ -14,6 +14,7 @@ function isPublicGuestRoute(pathname: string) {
 function requiredClubCapabilities(pathname: string, currentPath: string): readonly ClubCapability[] {
   if (pathname === '/club') return ['dashboard:view']
   if (pathname.startsWith('/club/configuracion')) return ['club:update', 'club:branding']
+  if (pathname.startsWith('/club/facturacion')) return ['club:update']
   if (pathname.startsWith('/club/usuarios') || pathname.startsWith('/club/equipo')) return ['roles:view']
   if (pathname.startsWith('/club/finanzas') || pathname.startsWith('/club/contabilidad')) return ['finance:view']
   if (pathname.startsWith('/club/reportes')) return ['finance:view', 'memberships:view']
@@ -82,6 +83,10 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     const isAllowed = pathname === '/player' || allowedWithoutClub.some(p => pathname.startsWith(p))
 
     if (session.isPlatformAdmin) return
+    if (pathname.startsWith('/platform/facturacion')) {
+      router.replace(session.role === 'player' ? '/player' : '/club')
+      return
+    }
 
     if (isClubAdminRoute) {
       if (!session.activeClubId || !session.isApprovedMember) {
@@ -127,6 +132,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     session.status === 'ready' &&
     Boolean(session.user) &&
     (!requiresPlayerProfile || isGlobalProfileComplete(session.globalProfile)) &&
+    (!pathname.startsWith('/platform/facturacion') || session.isPlatformAdmin) &&
     (session.isPlatformAdmin ||
       Boolean(session.activeClubId && session.isApprovedMember && (!isClubAdminRoute || (
         hasAdministrativeClubRole && hasAnyClubPermission(session.clubRole, requiredClubCapabilities(pathname, currentPath))
