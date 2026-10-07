@@ -17,15 +17,41 @@ export async function financeAccess(req: NextRequest, clubId: string, write = fa
     global: { headers: { Authorization: req.headers.get('authorization') ?? '' } },
   }) }
 }
-export function financeFailure(error: { code?: string } | null, operation = 'finance') {
-  // Never log JWTs, request headers, DB messages/details or financial payloads.
-  console.error('[club-finance]', { operation, code: error?.code ?? 'UNKNOWN' })
+export type FinanceRpcError = { code?: string; message?: string; details?: string | null; hint?: string | null }
+
+/** Host only: never include URL credentials, query strings or environment keys. */
+export function financeProjectHost() {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').hostname || 'UNCONFIGURED' }
+  catch { return 'UNCONFIGURED' }
+}
+
+function schemaDiagnostic(value?: string | null) {
+  if (!value) return null
+  return value
+    .replace(/Bearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED]')
+    .replace(/\b(?:sb_secret_|sb_publishable_)[A-Za-z0-9_-]+/g, '[REDACTED]')
+    .replace(/\b(authorization|cookie|token|secret|api[_-]?key)["']?\s*[:=]\s*["']?[^\r\n;,]+/gi, '$1=[REDACTED]')
+    .slice(0, 1500)
+}
+
+export function logFinanceRpcFailure(error: FinanceRpcError | null, operation: string) {
+  // Only schema-resolution errors have diagnostic text: SQL/business errors may contain row data.
+  console.error('[club-finance]', { operation, projectHost: financeProjectHost(), code: error?.code ?? 'UNKNOWN',
+    ...(error?.code === 'PGRST202' ? {
+      message: schemaDiagnostic(error.message), details: schemaDiagnostic(error.details), hint: schemaDiagnostic(error.hint),
+    } : {}),
+  })
+}
+
+export function financeFailure(error: FinanceRpcError | null, operation = 'finance') {
+  logFinanceRpcFailure(error, operation)
   return NextResponse.json({ error: error?.code === '40001'
     ? 'El caso cambió. Actualizá el detalle antes de continuar.'
     : error?.code === '42501' ? 'No tenés permiso para consultar las finanzas de este club.'
-    : 'No pudimos consultar las finanzas. Reintentá; si continúa, informá el código técnico.',
-    code: error?.code ?? 'UNKNOWN' },
-  { status: error?.code === '42501' ? 403 : error?.code === '40001' ? 409 : 400 })
+    : 'No pudimos cargar las finanzas. Reintentá en unos segundos.',
+    ...(error?.code === 'PGRST202' ? {} : { code: error?.code ?? 'UNKNOWN' }) },
+  { status: error?.code === '42501' ? 403 : error?.code === '40001' ? 409 : error?.code === 'PGRST202' ? 503 : 400 })
 }
 export function financeRangeParams(params: URLSearchParams) {
   const from = params.get('from') ?? ''; const to = params.get('to') ?? ''

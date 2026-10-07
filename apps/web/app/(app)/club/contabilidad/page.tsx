@@ -99,7 +99,9 @@ export default function ClubFinancePage() {
       headers: { Authorization: `Bearer ${accessToken}`, ...init?.headers },
     })
     const json = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(`${json?.error ?? 'No pudimos cargar las finanzas.'}${json?.code ? ` (${json.code})` : ''}`)
+    if (!response.ok) throw new Error(json?.code === 'PGRST202'
+      ? 'No pudimos cargar las finanzas. Reintentá en unos segundos.'
+      : json?.error ?? 'No pudimos cargar las finanzas. Reintentá en unos segundos.')
     return json
   }, [token])
 

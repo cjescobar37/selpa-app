@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { financeAccess, financeFailure, financeUuid } from '@/lib/clubFinanceF1FServer'
+import { financeAccess, financeFailure, financeUuid, logFinanceRpcFailure, type FinanceRpcError } from '@/lib/clubFinanceF1FServer'
 import { financePage } from '@/lib/clubFinanceF1C'
 import { GET as coreRead } from '../core/route'
 
@@ -23,9 +23,10 @@ export async function GET(req: NextRequest) {
   })
   const page = (data: unknown, dateKey: string) => financePage(
     ((data ?? []) as Array<{ item: { id: string; [key: string]: unknown } }>).map(r => r.item), 20, dateKey)
-  async function failureOrLegacy(error: { code?: string } | null, operation: string) {
+  async function failureOrLegacy(error: FinanceRpcError | null, operation: string) {
     // A Preview may share a database where F1F is not installed yet. Keep F1C usable.
     if (error?.code !== 'PGRST202') return financeFailure(error, operation)
+    logFinanceRpcFailure(error, operation)
     const url = new URL(req.url)
     if (filter === 'CANCELLED') url.searchParams.set('filter', 'ALL')
     const fallback = await coreRead(new NextRequest(url, { headers: req.headers }))
@@ -46,6 +47,9 @@ export async function GET(req: NextRequest) {
     ['list_club_finance_f1f:PAYMENTS', movements], ['list_club_finance_f1f:CASES', cases],
   ] as const
   const failed = results.find(([, result]) => result.error)
+  for (const [operation, result] of results) {
+    if (result.error && result !== failed?.[1]) logFinanceRpcFailure(result.error, operation)
+  }
   if (failed) return failureOrLegacy(failed[1].error, failed[0])
   return NextResponse.json({ f1fAvailable: true, canManage: access.canManage, overview: overview.data,
     requiresReview: Boolean(cases.data?.length), obligations: page(obligations.data, 'created_at'), movements: page(movements.data, 'paid_at') },

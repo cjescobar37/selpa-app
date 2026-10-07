@@ -1,4 +1,4 @@
-.page{color:#071e3d;max-width:980px;margin:0 auto;padding:12px 15px 64px;min-width:0}
+.page{color:#071e3d;max-width:980px;margin:0 auto;padding:6px 0 64px;min-width:0;width:100%}
 .page *{box-sizing:border-box}
 .page>header{margin-bottom:10px}
 .page button:focus-visible,.page input:focus-visible,.page select:focus-visible,.page textarea:focus-visible,.page summary:focus-visible{outline:2px solid #008ca5;outline-offset:3px}
@@ -48,11 +48,11 @@
 .overview span{font-size:11px;color:#5c6c80;font-weight:650}
 .overview strong{font-size:21px;letter-spacing:-.03em;overflow-wrap:anywhere;line-height:1.13}
 .overview p{border-top:1px solid #e4ebf1;grid-column:1/-1;margin:0;padding:7px 13px;color:#607289;font-size:11px}
-.tabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin:12px 0 10px;padding:4px;border:1px solid #dae4ec;border-radius:12px;background:#edf2f6;max-width:100%}
-.tabs button{grid-column:span 2;appearance:none;background:transparent;border:1px solid transparent;border-radius:8px;color:#526780;cursor:pointer;font:inherit;font-size:12px;font-weight:650;min-width:0;min-height:44px;padding:8px 4px}
-.tabs button:nth-child(n+4){grid-column:span 3}
-.tabs button.tabActive{border-color:#c5d4de;background:#fff;box-shadow:0 2px 5px #071c3b0a;color:#082044}
-@media(min-width:600px){.tabs{grid-template-columns:repeat(5,minmax(0,1fr))}.tabs button,.tabs button:nth-child(n+4){grid-column:auto}}
+/* SELPA screen subnavigation: one transparent row, equal tabs, green underline. */
+.tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;margin:10px 0;padding:0;border-bottom:1px solid #dce5ec;background:transparent;width:100%;min-width:0}
+.tabs button{appearance:none;background:transparent;border:0;border-bottom:3px solid transparent;border-radius:0;color:#60738a;cursor:pointer;font:inherit;font-size:clamp(9px,2.6vw,11.5px);font-weight:600;letter-spacing:-.025em;line-height:1;min-width:0;min-height:44px;padding:0 1px;white-space:nowrap;transition:color .15s ease,border-color .15s ease}
+.tabs button.tabActive{border-bottom-color:#66a509;color:#071e3d}
+@media(min-width:600px){.tabs button{font-size:13px;letter-spacing:normal;padding-inline:6px}}
 .sections{display:grid;gap:12px}
 .section{background:#fff;border:1px solid #dce5ec;border-radius:13px;padding:11px 12px;min-width:0;box-shadow:0 4px 16px rgba(11,36,61,.035)}
 .sectionTitle{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
@@ -108,6 +108,6 @@
 .submit{background:#082044;border:1px solid #082044;color:#fff}
 .sheetActions button:disabled{cursor:wait;opacity:.65}
 .page button:focus-visible,.page input:focus-visible,.page select:focus-visible,.page textarea:focus-visible{outline:3px solid #1cc6dc;outline-offset:2px}
-@media(max-width:340px){.page{padding-inline:11px}.overview strong{font-size:18px}.rowSide{min-width:92px}.smallAction{font-size:10px;padding-inline:5px}.filters button{padding-inline:9px}.sheetActions button{font-size:11px}}
-@media(min-width:760px){.page{padding:22px 24px 72px}.header h1{font-size:30px}.overview{max-width:600px}.sections{grid-template-columns:repeat(2,minmax(0,1fr))}.sheet{border-radius:18px;max-height:min(85vh,730px)}.backdrop{align-items:center;padding:20px}}
-@media(prefers-reduced-motion:reduce){.loading span{animation:none}}
+@media(max-width:340px){.overview strong{font-size:18px}.rowSide{min-width:92px}.smallAction{font-size:10px;padding-inline:5px}.filters button{padding-inline:9px}.sheetActions button{font-size:11px}}
+@media(min-width:760px){.page{padding:22px 0 72px}.header h1{font-size:30px}.sections{grid-template-columns:repeat(2,minmax(0,1fr))}.sheet{border-radius:18px;max-height:min(85vh,730px)}.backdrop{align-items:center;padding:20px}}
+@media(prefers-reduced-motion:reduce){.loading span{animation:none}.tabs button{transition:none}}

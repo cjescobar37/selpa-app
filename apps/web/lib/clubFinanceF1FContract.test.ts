@@ -191,6 +191,7 @@ test('operations keeps F1C available only when F1F RPC is not installed, not on 
           rpc.endsWith('_f1c') ? { data: report, error: null } : { data: null, error: { code: errorCode } } } }),
         financeUuid: /^[0-9a-f-]{36}$/i,
         financeFailure: () => Response.json({ error: 'Not hidden' }, { status: 400 }),
+        logFinanceRpcFailure: () => {},
       }
       if (name.endsWith('clubFinanceF1C')) return { financePage: () => ({ items: [], nextCursor: null }) }
       if (name === '../core/route') return { GET: async (req: Req) => { legacyCalls++; assert.equal(req.nextUrl.searchParams.get('clubId'), 'club-A'); return Response.json({ overview: report, canManage: true }) } }

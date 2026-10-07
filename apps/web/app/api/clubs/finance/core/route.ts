@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireClubCapability } from '@/lib/clubMembershipServer'
 import { hasClubCapability } from '@/lib/clubPermissions'
 import { paymentMovementLabels } from '@/lib/paymentProviderReadsF1E'
+import { financeFailure, logFinanceRpcFailure } from '@/lib/clubFinanceF1FServer'
 import {
   financePage, validFinanceAmount,
   type FinanceFilter, type FinanceMovement, type FinanceObligation,
@@ -79,13 +80,13 @@ export async function GET(req: NextRequest) {
   }
   if (view === 'obligations') {
     const result = await client.rpc('list_club_finance_obligations_f1c', obligationParams)
-    if (result.error) return businessError(result.error)
+    if (result.error) return financeFailure(result.error, 'core:list_club_finance_obligations_f1c')
     const rows = ((result.data ?? []) as Array<{ item: FinanceObligation }>).map((row) => row.item)
     return NextResponse.json({ obligations: financePage(rows, pageSize, 'created_at') })
   }
   if (view === 'movements') {
     const result = await client.rpc('list_club_finance_movements_f1c', movementParams)
-    if (result.error) return businessError(result.error)
+    if (result.error) return financeFailure(result.error, 'core:list_club_finance_movements_f1c')
     const rows = ((result.data ?? []) as Array<{ item: FinanceMovement }>).map((row) => row.item)
     return NextResponse.json({ movements: financePage(await paymentMovementLabels(client, clubId, rows), pageSize, 'paid_at') })
   }
@@ -94,8 +95,15 @@ export async function GET(req: NextRequest) {
     client.rpc('list_club_finance_obligations_f1c', obligationParams),
     client.rpc('list_club_finance_movements_f1c', movementParams),
   ])
-  const failure = overview.error ?? obligations.error ?? movements.error
-  if (failure) return businessError(failure)
+  const results = [
+    ['get_club_finance_overview_f1c', overview], ['list_club_finance_obligations_f1c', obligations],
+    ['list_club_finance_movements_f1c', movements],
+  ] as const
+  const failed = results.find(([, result]) => result.error)
+  for (const [operation, result] of results) {
+    if (result.error && result !== failed?.[1]) logFinanceRpcFailure(result.error, `core:${operation}`)
+  }
+  if (failed) return financeFailure(failed[1].error, `core:${failed[0]}`)
   return NextResponse.json({
     canManage: hasClubCapability(auth.membership?.role, 'finance:manage'),
     overview: overview.data,
