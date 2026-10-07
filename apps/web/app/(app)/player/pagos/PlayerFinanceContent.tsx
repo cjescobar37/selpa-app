@@ -1,5 +1,5 @@
 import { Building2, CheckCircle2, ReceiptText, RotateCcw, UsersRound } from 'lucide-react'
-import { financeMethodLabels, financeStatusLabels, formatFinanceMoney } from '@/lib/clubFinanceF1C'
+import { financeMovementMethod, financeStatusLabels, formatFinanceMoney } from '@/lib/clubFinanceF1C'
 import {
   groupPlayerObligations, playerBalanceLabel, playerMovementDate, playerMovementLabel,
   type PlayerFinanceData, type PlayerFinanceFilter, type PlayerFinanceTab,
@@ -16,9 +16,11 @@ type Props = {
   onFilter: (filter: PlayerFinanceFilter) => void
   onMore: () => void
   onRetry: () => void
+  onPay?: (obligationId: string) => void
+  payingId?: string | null
 }
 
-export default function PlayerFinanceContent({ data, tab, filter, busy, error, onTab, onFilter, onMore, onRetry }: Props) {
+export default function PlayerFinanceContent({ data, tab, filter, busy, error, onTab, onFilter, onMore, onRetry, onPay, payingId }: Props) {
   const groups = groupPlayerObligations(data.obligations.items)
   const currentPage = tab === 'obligations' ? data.obligations : data.movements
   return <>
@@ -55,6 +57,12 @@ export default function PlayerFinanceContent({ data, tab, filter, busy, error, o
               <span>Total <b>{formatFinanceMoney(row.original_amount)}</b></span>
               {row.financial_status !== 'PAID' ? <span>Pagado <b>{formatFinanceMoney(row.allocated_net)}</b></span> : null}
             </div>
+            {row.balance > 0 && row.financial_status !== 'CANCELLED' && row.online_payable && onPay ?
+              <button type="button" className={styles.payAction} disabled={Boolean(payingId)} onClick={() => onPay(row.id)}>
+                {payingId === row.id ? 'Preparando pago…' : 'Pagar con Mercado Pago'}
+              </button> : null}
+            {row.payment_status === 'PENDING' ? <p className={styles.paymentNote} role="status">Pago en proceso</p> : null}
+            {row.payment_status === 'RECONCILIATION_REQUIRED' ? <p className={styles.paymentNote}>El club está revisando este pago. No vuelvas a pagarlo.</p> : null}
           </article>)}
         </section>) : <section className={styles.empty}>
           <CheckCircle2 size={25} aria-hidden="true" />
@@ -66,7 +74,7 @@ export default function PlayerFinanceContent({ data, tab, filter, busy, error, o
           <div className={styles.movementBody}>
             <time dateTime={row.paid_at}>{playerMovementDate(row.paid_at)}</time>
             <h3>{row.tournament_name || row.concept}</h3>
-            <p>{row.club_name} · {financeMethodLabels[row.method]}</p>
+            <p>{row.club_name} · {financeMovementMethod(row)}</p>
             <span className={row.status === 'REVERSED' ? styles.reversedCopy : styles.recordedCopy}>{playerMovementLabel(row.status)}</span>
           </div>
           <strong className={styles.movementAmount}>{formatFinanceMoney(row.amount)}</strong>

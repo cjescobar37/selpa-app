@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireClubCapability } from '@/lib/clubMembershipServer'
 import { hasClubCapability } from '@/lib/clubPermissions'
+import { paymentMovementLabels } from '@/lib/paymentProviderReadsF1E'
 import {
   financePage, validFinanceAmount,
   type FinanceFilter, type FinanceMovement, type FinanceObligation,
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
     const result = await client.rpc('list_club_finance_movements_f1c', movementParams)
     if (result.error) return businessError(result.error)
     const rows = ((result.data ?? []) as Array<{ item: FinanceMovement }>).map((row) => row.item)
-    return NextResponse.json({ movements: financePage(rows, pageSize, 'paid_at') })
+    return NextResponse.json({ movements: financePage(await paymentMovementLabels(client, clubId, rows), pageSize, 'paid_at') })
   }
   const [overview, obligations, movements] = await Promise.all([
     client.rpc('get_club_finance_overview_f1c', { p_club_id: clubId }),
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
       ((obligations.data ?? []) as Array<{ item: FinanceObligation }>).map((row) => row.item), pageSize, 'created_at',
     ),
     movements: financePage(
-      ((movements.data ?? []) as Array<{ item: FinanceMovement }>).map((row) => row.item), pageSize, 'paid_at',
+      await paymentMovementLabels(client, clubId, ((movements.data ?? []) as Array<{ item: FinanceMovement }>).map((row) => row.item)), pageSize, 'paid_at',
     ),
   })
 }

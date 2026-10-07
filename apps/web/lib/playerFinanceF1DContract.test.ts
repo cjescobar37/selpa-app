@@ -127,7 +127,8 @@ test('P: player navigation and copy have no technical IDs or payment actions', (
   assert.equal((navbar.match(/href="\/player\/pagos"/g) ?? []).length, 2)
   assert.match(gate, /'\/player\/pagos'/)
   assert.match(page, /Mis pagos/)
-  assert.doesNotMatch(content, />\{row\.(?:id|obligation_id|debtor_type|status|financial_status)\}|journals|postings|allocation|UUID|source_type|50\/50|Mercado Pago|Subir comprobante|Informar transferencia|>Pagar</)
+  // F1E adds a server-gated provider CTA; F1D still has no legacy money-reporting actions.
+  assert.doesNotMatch(content, />\{row\.(?:id|obligation_id|debtor_type|status|financial_status)\}|journals|postings|allocation|UUID|source_type|50\/50|Subir comprobante|Informar transferencia|>Pagar</)
   assert.match(page, /result\?\.userId === userId/)
   assert.match(page, /controller\.signal\.aborted/)
 })

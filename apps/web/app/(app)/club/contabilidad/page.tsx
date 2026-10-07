@@ -5,8 +5,9 @@ import { ArrowRight, RotateCcw, X } from 'lucide-react'
 import ClubBackLink from '@/components/club/ClubBackLink'
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
+import PaymentProviderPanel from '@/features/finance/PaymentProviderPanel'
 import {
-  financeMethodLabels, financeStatusLabels, formatFinanceMoney, normalizeFinanceOverview, validFinanceAmount,
+  financeMethodLabels, financeMovementMethod, financeStatusLabels, formatFinanceMoney, normalizeFinanceOverview, validFinanceAmount,
   type FinanceCursor, type FinanceFilter, type FinanceMethod,
   type FinanceMovement, type FinanceObligation, type FinanceOverview, type FinancePage,
 } from '@/lib/clubFinanceF1C'
@@ -240,7 +241,7 @@ export default function ClubFinancePage() {
         <span className={styles.date}>{movementDate(row.paid_at)}</span>
         <strong>{row.debtor_name}</strong>
         <span>{row.concept}</span>
-        <span className={styles.rowMeta}>{financeMethodLabels[row.method]} · {row.status === 'REVERSED' ? 'Revertido' : 'Cobrado'}</span>
+        <span className={styles.rowMeta}>{financeMovementMethod(row)} · {row.status === 'REVERSED' ? 'Revertido' : 'Cobrado'}</span>
       </div>
       <div className={styles.rowSide}>
         <b className={row.status === 'REVERSED' ? styles.reversed : ''}>+ {formatFinanceMoney(row.amount)}</b>
@@ -269,6 +270,7 @@ export default function ClubFinancePage() {
         <button key={value} type="button" aria-current={tab === value ? 'page' : undefined}
           className={tab === value ? styles.tabActive : ''} onClick={() => setTab(value)}>{label}</button>)}
     </nav>
+    {clubId && currentData ? <PaymentProviderPanel key={clubId} clubId={clubId} canManage={canManage} request={request} /> : null}
 
     {loading ? <div className={styles.loading} aria-label="Cargando finanzas"><span /><span /><span /></div> : null}
     {!loading && currentData && tab === 'summary' ? <div className={styles.sections}>
@@ -308,6 +310,7 @@ export default function ClubFinancePage() {
         <p className={styles.sheetContext}>{sheet.kind === 'payment' ? sheet.obligation.debtor_name : sheet.movement.debtor_name}</p>
         {sheet.kind === 'payment' ? <p className={styles.sheetBalance}>Saldo pendiente <strong>{formatFinanceMoney(sheet.obligation.balance)}</strong></p>
           : <p className={styles.sheetWarning}>El movimiento permanecerá visible como «Revertido» y el saldo volverá a estar pendiente. Esta acción requiere un motivo.</p>}
+        {sheet.kind === 'reverse' && sheet.movement.provider === 'MERCADO_PAGO' ? <p className={styles.sheetWarning}>Revertir este cobro corrige el registro en SELPA. No devuelve dinero en Mercado Pago; el pago requerirá revisión.</p> : null}
         <form onSubmit={(event) => void submit(event)} className={styles.form}>
           {sheet.kind === 'payment' ? <>
             <label>Importe<input required inputMode="decimal" type="number" min="0.01" step="0.01" max={sheet.obligation.balance} value={amount} onChange={(event) => { setAmount(event.target.value); reviseAttempt() }} /></label>

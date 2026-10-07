@@ -59,6 +59,12 @@
 .more, .empty button { background: #fff; border: 1px solid #b2d6e0; border-radius: 10px; color: #006b83; font-size: 13px; font-weight: 650; min-height: 44px; padding: 0 18px; }
 .more { justify-self: center; }
 .feedback { color: #61748b; font-size: 12px; margin: 0; text-align: center; }
+.payAction { background: #061b3a; border: 1px solid #061b3a; border-radius: 9px; color: #fff !important; font-size: 13px; font-weight: 650; margin-top: 10px; min-height: 44px; padding: 8px 12px; width: 100%; }
+.paymentNote { color: #526780; font-size: 12px; line-height: 1.4; margin: 8px 0 0; }
+.returnNotice { background: #edfaff; border: 1px solid #b2e3ee; border-radius: 12px; padding: 12px; }
+.returnNotice strong { font-size: 14px; }
+.returnNotice p { color: #526780; font-size: 12px; margin: 5px 0; }
+.returnNotice button { background: #fff; border: 1px solid #b2d6e0; border-radius: 9px; color: #061b3a !important; font-size: 13px; min-height: 44px; padding: 8px 12px; }
 @media (max-width: 360px) {
   .summary > div { padding: 0 12px; }
   .obligation, .movement { padding: 10px; }

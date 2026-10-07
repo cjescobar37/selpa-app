@@ -1,0 +1,20 @@
+.panel { color: #061b3a; min-width: 0; margin: 10px 0; }
+.panel details { background: #fff; border: 1px solid #d5e0e8; border-radius: 11px; }
+.panel summary { align-items: center; cursor: pointer; display: flex; flex-wrap: wrap; font-size: 12px; gap: 6px 12px; justify-content: space-between; min-height: 44px; padding: 10px 12px; }
+.panel summary b { background: #edf5f7; border-radius: 6px; color: #526780; font-size: 11px; font-weight: 600; padding: 4px 7px; }
+.panel summary::after { content: '+'; color: #526780; }
+.panel details[open] summary::after { content: '−'; }
+.content { border-top: 1px solid #e6edf2; padding: 0 12px 12px; }
+.content p { font-size: 13px; line-height: 1.45; margin: 10px 0; overflow-wrap: anywhere; }
+.muted { color: #61748b; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions button { background: #061b3a; border: 1px solid #061b3a; border-radius: 9px; color: #fff !important; cursor: pointer; font-size: 13px; min-height: 44px; padding: 8px 12px; }
+.actions button.secondary, .refresh { background: #fff; border: 1px solid #b2d6e0; border-radius: 9px; color: #061b3a !important; min-height: 44px; padding: 8px 12px; }
+.actions button:disabled { cursor: default; opacity: .65; }
+.panel button:focus-visible, .panel summary:focus-visible { outline: 2px solid #007e94; outline-offset: 3px; }
+.warning { background: #fff8e7; border: 1px solid #eed399; border-radius: 11px; color: #735410; display: grid; font-size: 12px; gap: 5px; line-height: 1.4; margin: 0 0 9px; padding: 10px 12px; }
+.warning strong { font-size: 13px; font-weight: 650; }
+.issues { margin-bottom: 9px; }
+.issues ul { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0 12px 12px; }
+.issues li { display: flex; flex-wrap: wrap; font-size: 12px; gap: 5px 12px; justify-content: space-between; }
+.issues li span { min-width: 0; overflow-wrap: anywhere; }

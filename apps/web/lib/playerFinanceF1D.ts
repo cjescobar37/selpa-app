@@ -22,6 +22,8 @@ export type PlayerFinanceObligation = {
   balance: number
   currency_code: 'ARS'
   financial_status: FinanceStatus
+  online_payable?: boolean
+  payment_status?: string | null
 }
 export type PlayerFinanceMovement = {
   id: string
@@ -35,6 +37,7 @@ export type PlayerFinanceMovement = {
   amount: number
   currency_code: 'ARS'
   method: FinanceMethod
+  provider?: 'MERCADO_PAGO'
   status: 'POSTED' | 'REVERSED'
 }
 export type PlayerFinanceData = {

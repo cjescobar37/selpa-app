@@ -38,6 +38,7 @@ export type FinanceMovement = {
   amount: number
   currency_code: 'ARS'
   method: FinanceMethod
+  provider?: 'MERCADO_PAGO'
   status: 'POSTED' | 'REVERSED'
   reference: string | null
   concept: string
@@ -59,6 +60,11 @@ export const financeStatusLabels: Record<FinanceStatus, string> = {
   PARTIAL: 'Parcial',
   PAID: 'Pagado',
   CANCELLED: 'Cancelado',
+}
+
+// Provider-linked F1A payments retain method OTHER internally; manual methods are unchanged.
+export function financeMovementMethod(row: { method: FinanceMethod; provider?: 'MERCADO_PAGO' }) {
+  return row.provider === 'MERCADO_PAGO' ? 'Mercado Pago' : financeMethodLabels[row.method]
 }
 
 export function formatFinanceMoney(value: number | string) {

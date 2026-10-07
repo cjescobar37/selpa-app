@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { financePage } from '@/lib/clubFinanceF1C'
 import { parsePlayerFinanceQuery, type PlayerFinanceObligation, type PlayerFinanceMovement } from '@/lib/playerFinanceF1D'
+import { paymentMovementLabels, playerPaymentOptions } from '@/lib/paymentProviderReadsF1E'
 
 export const dynamic = 'force-dynamic'
 const pageSize = 20
@@ -45,13 +46,13 @@ export async function GET(req: NextRequest) {
       const result = await client.rpc('list_player_finance_obligations_f1d', obligationParams)
       if (result.error) return failure(result.error)
       const rows = ((result.data ?? []) as Array<{ item: PlayerFinanceObligation }>).map(row => row.item)
-      return NextResponse.json({ obligations: financePage(rows, pageSize, 'created_at') }, { headers })
+      return NextResponse.json({ obligations: financePage(await playerPaymentOptions(client, rows), pageSize, 'created_at') }, { headers })
     }
     if (query.view === 'movements') {
       const result = await client.rpc('list_player_finance_movements_f1d', movementParams)
       if (result.error) return failure(result.error)
       const rows = ((result.data ?? []) as Array<{ item: PlayerFinanceMovement }>).map(row => row.item)
-      return NextResponse.json({ movements: financePage(rows, pageSize, 'paid_at') }, { headers })
+      return NextResponse.json({ movements: financePage(await paymentMovementLabels(client, null, rows), pageSize, 'paid_at') }, { headers })
     }
     const [overview, obligations, movements] = await Promise.all([
       client.rpc('get_player_finance_overview_f1d', { p_club_id: query.clubId }),
@@ -62,8 +63,8 @@ export async function GET(req: NextRequest) {
     if (error) return failure(error)
     return NextResponse.json({
       overview: overview.data,
-      obligations: financePage(((obligations.data ?? []) as Array<{ item: PlayerFinanceObligation }>).map(row => row.item), pageSize, 'created_at'),
-      movements: financePage(((movements.data ?? []) as Array<{ item: PlayerFinanceMovement }>).map(row => row.item), pageSize, 'paid_at'),
+      obligations: financePage(await playerPaymentOptions(client, ((obligations.data ?? []) as Array<{ item: PlayerFinanceObligation }>).map(row => row.item)), pageSize, 'created_at'),
+      movements: financePage(await paymentMovementLabels(client, null, ((movements.data ?? []) as Array<{ item: PlayerFinanceMovement }>).map(row => row.item)), pageSize, 'paid_at'),
     }, { headers })
   } catch {
     return NextResponse.json({ error: 'No pudimos cargar tus pagos. Probá nuevamente.' }, { status: 503, headers })

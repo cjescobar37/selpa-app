@@ -1,4 +1,4 @@
-# Club Finance F1A–F1D
+# Club Finance F1A–F1E
 
 Club Finance registra dinero cuyo acreedor es el club. SELPA Billing (club → SELPA),
 pagos administrativos de inscripción y puntos de Competition son dominios distintos.
@@ -108,9 +108,130 @@ de dos sesiones están en `supabase/qa/20261001153611_club_finance_core_*`.
   Movimientos usan el ID de allocation como cursor y sólo muestran el importe
   aplicado a la obligación visible, sin revelar otras partes del pago.
 - Legacy queda excluido: ningún `tournament_payments` histórico entra en el
-  resumen o se convierte en dinero F1A. No hay backfill. Mercado Pago todavía no
-  está conectado; no hay checkout, comprobantes, solicitudes de pago ni refunds.
+  resumen o se convierte en dinero F1A. No hay backfill. F1D sólo lee; el checkout
+  opcional posterior pertenece a F1E. No hay comprobantes legacy ni refunds.
 - Migration: `20261006165334_20261006152334_player_finance_f1d_read_model.sql`. QA reversible:
   `supabase/qa/20261006152334_player_finance_f1d_read_model_validation.sql`.
   Las funciones y cuatro índices de lookup son aditivos; no cambian lifecycles
   ni las migrations aplicadas de F1A/F1B/F1C.
+
+## F1E · Mercado Pago foundation (desactivado)
+
+Migration local: `20261007004843_20261006170250_club_payment_provider_f1e_foundation.sql`.
+QA reversible y carreras: `supabase/qa/20261006170250_club_payment_provider_f1e_*`.
+No aplicada desde este bloque. El dump/resumen histórico no incluye F1A–F1E;
+los contratos se basan en las migrations aplicadas de cada bloque.
+
+- Marketplace Argentina / Split 1:1, Checkout Pro con token del vendedor obtenido
+  vía OAuth. REST oficial centralizado en `MercadoPagoProvider`, sin SDK nuevo.
+  `marketplace_fee` existe en el intent y adapter; la creación v1 fija 0 en DB.
+  No hay comisión comercial configurada ni selector de moneda: sólo ARS.
+- Cuentas por conexión histórica, intents separados de pagos F1A, inbox immutable
+  y resultados append-only. No se copian secretos a `public`; sólo referencias.
+  Todos los raw tables tienen RLS y cero grants Data API. RPCs de usuario derivan
+  `auth.uid()`; OAuth requiere `finance:manage`. Consume/callback/checkout worker
+  y reconciliación son service-only, con comprobaciones dentro de DB.
+- OAuth: state aleatorio de 256 bits, binding de navegador en cookie HttpOnly,
+  Secure, SameSite=Lax, hashes en DB, expiración 10 min y consumo único. PKCE S256;
+  verifier temporal vive en Vault. Callback revalida la capability del
+  actor original y jamás entrega tokens al navegador.
+- **Secret store: Supabase Vault.** La migration existente exige Vault instalado;
+  no crea otra migration ni usa pgsodium/cifrado propio. Account guarda sólo
+  `access_token_secret_id`, `refresh_token_secret_id` UUID y `token_expires_at`;
+  state guarda `pkce_verifier_secret_id`, hash/binding/actor/expiración. Los valores
+  se crean con `vault.create_secret`, se rotan con `vault.update_secret` y el runtime
+  los lee exclusivamente mediante helpers SECURITY DEFINER con search_path fijo,
+  EXECUTE service-only. Se protege Vault frente a PUBLIC/anon/authenticated.
+  `service_role` es el backend completamente confiable, server-only, y conserva
+  privilegios Vault administrados por Supabase. La migration no intenta revocarlos
+  ni alterar grantor/roles/ownership del extension. Código normal de SELPA usa sólo
+  VaultProviderSecretStore + RPCs acotadas, nunca consultas Vault directas; ni tokens
+  ni service_role llegan al browser.
+- `VaultProviderSecretStore` es la única frontera de secretos: OAuth por state
+  válido, credentials por account + purpose CHECKOUT/WEBHOOK, nunca un RPC genérico
+  por UUID de secret. El actor de inicio se obtiene del JWT en backend y DB vuelve
+  a validar finance:manage; authenticated no puede invocar esa escritura Vault.
+  Callback consume/elimina PKCE en una transacción; luego crea ambos secrets y
+  CONNECTED juntos en otra. Error Vault revierte ambos y no conecta ni deja huérfanos.
+- Refresh: claim persistente bajo row lock corto, sin red dentro de la transacción.
+  Un segundo worker recibe BUSY; después lee el mismo access actualizado. Respuesta
+  completa debe conservar vendedor/modo. Ambos secrets + expires_at se actualizan
+  atómicamente con CAS del claim. Sólo revocación/401/403/invalid_grant exige reconexión;
+  429 permite retry con credenciales intactas. Timeout/5xx/respuesta incompleta/crash
+  o fallo DB tras respuesta pueden haber rotado remotamente: conservan secrets y
+  claim, señalan REFRESH_UNCERTAIN y bloquean una rotación ciega. Claim abandonado
+  se detecta a los 30 segundos. Resolver mediante nueva autorización, no sobrescribir
+  tokens a mano; no confundir rechazo temporal con revocación.
+- Cleanup acotado (100 filas, SKIP LOCKED) en start/consume/completion/disconnect y
+  RPC service-only `cleanup_payment_provider_secrets_f1e` para mantenimiento. Un
+  verifier vencido nunca se puede consumir; se elimina en el próximo cleanup aunque
+  no haya callback. No se configura cron en este bloque: antes de activar, definir
+  la ejecución periódica de esa RPC para una eliminación puntual de expirados.
+  Desconectar bloquea nuevos checkouts sin borrar intents/eventos/F1A. Sin actividad
+  pendiente borra tokens y refs en la misma transacción; para evidencia/pagos en
+  tránsito conserva refs server-only, accesibles sólo por WEBHOOK, y una ventana
+  de 30 días para notificaciones tardías. Cleanup purga al resolverse/expirar la
+  retención; evidencia sin resolver prolonga retención intencionalmente.
+- El monto sale de la proyección F1A bajo lock de obligación: saldo completo neto
+  POSTED. USER sólo debtor; TEAM ambos integrantes, una sola obligación compartida.
+  `payer_user_id` conserva al iniciador SELPA, no acredita identidad del pagador
+  de Mercado Pago ni divide el saldo. El cuerpo del checkout no admite monto/moneda.
+- Índice parcial garantiza un intent activo por obligation/provider; el claim
+  transaccional permite un solo POST externo. Un retry listo reutiliza URL.
+  Saldo cambiado expira el anterior; antes del nuevo POST se invalida la preferencia
+  antigua. Timeout/crash ambiguo o pago en proceso bloquea otra preferencia y exige
+  conciliación. Claims abandonados se detectan después de dos minutos al reintentar.
+- Webhook valida HMAC oficial (`data.id`, x-request-id, ts), persiste inbox mínimo,
+  obtiene el pago por REST con token del vendedor, y comprueba en DB ID, collector,
+  referencia opaca UUID, importe, ARS, modo y captura. No conserva body completo,
+  emails/tarjetas ni registra tokens en logs. Respondemos 2xx sólo tras procesamiento
+  durable; API/DB temporal falla con 503 para reintentos MP y resultado RETRY.
+- APPROVED llama exclusivamente `register_club_finance_payment`, con key por
+  provider payment. Command → obligation → intent respeta el orden F1A. La llamada
+  y enlace del intent son atómicos; un fallo revierte payment/allocation/journal.
+  El bridge atribuye el journal al admin que autorizó la conexión OAuth, revalida
+  `finance:manage` y restaura claims al salir. Es una delegación automática
+  documentada, no suplantación del jugador. Revocada la capability, exige revisión.
+  F1A conserva exactamente sus métodos/grants; OTHER se presenta como Mercado Pago
+  sólo cuando hay un intent canónico vinculado al payment (nunca por texto libre).
+- Cobro manual concurrente, diferencia de importe/moneda, seller inválido,
+  intento vencido, refund/chargeback o segundo cobro externo conserva evidencia y
+  entra en RECONCILIATION_REQUIRED. No se sobreasigna, no se borra historial y no
+  hay refund/reversal automático. SQLSTATE 40001/40P01 aborta para retry completo.
+- Finanzas → Configuración muestra conexión y alerta de revisión. Desconectar
+  impide nuevos checkouts. La limpieza sigue la política Vault anterior; no implica
+  revocar autorización en MP ni borrar historia contable.
+- Mis pagos muestra CTA sólo con eligibility server-side y flag listo. El retorno
+  consulta estado autorizado; no acepta amount/status del navegador ni crea dinero.
+  Hace cuatro lecturas acotadas y ofrece Actualizar estado. Las consultas F1C/F1D
+  permanecen iguales con F1E desactivado; la metadata adicional usa RPCs batch.
+
+Variables server-side necesarias (sin valores reales):
+
+```dotenv
+PAYMENTS_MERCADO_PAGO_ENABLED=false
+PAYMENTS_MERCADO_PAGO_LIVE_MODE=false
+PAYMENTS_PUBLIC_ORIGIN=https://your-sandbox-host.example
+MERCADO_PAGO_CLIENT_ID=
+MERCADO_PAGO_CLIENT_SECRET=
+MERCADO_PAGO_WEBHOOK_SECRET=
+MERCADO_PAGO_REDIRECT_URI=https://your-sandbox-host.example/api/payments/mercado-pago/oauth/callback
+```
+
+La flag exige `true`, todas las env y HTTPS/origin fijo; SQL falla cerrado si Vault
+o credenciales no están disponibles. Ni instalar la migration ni Vault habilita pagos.
+No editar `.env.local` desde este bloque.
+Antes de dinero real: QA PostgreSQL reversible + carreras + grants Vault,
+OAuth/refresh/webhooks/Checkout Pro con cuentas sandbox, revisión de autorización
+marketplace, mantenimiento cleanup, observabilidad/replay del inbox y procedimiento
+humano de conciliación. RPCs secretos transmiten valores sólo backend→DB por TLS;
+sus respuestas nunca se reutilizan como JSON de API cliente. No loggear request bodies
+ni argumentos RPC; verificar redacción/log_parameter_max_length(_on_error), pgaudit
+y APM en QA antes de credenciales reales. No hay errores con valores de tokens.
+No se configura cron ni se crea movimiento económico durante tests locales.
+
+Vault: [documentación oficial](https://supabase.com/docs/guides/database/vault).
+
+Referencias oficiales revisadas: [Split 1:1](https://www.mercadopago.com.ar/developers/es/docs/split-payments/split-1-1/integration-configuration/integrate-marketplace),
+[OAuth/PKCE](https://www.mercadopago.com.ar/developers/es/docs/security/oauth/creation),
+[webhooks](https://www.mercadopago.com.ar/developers/es/docs/checkout-pro-preferences/additional-content/notifications/webhooks).
