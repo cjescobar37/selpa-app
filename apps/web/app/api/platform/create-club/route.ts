@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { withNotificationScope } from '@/lib/notificationScope'
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
-import { ensureClubPlayerForMembership, setActiveClubIfApproved } from '@/lib/clubMembershipServer'
+import { setActiveClubIfApproved } from '@/lib/clubMembershipServer'
+import { roleAssignmentDenial } from '@/lib/accountRoleServer'
 import { CLUB_THEMES } from '@/lib/clubThemes'
 
 type Body = {
@@ -124,6 +125,10 @@ export async function POST(req: Request) {
     const password = (body.owner?.password ?? '').trim()
     const requesterEmail = (u.user.email ?? '').trim().toLowerCase()
     const shouldCreateOwnerUser = isPlatformAdmin && Boolean(requestedOwnerEmail && password)
+    if (!shouldCreateOwnerUser) {
+      const denial = await roleAssignmentDenial(requesterId, 'OWNER')
+      if (denial) return denial
+    }
     const email = shouldCreateOwnerUser ? requestedOwnerEmail : requesterEmail
     const fullName =
       (body.owner?.fullName ?? '').trim() ||
@@ -208,12 +213,6 @@ export async function POST(req: Request) {
     }
 
     try {
-      await ensureClubPlayerForMembership({
-        clubId: clubRow.id,
-        userId: ownerId,
-        approvedBy: requesterId,
-        approvedAt,
-      })
       await setActiveClubIfApproved(ownerId, clubRow.id)
     } catch (consistencyError: unknown) {
       if (createdOwnerUser) await supabaseAdmin.auth.admin.deleteUser(ownerId)

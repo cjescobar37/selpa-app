@@ -3,6 +3,7 @@ import { authorizeCompetitionSeries } from '@/features/competition/series/compet
 import { seriesErrorResponse } from '@/features/competition/series/competition-series.http'
 import { projectCircuitPointHistory, type CircuitAward, type CircuitMovement, type CircuitRankingEntry } from '@/features/competition/series/competition-series.point-history'
 import { isUuid } from '@/features/competition/series/competition-series.validation'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 
 type Context = { params: Promise<{ clubId: string; seriesId: string }> }
 type RankingRow = CircuitRankingEntry & {
@@ -52,6 +53,9 @@ export async function GET(request: NextRequest, context: Context) {
       (mode === 'pairs' ? candidate.pair_key === pairKey : candidate.club_player_id === playerId))
     if (!row) return NextResponse.json({ error: 'Posición inexistente en este circuito.' }, { status: 404 })
     const playerIds = mode === 'pairs' ? [row.player1_user_id!, row.player2_user_id!] : [row.player_id!]
+    if ((await nonPlayerAccountIds(playerIds)).size) {
+      return NextResponse.json({ error: 'Perfil deportivo no disponible para esta cuenta.' }, { status: 404 })
+    }
     const entry: CircuitRankingEntry = {
       position: Number(row.ranking_position), points: Number(row.points),
       events_played: Number(row.events_played), titles: Number(row.titles), rule_snapshot: row.rule_snapshot,

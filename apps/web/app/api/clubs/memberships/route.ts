@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { roleAssignmentDenial } from '@/lib/accountRoleServer'
 import {
   ensureValidActiveClubForUser,
   userHasClubCapability,
@@ -157,6 +158,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, status: 'REJECTED' })
     }
 
+    const denial = await roleAssignmentDenial(membership.user_id, membership.role)
+    if (denial) return denial
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     if (!url || !anonKey) return NextResponse.json({ error: 'Configuración de Supabase incompleta.' }, { status: 500 })

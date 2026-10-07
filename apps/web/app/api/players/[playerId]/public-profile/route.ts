@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { playerAccountDenial } from '@/lib/accountRoleServer'
 import { getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
 import { readCompetitionPlayerStandings } from '@/features/competition/ranking/competition-ranking.repository'
 
@@ -48,6 +49,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ playerI
   if (playerError) return NextResponse.json({ error: playerError.message }, { status: 500 })
   if (!playerData) return NextResponse.json({ error: 'Jugador no encontrado.' }, { status: 404 })
   const player = playerData as ClubPlayer & { created_at: string }
+  const denial = await playerAccountDenial(player.user_id)
+  if (denial) return denial.status === 403
+    ? NextResponse.json({ error: 'Jugador no encontrado.' }, { status: 404 }) : denial
 
   const [{ data: profile }, { data: club }] = await Promise.all([
     supabaseAdmin

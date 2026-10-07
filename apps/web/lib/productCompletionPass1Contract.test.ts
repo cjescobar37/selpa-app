@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { humanizeUiError, publicRankingGender, clubRequestRequiredLabels } from './productPresentation'
+import * as accountRolePolicy from './accountRolePolicy'
 
 const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
 
@@ -84,6 +85,7 @@ function api(path: string, result: (table: string) => Query, adminAllowed = true
     if (name.endsWith('supabaseAdmin')) return { supabaseAdmin: client }
     if (name.endsWith('platformApiAuth')) return { assertPlatformAdmin: async () => ({ error: adminAllowed ? null : Response.json({ error: 'No autorizado.' }, { status: 403 }) }) }
     if (name.endsWith('tournamentDisplayStatus')) return { getTournamentDisplayStatus: () => ({ label: 'En juego' }) }
+    if (name.endsWith('accountRoleServer')) return { nonPlayerAccountIds: async () => new Set() }
     throw new Error(name)
   } })
   return { get: () => exports.GET!({ headers: new Headers({ authorization: 'Bearer fixture' }), nextUrl: new URL('https://test.invalid?q=Cristal&context=club') }), calls }
@@ -177,6 +179,7 @@ for (const pathname of ['/platform','/platform/clubs','/platform/usuarios','/pla
       if (name.endsWith('SessionProvider')) return { useSession: () => session }
       if (name.endsWith('globalProfile')) return { isGlobalProfileComplete: () => true }
       if (name.endsWith('clubPermissions')) return { hasAnyClubPermission: () => false }
+      if (name.endsWith('accountRolePolicy')) return accountRolePolicy
       return {}
     } })
     assert.notEqual(exports.default!({ children: 'protected' }).props.children, 'protected')

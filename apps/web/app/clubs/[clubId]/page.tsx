@@ -6,6 +6,7 @@ import PublicClubHomeExperience, {
   type PublicClubTournament,
 } from '@/components/public/PublicClubHomeExperience'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { TOURNAMENT_SELECT, toTournamentView, type TournamentView } from '@/lib/tournamentHelpers'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
@@ -159,7 +160,7 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
   const [{ data: playerRows }, { data: tournamentRows }] = await Promise.all([
     supabaseAdmin
       .from('club_players')
-      .select('id,display_name,category,gender,ranking_points,approved_at')
+      .select('id,user_id,display_name,category,gender,ranking_points,approved_at')
       .eq('club_id', clubId)
       .not('approved_at', 'is', null)
       .order('ranking_points', { ascending: false, nullsFirst: false }),
@@ -173,7 +174,8 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
       .limit(96),
   ])
 
-  const players = ((playerRows ?? []) as ClubPlayerRow[])
+  const blocked = await nonPlayerAccountIds((playerRows ?? []).map(row => row.user_id))
+  const players = ((playerRows ?? []).filter(row => !blocked.has(row.user_id)) as ClubPlayerRow[])
   const tournamentViews = (tournamentRows ?? [])
     .map((row) => toTournamentView(row))
     .filter((item): item is TournamentView => Boolean(item))

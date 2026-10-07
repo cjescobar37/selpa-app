@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { playerAccountDenial } from '@/lib/accountRoleServer'
 import { ensureValidActiveClubForUser } from '@/lib/clubMembershipServer'
 import { isApprovedMembership } from '@/lib/clubMembershipRules'
 import { withNotificationScope } from '@/lib/notificationScope'
@@ -22,6 +23,8 @@ export async function POST(req: Request) {
     }
 
     const userId = authData.user.id
+    const denial = await playerAccountDenial(userId)
+    if (denial) return denial
 
     const { data: club, error: clubError } = await supabaseAdmin
       .from('clubs')

@@ -4,6 +4,12 @@ import { seriesErrorResponse } from '@/features/competition/series/competition-s
 import { isUuid } from '@/features/competition/series/competition-series.validation'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { enrichCompetitionRankingAvatars } from '@/features/competition/ranking/competition-ranking.avatars'
+import { playerRankingPresentation } from '@/lib/accountRoleServer'
+
+async function visibleRanking(...args: Parameters<typeof enrichCompetitionRankingAvatars>) {
+  const enriched = await enrichCompetitionRankingAvatars(...args)
+  return playerRankingPresentation(enriched.individual, enriched.pairs)
+}
 
 type Context = { params: Promise<{ clubId: string; seriesId: string }> }
 type CompetitionSeriesRankingRow = {
@@ -41,7 +47,7 @@ export async function GET(request: NextRequest, context: Context) {
       if (finalResult.error) throw Object.assign(new Error(finalResult.error.message), { code: finalResult.error.code })
       const ranking = (finalResult.data ?? []).map(({ ranking_position, ...row }) => ({ ...row, position: Number(ranking_position) }))
       if (!includePairs) {
-        const enriched = await enrichCompetitionRankingAvatars(supabaseAdmin, ranking, [])
+        const enriched = await visibleRanking(supabaseAdmin, ranking, [])
         return NextResponse.json({ ranking: enriched.individual, finalized: true })
       }
       const pairResult = await auth.client.from('competition_series_final_pair_rankings')
@@ -51,14 +57,14 @@ export async function GET(request: NextRequest, context: Context) {
         throw Object.assign(new Error(pairResult.error.message), { code: pairResult.error.code })
       }
       const pairs = (pairResult.data ?? []).map(({ ranking_position, ...row }) => ({ ...row, position: Number(ranking_position) }))
-      const enriched = await enrichCompetitionRankingAvatars(supabaseAdmin, ranking, pairs)
+      const enriched = await visibleRanking(supabaseAdmin, ranking, pairs)
       return NextResponse.json({ ranking: enriched.individual, individual: enriched.individual, pairs: enriched.pairs, pairsUnavailable: Boolean(pairResult.error), finalized: true })
     }
     const { data, error } = await auth.client.rpc(byDivision ? 'get_competition_series_ranking_by_division' : 'get_competition_series_ranking', { p_club_id: clubId, p_series_id: seriesId })
     if (error) throw Object.assign(new Error(error.message), { code: error.code })
     const ranking = ((data ?? []) as Array<CompetitionSeriesRankingRow & { ranking_position?: number }>).map(({ ranking_position, ...row }) => ({ ...row, position: Number(ranking_position) }))
     if (!includePairs) {
-      const enriched = await enrichCompetitionRankingAvatars(supabaseAdmin, ranking, [])
+      const enriched = await visibleRanking(supabaseAdmin, ranking, [])
       return NextResponse.json({ ranking: enriched.individual, finalized: false })
     }
     const pairResult = await auth.client.rpc('get_competition_series_pair_ranking', { p_club_id: clubId, p_series_id: seriesId })
@@ -67,7 +73,7 @@ export async function GET(request: NextRequest, context: Context) {
     }
     const pairs = ((pairResult.data ?? []) as Array<{ ranking_position: number; player1_user_id?: string; player2_user_id?: string } & Record<string, unknown>>)
       .map(({ ranking_position, ...row }) => ({ ...row, position: Number(ranking_position) }))
-    const enriched = await enrichCompetitionRankingAvatars(supabaseAdmin, ranking, pairs)
+    const enriched = await visibleRanking(supabaseAdmin, ranking, pairs)
     return NextResponse.json({ ranking: enriched.individual, individual: enriched.individual, pairs: enriched.pairs, pairsUnavailable: Boolean(pairResult.error), finalized: false })
   } catch (error) {
     return seriesErrorResponse(error)

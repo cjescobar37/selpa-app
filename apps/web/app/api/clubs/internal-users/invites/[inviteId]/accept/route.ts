@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { roleAssignmentDenial } from '@/lib/accountRoleServer'
 import { clubInviteErrorResponse } from '@/lib/clubTeamInviteErrors'
 
 async function getTokenUser(req: NextRequest) {
@@ -19,6 +20,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ invite
   }
 
   const { inviteId } = await context.params
+  const invite = await supabaseAdmin.from('club_user_invites').select('role').eq('id', inviteId).maybeSingle()
+  if (invite.error) return NextResponse.json({ error: 'No pudimos verificar la invitación.' }, { status: 503 })
+  if (!invite.data) return NextResponse.json({ error: 'Invitación no encontrada.' }, { status: 404 })
+  const denial = await roleAssignmentDenial(user.id, invite.data.role)
+  if (denial) return denial
   const { data, error } = await supabaseAdmin.rpc('accept_club_team_invite_atomic', {
     p_invite_id: inviteId,
     p_user_id: user.id,

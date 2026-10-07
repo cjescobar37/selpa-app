@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { PLAYER_STAFF_MESSAGE, STAFF_PLAYER_MESSAGE } from './accountRolePolicy'
 
 export const CLUB_INVITE_ERROR_CODES = [
   'unauthorized',
@@ -56,6 +57,8 @@ export function getClubInviteErrorCode(error: unknown): ClubInviteErrorCode | nu
 }
 
 export function clubInviteErrorResponse(error: unknown) {
+  const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error)
+  if ([PLAYER_STAFF_MESSAGE, STAFF_PLAYER_MESSAGE].includes(message)) return NextResponse.json({ error: message }, { status: 403 })
   const code = getClubInviteErrorCode(error)
   if (!code) {
     return NextResponse.json(

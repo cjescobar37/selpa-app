@@ -3,6 +3,7 @@ import { mapTournamentError } from '@/lib/tournamentErrors'
 import { NextRequest, NextResponse } from 'next/server'
 import { notifyClubAdmins } from '@/lib/operationalNotifications'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { playerAccountDenial } from '@/lib/accountRoleServer'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
 import { getTournamentRegistrationIneligibility } from '@/lib/tournamentRegistrationEligibility'
@@ -64,6 +65,8 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
   const token = getBearerToken(req)
   const user = await getTokenUser(req)
   if (!token || !user) return NextResponse.json({ error: 'Iniciá sesión para inscribirte.' }, { status: 401 })
+  const denial = await playerAccountDenial(user.id)
+  if (denial) return denial
 
   const body = await req.json().catch(() => ({}))
   const partnerUserId = String(body?.partnerUserId ?? '').trim()
@@ -72,6 +75,8 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
   const availabilityScore = normalizeAvailabilityScore(body?.availabilityScore ?? body?.availability_score, preferredSlots.length)
   const flexibilityLevel = String(body?.flexibilityLevel ?? body?.flexibility_level ?? preferredSlots.length).trim() || null
   if (!partnerUserId) return NextResponse.json({ error: 'Seleccioná un compañero.' }, { status: 400 })
+  const partnerDenial = await playerAccountDenial(partnerUserId)
+  if (partnerDenial) return partnerDenial
   if (partnerUserId === user.id) return NextResponse.json({ error: 'No podés inscribirte con vos mismo.' }, { status: 400 })
   if (!allowedPaymentMethods.has(paymentMethod)) {
     return NextResponse.json({ error: 'Seleccioná un método de pago.' }, { status: 400 })

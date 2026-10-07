@@ -17,6 +17,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import PlayerSectionHero from '@/components/player/PlayerSectionHero'
 import { supabase } from '@/lib/supabaseClient'
+import { administrativeHome, isPlayerSession } from '@/lib/accountRolePolicy'
 
 type HubView = 'activity' | 'preferences'
 
@@ -61,6 +62,7 @@ function registrationLabel(status: string | null) {
 
 export default function PlayerAccountHub({ view }: { view: HubView }) {
   const session = useSession()
+  const player = isPlayerSession(session)
   const [loading, setLoading] = useState(view === 'activity')
   const [error, setError] = useState('')
   const [registrations, setRegistrations] = useState<RegistrationRow[]>([])
@@ -68,7 +70,7 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
   const [notifications, setNotifications] = useState<NotificationRow[]>([])
 
   useEffect(() => {
-    if (view !== 'activity' || session.status === 'loading') return
+    if (view !== 'activity' || !player || session.status === 'loading') return
     if (!session.user?.id) {
       setLoading(false)
       return
@@ -136,7 +138,7 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
     return () => {
       alive = false
     }
-  }, [session.status, session.user?.id, view])
+  }, [session.status, session.user?.id, view, player])
 
   const confirmedRegistrations = registrations.filter((item) => String(item.status).toUpperCase() === 'CONFIRMED').length
   const unreadNotifications = notifications.filter((item) => !item.read).length
@@ -179,7 +181,7 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
   if (view === 'preferences') {
     return (
       <main className="playerAccountHub">
-        <PlayerSectionHero badge="Mi cuenta" title="Preferencias" description="Todo lo importante de tu perfil y tu experiencia de juego." icon={<ShieldCheck />} />
+        <PlayerSectionHero badge="Mi cuenta" title="Preferencias" description={player ? 'Todo lo importante de tu perfil y tu experiencia de juego.' : 'Datos de cuenta, notificaciones y seguridad.'} icon={<ShieldCheck />} />
 
         <section className="playerPreferenceIdentity">
           <span className="playerPreferenceIdentity__avatar">{session.user.avatarUrl ? <img src={session.user.avatarUrl} alt="" /> : session.user.name.slice(0, 1)}</span>
@@ -190,18 +192,18 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
           <Link href="/mis-datos">Editar</Link>
         </section>
 
-        <section className="playerPreferenceGroup" aria-label="Perfil y juego">
-          <span>Perfil y juego</span>
-          <Link href="/perfil"><CircleUserRound size={19} /><div><strong>Mi perfil</strong><small>Así te ven otros jugadores</small></div><ChevronRight size={18} /></Link>
-          <Link href="/mis-datos"><CircleUserRound size={19} /><div><strong>Mis datos</strong><small>Información personal, deportiva y seguridad</small></div><ChevronRight size={18} /></Link>
-          <Link href="/seleccionar-club"><UsersRound size={19} /><div><strong>Club activo</strong><small>{session.activeClub?.name ?? 'Elegí dónde querés jugar'}</small></div><ChevronRight size={18} /></Link>
+        <section className="playerPreferenceGroup" aria-label={player ? 'Perfil y juego' : 'Mi cuenta'}>
+          <span>{player ? 'Perfil y juego' : 'Mi cuenta'}</span>
+          {player ? <Link href="/perfil"><CircleUserRound size={19} /><div><strong>Mi perfil</strong><small>Así te ven otros jugadores</small></div><ChevronRight size={18} /></Link> : null}
+          <Link href="/mis-datos"><CircleUserRound size={19} /><div><strong>Mis datos</strong><small>{player ? 'Información personal, deportiva y seguridad' : 'Información personal y seguridad'}</small></div><ChevronRight size={18} /></Link>
+          <Link href={player ? '/seleccionar-club' : administrativeHome(session)}><UsersRound size={19} /><div><strong>{player ? 'Club activo' : session.role === 'platform' ? 'Administración de SELPA' : 'Administración del club'}</strong><small>{session.activeClub?.name ?? (player ? 'Elegí dónde querés jugar' : 'Tu espacio operativo')}</small></div><ChevronRight size={18} /></Link>
         </section>
 
         <section className="playerPreferenceGroup" aria-label="Cuenta y privacidad">
           <span>Cuenta y privacidad</span>
-          <Link href="/notificaciones"><Bell size={19} /><div><strong>Notificaciones</strong><small>Revisá novedades de tus clubes y torneos</small></div><ChevronRight size={18} /></Link>
+          <Link href="/notificaciones"><Bell size={19} /><div><strong>Notificaciones</strong><small>{player ? 'Revisá novedades de tus clubes y torneos' : 'Avisos de tu actividad administrativa'}</small></div><ChevronRight size={18} /></Link>
           <Link href="/reset-password"><LockKeyhole size={19} /><div><strong>Seguridad</strong><small>Actualizá tu contraseña</small></div><ChevronRight size={18} /></Link>
-          <div className="playerPreferenceGroup__note"><ShieldCheck size={17} /><span>Tu información de juego se comparte solo dentro de los espacios donde participás.</span></div>
+          <div className="playerPreferenceGroup__note"><ShieldCheck size={17} /><span>{player ? 'Tu información de juego se comparte solo dentro de los espacios donde participás.' : 'Esta cuenta es exclusivamente administrativa.'}</span></div>
         </section>
         <style>{`
           .playerAccountHub { color:#061b3a; display:grid; gap:14px; width:100%; }

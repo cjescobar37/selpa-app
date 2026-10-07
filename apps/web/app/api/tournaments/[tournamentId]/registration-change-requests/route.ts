@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createOperationalNotification, notifyClubAdmins } from '@/lib/operationalNotifications'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { playerAccountDenial } from '@/lib/accountRoleServer'
 
 type RegistrationChangeRequestContext = {
   params: Promise<{ tournamentId: string }>
@@ -70,6 +71,8 @@ export async function POST(req: NextRequest, context: RegistrationChangeRequestC
   const { tournamentId } = await context.params
   const user = await getTokenUser(req)
   if (!user) return NextResponse.json({ error: 'Iniciá sesión para solicitar la baja.' }, { status: 401 })
+  const denial = await playerAccountDenial(user.id)
+  if (denial) return denial
 
   const body = await req.json().catch(() => ({}))
   const type = String(body?.type ?? '').trim().toUpperCase()

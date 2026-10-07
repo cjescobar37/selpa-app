@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 
 type SearchResult = {
@@ -94,7 +95,8 @@ export async function GET(req: NextRequest) {
   if (clubPlayersByProfile.error) return NextResponse.json({ error: 'No pudimos buscar jugadores. Intentá nuevamente.' }, { status: 500 })
 
   const playerRows = [...((clubPlayersByName.data ?? []) as SearchPlayer[]), ...((clubPlayersByProfile.data ?? []) as SearchPlayer[])]
-  const uniquePlayerRows = Array.from(new Map(playerRows.map((row) => [row.id, row])).values()).slice(0, 5)
+  const blocked = await nonPlayerAccountIds(playerRows.map(row => row.user_id))
+  const uniquePlayerRows = Array.from(new Map(playerRows.filter(row => row.user_id && !blocked.has(row.user_id)).map((row) => [row.id, row])).values()).slice(0, 5)
   const playerUserIds = uniquePlayerRows.map((row) => row.user_id).filter(Boolean)
   const playerClubIds = uniquePlayerRows.map((row) => row.club_id).filter(Boolean)
 

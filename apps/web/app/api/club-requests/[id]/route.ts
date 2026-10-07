@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { roleAssignmentDenial } from '@/lib/accountRoleServer'
 import {
-  ensureClubPlayerForMembership,
   ensureValidActiveClubForUser,
 } from '@/lib/clubMembershipServer'
 
@@ -127,6 +127,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ ok: true, status: 'REJECTED' })
     }
 
+    if (requesterProfile?.user_id) {
+      const denial = await roleAssignmentDenial(requesterProfile.user_id, 'OWNER')
+      if (denial) return denial
+    }
     const existingByName = await supabaseAdmin
       .from('clubs')
       .select('id, name')
@@ -230,12 +234,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
 
       try {
-        await ensureClubPlayerForMembership({
-          clubId: clubRow.id,
-          userId: requesterProfile.user_id,
-          approvedBy: auth.user!.id,
-          approvedAt,
-        })
         await ensureValidActiveClubForUser(requesterProfile.user_id, clubRow.id)
       } catch (consistencyError: any) {
         await supabaseAdmin.from('clubs').delete().eq('id', clubRow.id)

@@ -14,10 +14,11 @@ test('OWNER y ADMIN se reconocen como administradores deportivos incompatibles',
 })
 
 test('la experiencia pública no presenta módulos de jugador al administrador organizador', () => {
-  assert.match(publicHome, /hideHero \|\| isClubAdminRole\(session\.clubRole\)/)
+  assert.match(publicHome, /hideHero \|\| session.role === 'club' \|\| session.role === 'platform'/)
   assert.match(publicDetail, /isApprovedMembership\(membership\) && isClubAdminRole\(membership\?\.role\)/)
-  assert.match(publicTournamentPage, /!detail\.viewer\.isClubAdmin \? <section id="estado-jugador"/)
-  assert.match(publicTournamentPage, /!detail\.viewer\.isClubAdmin \? <section className="tournamentPublicDetail__personalBoard"/)
+  assert.match(publicTournamentPage, /!detail\.viewer\.isClubAdmin && !detail\.viewer\.isStaffAccount \? <section id="estado-jugador"/)
+  assert.match(publicTournamentPage, /!detail\.viewer\.isClubAdmin && !detail\.viewer\.isStaffAccount \? <section className="tournamentPublicDetail__personalBoard"/)
+  assert.match(publicDetail, /nonPlayerAccountIds\(\[user.id\]\)/)
 })
 
 test('el submit bloquea al administrador organizador como titular o compañero', () => {

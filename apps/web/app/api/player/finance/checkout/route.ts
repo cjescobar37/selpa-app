@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createPaymentCheckout } from '@/lib/paymentProviderFlowF1E'
+import { playerRequestDenial } from '@/lib/accountRoleServer'
 import { authenticatedProviderClient, providerFailure, providerHeaders, providerRepository, providerRpc, providerRuntime, providerUnavailable, providerUuid } from '@/lib/paymentProviderServerF1E'
 
 export const runtime = 'nodejs'
 export async function GET(req: NextRequest) {
   if (!providerRuntime()) return providerUnavailable()
+  const roleDenied = await playerRequestDenial(req)
+  if (roleDenied) return roleDenied
   const reference = req.nextUrl.searchParams.get('reference') ?? ''
   if (!providerUuid.test(reference)) return providerFailure(400)
   const client = await authenticatedProviderClient(req)
@@ -17,6 +20,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const provider = providerRuntime()
   if (!provider) return providerUnavailable()
+  const roleDenied = await playerRequestDenial(req)
+  if (roleDenied) return roleDenied
   const client = await authenticatedProviderClient(req)
   if (!client) return providerFailure(401)
   const body = await req.json().catch(() => null)

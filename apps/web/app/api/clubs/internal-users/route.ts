@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { roleAssignmentDenial } from '@/lib/accountRoleServer'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { clubInviteErrorResponse } from '@/lib/clubTeamInviteErrors'
 import { clubTeamMemberErrorResponse } from '@/lib/clubTeamMemberErrors'
@@ -235,6 +236,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No tenés permisos para invitar usuarios internos.' }, { status: 403 })
   }
 
+  const target = await supabaseAdmin.from('profiles').select('user_id').eq('email', email).maybeSingle()
+  if (target.error) return NextResponse.json({ error: 'No pudimos verificar la cuenta a invitar.' }, { status: 503 })
+  if (target.data) {
+    const denial = await roleAssignmentDenial(target.data.user_id, role)
+    if (denial) return denial
+  }
   const { data: invite, error } = await supabaseAdmin.rpc('create_club_team_invite_atomic', {
     p_club_id: clubId,
     p_email: email,
@@ -259,6 +266,14 @@ export async function PATCH(req: NextRequest) {
   const role = String(body?.role ?? '').trim() as ClubRole
   if (!clubId || !membershipId || !isManageableInternalRole(role)) {
     return NextResponse.json({ error: 'Datos de rol inválidos.' }, { status: 400 })
+  }
+  if (!await userHasClubCapability(user.id, clubId, 'roles:manage')) return NextResponse.json({ error: 'No autorizado para cambiar roles.' }, { status: 403 })
+  const target = await supabaseAdmin.from('club_memberships').select('user_id,role').eq('id', membershipId).eq('club_id', clubId).maybeSingle()
+  if (target.error) return NextResponse.json({ error: 'No pudimos verificar la cuenta.' }, { status: 503 })
+  if (!target.data) return NextResponse.json({ error: 'Usuario interno no encontrado.' }, { status: 404 })
+  if (target.data.role !== role && (!isClubStaffRole(target.data.role) || !isClubStaffRole(role))) {
+    const denial = await roleAssignmentDenial(target.data.user_id, role)
+    if (denial) return denial
   }
   const { data: membership, error } = await supabaseAdmin.rpc('change_club_staff_role_atomic', {
     p_club_id: clubId,

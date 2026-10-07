@@ -8,6 +8,8 @@ import {
   type PartnerInviteRow,
 } from '@/lib/playerPartnerships'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
+import { STAFF_PLAYER_MESSAGE } from '@/lib/accountRolePolicy'
 
 type ClubPlayerRow = {
   id: string
@@ -51,6 +53,11 @@ async function enrichInvites(invites: PartnerInviteRow[]) {
   const clubPlayers = (clubPlayersData ?? []) as ClubPlayerRow[]
   const clubPlayersById = new Map(clubPlayers.map((player) => [player.id, player]))
   const userIds = Array.from(new Set(clubPlayers.map((player) => player.user_id)))
+  const nonPlayers = await nonPlayerAccountIds(userIds)
+  const eligible = (id: string) => {
+    const player = clubPlayersById.get(id)
+    return Boolean(player && !nonPlayers.has(player.user_id))
+  }
 
   let profilesByUserId = new Map<string, ProfileRow>()
   if (userIds.length) {
@@ -76,7 +83,7 @@ async function enrichInvites(invites: PartnerInviteRow[]) {
       : null
   }
 
-  return invites.map((invite) => ({
+  return invites.filter(invite => eligible(invite.sender_club_player_id) && eligible(invite.receiver_club_player_id)).map((invite) => ({
     ...invite,
     sender: toPlayer(invite.sender_club_player_id),
     receiver: toPlayer(invite.receiver_club_player_id),
@@ -123,6 +130,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
     const senderClubPlayerId = auth.isAdmin && requestedSenderId
       ? requestedSenderId
       : auth.currentClubPlayer?.id ?? ''
+    if (!senderClubPlayerId && !auth.currentClubPlayer) {
+      return NextResponse.json({ error: STAFF_PLAYER_MESSAGE }, { status: 403 })
+    }
     const message = typeof body?.message === 'string' && body.message.trim()
       ? body.message.trim().slice(0, 500)
       : null
@@ -166,6 +176,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ invite: data as PartnerInviteRow }, { status: 201 })
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error, 'Error creando invitación de pareja.') }, { status: 500 })
+    const message = getErrorMessage(error, 'Error creando invitación de pareja.')
+    return NextResponse.json({ error: message }, { status: message === STAFF_PLAYER_MESSAGE ? 403 : 500 })
   }
 }

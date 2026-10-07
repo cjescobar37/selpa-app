@@ -1,5 +1,6 @@
 import PublicRankingExperience, { type PublicRankingPlayer } from '@/components/public/PublicRankingExperience'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { BRAND } from '@/lib/branding'
 import { getCompetitionRanking, getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
 
@@ -58,7 +59,8 @@ export default async function RankingPublicPage({
     .order('ranking_points', { ascending: false, nullsFirst: false })
     .limit(240)
 
-  const players = (playersData ?? []) as ClubPlayerRow[]
+  const blocked = await nonPlayerAccountIds((playersData ?? []).map(row => row.user_id))
+  const players = ((playersData ?? []) as ClubPlayerRow[]).filter(row => !row.user_id || !blocked.has(row.user_id))
   const clubIds = Array.from(new Set(players.map((player) => player.club_id).filter(Boolean)))
   const userIds = Array.from(new Set(players.map((player) => player.user_id).filter(Boolean))) as string[]
 
@@ -91,8 +93,9 @@ export default async function RankingPublicPage({
     const competitionPlayers = await Promise.all(clubIds.map(async (clubId) => {
       try {
         const ranking = await getCompetitionRanking(clubId, new Map())
+        const blocked = await nonPlayerAccountIds(ranking.rows.map(row => row.userId))
         const club = clubsById.get(clubId)
-        return ranking.rows.map((player): PublicRankingPlayer => ({
+        return ranking.rows.filter(row => !blocked.has(row.userId)).map((player): PublicRankingPlayer => ({
           id: player.playerId,
           clubId,
           clubName: club?.name ?? `Club ${BRAND.name}`,

@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
+import { STAFF_PLAYER_MESSAGE } from '@/lib/accountRolePolicy'
 
 export type ClubPlayerRow = {
   id: string
@@ -62,6 +64,7 @@ export function canonicalPair(leftId: string, rightId: string) {
 }
 
 export async function getCurrentClubPlayer(userId: string, clubId: string) {
+  if ((await nonPlayerAccountIds([userId])).has(userId)) return null
   const { data, error } = await supabaseAdmin
     .from('club_players')
     .select('id,club_id,user_id,display_name,approved_at')
@@ -108,9 +111,11 @@ export async function getClubPlayersByIds(clubId: string, ids: string[]) {
 
 export async function assertClubPlayersAvailable(clubId: string, playerIds: string[]) {
   const players = await getClubPlayersByIds(clubId, playerIds)
+  const nonPlayers = await nonPlayerAccountIds([...players.values()].map(player => player.user_id))
   for (const id of playerIds) {
     const player = players.get(id)
     if (!player) throw new Error('Alguno de los jugadores no pertenece a este club.')
+    if (nonPlayers.has(player.user_id)) throw new Error(STAFF_PLAYER_MESSAGE)
     if (!player.approved_at) throw new Error('Ambos jugadores deben estar aprobados para formar pareja.')
   }
   return players

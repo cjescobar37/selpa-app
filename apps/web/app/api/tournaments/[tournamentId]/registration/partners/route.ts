@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { playerAccountDenial, nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { getTournamentRegistrationIneligibility } from '@/lib/tournamentRegistrationEligibility'
@@ -44,6 +45,8 @@ export async function GET(req: NextRequest, context: PartnerSearchContext) {
   const { tournamentId } = await context.params
   const user = await getTokenUser(req)
   if (!user) return NextResponse.json({ error: 'Iniciá sesión para buscar compañero.' }, { status: 401 })
+  const denial = await playerAccountDenial(user.id)
+  if (denial) return denial
 
   const { data: tournamentRow, error: tournamentError } = await supabaseAdmin
     .from('tournaments')
@@ -116,6 +119,7 @@ export async function GET(req: NextRequest, context: PartnerSearchContext) {
   if (playersError) return NextResponse.json({ error: playersError.message }, { status: 500 })
 
   const userIds = Array.from(new Set((players ?? []).map((player) => String(player.user_id)).filter(Boolean)))
+  const blocked = await nonPlayerAccountIds(userIds)
   const profilesResult = userIds.length
     ? await supabaseAdmin
         .from('profiles')
@@ -168,6 +172,7 @@ export async function GET(req: NextRequest, context: PartnerSearchContext) {
     : null
   const membershipsByUserId = new Map((memberships ?? []).map((membership) => [String(membership.user_id), membership]))
   const partners = (players ?? [])
+    .filter(player => !blocked.has(String(player.user_id)))
     .map((player) => {
       const profile = profilesByUserId.get(String(player.user_id))
       const name = fullName(profile, player.display_name)

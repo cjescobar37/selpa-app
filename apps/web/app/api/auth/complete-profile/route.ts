@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server'
 import { countries, findArgentinaLocation } from '@/lib/argentinaLocations'
 import { isValidBirthDate } from '@/lib/birthDate'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
+import { STAFF_PLAYER_MESSAGE } from '@/lib/accountRolePolicy'
 
 const ASSET_BUCKET = 'player-assets'
 const imageTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
-type CompletionStep = 'personal' | 'sports'
+type CompletionStep = 'personal' | 'sports' | 'account'
 
 class CompleteProfileError extends Error {
   constructor(
@@ -160,11 +162,28 @@ export async function POST(request: Request) {
   }
 
   const step = text(form.get('step')) as CompletionStep
-  if (step !== 'personal' && step !== 'sports') {
+  if (step !== 'personal' && step !== 'sports' && step !== 'account') {
     return NextResponse.json({ code: 'INVALID_STEP', message: 'El paso de onboarding no es válido.' }, { status: 400 })
   }
 
   try {
+    const nonPlayer = (await nonPlayerAccountIds([user.id])).has(user.id)
+    if (nonPlayer && step !== 'account') return NextResponse.json({ message: STAFF_PLAYER_MESSAGE }, { status: 403 })
+    if (step === 'account') {
+      const firstName = text(form.get('firstName'))
+      const lastName = text(form.get('lastName'))
+      const phone = normalizeArgentinaPhone(text(form.get('phoneAreaCode')), text(form.get('phoneNumber')))
+      if (firstName.length < 2 || lastName.length < 2 || !phone) return NextResponse.json({ message: 'Completá nombre, apellido y un teléfono válido.' }, { status: 400 })
+      const patch: Record<string, unknown> = {
+        first_name: firstName, last_name: lastName, display_name: `${firstName} ${lastName}`,
+        phone_country_code: '+54', phone_area_code: phone.areaCode, phone_number: phone.phoneNumber, phone_e164: phone.e164,
+      }
+      const avatar = form.get('avatar')
+      if (avatar instanceof File && avatar.size > 0) patch.avatar_url = await uploadImage(user.id, avatar, 'avatars', 3 * 1024 * 1024)
+      // Explicit allowlist: never copy arbitrary form fields or change sporting identity.
+      const profile = await upsertProfile(user.id, user.email, patch)
+      return NextResponse.json({ ok: true, profile })
+    }
     if (step === 'personal') {
       const birthDate = text(form.get('birthDate'))
       const gender = text(form.get('gender'))

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { playerAccountDenial } from '@/lib/accountRoleServer'
 import { getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
 import { readCompetitionPlayerStandings } from '@/features/competition/ranking/competition-ranking.repository'
 
@@ -205,6 +206,8 @@ export async function GET(
     if (!playerData) return NextResponse.json({ error: 'Jugador no encontrado.' }, { status: 404 })
 
     const player = playerData as PlayerRow
+    const denial = await playerAccountDenial(player.user_id)
+    if (denial) return denial
     const isOwnProfile = player.user_id === user.id
     if (!isOwnProfile) return NextResponse.json({ error: 'Este endpoint contiene datos privados del propietario.' }, { status: 403 })
     const { data: profileData } = await supabaseAdmin
@@ -425,6 +428,8 @@ export async function PATCH(
     if (!playerData) return NextResponse.json({ error: 'Jugador no encontrado.' }, { status: 404 })
 
     const player = playerData as PlayerRow
+    const denial = await playerAccountDenial(player.user_id)
+    if (denial) return denial
     if (player.user_id !== user.id) {
       return NextResponse.json({ error: 'Solo podés editar tu propio perfil jugador.' }, { status: 403 })
     }

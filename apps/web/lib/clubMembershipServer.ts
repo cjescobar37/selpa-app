@@ -3,6 +3,8 @@ import { isApprovedMembership, type ClubRole } from '@/lib/clubMembershipRules'
 import { getClubCapabilities, hasClubCapability, type ClubCapability } from '@/lib/clubPermissions'
 import { NextRequest, NextResponse } from 'next/server'
 import { getTokenUser } from '@/lib/platformApiAuth'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
+import { STAFF_PLAYER_MESSAGE } from '@/lib/accountRolePolicy'
 
 type MembershipRow = {
   id: string
@@ -71,6 +73,7 @@ export async function ensureClubPlayerForMembership(input: {
   approvedBy: string | null
   approvedAt?: string
 }) {
+  if ((await nonPlayerAccountIds([input.userId])).has(input.userId)) throw new Error(STAFF_PLAYER_MESSAGE)
   const approvedAt = input.approvedAt ?? new Date().toISOString()
 
   const { data: existingPlayer, error: playerCheckError } = await supabaseAdmin

@@ -318,7 +318,7 @@ export default function PublicHomeExperience({
 }) {
   const router = useRouter()
   const session = useSession()
-  const hidePlayerHero = hideHero || isClubAdminRole(session.clubRole)
+  const hidePlayerHero = hideHero || session.role === 'club' || session.role === 'platform' || isClubAdminRole(session.clubRole)
   const heroPrimaryAction = useMemo(() => {
     if (session.role === 'player') {
       return { label: 'Ir a mi espacio', href: '/player' }

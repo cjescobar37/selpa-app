@@ -12,6 +12,7 @@ import {
   type MembershipStatus,
 } from '@/lib/clubMembershipRules'
 import { resolveFastAuthorization, type FastAuthorization, type SessionMembership } from '@/lib/sessionFastAuthorization'
+import { hasStaffAccountMembership } from '@/lib/accountRolePolicy'
 
 export type AppRole = 'guest' | 'player' | 'club' | 'platform'
 export type PostLoginDestination = '/login' | '/completar-perfil' | '/seleccionar-club' | '/club' | '/player' | '/platform' | `/clubs/${string}`
@@ -139,12 +140,19 @@ async function resolveContext(onAuthorizationReady?: (context: AuthorizationRead
 
   const userId = user.id
 
-  const [{ data: profile }, { data: pa }, { data: us }, { data: memberships }] = await Promise.all([
+  const [profileResult, platformResult, settingsResult, membershipResult, accountResult] = await Promise.all([
     supabase.from('profiles').select(globalProfileFields).eq('user_id', userId).maybeSingle(),
     supabase.from('platform_admins').select('user_id').eq('user_id', userId).maybeSingle(),
     supabase.from('user_settings').select('active_club_id').eq('user_id', userId).maybeSingle(),
     supabase.from('club_memberships').select('club_id,role,status,approved_at').eq('user_id', userId),
+    fetch('/api/auth/account-role', { headers: { Authorization: `Bearer ${s.session?.access_token ?? ''}` }, cache: 'no-store' }),
   ])
+  if (membershipResult.error || platformResult.error || !accountResult.ok) throw new Error('ACCOUNT_ROLE_READ_FAILED')
+  const { data: profile } = profileResult
+  const { data: pa } = platformResult
+  const { data: us } = settingsResult
+  const { data: memberships } = membershipResult
+  const account = await accountResult.json() as { administrative: boolean }
 
   const isPlatformAdmin = !!pa?.user_id
   const configuredActiveClubId = (us?.active_club_id as string | null) ?? null
@@ -161,13 +169,15 @@ async function resolveContext(onAuthorizationReady?: (context: AuthorizationRead
     isClubStaffRole(membership.role)
   )
 
-  const approvedClubIds = approvedMemberships.map((m) => m.club_id)
+  const accountIsStaff = account.administrative || hasStaffAccountMembership(membershipRows)
+  const approvedClubIds = (accountIsStaff ? approvedAdministrativeMemberships : approvedMemberships).map((m) => m.club_id)
 
-  const fastAuthorization = resolveFastAuthorization({
+  const candidateAuthorization = resolveFastAuthorization({
     configuredActiveClubId,
     memberships: membershipRows,
     isPlatformAdmin,
   })
+  const fastAuthorization = accountIsStaff && candidateAuthorization?.role === 'player' ? null : candidateAuthorization
   const resolvedUser = {
     id: userId,
     name: getNameFromUser(user, profile as GlobalProfile | null),
@@ -242,7 +252,7 @@ async function resolveContext(onAuthorizationReady?: (context: AuthorizationRead
 
   const hasValidConfiguredClub = Boolean(
     configuredActiveClubId &&
-      approvedMemberships.some((m) => m.club_id === configuredActiveClubId)
+      approvedClubIds.includes(configuredActiveClubId)
   )
 
   const soleAdministrativeClubId =
@@ -278,7 +288,7 @@ async function resolveContext(onAuthorizationReady?: (context: AuthorizationRead
 
   let role: AppRole = 'player'
   if (isPlatformAdmin) role = 'platform'
-  else if (isClubStaffRole(clubRole)) role = 'club'
+  else if (accountIsStaff || isClubStaffRole(clubRole)) role = 'club'
   else role = 'player'
 
   const result = {
@@ -388,6 +398,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         throw new Error('No podés activar un club sin membresía aprobada.')
       }
 
+      if (role === 'club' && !isClubStaffRole(membership.role)) {
+        throw new Error('Esta cuenta sólo puede activar un contexto administrativo.')
+      }
+
       await supabase
         .from('user_settings')
         .upsert({ user_id: u.id, active_club_id: clubId }, { onConflict: 'user_id' })
@@ -400,7 +414,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setIsApprovedMember(true)
       setRole(isPlatformAdmin ? 'platform' : isClubStaffRole(membership.role as ClubRole) ? 'club' : 'player')
     },
-    [clubs, isPlatformAdmin]
+    [clubs, isPlatformAdmin, role]
   )
 
   const signOut = useCallback(async () => {

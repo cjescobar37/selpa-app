@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { withRankingPositions } from '@/lib/ranking'
 import { getCompetitionRanking, getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
@@ -214,7 +215,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
 
     if (playersError) return NextResponse.json({ error: playersError.message }, { status: 500 })
 
-    const players = (playersData ?? []) as PlayerRow[]
+    const blocked = await nonPlayerAccountIds((playersData ?? []).map(row => row.user_id))
+    const players = ((playersData ?? []) as PlayerRow[]).filter(row => !blocked.has(row.user_id))
     const userIds = Array.from(new Set(players.map((player) => player.user_id).filter(Boolean)))
     const playersByClubPlayerId = new Map(players.map((player) => [player.id, player]))
 
@@ -418,8 +420,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         finals: stats.finals,
       }]))
       const competition = await getCompetitionRanking(clubId, competitionStats)
-      competitionRows = competition.rows
-      rankedIndividual = competition.rows.map(mapCompetitionRankingToLegacyContract)
+      const competitionBlocked = await nonPlayerAccountIds(competition.rows.map(row => row.userId))
+      competitionRows = competition.rows.filter(row => !competitionBlocked.has(row.userId))
+      rankedIndividual = competitionRows.map(mapCompetitionRankingToLegacyContract)
       configuredCategories = competition.categories
     }
 

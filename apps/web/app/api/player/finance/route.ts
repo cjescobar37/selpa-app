@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { financePage } from '@/lib/clubFinanceF1C'
 import { parsePlayerFinanceQuery, type PlayerFinanceObligation, type PlayerFinanceMovement } from '@/lib/playerFinanceF1D'
 import { paymentMovementLabels, playerPaymentOptions } from '@/lib/paymentProviderReadsF1E'
+import { playerAccountDenial } from '@/lib/accountRoleServer'
 
 export const dynamic = 'force-dynamic'
 const pageSize = 20
@@ -29,6 +30,8 @@ export async function GET(req: NextRequest) {
     if (authError || !user.user) {
       return NextResponse.json({ error: 'Tu sesión venció. Volvé a ingresar.' }, { status: 401, headers })
     }
+    const roleDenied = await playerAccountDenial(user.user.id)
+    if (roleDenied) return roleDenied
     const obligationParams = {
       p_club_id: query.clubId, p_filter: query.filter, p_limit: pageSize + 1,
       p_before_created_at: query.view === 'obligations' ? query.cursor?.at ?? null : null,

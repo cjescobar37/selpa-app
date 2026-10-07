@@ -6,6 +6,8 @@ import {
   type ActivePartnershipRow,
 } from '@/lib/playerPartnerships'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
+import { STAFF_PLAYER_MESSAGE } from '@/lib/accountRolePolicy'
 
 type ClubPlayerRow = {
   id: string
@@ -47,6 +49,11 @@ async function enrichPartnerships(partnerships: ActivePartnershipRow[]) {
   const clubPlayers = (clubPlayersData ?? []) as ClubPlayerRow[]
   const clubPlayersById = new Map(clubPlayers.map((player) => [player.id, player]))
   const userIds = Array.from(new Set(clubPlayers.map((player) => player.user_id)))
+  const nonPlayers = await nonPlayerAccountIds(userIds)
+  const eligible = (id: string) => {
+    const player = clubPlayersById.get(id)
+    return Boolean(player && !nonPlayers.has(player.user_id))
+  }
 
   let profilesByUserId = new Map<string, ProfileRow>()
   if (userIds.length) {
@@ -72,7 +79,7 @@ async function enrichPartnerships(partnerships: ActivePartnershipRow[]) {
       : null
   }
 
-  return partnerships.map((partnership) => ({
+  return partnerships.filter(partnership => eligible(partnership.player1_club_player_id) && eligible(partnership.player2_club_player_id)).map((partnership) => ({
     ...partnership,
     player1: toPlayer(partnership.player1_club_player_id),
     player2: toPlayer(partnership.player2_club_player_id),
@@ -133,6 +140,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
 
     return NextResponse.json({ partnership }, { status: 201 })
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error, 'Error creando pareja activa.') }, { status: 500 })
+    const message = getErrorMessage(error, 'Error creando pareja activa.')
+    return NextResponse.json({ error: message }, { status: message === STAFF_PLAYER_MESSAGE ? 403 : 500 })
   }
 }

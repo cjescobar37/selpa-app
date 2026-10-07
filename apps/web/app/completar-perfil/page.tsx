@@ -12,6 +12,7 @@ import { birthMonths, birthYears, toBirthDate } from '@/lib/birthDate'
 import { isGlobalProfileComplete } from '@/lib/globalProfile'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
+import { isPlayerSession } from '@/lib/accountRolePolicy'
 
 type Step = 1 | 2 | 3
 type PersonalField = 'fullName' | 'phone' | 'birthDate' | 'gender' | 'countryCode' | 'provinceId' | 'cityId'
@@ -58,6 +59,11 @@ function membershipLabel(club: DiscoverClub) {
 }
 
 export default function CompleteProfilePage() {
+  const session = useSession()
+  const router = useRouter()
+  const denied = session.status === 'ready' && Boolean(session.user) && !isPlayerSession(session)
+  useEffect(() => { if (denied) router.replace('/mi-cuenta') }, [denied, router])
+  if (session.status === 'loading' || denied) return null
   return <Suspense fallback={null}><CompleteProfilePageClient /></Suspense>
 }
 

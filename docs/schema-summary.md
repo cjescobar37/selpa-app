@@ -145,15 +145,18 @@ Observaciones/deuda:
 - El staff operativo se limita a memberships aprobadas con rol `OWNER`, `ADMIN`,
   `OPERADOR` o `PLANILLERO`. `PLAYER` conserva su membership, pero no se lista ni
   se cuenta como staff.
-- La promoción desde el padrón usa `search_club_staff_candidates` y
-  `promote_club_player_to_staff_atomic`: busca candidatos elegibles sin exponer
-  el padrón completo, revalida actor/estado en base y reutiliza la membership.
+- Decisión de producto 2026-10-07: STAFF y PLAYER son excluyentes a nivel de
+  cuenta, no de club activo. OWNER/ADMIN/OPERADOR/PLANILLERO y Platform Admin
+  no tienen experiencia Player. Para competir deben usar otra cuenta/email.
+  La promoción legacy desde el padrón ya no está disponible en la app.
 - `is_club_player()` exige ambos registros aprobados para el mismo usuario y club.
 - Las invitaciones de equipo se crean, aceptan, rechazan y cancelan mediante las
   RPC atómicas `*_club_team_invite_atomic`. Solo admiten `ADMIN`, `OPERADOR`,
-  `PLANILLERO` y `PLAYER`. Al invitar como staff a una membership `PLAYER`
-  aprobada, la RPC actualiza esa misma membership de forma atómica; otros estados
-  existentes no se rehabilitan desde este flujo.
+  `PLANILLERO` y `PLAYER` en su firma legacy. La app bloquea cuentas Player
+  para altas de staff y viceversa; el follow-up local
+  `20261007155811_account_staff_player_separation.sql` añade guards de DB
+  internos sin reescribir migrations aplicadas ni borrar históricos.
+  Este guard nuevo no está aplicado ni validado live en este pass.
 - La aceptación de una invitación crea únicamente `club_memberships` y preserva
   íntegramente cualquier `club_players` existente.
 - Compatibilidad transitoria: los endpoints derivan el actor de la sesión y las

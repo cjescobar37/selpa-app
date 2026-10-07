@@ -6,6 +6,7 @@ import SelpaLoader from '@/components/SelpaLoader'
 import { useSession } from '@/components/session/SessionProvider'
 import { isGlobalProfileComplete } from '@/lib/globalProfile'
 import { hasAnyClubPermission, type ClubCapability } from '@/lib/clubPermissions'
+import { administrativeHome, isPlayerSession, isPrivatePlayerPath } from '@/lib/accountRolePolicy'
 
 function isPublicGuestRoute(pathname: string) {
   return /^\/torneos\/[^/]+(?:\/inscripcion)?$/.test(pathname)
@@ -43,7 +44,8 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     session.clubRole === 'ADMIN' ||
     session.clubRole === 'OPERADOR' ||
     session.clubRole === 'PLANILLERO'
-  const requiresPlayerProfile = session.role === 'player'
+  const privatePlayerDenied = Boolean(session.user && !isPlayerSession(session) && isPrivatePlayerPath(pathname))
+  const requiresPlayerProfile = isPlayerSession(session)
   const currentPath = useMemo(() => {
     if (typeof window === 'undefined') return pathname
     return `${pathname}${window.location.search}`
@@ -56,6 +58,8 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
       '/clubs/nuevo',
       '/perfil',
       '/mis-datos',
+      '/mi-cuenta',
+      '/preferencias',
       '/ajustes',
       '/actividad',
       '/notificaciones',
@@ -67,11 +71,16 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
   )
 
   useEffect(() => {
-    if (publicGuestRoute) return
+    if (publicGuestRoute && !privatePlayerDenied) return
     if (session.status === 'loading') return
 
     if (!session.user) {
       router.replace(`/login?next=${encodeURIComponent(currentPath)}`)
+      return
+    }
+
+    if (privatePlayerDenied) {
+      router.replace(administrativeHome(session))
       return
     }
 
@@ -111,6 +120,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     currentPath,
     pathname,
     publicGuestRoute,
+    privatePlayerDenied,
     requiresPlayerProfile,
     router,
     session.activeClubId,
@@ -126,7 +136,8 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
   ])
 
   const isAllowedWithoutClub = pathname === '/player' || allowedWithoutClub.some(p => pathname.startsWith(p))
-  if (publicGuestRoute) return <>{children}</>
+  if (privatePlayerDenied) return null
+  if (publicGuestRoute && session.status === 'ready') return <>{children}</>
 
   const ready =
     session.status === 'ready' &&
@@ -142,7 +153,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
   if (!ready) {
     return (
       <div className="px-auth px-authModern px-auth--bridge">
-        <SelpaLoader title="Preparando tu perfil..." subtitle="Cargando tu información" />
+        <SelpaLoader title="Preparando tu cuenta..." subtitle="Cargando tu información" />
       </div>
     )
   }

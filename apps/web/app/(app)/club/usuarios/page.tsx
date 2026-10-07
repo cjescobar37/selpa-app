@@ -19,7 +19,7 @@ type InviteStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED'
 type ManageableRole = 'ADMIN' | 'OPERADOR' | 'PLANILLERO' | 'PLAYER'
 type InvitableRole = Exclude<ManageableRole, 'PLAYER'>
 type TeamTab = 'staff' | 'invites' | 'permissions' | 'activity'
-type InviteMode = 'player' | 'email'
+type InviteMode = 'email'
 type StaffFilter = 'ALL' | 'ADMIN' | 'OPERADOR' | 'PLANILLERO'
 type FlowSuccess = { mode: InviteMode; title: string } | null
 
@@ -83,20 +83,10 @@ type AuditEvent = {
   target_profile: Profile | null
 }
 
-type StaffCandidate = {
-  user_id: string
-  display_name: string
-  email: string
-  avatar_url: string | null
-  category: number | null
-  candidate_status: string
-}
-
 const roleOptions: Array<{ value: ManageableRole; label: string; help: string }> = [
   { value: 'ADMIN', label: 'Admin', help: 'Gestión operativa amplia del club.' },
   { value: 'OPERADOR', label: 'Operador', help: 'Gestión cotidiana deportiva y de contenidos.' },
   { value: 'PLANILLERO', label: 'Planillero', help: 'Carga operativa de partidos/resultados.' },
-  { value: 'PLAYER', label: 'Jugador', help: 'Membresía sin permisos administrativos.' },
 ]
 
 const inviteRoleOptions = roleOptions.filter((option) => option.value !== 'PLAYER')
@@ -264,13 +254,6 @@ export default function ClubUsuariosPage() {
   const [staffMetrics, setStaffMetrics] = useState({ active: 0, rolesCovered: 0 })
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<ManageableRole>('ADMIN')
-  const [inviteMode, setInviteMode] = useState<InviteMode>('player')
-  const [candidateQuery, setCandidateQuery] = useState('')
-  const [candidates, setCandidates] = useState<StaffCandidate[]>([])
-  const [selectedCandidate, setSelectedCandidate] = useState<StaffCandidate | null>(null)
-  const [candidateLoading, setCandidateLoading] = useState(false)
-  const [candidateError, setCandidateError] = useState('')
-  const [candidateRetry, setCandidateRetry] = useState(0)
   const [emailError, setEmailError] = useState('')
   const [staffFilter, setStaffFilter] = useState<StaffFilter>('ALL')
   const [flowSuccess, setFlowSuccess] = useState<FlowSuccess>(null)
@@ -452,48 +435,6 @@ export default function ClubUsuariosPage() {
   }, [activeClub?.id])
 
   useEffect(() => {
-    if (inviteMode !== 'player' || !activeClub?.id || selectedCandidate) return
-    const query = candidateQuery.trim()
-    if (query.length < 2) return
-
-    const controller = new AbortController()
-    const timer = window.setTimeout(async () => {
-      setCandidateLoading(true)
-      setCandidateError('')
-      const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      if (!token) {
-        setCandidateError('Sesión inválida.')
-        setCandidateLoading(false)
-        return
-      }
-      try {
-        const params = new URLSearchParams({ clubId: activeClub.id, query })
-        const res = await fetch(`/api/clubs/internal-users/candidates?${params}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-          signal: controller.signal,
-        })
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error('No pudimos buscar jugadores.')
-        setCandidates((json?.candidates ?? []) as StaffCandidate[])
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setCandidates([])
-          setCandidateError(error instanceof Error ? error.message : 'No pudimos buscar jugadores.')
-        }
-      } finally {
-        if (!controller.signal.aborted) setCandidateLoading(false)
-      }
-    }, 350)
-
-    return () => {
-      window.clearTimeout(timer)
-      controller.abort()
-    }
-  }, [activeClub?.id, candidateQuery, candidateRetry, inviteMode, selectedCandidate])
-
-  useEffect(() => {
     if (!openActionsId) return
     function closeActions(event: MouseEvent) {
       const target = event.target
@@ -563,44 +504,6 @@ export default function ClubUsuariosPage() {
     setEmail('')
     setRole('ADMIN')
     setFlowSuccess({ mode: 'email', title: `Invitación enviada a ${normalizedEmail}.` })
-    await loadClubCore()
-  }
-
-  async function promoteSelectedPlayer(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!activeClub?.id || !selectedCandidate || !canManageTeam || role === 'PLAYER') return
-    setSaving(true)
-    setMessage('')
-    setFlowSuccess(null)
-    const token = await getToken()
-    if (!token) {
-      setMessage('Sesión inválida.')
-      setSaving(false)
-      return
-    }
-
-    const res = await fetch('/api/clubs/internal-users/candidates', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        clubId: activeClub.id,
-        targetUserId: selectedCandidate.user_id,
-        role,
-      }),
-    })
-    const json = await res.json().catch(() => ({}))
-    setSaving(false)
-    if (!res.ok) {
-      setMessage(json?.error ?? 'No pudimos asignar el rol.')
-      return
-    }
-
-    const promotedName = selectedCandidate.display_name
-    setSelectedCandidate(null)
-    setCandidateQuery('')
-    setCandidates([])
-    setRole('ADMIN')
-    setFlowSuccess({ mode: 'player', title: `${promotedName} ahora forma parte del equipo como ${actionRoleLabel(role)}.` })
     await loadClubCore()
   }
 
@@ -779,7 +682,7 @@ export default function ClubUsuariosPage() {
             <div>
               <span className="club-kicker">Alta interna</span>
               <h2>Incorporar al equipo</h2>
-              <p>Promové un jugador del club o invitá a una persona externa.</p>
+              <p>Invitá una cuenta administrativa. Si la persona juega, debe usar otro email para administrar.</p>
             </div>
           </div>
 
@@ -787,86 +690,20 @@ export default function ClubUsuariosPage() {
             <div className="club-note">No tenés permisos para crear invitaciones de staff.</div>
           ) : (
             <>
-              <div className="club-inviteModes" role="tablist" aria-label="Tipo de incorporación">
-                <button type="button" role="tab" aria-selected={inviteMode === 'player'} className={inviteMode === 'player' ? 'is-active' : ''} onClick={() => { setInviteMode('player'); setMessage(''); setFlowSuccess(null) }}>
-                  Jugador del club
-                </button>
-                <button type="button" role="tab" aria-selected={inviteMode === 'email'} className={inviteMode === 'email' ? 'is-active' : ''} onClick={() => { setInviteMode('email'); setMessage(''); setFlowSuccess(null) }}>
-                  Persona externa
-                </button>
-              </div>
-
-              {flowSuccess?.mode === inviteMode ? (
+              {flowSuccess ? (
                 <div className="club-flowSuccess" role="status">
                   <span aria-hidden="true">✓</span>
                   <strong>{flowSuccess.title}</strong>
-                  <p>{inviteMode === 'player' ? 'El nuevo rol ya está activo en el equipo.' : 'La invitación queda pendiente hasta que la persona la acepte.'}</p>
+                  <p>La invitación queda pendiente hasta que la persona la acepte.</p>
                   <div>
-                    <button type="button" className="club-primaryBtn" onClick={() => { setFlowSuccess(null); setActiveTab(inviteMode === 'player' ? 'staff' : 'invites') }}>
-                      {inviteMode === 'player' ? 'Ver en Staff' : 'Ver invitaciones'}
+                    <button type="button" className="club-primaryBtn" onClick={() => { setFlowSuccess(null); setActiveTab('invites') }}>
+                      Ver invitaciones
                     </button>
                     <button type="button" className="club-secondaryBtn" onClick={() => setFlowSuccess(null)}>
-                      {inviteMode === 'player' ? 'Incorporar otra persona' : 'Enviar otra'}
+                      Enviar otra
                     </button>
                   </div>
                 </div>
-              ) : inviteMode === 'player' ? (
-                <form className="club-inviteForm" onSubmit={promoteSelectedPlayer}>
-                  {!selectedCandidate ? (
-                    <label>
-                      <span>Buscar jugador</span>
-                      <div className="club-searchField">
-                        <input className="px-input" type="search" value={candidateQuery} onChange={(event) => {
-                          const nextQuery = event.target.value
-                          setCandidateQuery(nextQuery)
-                          if (nextQuery.trim().length < 2) {
-                            setCandidates([])
-                            setCandidateError('')
-                            setCandidateLoading(false)
-                          }
-                        }} placeholder="Buscar por nombre o email" autoComplete="off" />
-                        {candidateLoading ? <span className="club-searchLoader" aria-label="Buscando jugadores" /> : null}
-                        {candidateQuery ? <button type="button" aria-label="Limpiar búsqueda" onClick={() => { setCandidateQuery(''); setCandidates([]); setCandidateError('') }}>×</button> : null}
-                      </div>
-                      <small aria-live="polite">
-                        {!candidateQuery.trim()
-                          ? 'Buscá un jugador aprobado del club para incorporarlo al equipo.'
-                          : candidateQuery.trim().length < 2
-                            ? 'Escribí al menos 2 caracteres.'
-                            : candidateLoading
-                              ? 'Buscando jugadores…'
-                              : candidateError || 'Seleccioná un jugador del padrón del club.'}
-                      </small>
-                      {candidateError ? <button type="button" className="club-inlineRetry" onClick={() => setCandidateRetry((value) => value + 1)}>Reintentar</button> : null}
-                    </label>
-                  ) : null}
-
-                  {!selectedCandidate && candidateQuery.trim().length >= 2 && !candidateLoading && !candidateError ? (
-                    candidates.length > 0 ? (
-                      <div className="club-candidateList" role="listbox" aria-label="Jugadores encontrados">
-                        {candidates.map((candidate) => (
-                          <button key={candidate.user_id} type="button" role="option" aria-selected="false" onClick={() => setSelectedCandidate(candidate)}>
-                            {renderPerson({ user_id: candidate.user_id, email: candidate.email, first_name: null, last_name: null, display_name: candidate.display_name, avatar_url: candidate.avatar_url }, candidate.display_name, candidate.email, true)}
-                            <span className="club-candidateMeta">{candidate.category ? `Categoría ${candidate.category}` : 'Sin categoría'} · Jugador</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : <div className="px-empty">No encontramos jugadores disponibles con esa búsqueda.</div>
-                  ) : null}
-
-                  {selectedCandidate ? (
-                    <div className="club-selectedCandidate">
-                      {renderPerson({ user_id: selectedCandidate.user_id, email: selectedCandidate.email, first_name: null, last_name: null, display_name: selectedCandidate.display_name, avatar_url: selectedCandidate.avatar_url }, selectedCandidate.display_name, selectedCandidate.email)}
-                      <span>{selectedCandidate.category ? `Categoría ${selectedCandidate.category}` : 'Sin categoría'} · {selectedCandidate.candidate_status} · Jugador</span>
-                      <button type="button" className="club-secondaryBtn" onClick={() => setSelectedCandidate(null)}>Cambiar jugador</button>
-                    </div>
-                  ) : null}
-
-                  <StaffRoleField role={role} onChange={setRole} />
-                  <button type="submit" className="club-primaryBtn" disabled={saving || !selectedCandidate}>
-                    {saving ? 'Asignando…' : `✓ Asignar como ${actionRoleLabel(role)}`}
-                  </button>
-                </form>
               ) : (
                 <form className="club-inviteForm" onSubmit={createInvite}>
                   <p className="club-formHint">Se enviará una invitación para sumarse al equipo del club.</p>

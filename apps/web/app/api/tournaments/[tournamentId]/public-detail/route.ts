@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { getTournamentFlyerUrl } from '@/lib/tournamentFlyers'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
@@ -246,10 +247,12 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
   ])
 
   const isClubAdmin = isApprovedMembership(membership) && isClubAdminRole(membership?.role)
-  if (isClubAdmin) {
+  const isStaffAccount = (await nonPlayerAccountIds([user.id])).has(user.id)
+  if (isClubAdmin || isStaffAccount) {
     return {
       isAuthenticated: true,
-      isClubAdmin: true,
+      isClubAdmin,
+      isStaffAccount: true,
       isPlayerInClub: false,
       isRegisteredInTournament: false,
       myTeam: null,

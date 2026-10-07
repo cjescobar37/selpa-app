@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { getApprovedMembership, userHasClubCapability } from '@/lib/clubMembershipServer'
 import { getRankingEngineSource } from '@/features/competition/ranking/competition-ranking.service'
 import { readCompetitionPlayerStandings } from '@/features/competition/ranking/competition-ranking.repository'
@@ -108,11 +109,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     if (playersRes.error) return NextResponse.json({ error: playersRes.error.message }, { status: 500 })
     if (membershipsRes.error) return NextResponse.json({ error: membershipsRes.error.message }, { status: 500 })
 
-    const players = (playersRes.data ?? []) as PlayerRow[]
+    const blocked = await nonPlayerAccountIds([...(playersRes.data ?? []), ...(membershipsRes.data ?? [])].map(row => row.user_id))
+    const players = ((playersRes.data ?? []) as PlayerRow[]).filter(row => !blocked.has(row.user_id))
     const competitionByPlayer = getRankingEngineSource() === 'competition'
       ? await readCompetitionPlayerStandings(clubId)
       : null
-    const memberships = (membershipsRes.data ?? []) as MembershipRow[]
+    const memberships = ((membershipsRes.data ?? []) as MembershipRow[]).filter(row => !blocked.has(row.user_id))
     const isPlanillero = membership.role === 'PLANILLERO'
     const profiles = await getProfilesMap([
       ...players.map((player) => player.user_id).filter((userId): userId is string => Boolean(userId)),

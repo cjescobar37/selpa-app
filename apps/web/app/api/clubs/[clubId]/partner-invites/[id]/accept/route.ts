@@ -6,6 +6,7 @@ import {
   type PartnerInviteRow,
 } from '@/lib/playerPartnerships'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { STAFF_PLAYER_MESSAGE } from '@/lib/accountRolePolicy'
 
 export async function POST(
   req: NextRequest,
@@ -48,7 +49,7 @@ export async function POST(
       })
     } catch (error: unknown) {
       const message = getErrorMessage(error, 'No se pudo crear la pareja activa.')
-      const status = message.includes('pareja activa') ? 409 : 400
+      const status = message === STAFF_PLAYER_MESSAGE ? 403 : message.includes('pareja activa') ? 409 : 400
       return NextResponse.json({ error: message }, { status })
     }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { roleAssignmentDenial } from '@/lib/accountRoleServer'
 import {
   ensureClubPlayerForMembership,
   ensureValidActiveClubForUser,
@@ -226,6 +227,8 @@ export async function POST(req: NextRequest) {
     }
 
     const approvedAt = new Date().toISOString()
+    const denial = await roleAssignmentDenial(membership.user_id, membership.role)
+    if (denial) return denial
 
     const { error: approveError } = await supabaseAdmin
       .from('club_memberships')
@@ -240,7 +243,7 @@ export async function POST(req: NextRequest) {
     if (approveError) return NextResponse.json({ error: approveError.message }, { status: 500 })
 
     try {
-      await ensureClubPlayerForMembership({
+      if (membership.role === 'PLAYER') await ensureClubPlayerForMembership({
         clubId: membership.club_id,
         userId: membership.user_id,
         approvedBy: auth.user!.id,

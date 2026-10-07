@@ -1,4 +1,5 @@
 import { isApprovedMembership, isClubStaffRole, type ClubRole, type MembershipStatus } from './clubMembershipRules'
+import { hasStaffAccountMembership } from './accountRolePolicy'
 
 export type SessionMembership = {
   club_id: string
@@ -32,7 +33,9 @@ export function resolveFastAuthorization(input: {
 
   // Preserve the existing preference: a sole administrative club wins over a
   // configured player-only club. Otherwise a valid configured club is exact.
-  const selectedMembership = soleAdministrativeMembership ?? configuredMembership
+  const accountIsStaff = hasStaffAccountMembership(input.memberships)
+  const selectedMembership = soleAdministrativeMembership
+    ?? (accountIsStaff ? approvedAdministrativeMemberships.find(row => row.club_id === input.configuredActiveClubId) : configuredMembership)
   if (!selectedMembership?.approved_at) return null
 
   return {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { PLAYER_STAFF_MESSAGE, STAFF_PLAYER_MESSAGE } from './accountRolePolicy'
 
 export const CLUB_TEAM_MEMBER_ERROR_CODES = [
   'unauthorized','forbidden','member_not_found','membership_not_approved','invalid_role',
@@ -37,6 +38,8 @@ export function getClubTeamMemberErrorCode(error:unknown):ClubTeamMemberErrorCod
 }
 
 export function clubTeamMemberErrorResponse(error:unknown) {
+  const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error)
+  if ([PLAYER_STAFF_MESSAGE, STAFF_PLAYER_MESSAGE].includes(message)) return NextResponse.json({ error: message }, { status: 403 })
   const code=getClubTeamMemberErrorCode(error)
   if (!code) return NextResponse.json(
     {error:'No pudimos completar la operación.',code:'team_member_operation_failed'},

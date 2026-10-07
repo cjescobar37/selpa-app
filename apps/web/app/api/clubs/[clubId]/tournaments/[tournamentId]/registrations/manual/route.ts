@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { assertServiceRole, supabaseAdmin } from '@/lib/supabaseAdmin'
+import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
+import { STAFF_PLAYER_MESSAGE } from '@/lib/accountRolePolicy'
 import { isApprovedMembership, isClubAdminRole } from '@/lib/clubMembershipRules'
 
 type ManualPlayerInput = {
@@ -272,6 +274,8 @@ export async function GET(
       .filter((player) => !usedPlayerIds.has(player.user_id))
       .filter((player) => !clubAdminUserIds.has(player.user_id))
       .filter((player) => genderMatchesTournament(player.gender, tournamentRow.gender))
+    const blocked = await nonPlayerAccountIds(playerRows.map(player => player.user_id))
+    const eligibleRows = playerRows.filter(player => !blocked.has(player.user_id))
 
     const userIds = playerRows.map((player) => player.user_id)
     const { data: profiles, error: profilesError } = userIds.length
@@ -284,7 +288,7 @@ export async function GET(
     if (profilesError) return NextResponse.json({ error: profilesError.message }, { status: 500 })
 
     const profilesMap = new Map(((profiles ?? []) as ProfileRow[]).map((profile) => [profile.user_id, profile]))
-    const suggestions = playerRows
+    const suggestions = eligibleRows
       .map((player) => {
         const profile = profilesMap.get(player.user_id) ?? null
         const fullName = getFullName(profile, player.display_name)
@@ -314,6 +318,7 @@ export async function GET(
 }
 
 async function ensureClubPlayer(clubId: string, userId: string, fullName: string, actorId: string) {
+  if ((await nonPlayerAccountIds([userId])).has(userId)) throw new Error(STAFF_PLAYER_MESSAGE)
   const { error } = await supabaseAdmin
     .from('club_players')
     .upsert(
@@ -362,6 +367,7 @@ async function resolveExistingClubPlayer(
   }
 
   const userId = player.user_id?.trim()
+  if ((await nonPlayerAccountIds([userId])).has(String(userId))) throw new Error(STAFF_PLAYER_MESSAGE)
   if (!userId || !uuidPattern.test(userId)) {
     throw new Error('PLAYER_AUTH_REQUIRED')
   }
@@ -670,6 +676,7 @@ export async function POST(
     await cleanupCreatedAuthUsers(createdAuthUserIds)
 
     const message = error instanceof Error ? error.message : 'No pude crear la inscripción manual.'
+    if (message === STAFF_PLAYER_MESSAGE) return NextResponse.json({ error: message }, { status: 403 })
     const knownErrors: Record<string, string> = {
       INVALID_PLAYER: 'Completá los datos de ambos jugadores.',
       INVALID_PLAYER_CLUB_PLAYER_ID: 'El club_player_id de jugador no es válido.',
