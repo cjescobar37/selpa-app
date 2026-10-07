@@ -486,7 +486,7 @@ do $$ declare t text; begin
     execute format('alter table public.%I enable row level security',t);
     execute format('revoke all on table public.%I from public,anon,authenticated,service_role',t);
     if t in ('platform_billing_plans','platform_billing_commands') then
-      execute format('create policy %I on public.%I for select to authenticated using ((select public.is_platform_admin()))',t || '_read',t);
+      execute format('create policy %I on public.%I for select to authenticated using ((select public.platform_billing_can_read_f2(null)))',t || '_read',t);
     else
       execute format('create policy %I on public.%I for select to authenticated using (public.platform_billing_can_read_f2(club_id))',t || '_read',t);
     end if;

@@ -82,6 +82,25 @@ test('DB authorization: real JWT platform actor; approved OWNER/ADMIN reads, no 
   assert.doesNotMatch(sql,/grant .* to service_role/i)
   for(const check of ['CROSS_CLUB','CLUB_WRITE','PLAYER','ANON','ACL','ACTOR','DIRECT_WRITES_RLS'])assert.match(qa,new RegExp(`QA_F2_${check}`))
 })
+test('RLS policies reuse the F2 helper: plans/commands are platform-only and club tables remain scoped',()=>{
+  assert.doesNotMatch(sql,/public\.is_platform_admin\s*\(/i)
+  assert.match(sql,/create function public\.platform_billing_can_read_f2\(p_club_id uuid\)/)
+  const policyLoop=sql.match(/foreach t in array array\[([^\]]*)\] loop\s+execute format\('alter table public\.%I enable row level security',t\);[\s\S]*?if t in \(([^)]+)\) then\s+execute format\('([^']+)'[\s\S]*?else\s+execute format\('([^']+)'/)
+  assert.ok(policyLoop,'F2 must define both admin-only and club-scoped SELECT policy branches')
+  const tables=[...policyLoop[1].matchAll(/'([^']+)'/g)].map(match=>match[1])
+  const adminTables=[...policyLoop[2].matchAll(/'([^']+)'/g)].map(match=>match[1])
+  assert.deepEqual(adminTables,['platform_billing_plans','platform_billing_commands'])
+  assert.deepEqual(tables,[...sql.matchAll(/create table public\.(platform_billing_\w+)\s*\(/g)].map(match=>match[1]))
+  for(const table of tables){
+    const policy=adminTables.includes(table)?policyLoop[3]:policyLoop[4]
+    assert.match(policy,/for select to authenticated using/)
+    if(table==='platform_billing_plans'||table==='platform_billing_commands'){
+      assert.match(policy,/using \(\(select public\.platform_billing_can_read_f2\(null\)\)\)$/)
+    }else{
+      assert.match(policy,/using \(public\.platform_billing_can_read_f2\(club_id\)\)$/)
+    }
+  }
+})
 test('aggregated reads, stable keyset pagination, Argentina date boundary and bounded exports',()=>{
   assert.match(sql,/\(i\.created_at,i\.id\)<\(p_cursor_at,p_cursor_id\)/)
   assert.match(sql,/limit p_limit\+1/)
