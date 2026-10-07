@@ -382,8 +382,9 @@ test('flag OFF and incomplete config leave player reads unchanged, with no payme
   const keys = Object.keys(configuredEnv), previous = keys.map(key => process.env[key])
   const rows = [{ id: 'obligation', balance: 80 }]
   const client = { async rpc() { throw new Error('Disabled player read called provider RPC') } } as unknown as Parameters<typeof playerPaymentOptions>[0]
+  const environments: Array<Record<string, string>> = [{ ...configuredEnv, PAYMENTS_MERCADO_PAGO_ENABLED: 'false' }, { ...configuredEnv, MERCADO_PAGO_CLIENT_SECRET: '' }]
   try {
-    for (const env of [{ ...configuredEnv, PAYMENTS_MERCADO_PAGO_ENABLED: 'false' }, { ...configuredEnv, MERCADO_PAGO_CLIENT_SECRET: '' }]) {
+    for (const env of environments) {
       for (const key of keys) process.env[key] = env[key]
       const result = await playerPaymentOptions(client, rows)
       assert.equal(result, rows)
