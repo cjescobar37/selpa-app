@@ -6,6 +6,8 @@ import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubTheme } from '@/lib/clubThemes'
 import PageHeader from '@/components/navigation/PageHeader'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
+import { humanizeUiError } from '@/lib/productPresentation'
 
 type Media = { id: string; kind: 'COVER' | 'STORY' | 'GALLERY'; storage_path: string; public_url: string; alt_text: string | null; caption: string | null; sort_order: number; is_visible: boolean }
 type Facility = { id?: string; facility_key: string; label: string; description?: string | null; is_available: boolean; sort_order?: number }
@@ -39,14 +41,20 @@ export default function ClubPublicProfilePage() {
 
   const load = useCallback(async () => {
     if (!clubId) return
-    const accessToken = await token()
     setLoading(true); setMessage('')
+    try {
+    const accessToken = await token()
     const response = await fetch(`/api/clubs/${clubId}/profile`, { headers: { Authorization: `Bearer ${accessToken}` } })
     const json = await response.json().catch(() => ({}))
     if (!response.ok) { setMessage(json.error || 'No pudimos cargar el perfil.'); setLoading(false); return }
     setData(json); setTagline(json.profile.tagline ?? ''); setStory(json.profile.story ?? '')
     setClubFields({ name: json.club.name ?? '', city: json.club.city ?? '', province: json.club.province ?? '', description: json.club.description ?? '', address: json.club.address ?? '', phone: json.club.phone ?? '', mobile_phone: json.club.mobile_phone ?? '', contact_email: json.club.contact_email ?? '', website: json.club.website ?? '', instagram: json.club.instagram ?? '' })
     setFacilities(json.facilities ?? []); setDirty(false); setLoading(false)
+    } catch {
+      setMessage('No pudimos cargar el perfil. Revisá tu conexión y reintentá.')
+    } finally {
+      setLoading(false)
+    }
   }, [clubId])
 
   useEffect(() => {
@@ -117,7 +125,7 @@ export default function ClubPublicProfilePage() {
   }
 
   if (loading) return <main className="clubProfilePage"><PageHeader title="Perfil del club" backHref="/club/admin" /><div className="clubProfileSkeleton">Cargando perfil del club…</div><Styles /></main>
-  if (!data) return <main className="clubProfilePage"><PageHeader title="Perfil del club" backHref="/club/admin" /><div className="clubProfileError">{message || 'Perfil no disponible.'}</div><Styles /></main>
+  if (!data) return <main className="clubProfilePage"><PageHeader title="Perfil del club" backHref="/club/admin" /><PlayerStatePanel kind="error" title="No pudimos cargar el perfil" message={message || 'Perfil no disponible.'} onRetry={() => void load()} compact /><Styles /></main>
   const location = [clubFields.city, clubFields.province].filter(Boolean).join(' · ') || data.club.country || 'Ubicación sin completar'
   const status = data.profile.publication_status
   const publicHref = `/clubs/${data.club.id}`
@@ -126,7 +134,7 @@ export default function ClubPublicProfilePage() {
   return <main className="clubProfilePage" style={style}>
     <PageHeader backHref="/club/admin" title="Perfil del club" eyebrow="IDENTIDAD PÚBLICA"
       actions={<div className="clubProfileHeadActions"><em data-status={status}>{status === 'PUBLISHED' ? 'Publicado' : 'Borrador'}</em><a href={publicHref} target="_blank" rel="noreferrer">Ver perfil público</a></div>} />
-    {message ? <p className="clubProfileMessage">{message}</p> : null}
+    {message ? <p className="clubProfileMessage">{humanizeUiError(message)}</p> : null}
     <section className="clubProfilePreview" style={cover ? { backgroundImage: `linear-gradient(180deg,rgba(4,17,37,.12),rgba(4,17,37,.84)),url(${cover.public_url})` } : undefined}>
       <div className="clubProfileLogo">{data.club.logo_url ? <img src={data.club.logo_url} alt={`Logo de ${data.club.name}`} /> : <Building2 />}</div>
       <div><h2>{clubFields.name || data.club.name}</h2><p><MapPin /> {location}</p><strong>{tagline || 'Agregá una frase que represente al club.'}</strong></div>

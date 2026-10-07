@@ -6,6 +6,7 @@ import { AlertTriangle, BarChart3, CalendarRange, ChevronDown } from 'lucide-rea
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import PageHeader from '@/components/navigation/PageHeader'
+import { humanizeUiError } from '@/lib/productPresentation'
 import styles from './estadisticas.module.css'
 
 type Section = 'summary' | 'players' | 'tournaments' | 'activity' | 'finance' | 'content'
@@ -95,7 +96,7 @@ export default function ClubAnalyticsPage() {
       if (!response.ok) throw new Error(json.error || 'No pudimos cargar las estadísticas.')
       setData(json)
     } catch (loadError) {
-      if ((loadError as { name?: string }).name !== 'AbortError') setError(loadError instanceof Error ? loadError.message : 'No pudimos cargar las estadísticas.')
+      if ((loadError as { name?: string }).name !== 'AbortError') setError(humanizeUiError(loadError instanceof Error ? loadError.message : null, 'No pudimos cargar las estadísticas. Reintentá.'))
     } finally { if (!signal?.aborted) setLoading(false) }
   }, [clubId, from, to])
 

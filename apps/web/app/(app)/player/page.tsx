@@ -21,6 +21,7 @@ import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import PublicHomeEmbed from '@/components/public/PublicHomeEmbed'
 import ModeSegmentedControl, { type HomeMode } from '@/components/ModeSegmentedControl'
+import { humanizeUiError } from '@/lib/productPresentation'
 
 type ClubPlayerRow = {
   id: string
@@ -180,6 +181,7 @@ export default function PlayerHomePage() {
   const [loadingData, setLoadingData] = useState(true)
   const [hasLoadedData, setHasLoadedData] = useState(false)
   const [message, setMessage] = useState('')
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [homeMode, setHomeMode] = useState<HomeMode>('space')
 
   useEffect(() => {
@@ -309,7 +311,7 @@ export default function PlayerHomePage() {
         return
       }
 
-      if (!hasLoadedData) setLoadingData(true)
+      setLoadingData(true)
       setMessage('')
 
       try {
@@ -445,7 +447,7 @@ export default function PlayerHomePage() {
         setInvites(inviteRows)
       } catch (error: unknown) {
         if (!alive) return
-        setMessage(error instanceof Error ? error.message : 'No pude cargar el inicio del jugador.')
+        setMessage(humanizeUiError(error instanceof Error ? error.message : null, 'No pudimos cargar el inicio del jugador. Reintentá.'))
       } finally {
         if (alive) {
           setHasLoadedData(true)
@@ -459,13 +461,13 @@ export default function PlayerHomePage() {
     return () => {
       alive = false
     }
-  }, [hasLoadedData, session.status, session.user?.id, session.clubs])
+  }, [session.status, session.user?.id, session.clubs, loadAttempt])
 
   async function activateClub(clubId: string) {
     try {
       await session.setActiveClub(clubId)
     } catch (error: unknown) {
-      setMessage(error instanceof Error ? error.message : 'No pude activar el club.')
+      setMessage(humanizeUiError(error instanceof Error ? error.message : null, 'No pudimos activar el club. Reintentá.'))
     }
   }
 
@@ -511,7 +513,7 @@ export default function PlayerHomePage() {
           ) : (
             <p>{`Elegí un club para empezar a competir en ${BRAND.name}.`}</p>
           )}
-          {message ? <div className="playerHomeMessage">{message}</div> : null}
+          {message ? <PlayerStatePanel kind="error" title="No pudimos completar la carga" message={message} onRetry={() => setLoadAttempt(attempt => attempt + 1)} compact /> : null}
         </div>
         <div className="playerHomeHeroCard" aria-label="Resumen deportivo actual">
           <span className="playerHomeHeroCard__club">Tu nivel actual</span>

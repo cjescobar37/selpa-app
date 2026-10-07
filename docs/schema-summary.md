@@ -154,9 +154,10 @@ Observaciones/deuda:
   RPC atómicas `*_club_team_invite_atomic`. Solo admiten `ADMIN`, `OPERADOR`,
   `PLANILLERO` y `PLAYER` en su firma legacy. La app bloquea cuentas Player
   para altas de staff y viceversa; el follow-up local
-  `20261007155811_account_staff_player_separation.sql` añade guards de DB
+  `20261007164510_20261007155811_account_staff_player_separation.sql` añade guards de DB
   internos sin reescribir migrations aplicadas ni borrar históricos.
-  Este guard nuevo no está aplicado ni validado live en este pass.
+  El ledger live fue confirmado por el usuario con versión `20261007164510`;
+  Pass 2 sólo alinea el nombre local, sin ejecutar Supabase ni cambiar SQL.
 - La aceptación de una invitación crea únicamente `club_memberships` y preserva
   íntegramente cualquier `club_players` existente.
 - Compatibilidad transitoria: los endpoints derivan el actor de la sesión y las

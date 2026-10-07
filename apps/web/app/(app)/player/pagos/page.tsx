@@ -7,6 +7,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { getCurrentSession } from '@/lib/supabaseClient'
+import { humanizeUiError } from '@/lib/productPresentation'
 import { playerFinanceQuery, type PlayerFinanceData, type PlayerFinanceFilter, type PlayerFinanceTab } from '@/lib/playerFinanceF1D'
 import PlayerFinanceContent from './PlayerFinanceContent'
 import styles from './PlayerFinance.module.css'
@@ -76,7 +77,7 @@ export default function PlayerPaymentsPage() {
       const checkout = new URL(json.checkoutUrl)
       if (checkout.protocol !== 'https:' || !['www.mercadopago.com.ar', 'mercadopago.com.ar', 'sandbox.mercadopago.com.ar'].includes(checkout.hostname)) throw new Error('El enlace de pago no es válido.')
       window.location.assign(checkout.toString())
-    } catch (cause) { setPageError(cause instanceof Error ? cause.message : 'No pudimos preparar el pago.') }
+    } catch (cause) { setPageError(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos preparar el pago. Reintentá.')) }
     finally { setPayingId(null) }
   }
 
@@ -101,7 +102,7 @@ export default function PlayerPaymentsPage() {
         if (!response.ok) throw new Error(json.error || 'No pudimos cargar tus pagos.')
         if (!controller.signal.aborted) setResult({ userId: userId!, data: json as PlayerFinanceData })
       } catch (error) {
-        if (!controller.signal.aborted) setInitialError(error instanceof Error ? error.message : 'No pudimos cargar tus pagos.')
+        if (!controller.signal.aborted) setInitialError(humanizeUiError(error instanceof Error ? error.message : null, 'No pudimos cargar tus pagos. Reintentá.'))
       }
     }
     void load()
@@ -137,7 +138,7 @@ export default function PlayerPaymentsPage() {
         } } }
       })
     } catch (error) {
-      if (!controller.signal.aborted) setPageError(error instanceof Error ? error.message : 'No pudimos cargar esta lista.')
+      if (!controller.signal.aborted) setPageError(humanizeUiError(error instanceof Error ? error.message : null, 'No pudimos cargar esta lista. Reintentá.'))
     } finally {
       if (!controller.signal.aborted) setBusy(false)
     }

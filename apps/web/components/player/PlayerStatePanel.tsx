@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { AlertCircle, Inbox, RotateCw } from 'lucide-react'
 import SelpaLoader from '@/components/SelpaLoader'
+import { humanizeUiError } from '@/lib/productPresentation'
 
 type PlayerStatePanelProps = {
   kind?: 'loading' | 'empty' | 'error'
@@ -34,7 +35,7 @@ export default function PlayerStatePanel({
           </span>
           <div>
             <strong>{title}</strong>
-            {message ? <p>{message}</p> : null}
+            {message ? <p>{kind === 'error' ? humanizeUiError(message) : message}</p> : null}
           </div>
           {action?.href ? <Link href={action.href}>{action.label}</Link> : null}
           {action?.onClick ? <button type="button" onClick={action.onClick}><RotateCw size={15} />{action.label}</button> : null}

@@ -196,7 +196,7 @@ Alta OWNER, invitación/aceptación de staff, aprobación de membresías y cambi
 
 ### Protección DB local, no aplicada
 
-Nueva migration: `apps/web/supabase/migrations/20261007155811_account_staff_player_separation.sql`.
+Nueva migration: `apps/web/supabase/migrations/20261007164510_20261007155811_account_staff_player_separation.sql` (nombre alineado al ledger durante Pass 2; SQL idéntico).
 
 Triggers de identidad en memberships, propietarios, platform_admins, invitaciones administrativas, club_players, campos deportivos de profiles, equipos, inscripciones, invitaciones deportivas y parejas. Cambios rutinarios que no crean/activan identidad preservan históricos; cancelación/rechazo siguen disponibles. Helpers INTERNAL, search_path fijo, sin EXECUTE público/anon/authenticated/service_role ni ampliación de grants económicos.
 
@@ -231,7 +231,7 @@ Nuevos:
 - `apps/web/app/api/auth/account-role/route.ts`
 - `apps/web/app/(app)/mi-cuenta/page.tsx`
 - `apps/web/app/(app)/preferencias/page.tsx`
-- `apps/web/supabase/migrations/20261007155811_account_staff_player_separation.sql`
+- `apps/web/supabase/migrations/20261007164510_20261007155811_account_staff_player_separation.sql`
 - `apps/web/supabase/qa/20261007155811_account_staff_player_separation_validation.sql`
 
 Modificados, todos de esta separación (además de este informe y `docs/schema-summary.md`):

@@ -15,7 +15,9 @@ export async function billingAccess(req:NextRequest,platform:boolean) {
   if (!url || !key) return {error:NextResponse.json({error:'Facturación no disponible.'},{status:503}),client:null,clubId:null}
   return {error:null,clubId,client:createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Authorization:req.headers.get('authorization') ?? ''}}})}
 }
-export function billingFailure(error:{code?:string;message?:string}) {
+export function billingFailure(error:{code?:string;message?:string},operation='billing') {
+  // Technical identity of the operation only; never actor, request, or DB diagnostic text.
+  console.error('[selpa-billing]',{operation,code:/^[A-Z0-9_]{1,32}$/.test(error.code??'')?error.code:'UNKNOWN'})
   const messages:Record<string,string>={
     BILLING_OVER_ALLOCATION:'El importe supera el saldo actual. Actualizá antes de continuar.',
     BILLING_CURRENT_SUBSCRIPTION_EXISTS:'Este club ya tiene una suscripción vigente.',
@@ -41,7 +43,7 @@ export async function billingGet(req:NextRequest,platform:boolean) {
   const result=await access.client.rpc(kind==='overview'?'get_platform_billing_overview_f2':'list_platform_billing_f2',{
     p_club_id:access.clubId,p_from:from,p_to:to,...(kind==='overview'?{}:{p_kind:kind,p_cursor_at:at,p_cursor_id:id,p_limit:20,p_search:q.get('search')??''}),
   })
-  if(result.error) return billingFailure(result.error)
+  if(result.error) return billingFailure(result.error,kind==='overview'?'get_platform_billing_overview_f2':'list_platform_billing_f2')
   return NextResponse.json(result.data,{headers:{'Cache-Control':'private, no-store'}})
 }
 export async function billingPost(req:NextRequest) {
@@ -52,6 +54,6 @@ export async function billingPost(req:NextRequest) {
     (body.operation==='SAVE_PLAN' && !billingValidMoney(body.payload.price)) ||
     (body.operation==='REGISTER_PAYMENT' && !billingValidMoney(body.payload.amount,true))) return NextResponse.json({error:'Operación inválida.'},{status:400})
   const result=await access.client.rpc('execute_platform_billing_f2',{p_operation:body.operation,p_key:body.key,p_payload:body.payload})
-  if(result.error) return billingFailure(result.error)
+  if(result.error) return billingFailure(result.error,'execute_platform_billing_f2')
   return NextResponse.json(result.data,{headers:{'Cache-Control':'private, no-store'}})
 }

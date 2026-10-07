@@ -9,6 +9,7 @@ import PaymentProviderPanel from '@/features/finance/PaymentProviderPanel'
 import FinanceReports from '@/features/finance/FinanceReports'
 import FinanceReconciliations from '@/features/finance/FinanceReconciliations'
 import { movementFilters } from '@/lib/clubFinanceF1F'
+import { humanizeUiError } from '@/lib/productPresentation'
 import {
   financeMethodLabels, financeMovementMethod, financeStatusLabels, formatFinanceMoney, normalizeFinanceOverview, validFinanceAmount,
   type FinanceCursor, type FinanceFilter, type FinanceMethod,
@@ -84,6 +85,10 @@ export default function ClubFinancePage() {
   const refreshId = useRef(0)
   const previousClubId = useRef(clubId)
   const currentData = Boolean(clubId) && loadedClubId === clubId
+  // Depend on the effective query, not the selected presentation tab.
+  const readFilter = tab === 'summary' ? 'PENDING' : filter
+  const readSearch = tab === 'summary' ? '' : search
+  const readMethod = tab === 'summary' ? 'ALL' : movementFilter
 
   const token = useCallback(async () => {
     const { data } = await supabase.auth.getSession()
@@ -101,7 +106,7 @@ export default function ClubFinancePage() {
     const json = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(json?.code === 'PGRST202'
       ? 'No pudimos cargar las finanzas. Reintentá en unos segundos.'
-      : json?.error ?? 'No pudimos cargar las finanzas. Reintentá en unos segundos.')
+      : humanizeUiError(json?.error, 'No pudimos cargar las finanzas. Reintentá en unos segundos.'))
     return json
   }, [token])
 
@@ -111,8 +116,8 @@ export default function ClubFinancePage() {
     setLoading(true)
     setError('')
     try {
-      const params = new URLSearchParams({ clubId, view: 'dashboard', filter: tab === 'summary' ? 'PENDING' : filter,
-        search: tab === 'summary' ? '' : search, method: tab === 'summary' ? 'ALL' : movementFilter })
+      const params = new URLSearchParams({ clubId, view: 'dashboard', filter: readFilter,
+        search: readSearch, method: readMethod })
       const data = await request(`/api/clubs/finance/operations?${params}`)
       if (refreshId.current !== requestId) return
       setOverview(normalizeFinanceOverview(data.overview ?? null))
@@ -121,14 +126,14 @@ export default function ClubFinancePage() {
       setCanManage(Boolean(data.canManage))
       setRequiresReview(Boolean(data.requiresReview))
       setF1fAvailable(data.f1fAvailable !== false)
-      if (data.f1fAvailable === false && (tab === 'reports' || tab === 'reconciliations')) setTab('summary')
+      if (data.f1fAvailable === false) setTab(current => current === 'reports' || current === 'reconciliations' ? 'summary' : current)
       setLoadedClubId(clubId)
     } catch (cause) {
       if (refreshId.current === requestId) setError(cause instanceof Error ? cause.message : 'No pudimos cargar las finanzas.')
     } finally {
       if (refreshId.current === requestId) setLoading(false)
     }
-  }, [clubId, filter, search, movementFilter, tab, request])
+  }, [clubId, readFilter, readSearch, readMethod, request])
 
   // Fetching remote state when club/filter changes is intentional.
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -275,7 +280,7 @@ export default function ClubFinancePage() {
 
     {!clubId ? <p className={styles.caption}>Seleccioná un club para consultar sus finanzas.</p> : null}
 
-    {error ? <div role="alert" className={styles.error}><p>{error}</p><button type="button" className={styles.cancel} disabled={loading} onClick={() => void refresh()}>Reintentar</button></div> : null}
+    {error ? <div role="alert" className={styles.error}><p>{humanizeUiError(error, 'No pudimos completar la operación financiera. Reintentá.')}</p><button type="button" className={styles.cancel} disabled={loading} onClick={() => void refresh()}>Reintentar</button></div> : null}
     {feedback ? <p role="status" className={styles.success}>{feedback}</p> : null}
 
     {tab !== 'reports' ? <section className={styles.overview} aria-label="Resumen financiero">

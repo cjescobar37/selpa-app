@@ -1,6 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import PageHeader from '@/components/navigation/PageHeader'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
+import { humanizeUiError } from '@/lib/productPresentation'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -76,6 +79,7 @@ export default function ClubJugadoresPage() {
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+  const [readFailed, setReadFailed] = useState(false)
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const [players, setPlayers] = useState<ClubPlayer[]>([])
   const [requests, setRequests] = useState<PlayerRequest[]>([])
@@ -175,9 +179,12 @@ export default function ClubJugadoresPage() {
 
     setLoading(true)
     setMessage('')
+    setReadFailed(false)
 
+    try {
     const token = await getToken()
     if (!token) {
+      setReadFailed(true)
       setMessage('Sesión inválida.')
       setLoading(false)
       return
@@ -193,6 +200,7 @@ export default function ClubJugadoresPage() {
     ])
 
     if (!res.ok) {
+      setReadFailed(true)
       setMessage(json?.error ?? 'No pude cargar jugadores.')
       setLoading(false)
       return
@@ -203,6 +211,12 @@ export default function ClubJugadoresPage() {
     setRequestStats(json?.requestStats ?? { pending: 0, approved: 0, rejected: 0 })
     setThemeKey((clubThemeResult.data?.theme_key as string | null) ?? null)
     setLoading(false)
+    } catch {
+      setReadFailed(true)
+      setMessage('No pudimos cargar jugadores. Revisá tu conexión y reintentá.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -247,6 +261,8 @@ export default function ClubJugadoresPage() {
     await loadPlayers()
   }
 
+  if (readFailed) return <main className="px-wrap"><PageHeader title="Jugadores" backHref="/club" /><PlayerStatePanel kind="error" title="No pudimos cargar jugadores" message={message} onRetry={() => void loadPlayers()} compact /></main>
+
   return (
     <div className="px-wrap">
       <div className="club-panel club-players" style={themeStyle}>
@@ -267,7 +283,7 @@ export default function ClubJugadoresPage() {
           { href:'/club/solicitudes', label:'Solicitudes', description:'Altas pendientes', icon:'requests', requiredAnyCapabilities:['memberships:view'] },
         ]} />
 
-        {message ? <div className="club-message">{message}</div> : null}
+        {message ? <div className="club-message">{humanizeUiError(message)}</div> : null}
 
         {!activeClub?.id ? (
           <div className="px-empty">Primero seleccioná un club activo.</div>

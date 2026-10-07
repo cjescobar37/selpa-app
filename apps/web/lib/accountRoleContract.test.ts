@@ -206,7 +206,7 @@ test('actual enabled checkout GET/POST rejects staff before provider/client work
 })
 
 test('follow-up guards direct DB writes without rewriting history or financial selection/formulas', () => {
-  const sql = read('../supabase/migrations/20261007155811_account_staff_player_separation.sql')
+  const sql = read('../supabase/migrations/20261007164510_20261007155811_account_staff_player_separation.sql')
   for (const table of ['club_memberships','club_players','platform_admins','clubs','profiles','tournament_teams','tournament_registrations','player_partner_invites','player_active_partnerships','club_user_invites']) {
     assert.ok(sql.includes(`before insert or update on public.${table}`))
   }

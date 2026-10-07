@@ -1,6 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import PageHeader from '@/components/navigation/PageHeader'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
+import { humanizeUiError } from '@/lib/productPresentation'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
@@ -154,6 +157,7 @@ export default function ClubTorneosPage() {
   const currentYear = String(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [readFailed, setReadFailed] = useState(false)
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [stagesByTournamentId, setStagesByTournamentId] = useState<Record<string, OperationalStage>>({})
   const [summariesByTournamentId, setSummariesByTournamentId] = useState<Record<string, TournamentListSummary>>({})
@@ -275,9 +279,12 @@ export default function ClubTorneosPage() {
 
     setLoading(true)
     setMessage('')
+    setReadFailed(false)
 
+    try {
     const token = await getToken()
     if (!token) {
+      setReadFailed(true)
       setMessage('Sesión inválida.')
       setLoading(false)
       return
@@ -293,6 +300,7 @@ export default function ClubTorneosPage() {
     ])
 
     if (!res.ok) {
+      setReadFailed(true)
       setMessage(json?.error ?? 'No pude cargar torneos.')
       setLoading(false)
       return
@@ -311,6 +319,12 @@ export default function ClubTorneosPage() {
     setStagesByTournamentId(nextStages)
     setSummariesByTournamentId(nextSummaries)
     setLoading(false)
+    } catch {
+      setReadFailed(true)
+      setMessage('No pudimos cargar torneos. Revisá tu conexión y reintentá.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -410,6 +424,8 @@ export default function ClubTorneosPage() {
     )
   }
 
+  if (readFailed) return <main className="px-wrap"><PageHeader title="Torneos" backHref="/club" /><PlayerStatePanel kind="error" title="No pudimos cargar torneos" message={message} onRetry={() => void loadTournaments()} compact /></main>
+
   return (
     <div className="px-wrap">
       <div className="club-panel club-tournaments" style={themeStyle}>
@@ -425,7 +441,7 @@ export default function ClubTorneosPage() {
           </div>
         </div>
 
-        {message ? <div className="club-message">{message}</div> : null}
+        {message ? <div className="club-message">{humanizeUiError(message)}</div> : null}
 
         {!activeClub?.id ? (
           <div className="px-empty">Primero seleccioná un club activo.</div>

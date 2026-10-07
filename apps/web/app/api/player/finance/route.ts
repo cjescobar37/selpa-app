@@ -42,18 +42,22 @@ export async function GET(req: NextRequest) {
       p_before_paid_at: query.view === 'movements' ? query.cursor?.at ?? null : null,
       p_before_id: query.view === 'movements' ? query.cursor?.id ?? null : null,
     }
-    const failure = (error: { code?: string }) => NextResponse.json({
-      error: error.code === '42501' ? 'No tenés acceso a esos pagos.' : 'No pudimos cargar tus pagos. Probá nuevamente.',
-    }, { status: error.code === '42501' ? 403 : 503, headers })
+    const failure = (error: { code?: string }, operation: string) => {
+      // Never log identity, JWTs, RPC arguments, or database diagnostic text.
+      console.error('[player-finance]', { operation, code: /^[A-Z0-9_]{1,32}$/.test(error.code ?? '') ? error.code : 'UNKNOWN' })
+      return NextResponse.json({
+        error: error.code === '42501' ? 'No tenés acceso a esos pagos.' : 'No pudimos cargar tus pagos. Probá nuevamente.',
+      }, { status: error.code === '42501' ? 403 : 503, headers })
+    }
     if (query.view === 'obligations') {
       const result = await client.rpc('list_player_finance_obligations_f1d', obligationParams)
-      if (result.error) return failure(result.error)
+      if (result.error) return failure(result.error, 'list_player_finance_obligations_f1d')
       const rows = ((result.data ?? []) as Array<{ item: PlayerFinanceObligation }>).map(row => row.item)
       return NextResponse.json({ obligations: financePage(await playerPaymentOptions(client, rows), pageSize, 'created_at') }, { headers })
     }
     if (query.view === 'movements') {
       const result = await client.rpc('list_player_finance_movements_f1d', movementParams)
-      if (result.error) return failure(result.error)
+      if (result.error) return failure(result.error, 'list_player_finance_movements_f1d')
       const rows = ((result.data ?? []) as Array<{ item: PlayerFinanceMovement }>).map(row => row.item)
       return NextResponse.json({ movements: financePage(await paymentMovementLabels(client, null, rows), pageSize, 'paid_at') }, { headers })
     }
@@ -62,14 +66,16 @@ export async function GET(req: NextRequest) {
       client.rpc('list_player_finance_obligations_f1d', obligationParams),
       client.rpc('list_player_finance_movements_f1d', movementParams),
     ])
-    const error = overview.error ?? obligations.error ?? movements.error
-    if (error) return failure(error)
+    if (overview.error) return failure(overview.error, 'get_player_finance_overview_f1d')
+    if (obligations.error) return failure(obligations.error, 'list_player_finance_obligations_f1d')
+    if (movements.error) return failure(movements.error, 'list_player_finance_movements_f1d')
     return NextResponse.json({
       overview: overview.data,
       obligations: financePage(await playerPaymentOptions(client, ((obligations.data ?? []) as Array<{ item: PlayerFinanceObligation }>).map(row => row.item)), pageSize, 'created_at'),
       movements: financePage(await paymentMovementLabels(client, null, ((movements.data ?? []) as Array<{ item: PlayerFinanceMovement }>).map(row => row.item)), pageSize, 'paid_at'),
     }, { headers })
   } catch {
+    console.error('[player-finance]', { operation: 'read', code: 'UNEXPECTED' })
     return NextResponse.json({ error: 'No pudimos cargar tus pagos. Probá nuevamente.' }, { status: 503, headers })
   }
 }

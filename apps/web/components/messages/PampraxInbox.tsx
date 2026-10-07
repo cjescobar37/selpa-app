@@ -8,6 +8,7 @@ import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import SelpaLoader from '@/components/SelpaLoader'
 import PageHeader from '@/components/navigation/PageHeader'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 
 type InboxScope = 'player' | 'club' | 'platform'
 
@@ -312,6 +313,7 @@ export default function PampraxInbox({
     setLoading(true)
     setError('')
 
+    try {
     const token = await getToken()
     if (!token) {
       setError('Sesión inválida.')
@@ -338,6 +340,11 @@ export default function PampraxInbox({
     if (!nextThreadId) setMessages([])
     setLoading(false)
     if (nextThreadId) await loadMessages(nextThreadId)
+    } catch {
+      setError('No pudimos cargar los mensajes. Revisá tu conexión y reintentá.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function loadMessages(threadId: string) {
@@ -451,7 +458,7 @@ export default function PampraxInbox({
           Nuevo mensaje
         </button>} />
 
-      {error ? <div className="px-inboxAlert">{error}</div> : null}
+      {error ? <PlayerStatePanel kind="error" title="No pudimos cargar los mensajes" message={error} onRetry={() => void loadThreads(selectedThreadId)} compact /> : null}
       {notice ? <div className="px-inboxNotice">{notice}</div> : null}
 
       <section className={`px-inboxGrid${!loading && threads.length === 0 ? ' is-empty' : ''}`}>

@@ -4,6 +4,7 @@ import PageHeader from '@/components/navigation/PageHeader'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Download, Plus, RotateCcw, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { humanizeUiError } from '@/lib/productPresentation'
 import { billingDate, billingLabels, billingMoney, type BillingCursor, type BillingOverview, type BillingPage, type BillingRow } from '@/lib/platformBillingF2'
 import styles from './BillingExperience.module.css'
 
@@ -93,7 +94,7 @@ function BillingAction({action,request,onSave,onClose,saving,error}:{action:Acti
         </>:null}
         {['VOID_INVOICE','REVERSE_PAYMENT'].includes(op)?<><strong>{op==='VOID_INVOICE'?'Cargo a compensar':'Cobro a revertir'}: {billingMoney(op==='VOID_INVOICE'?row?.total:row?.amount)}</strong><p className={styles.hint}>{op==='VOID_INVOICE'?'Se compensará el cargo sin borrar el comprobante. Primero deben revertirse los pagos aplicados.':'Se compensará el cobro y se reabrirán los saldos aplicados. El pago original se conserva.'}</p><label>Motivo<input name="reason" required minLength={3} maxLength={1000}/></label></>:null}
         {['SUSPEND','REACTIVATE','CANCEL_AT_END'].includes(op)?<p className={styles.hint}>{op==='SUSPEND'?'Suspende la facturación de nuevos períodos. No altera deudas ni bloquea automáticamente la actividad deportiva.':op==='REACTIVATE'?'Reactiva la suscripción. Si existe deuda vencida seguirá mostrando ese estado.':row?.cancel_at_period_end?'Quita la cancelación programada. La próxima generación podrá emitir el siguiente período.':'Conserva el período actual. La siguiente generación cerrará la suscripción sin emitir un cargo nuevo.'}</p>:null}
-        {lookupError?<p role="alert" className={styles.error}>{lookupError}</p>:null}{error?<p role="alert" className={styles.error}>{error}</p>:null}
+        {lookupError?<p role="alert" className={styles.error}>{humanizeUiError(lookupError, 'No pudimos cargar las opciones. Reintentá.')}</p>:null}{error?<p role="alert" className={styles.error}>{humanizeUiError(error, 'No pudimos guardar la operación. Reintentá.')}</p>:null}
       </div>
       <footer className={styles.dialogFoot}><button type="button" className={styles.secondary} disabled={saving} onClick={onClose}>Cancelar</button><button className={styles.primary} disabled={saving||lookupBusy}>{saving?'Guardando…':planForm?'Guardar plan':'Confirmar operación'}</button></footer>
     </form>
@@ -165,7 +166,7 @@ export default function BillingExperience({platform=false,clubId}:{platform?:boo
     <nav className={styles.tabs} aria-label="Secciones de facturación">{tabs.map(t=><button key={t} className={tab===t?styles.active:''} onClick={()=>{setTab(t);setNotice('')}}>{tabLabels[t]}</button>)}</nav>
     {platform&&['overview','reports'].includes(tab)?<div className={styles.dateFilters}><label>Cobrado desde<input type="date" value={from} max={to} onChange={e=>{if(e.target.value)setFrom(e.target.value)}}/></label><label>Hasta<input type="date" value={to} min={from} onChange={e=>{if(e.target.value)setTo(e.target.value)}}/></label></div>:null}
     {notice?<p role="status" className={styles.notice}>{notice}</p>:null}
-    {error?<p className={styles.error} role="alert">{error}<button className={styles.secondary} onClick={()=>void refresh()}>Reintentar</button></p>:null}
+    {error?<p className={styles.error} role="alert">{humanizeUiError(error, 'No pudimos cargar Facturación. Reintentá.')}<button className={styles.secondary} onClick={()=>void refresh()}>Reintentar</button></p>:null}
     {loading?<div className={styles.loading} role="status"><span/>Cargando facturación…</div>:!clubId&&!platform?<p className={styles.empty}>Seleccioná un club para ver su facturación.</p>:overview?<>
       {platform&&focusClub?<div className={styles.toolbar}><span>Vista de un club</span><button className={styles.secondary} onClick={()=>setFocusClub(undefined)}>Ver todos</button></div>:null}
       {['overview','plan','reports'].includes(tab)?<>

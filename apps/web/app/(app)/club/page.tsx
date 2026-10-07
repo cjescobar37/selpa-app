@@ -8,6 +8,7 @@ import { resolveStorageUrl } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { BRAND } from '@/lib/branding'
 import { canUpdateTournament } from '@/lib/clubPermissions'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 
 type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
 
@@ -165,6 +166,7 @@ export default function ClubPage() {
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const theme = useMemo(() => getClubTheme(themeKey), [themeKey])
   const themeStyle = useMemo(
     () => ({
@@ -233,12 +235,16 @@ export default function ClubPage() {
       setThemeKey((clubThemeResult.data?.theme_key as string | null) ?? null)
 
       setLoading(false)
-    })()
+    })().catch(() => {
+      if (!alive) return
+      setError('No pudimos cargar el club. Revisá tu conexión y reintentá.')
+      setLoading(false)
+    })
 
     return () => {
       alive = false
     }
-  }, [activeClub?.id, role])
+  }, [activeClub?.id, role, loadAttempt])
 
   if (loading) {
     return (
@@ -265,7 +271,7 @@ export default function ClubPage() {
       </div>
     )
   }
-  if (error) return <div className="px-wrap"><div className="px-help">{error}</div></div>
+  if (error) return <div className="px-wrap"><PlayerStatePanel kind="error" title="No pudimos cargar el club" message={error} onRetry={() => setLoadAttempt(attempt => attempt + 1)} compact /></div>
 
   if (role === 'player') {
     if (!clubForPlayer) return <div className="px-wrap"><div className="px-help">No hay club activo seleccionado.</div></div>
