@@ -1,234 +1,53 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
+import PageHeader from '@/components/navigation/PageHeader'
+import AuthAlert from '@/components/AuthAlert'
+import { CLUB_THEMES, CLUB_THEME_LABELS, type ClubThemeKey } from '@/lib/clubThemes'
+import { clubRequestRequiredLabels, humanizeUiError } from '@/lib/productPresentation'
+import styles from '@/components/product/ProductFlow.module.css'
 
-type FormState = {
-  club_name: string
-  brand_name: string
-  cuit: string
-  email: string
-  phone: string
-  website: string
-  instagram: string
-  address: string
-  city: string
-  province: string
-  country: string
-  courts_count: string
-  courts_surface: string
-  opening_hours: string
-  logo_url: string
-  notes: string
-
-  admin_name: string
-  admin_email: string
-  admin_phone: string
-}
-
-const initial: FormState = {
-  club_name: '',
-  brand_name: '',
-  cuit: '',
-  email: '',
-  phone: '',
-  website: '',
-  instagram: '',
-  address: '',
-  city: '',
-  province: '',
-  country: 'Argentina',
-  courts_count: '',
-  courts_surface: '',
-  opening_hours: '',
-  logo_url: '',
-  notes: '',
-
-  admin_name: '',
-  admin_email: '',
-  admin_phone: '',
-}
+const initial = { club_name: '', brand_name: '', cuit: '', email: '', phone: '', website: '', instagram: '',
+  address: '', city: '', province: '', country: 'Argentina', courts_count: '', courts_surface: '', opening_hours: '',
+  logo_url: '', notes: '', admin_name: '', admin_email: '', admin_phone: '', theme_key: 'cyan' }
+type Field = keyof typeof initial
+const optionalLabels: Partial<Record<Field, string>> = { brand_name: 'Nombre comercial', cuit: 'CUIT', phone: 'Teléfono del club',
+  website: 'Sitio web', instagram: 'Instagram', address: 'Dirección', country: 'País', courts_count: 'Cantidad de canchas',
+  courts_surface: 'Superficie', opening_hours: 'Horarios de apertura', logo_url: 'URL del logo', notes: 'Observaciones', admin_phone: 'Teléfono del administrador' }
 
 export default function UnirMiClubPage() {
-  const [v, setV] = useState<FormState>(initial)
+  const [values, setValues] = useState(initial)
   const [sent, setSent] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-
-  const requiredMissing = useMemo(() => {
-    const req: (keyof FormState)[] = ['club_name', 'email', 'city', 'province', 'admin_name', 'admin_email']
-    return req.filter((k) => !String(v[k] ?? '').trim())
-  }, [v])
-
-  function onChange<K extends keyof FormState>(k: K, val: string) {
-    setV((p) => ({ ...p, [k]: val }))
+  const [error, setError] = useState('')
+  function field(key: Field, label: string, required = false) {
+    const type = key.includes('email') ? 'email' : key === 'courts_count' ? 'number' : 'text'
+    return <label key={key} className={styles.field}>{label}{required ? ' *' : ''}<input name={key} type={type} required={required} min={key === 'courts_count' ? 1 : undefined} value={values[key]} onChange={event => setValues(current => ({ ...current, [key]: event.target.value }))} disabled={submitting} /></label>
   }
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (requiredMissing.length) {
-      alert('Faltan campos obligatorios: ' + requiredMissing.join(', '))
-      return
-    }
-
-    setSubmitting(true)
-    const res = await fetch('/api/club-requests', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(v),
-    })
-    const json = await res.json().catch(() => ({}))
-    setSubmitting(false)
-    if (!res.ok) {
-      alert(json?.error ?? 'No pudimos guardar la solicitud')
-      return
-    }
-
-    setSent(true)
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (submitting) return
+    const missing = (Object.keys(clubRequestRequiredLabels) as Array<keyof typeof clubRequestRequiredLabels>).filter(key => !values[key].trim())
+    if (missing.length) { setError(`Completá: ${missing.map(key => clubRequestRequiredLabels[key]).join(', ')}.`); return }
+    setSubmitting(true); setError('')
+    try {
+      const response = await fetch('/api/club-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) { setError(humanizeUiError(data.error, 'No pudimos enviar la solicitud. Conservamos tus datos para que puedas reintentar.')); return }
+      setSent(true)
+    } catch { setError('No pudimos conectarnos. Conservamos tus datos; reintentá cuando tengas conexión.') }
+    finally { setSubmitting(false) }
   }
-
-  return (
-    <div className="px-wrap" style={{ paddingTop: 10 }}>
-      <div className="px-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <h1 className="px-h1">Unir mi club</h1>
-            <p className="px-muted" style={{ marginTop: 6 }}>
-              Completá este formulario para enviar la <b>solicitud de alta</b> de tu club.
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <Link className="px-btn px-btn--ghost" href="/">Volver</Link>
-            <Link className="px-btn px-btn--ghost" href="/login">Login</Link>
-          </div>
-        </div>
-
-        {sent ? (
-          <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
-            <div className="px-help">
-              ✅ Solicitud enviada. Ya quedó guardada como pendiente para revisión.
-            </div>
-            <button className="px-btn" onClick={() => { setV(initial); setSent(false) }}>
-              Cargar otra solicitud
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={onSubmit} style={{ marginTop: 14 }}>
-            <div className="px-formGrid">
-              <div className="px-sepRow">Datos del club</div>
-
-              <div className="px-grid2">
-                <div className="px-field">
-                  <div className="px-label">Nombre del club *</div>
-                  <input className="px-input" value={v.club_name} onChange={(e) => onChange('club_name', e.target.value)} placeholder="Complejo LA33" />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">Nombre comercial / branding</div>
-                  <input className="px-input" value={v.brand_name} onChange={(e) => onChange('brand_name', e.target.value)} placeholder="LA33 Pádel" />
-                </div>
-              </div>
-
-              <div className="px-grid3">
-                <div className="px-field">
-                  <div className="px-label">CUIT</div>
-                  <input className="px-input" value={v.cuit} onChange={(e) => onChange('cuit', e.target.value)} placeholder="20-xxxxxxxx-x" />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">Email contacto *</div>
-                  <input className="px-input" value={v.email} onChange={(e) => onChange('email', e.target.value)} placeholder="club@dominio.com" />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">Teléfono</div>
-                  <input className="px-input" value={v.phone} onChange={(e) => onChange('phone', e.target.value)} placeholder="+54 ..." />
-                </div>
-              </div>
-
-              <div className="px-grid3">
-                <div className="px-field">
-                  <div className="px-label">Website</div>
-                  <input className="px-input" value={v.website} onChange={(e) => onChange('website', e.target.value)} placeholder="https://..." />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">Instagram</div>
-                  <input className="px-input" value={v.instagram} onChange={(e) => onChange('instagram', e.target.value)} placeholder="@club" />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">URL Logo (opcional)</div>
-                  <input className="px-input" value={v.logo_url} onChange={(e) => onChange('logo_url', e.target.value)} placeholder="https://.../logo.png" />
-                </div>
-              </div>
-
-              <div className="px-grid2">
-                <div className="px-field">
-                  <div className="px-label">Dirección</div>
-                  <input className="px-input" value={v.address} onChange={(e) => onChange('address', e.target.value)} placeholder="Calle y número" />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">Ciudad *</div>
-                  <input className="px-input" value={v.city} onChange={(e) => onChange('city', e.target.value)} placeholder="Santa Rosa" />
-                </div>
-              </div>
-
-              <div className="px-grid3">
-                <div className="px-field">
-                  <div className="px-label">Provincia *</div>
-                  <input className="px-input" value={v.province} onChange={(e) => onChange('province', e.target.value)} placeholder="La Pampa" />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">País</div>
-                  <input className="px-input" value={v.country} onChange={(e) => onChange('country', e.target.value)} />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">Horarios</div>
-                  <input className="px-input" value={v.opening_hours} onChange={(e) => onChange('opening_hours', e.target.value)} placeholder="Lun a Dom 08:00–23:00" />
-                </div>
-              </div>
-
-              <div className="px-grid3">
-                <div className="px-field">
-                  <div className="px-label">Cantidad de canchas</div>
-                  <input className="px-input" value={v.courts_count} onChange={(e) => onChange('courts_count', e.target.value)} placeholder="Ej: 6" />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">Superficie</div>
-                  <input className="px-input" value={v.courts_surface} onChange={(e) => onChange('courts_surface', e.target.value)} placeholder="Césped sintético, Mondo, etc." />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">Notas</div>
-                  <input className="px-input" value={v.notes} onChange={(e) => onChange('notes', e.target.value)} placeholder="Observaciones / necesidades" />
-                </div>
-              </div>
-
-              <div className="px-sepRow">Usuario administrador del club</div>
-
-              <div className="px-grid3">
-                <div className="px-field">
-                  <div className="px-label">Nombre y apellido *</div>
-                  <input className="px-input" value={v.admin_name} onChange={(e) => onChange('admin_name', e.target.value)} placeholder="Nombre Apellido" />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">Email admin *</div>
-                  <input className="px-input" value={v.admin_email} onChange={(e) => onChange('admin_email', e.target.value)} placeholder="admin@dominio.com" />
-                </div>
-                <div className="px-field">
-                  <div className="px-label">Teléfono admin</div>
-                  <input className="px-input" value={v.admin_phone} onChange={(e) => onChange('admin_phone', e.target.value)} placeholder="+54 ..." />
-                </div>
-              </div>
-
-              <div className="px-help">
-                * Campos obligatorios. Revisaremos tu solicitud y nos comunicaremos con vos.
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button className="px-btn" type="submit" disabled={submitting}>{submitting ? 'Enviando…' : 'Enviar solicitud'}</button>
-                <button className="px-btn px-btn--ghost" type="button" onClick={() => setV(initial)}>
-                  Limpiar
-                </button>
-              </div>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
-  )
+  return <main className={styles.page}>
+    <PageHeader backHref="/" title="Unir mi club" description="Solicitá el alta de tu club. Revisaremos los datos antes de activarlo." actions={<Link className={styles.link} href="/login">Ingresar</Link>} />
+    {sent ? <section className={styles.panel}><h2>Solicitud enviada</h2><p>El equipo de SELPA revisará el alta y se comunicará con el administrador indicado. No necesitás volver a enviarla.</p><div className={styles.actions}><Link className={styles.button} href="/">Volver al inicio</Link><Link className={styles.link} href="/clubes">Explorar clubes</Link></div></section> : <form onSubmit={submit} className={styles.page} style={{ padding: 0 }}>
+      <section className={styles.panel}><h2>Club y contacto</h2><div className={styles.grid}>{(Object.entries(clubRequestRequiredLabels) as Array<[keyof typeof clubRequestRequiredLabels, string]>).map(([key,label]) => field(key,label,true))}</div>
+        <label className={styles.field}>Identidad visual<select name="theme_key" value={values.theme_key} onChange={event => setValues(current => ({ ...current, theme_key: event.target.value }))} disabled={submitting}>{(Object.keys(CLUB_THEMES) as ClubThemeKey[]).map(key => <option key={key} value={key}>{CLUB_THEME_LABELS[key]}</option>)}</select></label>
+      </section>
+      <details className={styles.disclosure}><summary>Datos adicionales · opcional</summary><div className={styles.grid}>{(Object.entries(optionalLabels) as Array<[Field,string]>).map(([key,label]) => field(key,label))}</div></details>
+      {error ? <AuthAlert variant="error" title="Revisá la solicitud" message={error} /> : null}
+      <div className={styles.actions}><button className={styles.button} type="submit" disabled={submitting}>{submitting ? 'Enviando…' : 'Enviar solicitud'}</button><p className={styles.note}>* Datos obligatorios. No crea un club automáticamente.</p></div>
+    </form>}
+  </main>
 }

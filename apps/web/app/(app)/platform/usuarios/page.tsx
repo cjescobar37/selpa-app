@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import PageHeader from '@/components/navigation/PageHeader'
 import { membershipStatusBadgeClass, membershipStatusLabel } from '@/lib/platformStatus'
 
 type MembershipRow = {
@@ -86,14 +87,15 @@ export default function PlatformUsuariosPage() {
 
     const nextRows = (json?.rows ?? []) as MembershipRow[]
     setRows(nextRows)
-    setClubs((json?.clubs ?? []).map((club: any) => ({ id: club.id, name: club.name })))
+    setClubs(((json?.clubs ?? []) as Array<{ id: string; name: string }>).map(club => ({ id: club.id, name: club.name })))
     setSummary(json?.summary ?? { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0 })
     setSelectedId((current) => current ?? nextRows[0]?.id ?? null)
     setLoading(false)
   }
 
   useEffect(() => {
-    load()
+    const timer = window.setTimeout(() => { void load() }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   const filtered = useMemo(() => {
@@ -196,17 +198,11 @@ export default function PlatformUsuariosPage() {
   return (
     <div className="platform-shell">
       <div className="px-platform px-platform--users">
-        <div className="px-platformHead">
-          <div>
-            <h1 className="px-platformTitle">Administración global de usuarios</h1>
-            <div className="px-platformSub">Supervisá altas por club, membresías pendientes y acciones transversales desde plataforma.</div>
-          </div>
-          <div className="px-toolbar">
+        <PageHeader backHref="/platform" title="Usuarios" description="Personas, membresías y acciones de plataforma." actions={<div className="px-toolbar">
             <button className="px-btn px-btn--ghost" type="button" onClick={load} disabled={loading}>
               {loading ? (<><span className="px-spinner" /> Recargando…</>) : 'Recargar'}
             </button>
-          </div>
-        </div>
+          </div>} />
 
         <div className="px-kpis px-kpis--platformAdmin" style={{ marginTop: 16 }}>
           <div className="px-platformMetricCard"><span>Total membresías</span><strong>{summary.total}</strong></div>

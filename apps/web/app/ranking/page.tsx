@@ -46,7 +46,7 @@ function displayName(player: ClubPlayerRow, profile?: ProfileRow | null) {
 export default async function RankingPublicPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ clubId?: string; club?: string; category?: string }>
+  searchParams?: Promise<{ clubId?: string; club?: string; category?: string; gender?: string }>
 }) {
   const params = await searchParams
   const initialClubId = params?.clubId ?? params?.club ?? null
@@ -152,7 +152,7 @@ export default async function RankingPublicPage({
 
   return (
     <div className="px-wrap px-publicFrame">
-      <PublicRankingExperience players={publicPlayers} pairs={publicPairs} clubs={clubs} initialClubId={initialClubId} initialCategory={initialCategory} />
+      <PublicRankingExperience key={params?.gender ?? 'all'} players={publicPlayers} pairs={publicPairs} clubs={clubs} initialClubId={initialClubId} initialCategory={initialCategory} initialGender={params?.gender} />
     </div>
   )
 }

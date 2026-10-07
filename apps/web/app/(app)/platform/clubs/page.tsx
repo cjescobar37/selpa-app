@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import PageHeader from '@/components/navigation/PageHeader'
 import { clubStatusBadgeClass, clubStatusLabel } from '@/lib/platformStatus'
 
 type ClubRow = {
@@ -184,18 +185,12 @@ export default function PlatformClubsPage() {
   return (
     <div className="platform-shell">
       <div className="px-platform px-platform--clubs">
-        <div className="px-platformHead">
-          <div>
-            <h1 className="px-platformTitle">Administración de clubes</h1>
-            <div className="px-platformSub">Gestioná el padrón de clubes activos, estados operativos y próximos módulos de plataforma.</div>
-          </div>
-          <div className="px-toolbar">
+        <PageHeader backHref="/platform" title="Clubes" description="Padrón y estados operativos." actions={<div className="px-toolbar">
             <Link className="px-btn" href="/platform/clubs/nuevo">Alta de club</Link>
             <button className="px-btn px-btn--ghost" type="button" onClick={load} disabled={loading}>
               {loading ? (<><span className="px-spinner" /> Recargando…</>) : 'Recargar'}
             </button>
-          </div>
-        </div>
+          </div>} />
 
         <div className="px-kpis px-kpis--platformAdmin" style={{ marginTop: 16 }}>
           <div className="px-platformMetricCard">

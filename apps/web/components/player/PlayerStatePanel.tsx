@@ -24,7 +24,7 @@ export default function PlayerStatePanel({
   compact = false,
 }: PlayerStatePanelProps) {
   return (
-    <section className={`playerStatePanel is-${kind}${viewport ? ' is-viewport' : ''}${compact ? ' is-compact' : ''}`} aria-live="polite">
+    <section className={`playerStatePanel is-${kind}${viewport ? ' is-viewport' : ''}${compact ? ' is-compact' : ''}`} role={kind === 'error' ? 'alert' : undefined} aria-live="polite">
       {kind === 'loading' ? (
         <SelpaLoader title={title} subtitle={message ?? ''} />
       ) : (

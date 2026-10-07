@@ -83,7 +83,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     const isAllowed = pathname === '/player' || allowedWithoutClub.some(p => pathname.startsWith(p))
 
     if (session.isPlatformAdmin) return
-    if (pathname.startsWith('/platform/facturacion')) {
+    if (pathname === '/platform' || pathname.startsWith('/platform/')) {
       router.replace(session.role === 'player' ? '/player' : '/club')
       return
     }
@@ -132,7 +132,7 @@ export default function RoleGate({ children }: { children: React.ReactNode }) {
     session.status === 'ready' &&
     Boolean(session.user) &&
     (!requiresPlayerProfile || isGlobalProfileComplete(session.globalProfile)) &&
-    (!pathname.startsWith('/platform/facturacion') || session.isPlatformAdmin) &&
+    (!(pathname === '/platform' || pathname.startsWith('/platform/')) || session.isPlatformAdmin) &&
     (session.isPlatformAdmin ||
       Boolean(session.activeClubId && session.isApprovedMember && (!isClubAdminRoute || (
         hasAdministrativeClubRole && hasAnyClubPermission(session.clubRole, requiredClubCapabilities(pathname, currentPath))

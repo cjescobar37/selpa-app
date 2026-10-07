@@ -1,32 +1,18 @@
 import Link from 'next/link'
-import { BRAND } from '@/lib/branding'
+import PageHeader from '@/components/navigation/PageHeader'
+import PublicAgenda from '@/components/product/PublicAgenda'
+import ReadFailure from '@/components/product/ReadFailure'
+import { getPublicTournamentItems } from '@/lib/publicTournamentItems'
+import styles from '@/components/product/ProductFlow.module.css'
 
-export default function TorneosCalendarioPage() {
-  return (
-    <div className="px-page">
-      <div className="px-pageHead">
-        <h1 className="px-pageTitle">Calendario</h1>
-        <p className="px-pageSub">Agenda pública de torneos y fechas destacadas.</p>
-      </div>
+export const dynamic = 'force-dynamic'
 
-      <div className="px-card px-cardTopAccent px-sectionCard">
-        <h2 className="px-cardTitle">Próximas fechas</h2>
-        <div className="px-list" style={{ marginTop: 12 }}>
-          {[
-            ['Open LA33', '22–24 Mar · Santa Rosa'],
-            [`Copa ${BRAND.name}`, '05–07 Abr · General Pico'],
-            ['Night Cup', '12–13 Abr · Toay'],
-          ].map(([name, meta]) => (
-            <div key={name} className="px-card px-card--flat">
-              <div style={{ fontWeight: 900 }}>{name}</div>
-              <div className="px-muted" style={{ marginTop: 4 }}>{meta}</div>
-            </div>
-          ))}
-        </div>
-        <div className="px-pageActions">
-          <Link className="px-btn px-btn--ghost" href="/torneos">Volver a torneos</Link>
-        </div>
-      </div>
-    </div>
-  )
+export default async function TorneosCalendarioPage() {
+  let data: Awaited<ReturnType<typeof getPublicTournamentItems>> | null = null
+  try { data = await getPublicTournamentItems() }
+  catch { /* Keep read failure separate from a valid empty calendar. */ }
+  return <main className={styles.page}>
+    <PageHeader backHref="/torneos" title="Calendario" description="Fechas reales publicadas por los clubes." actions={<Link className={styles.link} href="/envivo">En vivo</Link>} />
+    {data ? <PublicAgenda tournaments={data.tournaments} mode="calendar" /> : <ReadFailure message="No pudimos cargar el calendario. Intentá nuevamente." />}
+  </main>
 }

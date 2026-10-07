@@ -7,6 +7,7 @@ import AuthAlert from '@/components/AuthAlert'
 import PasswordField, { meetsPasswordRequirements } from '@/components/auth/PasswordField'
 import { BRAND } from '@/lib/branding'
 import { supabase } from '@/lib/supabaseClient'
+import controls from '@/components/auth/AuthControls.module.css'
 
 type RegisterErrorCode = 'EMAIL_ALREADY_REGISTERED' | 'EMAIL_RATE_LIMIT' | 'DATABASE_ERROR' | 'EMAIL_SEND_ERROR' | 'INVALID_EMAIL' | 'WEAK_PASSWORD' | 'NETWORK_ERROR' | 'UNKNOWN_ERROR'
 type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string; code?: RegisterErrorCode } | null
@@ -55,7 +56,7 @@ export default function RegisterPage() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data?.session?.user) router.replace('/auth/post-login')
-    })
+    }).catch(() => { /* A failed session lookup must not block a new registration. */ })
   }, [router])
 
   function clearFieldError(field: FieldName) {
@@ -140,10 +141,14 @@ export default function RegisterPage() {
   async function signUpWithGoogle() {
     setAlert(null)
     setLoading(true)
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: oauthRedirectTo },
-    })
+    let error
+    try {
+      ;({ error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: oauthRedirectTo } }))
+    } catch {
+      setAlert(registerAlertFromCode('NETWORK_ERROR'))
+      setLoading(false)
+      return
+    }
 
     if (error) {
       setAlert({ variant: 'error', title: 'No pudimos continuar con Google.', message: error.message })
@@ -152,7 +157,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="px-auth px-authModern px-registerAuth">
+    <div className={`px-auth px-authModern px-registerAuth ${controls.form}`}>
       <div className="px-authCard">
         <div className="px-authTop">
           <div className="px-authBrand">

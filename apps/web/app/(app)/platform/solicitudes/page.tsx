@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import PageHeader from '@/components/navigation/PageHeader'
+import PublicClubRequests from '@/components/platform/PublicClubRequests'
 import { clubStatusBadgeClass, clubStatusLabel } from '@/lib/platformStatus'
 
 type AlertState =
@@ -124,11 +126,12 @@ export default function PlatformSolicitudesPage() {
   const [selected, setSelected] = useState<PendingClubRow | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
+  const [visibleCount, setVisibleCount] = useState(8)
 
   async function load() {
     setLoading(true)
     setAlert(null)
-
+    try {
     const { data: sess } = await supabase.auth.getSession()
     const token = sess?.session?.access_token
     if (!token) {
@@ -153,21 +156,30 @@ export default function PlatformSolicitudesPage() {
     setRows(nextRows)
 
     const focused = focusId ? nextRows.find((row) => row.id === focusId) ?? null : null
-    if (focused) setSelected(focused)
+    if (focused) {
+      setSelected(focused)
+      setVisibleCount(Math.max(8, nextRows.findIndex(row => row.id === focusId) + 1))
+    }
 
     setLoading(false)
+    } catch {
+      setAlert({ variant: 'error', title: 'No pudimos cargar los clubes', message: 'Revisá tu conexión y reintentá.' })
+    } finally { setLoading(false) }
   }
 
   useEffect(() => {
-    load()
+    const timer = window.setTimeout(() => { void load() }, 0)
+    return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId])
 
   const pendingCount = rows.length
-  const latestThree = rows.slice(0, 3)
   const selectedId = selected?.id ?? focusId
 
   async function applyAction(row: PendingClubRow, action: 'approve' | 'reject') {
+    if (busyId) return
+    setBusyId(row.id)
+    try {
     const { data: sess } = await supabase.auth.getSession()
     const token = sess?.session?.access_token
     if (!token) {
@@ -180,7 +192,6 @@ export default function PlatformSolicitudesPage() {
       return
     }
 
-    setBusyId(row.id)
     const res = await fetch('/api/platform/clubs-admin', {
       method: 'PATCH',
       headers: {
@@ -195,60 +206,54 @@ export default function PlatformSolicitudesPage() {
     })
 
     const json = await res.json().catch(() => ({}))
-    setBusyId(null)
 
     if (!res.ok) {
       setAlert({ variant: 'error', title: 'No pude procesar la solicitud', message: json?.error ?? 'Error' })
       return
     }
 
-    setAlert({
+    const success: AlertState = {
       variant: 'success',
       title: action === 'approve' ? 'Solicitud aprobada' : 'Solicitud rechazada',
       message: action === 'approve'
         ? 'El club ya quedó habilitado y visible para la operación pública.'
         : 'Se rechazó la solicitud del club y se actualizó su estado.',
-    })
+    }
     setSelected(null)
     setRejectionReason('')
     await load()
+    setAlert(current => current?.variant === 'error' ? current : success)
+    } catch {
+      setAlert({ variant: 'error', title: 'No pudimos procesar la solicitud', message: 'Revisá tu conexión. Antes de reintentar, recargá para comprobar el estado del club.' })
+    } finally {
+      setBusyId(null)
+    }
   }
 
   return (
     <div className="platform-shell">
       <div className="platform-panel">
         <div className="px-platform px-platform--requests">
-          <div className="px-platformHead">
-            <div>
-              <h1 className="px-platformTitle">Solicitudes de alta de clubes</h1>
-              <div className="px-platformSub">Revisá, visualizá y aprobá o denegá cada alta pendiente.</div>
-            </div>
-            <div className="px-toolbar">
-              <span className="px-pill">{pendingCount} pendientes</span>
-              <button className="px-btn px-btn--ghost" type="button" onClick={load}>Recargar</button>
-            </div>
-          </div>
+          <PageHeader backHref="/platform" title="Solicitudes" description="Altas públicas y clubes por habilitar." actions={<div className="px-toolbar">
+              {!loading && alert?.variant !== 'error' ? <span className="px-pill">{pendingCount} clubes por habilitar</span> : null}
+              <button className="px-btn px-btn--ghost" style={{ minHeight: 44 }} type="button" onClick={load}>Recargar</button>
+            </div>} />
 
-          <div className="px-kpis px-kpis--platformAdmin" style={{ marginTop: 16 }}>
-            <div className="px-platformMetricCard"><span>Pendientes</span><strong>{pendingCount}</strong></div>
-            <div className="px-platformMetricCard"><span>Últimas ingresadas</span><strong>{latestThree.length}</strong></div>
-            <div className="px-platformMetricCard"><span>Modalidad</span><strong>Alta club</strong></div>
-            <div className="px-platformMetricCard"><span>Acción sugerida</span><strong>Revisar hoy</strong></div>
-          </div>
+          <PublicClubRequests focusId={focusId} />
 
           {alert ? <div style={{ marginTop: 14 }}><AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /></div> : null}
 
           <div className="px-platformGrid" style={{ marginTop: 16 }}>
             <div className="px-platformCard">
-              <div className="px-sectionTitle">Pendientes</div>
+              <div className="px-sectionTitle">Clubes por habilitar</div>
 
               {loading ? (
                 <div className="px-empty">Cargando solicitudes…</div>
-              ) : rows.length === 0 ? (
-                <div className="px-empty">No hay solicitudes pendientes.</div>
+              ) : alert?.variant === 'error' ? <button className="px-btn px-btn--ghost" type="button" onClick={load}>Reintentar clubes</button> : rows.length === 0 ? (
+                <div className="px-empty">No hay clubes por habilitar.</div>
               ) : (
                 <div className="px-platformRequestList">
-                  {rows.map((row) => {
+                  {rows.slice(0, visibleCount).map((row) => {
                     const isBusy = busyId === row.id
                     const isSelected = selectedId === row.id
                     return (
@@ -282,37 +287,7 @@ export default function PlatformSolicitudesPage() {
                   })}
                 </div>
               )}
-            </div>
-
-            <div className="px-platformAsideStack">
-              <div className="px-platformCard">
-                <div className="px-sectionTitle">Últimas 3 solicitudes</div>
-                <div className="px-platformMiniStack">
-                  {latestThree.length === 0 ? (
-                    <div className="px-empty">Sin movimientos recientes.</div>
-                  ) : latestThree.map((row) => (
-                    <button
-                      key={row.id}
-                      className={`px-platformMiniItem${selectedId === row.id ? ' is-selected' : ''}`}
-                      type="button"
-                      onClick={() => setSelected(row)}
-                    >
-                      <strong>{row.name}</strong>
-                      <span>{row.owner_name || row.owner_email || 'Sin responsable'}</span>
-                      <span>{[row.city, row.province].filter(Boolean).join(' · ') || 'Ubicación sin completar'}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="px-platformCard">
-                <div className="px-sectionTitle">Tips de revisión</div>
-                <div className="px-platformChecklist">
-                  <div>Validá datos del responsable.</div>
-                  <div>Chequeá branding, contacto y CUIT.</div>
-                  <div>Aprobá solo cuando el club esté listo para operar.</div>
-                </div>
-              </div>
+              {!loading && rows.length > visibleCount && <button className="px-btn px-btn--ghost" type="button" onClick={() => setVisibleCount(current => current + 8)}>Ver más clubes</button>}
             </div>
           </div>
         </div>
@@ -357,7 +332,7 @@ export default function PlatformSolicitudesPage() {
 
         .px-platformGrid {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 320px;
+          grid-template-columns: minmax(0, 1fr);
           gap: 16px;
           align-items: start;
         }

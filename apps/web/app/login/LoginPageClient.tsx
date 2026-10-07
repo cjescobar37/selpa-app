@@ -8,6 +8,7 @@ import AuthAlert from '@/components/AuthAlert'
 import PasswordField from '@/components/auth/PasswordField'
 import SelpaLoader from '@/components/SelpaLoader'
 import { BRAND } from '@/lib/branding'
+import controls from '@/components/auth/AuthControls.module.css'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
@@ -58,7 +59,7 @@ export default function LoginPageClient() {
       return {
         variant: 'error',
         title: 'No se pudo completar la validación',
-        message: decodeURIComponent(error),
+        message: error,
       }
     }
 
@@ -80,10 +81,14 @@ export default function LoginPageClient() {
     // Espera la lectura inicial compartida para no competir por el lock de auth.
     await getCurrentSession().catch(() => null)
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo },
-    })
+    let error
+    try {
+      ;({ error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } }))
+    } catch {
+      setAlert({ variant: 'error', title: 'No pudimos conectar con Google', message: 'Revisá tu conexión y volvé a intentar.' })
+      setLoading(false)
+      return
+    }
 
     if (error) {
       setAlert({
@@ -115,10 +120,14 @@ export default function LoginPageClient() {
     // La comprobación inicial y el login no deben correr sobre el mismo token a la vez.
     await getCurrentSession().catch(() => null)
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
-    })
+    let error
+    try {
+      ;({ error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password }))
+    } catch {
+      setAlert({ variant: 'error', title: 'No pudimos iniciar sesión', message: 'Revisá tu conexión y volvé a intentar. Conservamos tu email.' })
+      setLoading(false)
+      return
+    }
 
     if (error) {
       setAlert({
@@ -134,7 +143,7 @@ export default function LoginPageClient() {
   }
 
   return (
-    <div className="px-auth px-authModern px-loginAuth">
+    <div className={`px-auth px-authModern px-loginAuth ${controls.form}`}>
       <div className="px-authCard">
         <div className="px-authTop">
           <div className="px-authBrand">

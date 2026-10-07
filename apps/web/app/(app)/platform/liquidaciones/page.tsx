@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import Link from 'next/link'
+import PageHeader from '@/components/navigation/PageHeader'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
@@ -112,7 +114,8 @@ export default function PlatformLiquidacionesPage() {
   }
 
   useEffect(() => {
-    load()
+    const timer = window.setTimeout(() => { void load() }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   const filtered = useMemo(() => {
@@ -188,17 +191,12 @@ export default function PlatformLiquidacionesPage() {
   return (
     <div className="platform-shell">
       <div className="px-platform px-platform--finance">
-        <div className="px-platformHead">
-          <div>
-            <h1 className="px-platformTitle">Liquidaciones</h1>
-            <div className="px-platformSub">Generá y seguí liquidaciones por club con totales claros.</div>
-          </div>
-          <div className="px-toolbar">
+        <PageHeader backHref="/platform" title="Liquidaciones legacy" description="Circuito anterior, separado de Facturación SELPA." actions={<div className="px-toolbar">
             <button className="px-btn px-btn--ghost" onClick={load} disabled={loading}>
               {loading ? (<><span className="px-spinner" /> Recargando…</>) : 'Recargar'}
             </button>
-          </div>
-        </div>
+          </div>} />
+        <div className="px-platformNoteBox" style={{ marginTop:12 }}>Para consultar planes, facturas y pagos Club → SELPA, entrá a <Link href="/platform/facturacion">Facturación SELPA</Link>.</div>
 
         <div className="px-kpis px-kpis--platformAdmin" style={{ marginTop: 16 }}>
           <div className="px-platformMetricCard"><span>Pendientes</span><strong>{totals.pending}</strong></div>

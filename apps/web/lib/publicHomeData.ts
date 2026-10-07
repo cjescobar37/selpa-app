@@ -9,7 +9,7 @@ function normalizeBrandText(value: unknown) {
     : value
 }
 
-function normalizeContentBrand<T extends Record<string, any>>(item: T): T {
+function normalizeContentBrand<T extends Record<string, unknown>>(item: T): T {
   return {
     ...item,
     title: normalizeBrandText(item.title),
@@ -20,29 +20,31 @@ function normalizeContentBrand<T extends Record<string, any>>(item: T): T {
 }
 
 export async function getPublicHomeData() {
-  const { archiveNews, ads, sponsors } = await listPublishedContent()
-  const normalizedArchiveNews = archiveNews.map((item: any) => normalizeContentBrand(item))
-  const normalizedAds = ads.map((item: any) => normalizeContentBrand(item))
-  const normalizedSponsors = sponsors.map((item: any) => normalizeContentBrand(item))
+  const [content, tournamentResult] = await Promise.all([
+    listPublishedContent(),
+    supabaseAdmin
+      .from('tournaments')
+      .select(TOURNAMENT_SELECT)
+      .not('status', 'in', '("DRAFT","CANCELLED","CANCELED","CANCELADO","ARCHIVED","FINISHED","COMPLETED","FINALIZADO","CLOSED")')
+      .order('starts_on', { ascending: true, nullsFirst: false })
+      .order('start_date', { ascending: true, nullsFirst: false })
+      .limit(72),
+  ])
+  const { archiveNews, ads, sponsors } = content
+  const normalizedArchiveNews = archiveNews.map(item => normalizeContentBrand(item))
+  const normalizedAds = ads.map(item => normalizeContentBrand(item))
+  const normalizedSponsors = sponsors.map(item => normalizeContentBrand(item))
   const prioritizedSlides = [
-    ...normalizedArchiveNews.filter((item: any) => item.placement === 'HERO'),
-    ...normalizedArchiveNews.filter((item: any) => item.placement !== 'HERO'),
+    ...normalizedArchiveNews.filter(item => item.placement === 'HERO'),
+    ...normalizedArchiveNews.filter(item => item.placement !== 'HERO'),
   ]
-    .filter((item: any, index: number, list: any[]) => list.findIndex((entry) => entry.id === item.id) === index)
+    .filter((item, index, list) => list.findIndex(entry => entry.id === item.id) === index)
     .slice(0, 3)
 
-  const { data: tournamentRows } = await supabaseAdmin
-    .from('tournaments')
-    .select(TOURNAMENT_SELECT)
-    .not('status', 'in', '("DRAFT","CANCELLED","CANCELED","CANCELADO","ARCHIVED","FINISHED","COMPLETED","FINALIZADO","CLOSED")')
-    .order('starts_on', { ascending: true, nullsFirst: false })
-    .order('start_date', { ascending: true, nullsFirst: false })
-    // La comunidad prioriza torneos vigentes y próximos. Un límite corto ordenado
-    // desde las fechas antiguas terminaba ocultándolos detrás de eventos históricos.
-    .limit(72)
+  const { data: tournamentRows } = tournamentResult
 
-  const tournamentViewsRaw = (tournamentRows ?? []).map((row: any) => toTournamentView(row)).filter(Boolean)
-  const featuredTournamentIds = tournamentViewsRaw.map((item: any) => item.id).filter(Boolean)
+  const tournamentViewsRaw = (tournamentRows ?? []).map(toTournamentView).filter(item => item !== null)
+  const featuredTournamentIds = tournamentViewsRaw.map(item => item.id).filter(Boolean)
   const { data: featuredRegistrationRows } = featuredTournamentIds.length
     ? await supabaseAdmin
       .from('tournament_registrations')
@@ -82,16 +84,16 @@ export async function getPublicHomeData() {
       .neq('status', 'DRAFT'),
   ])
 
-  const clubsById = new Map((clubRows ?? []).map((club: any) => [String(club.id), club]))
+  const clubsById = new Map((clubRows ?? []).map(club => [String(club.id), club]))
   const playerStatsByClub = new Map<string, { players: number; categories: Set<number>; male: number; female: number }>()
   for (const row of clubPlayerRows ?? []) {
-    const clubId = String((row as any).club_id ?? '')
+    const clubId = String(row.club_id ?? '')
     if (!clubId) continue
     const current = playerStatsByClub.get(clubId) ?? { players: 0, categories: new Set<number>(), male: 0, female: 0 }
     current.players += 1
-    const category = Number((row as any).category)
+    const category = Number(row.category)
     if (Number.isFinite(category)) current.categories.add(category)
-    const gender = String((row as any).gender ?? '').toUpperCase()
+    const gender = String(row.gender ?? '').toUpperCase()
     if (gender === 'M' || gender === 'MALE') current.male += 1
     if (gender === 'F' || gender === 'FEMALE') current.female += 1
     playerStatsByClub.set(clubId, current)
@@ -99,16 +101,16 @@ export async function getPublicHomeData() {
 
   const tournamentStatsByClub = new Map<string, { tournaments: number; active: number }>()
   for (const row of tournamentStatRows ?? []) {
-    const clubId = String((row as any).club_id ?? '')
+    const clubId = String(row.club_id ?? '')
     if (!clubId) continue
     const current = tournamentStatsByClub.get(clubId) ?? { tournaments: 0, active: 0 }
     current.tournaments += 1
-    const status = String((row as any).status ?? '').toUpperCase()
+    const status = String(row.status ?? '').toUpperCase()
     if (!['FINISHED', 'COMPLETED', 'CLOSED', 'ARCHIVED'].includes(status)) current.active += 1
     tournamentStatsByClub.set(clubId, current)
   }
 
-  const featuredClubs = (clubRows ?? []).map((club: any) => {
+  const featuredClubs = (clubRows ?? []).map(club => {
     const id = String(club.id)
     const playerStats = playerStatsByClub.get(id)
     const tournamentStats = tournamentStatsByClub.get(id)
@@ -124,7 +126,7 @@ export async function getPublicHomeData() {
   })
 
   const tournaments = tournamentViewsRaw
-    .map((view: any) => {
+    .map(view => {
       const club = view ? clubsById.get(view.club_id) : null
       return view ? { ...view, name: normalizeBrandText(view.name), registeredPairs: featuredRegistrationsByTournamentId.get(view.id) ?? 0, clubName: club?.name ?? null, clubLogoUrl: club?.logo_url ?? null, clubThemeKey: club?.theme_key ?? null } : null
     })

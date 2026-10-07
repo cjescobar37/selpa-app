@@ -136,17 +136,17 @@ export const NAV_CONFIG: Record<AppRole, NavConfig> = {
         href: '/platform/solicitudes',
         children: [
           { label: 'Solicitudes', href: '/platform/solicitudes' },
-          { label: 'Admin Clubs', href: '/platform/clubs' },
-          { label: 'Admin Jugadores', href: '/platform/usuarios' },
+          { label: 'Clubes', href: '/platform/clubs' },
+          { label: 'Usuarios', href: '/platform/usuarios' },
+          { label: 'Configuración', href: '/platform/configuracion' },
+          { label: 'Auditoría', href: '/platform/logs' },
         ],
       },
       {
-        label: 'Finanzas',
+        label: 'Facturación',
         href: '/platform/facturacion',
         children: [
           { label: 'Facturación SELPA', href: '/platform/facturacion' },
-          { label: 'Pagos / comisiones', href: '/platform/pagos' },
-          { label: 'Liquidaciones', href: '/platform/liquidaciones' },
         ],
       },
       {

@@ -9,7 +9,7 @@ import { billingDate, billingValidMoney } from './platformBillingF2'
 import { billingCsv, billingExportTable, billingXlsx } from './platformBillingF2Export'
 
 const read=(path:string)=>readFileSync(fileURLToPath(new URL(path,import.meta.url)),'utf8')
-const sql=read('../supabase/migrations/20261007100803_platform_billing_f2_core.sql')
+const sql=read('../supabase/migrations/20261007131222_20261007100803_platform_billing_f2_core.sql')
 const qa=read('../supabase/qa/20261007100803_platform_billing_f2_validation.sql')
 const ui=read('../features/billing/BillingExperience.tsx')
 

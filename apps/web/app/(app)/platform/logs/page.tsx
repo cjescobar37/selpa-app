@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import PageHeader from '@/components/navigation/PageHeader'
 
 type AuditRow = {
   id: string
@@ -116,7 +117,8 @@ export default function PlatformLogsPage() {
   }
 
   useEffect(() => {
-    load()
+    const timer = window.setTimeout(() => { void load() }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   const selected = useMemo(() => rows.find((row) => row.id === selectedId) ?? rows[0] ?? null, [rows, selectedId])
@@ -125,17 +127,11 @@ export default function PlatformLogsPage() {
   return (
     <div className="platform-shell">
       <div className="px-platform px-platform--logs">
-        <div className="px-platformHead">
-          <div>
-            <h1 className="px-platformTitle">Auditoría</h1>
-            <div className="px-platformSub">Eventos críticos de Platform con actor, entidad y metadata técnica.</div>
-          </div>
-          <div className="px-toolbar">
+        <PageHeader backHref="/platform" title="Auditoría" description="Actividad administrativa, actor y entidad." actions={<div className="px-toolbar">
             <button className="px-btn px-btn--ghost" type="button" onClick={load} disabled={loading}>
               {loading ? (<><span className="px-spinner" /> Recargando…</>) : 'Recargar'}
             </button>
-          </div>
-        </div>
+          </div>} />
 
         {!auditReady ? (
           <div style={{ marginTop: 14 }}>

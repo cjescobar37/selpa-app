@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import PageHeader from '@/components/navigation/PageHeader'
 
 type Metric = { label: string; value: string; hint?: string }
 type QuickAction = { title: string; description: string; tag?: string }
@@ -17,13 +18,7 @@ export default function PlatformModuleShell({ title, subtitle, metrics = [], act
   return (
     <div className="platform-shell">
       <div className="px-platform">
-        <div className="px-platformHead">
-          <div>
-            <h1 className="px-platformTitle">{title}</h1>
-            <div className="px-platformSub">{subtitle}</div>
-          </div>
-          {actions ? <div className="px-toolbar">{actions}</div> : null}
-        </div>
+        <PageHeader backHref="/platform" title={title} description={subtitle} actions={actions} />
 
         {metrics.length ? (
           <div className="px-kpis px-kpis--platformAdmin" style={{ marginTop: 16 }}>

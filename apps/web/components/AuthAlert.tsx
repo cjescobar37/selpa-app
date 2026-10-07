@@ -1,5 +1,7 @@
 'use client'
 
+import { humanizeUiError } from '@/lib/productPresentation'
+
 type Variant = 'success' | 'warning' | 'error' | 'info'
 
 export default function AuthAlert({
@@ -21,11 +23,11 @@ export default function AuthAlert({
       : 'px-alert'
 
   return (
-    <div className={cls} role="status" aria-live="polite">
+    <div className={cls} role={variant === 'error' ? 'alert' : 'status'} aria-live={variant === 'error' ? 'assertive' : 'polite'}>
       <span className="px-alertDot" aria-hidden="true" />
       <div>
-        <p className="px-alertTitle">{title}</p>
-        {message ? <p className="px-alertText">{message}</p> : null}
+        <p className="px-alertTitle">{humanizeUiError(title, 'Revisá esta acción')}</p>
+        {message ? <p className="px-alertText">{humanizeUiError(message)}</p> : null}
       </div>
     </div>
   )

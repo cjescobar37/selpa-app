@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabaseClient'
 import { getClubInitials } from '@/lib/clubAssets'
 import { useSession } from '@/components/session/SessionProvider'
 import { isApprovedMembership, isClubStaffRole } from '@/lib/clubMembershipRules'
+import PageHeader from '@/components/navigation/PageHeader'
+import { humanizeUiError } from '@/lib/productPresentation'
 
 type AlertType = 'success' | 'warning' | 'error' | 'info'
 
@@ -60,6 +62,7 @@ function AlertBox({ alert }: { alert: AlertState }) {
 
   return (
     <div
+      role={alert.type === 'error' ? 'alert' : 'status'}
       style={{
         ...styles[alert.type],
         borderRadius: 18,
@@ -68,7 +71,7 @@ function AlertBox({ alert }: { alert: AlertState }) {
       }}
     >
       <div style={{ fontWeight: 850 }}>{alert.title}</div>
-      {alert.message ? <div style={{ marginTop: 6, opacity: 0.95 }}>{alert.message}</div> : null}
+      {alert.message ? <div style={{ marginTop: 6, opacity: 0.95 }}>{humanizeUiError(alert.message)}</div> : null}
     </div>
   )
 }
@@ -78,6 +81,8 @@ export default function SeleccionarClubPage() {
   const session = useSession()
 
   const [loading, setLoading] = useState(true)
+  const [readFailed, setReadFailed] = useState(false)
+  const [retry, setRetry] = useState(0)
   const [savingClubId, setSavingClubId] = useState<string | null>(null)
   const [alert, setAlert] = useState<AlertState>(null)
   const [memberships, setMemberships] = useState<MembershipRow[]>([])
@@ -89,8 +94,9 @@ export default function SeleccionarClubPage() {
 
     async function load() {
       setLoading(true)
+      setReadFailed(false)
       setAlert(null)
-
+      try {
       const { data: sess } = await supabase.auth.getSession()
       const user = sess?.session?.user
 
@@ -109,6 +115,7 @@ export default function SeleccionarClubPage() {
       if (cancelled) return
 
       if (!response.ok) {
+        setReadFailed(true)
         setAlert({
           type: 'error',
           title: 'No pude leer tus clubes',
@@ -122,14 +129,20 @@ export default function SeleccionarClubPage() {
       setMemberships(result?.memberships ?? [])
 
       setLoading(false)
+      } catch {
+        if (cancelled) return
+        setReadFailed(true)
+        setAlert({ type: 'error', title: 'No pudimos cargar tus clubes', message: 'Revisá tu conexión y reintentá. Tus membresías no cambiaron.' })
+      } finally { if (!cancelled) setLoading(false) }
     }
 
-    load()
+    const timer = window.setTimeout(() => { void load() }, 0)
 
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
-  }, [router, session.activeClubId])
+  }, [router, session.activeClubId, retry])
 
   const approved = useMemo(() => {
     return memberships.filter((item) => isApprovedMembership(item) && item.club)
@@ -156,15 +169,13 @@ export default function SeleccionarClubPage() {
     setSavingClubId(clubId)
     setAlert(null)
 
-    const { data: sess } = await supabase.auth.getSession()
-    const user = sess?.session?.user
-
-    if (!user) {
-      router.replace('/login')
-      return
-    }
-
     try {
+      const { data: sess } = await supabase.auth.getSession()
+      if (!sess?.session?.user) {
+        setSavingClubId(null)
+        router.replace('/login')
+        return
+      }
       await session.setActiveClub(clubId)
     } catch (error: unknown) {
       setAlert({
@@ -193,25 +204,14 @@ export default function SeleccionarClubPage() {
       <div
         className="px-authCard"
       >
-        <div className="px-authTop">
-          <div className="px-authBrand">
-            <div className="px-authLogo">
-              <img src="/brand/selpa-isotipo.png" alt="SELPA" />
-            </div>
-            <div className="px-authBrandText">
-              <span className="px-playerFlowKicker">{hasApproved ? 'Contexto jugador' : 'Tu espacio SELPA'}</span>
-              <h1 className="px-authTitle">{pageTitle}</h1>
-              <p className="px-authSub">{pageSubtitle}</p>
-            </div>
-          </div>
-        </div>
+        <PageHeader backHref="/player" title={readFailed || loading ? 'Mis clubes' : pageTitle} description={readFailed ? 'Reintentá para consultar tus membresías.' : pageSubtitle} />
 
         <div className="px-authBody">
           <AlertBox alert={alert} />
 
           {loading ? (
             <div className="px-help">Cargando clubes…</div>
-          ) : approved.length > 0 ? (
+          ) : readFailed ? <button type="button" className="px-btn px-btn--ghost" onClick={() => setRetry(value => value + 1)}>Reintentar</button> : approved.length > 0 ? (
             <>
               <div className="px-playerSectionHead">
                 <div>

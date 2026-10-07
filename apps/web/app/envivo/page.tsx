@@ -1,34 +1,18 @@
-'use client'
-
 import Link from 'next/link'
-import { useSession } from '@/components/session/SessionProvider'
+import PageHeader from '@/components/navigation/PageHeader'
+import PublicAgenda from '@/components/product/PublicAgenda'
+import ReadFailure from '@/components/product/ReadFailure'
+import { getPublicTournamentItems } from '@/lib/publicTournamentItems'
+import styles from '@/components/product/ProductFlow.module.css'
 
-export default function EnVivoPage() {
-  const { role } = useSession()
+export const dynamic = 'force-dynamic'
 
-  return (
-    <div className="px-page">
-      <div className="px-pageHead">
-        <h1 className="px-pageTitle">En vivo</h1>
-        <p className="px-pageSub">Resultados en tiempo real y próximos partidos.</p>
-      </div>
-
-      {role === 'guest' ? (
-        <div className="px-card px-cardTopAccent px-sectionCard">
-          <h2 className="px-cardTitle">Seguí la acción</h2>
-          <div className="px-help" style={{ marginTop: 10 }}>
-            Para ver “En vivo” completo y recibir notificaciones, iniciá sesión.
-          </div>
-          <div className="px-pageActions">
-            <Link className="px-btn" href="/login">Ingresar</Link>
-          </div>
-        </div>
-      ) : (
-        <div className="px-card px-cardTopAccent px-sectionCard">
-          <h2 className="px-cardTitle">Partidos en curso</h2>
-          <div className="px-help" style={{ marginTop: 10 }}>(placeholder) Vista “En vivo” para usuarios logueados.</div>
-        </div>
-      )}
-    </div>
-  )
+export default async function EnVivoPage() {
+  let data: Awaited<ReturnType<typeof getPublicTournamentItems>> | null = null
+  try { data = await getPublicTournamentItems() }
+  catch { /* A failed read must be distinct from a valid empty agenda. */ }
+  return <main className={styles.page}>
+    <PageHeader backHref="/" title="En vivo" description="Seguí los torneos que están en juego." actions={<Link className={styles.link} href="/torneos">Torneos</Link>} />
+    {data ? <PublicAgenda tournaments={data.tournaments} mode="live" /> : <ReadFailure message="No pudimos cargar los torneos en juego. Intentá nuevamente." />}
+  </main>
 }

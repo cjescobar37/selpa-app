@@ -6,48 +6,13 @@ import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import PageHeader from '@/components/navigation/PageHeader'
-
-type PaymentRow = {
-  amount: number | string | null
-  status: string | null
-}
+import { hasAnyClubPermission } from '@/lib/clubPermissions'
 
 type ReportState = {
   activePlayers: number
   tournaments: number
   registrations: number
   matches: number
-  payments: PaymentRow[]
-  paymentsAvailable: boolean
-}
-
-function isMissingRelation(error?: { code?: string; message?: string } | null) {
-  const message = String(error?.message ?? '').toLowerCase()
-  return (
-    error?.code === '42P01' ||
-    error?.code === 'PGRST205' ||
-    message.includes('does not exist') ||
-    message.includes('schema cache') ||
-    message.includes('could not find the table')
-  )
-}
-
-function normalizeStatus(value?: string | null) {
-  return String(value ?? '').trim().toUpperCase()
-}
-
-function toAmount(value: PaymentRow['amount']) {
-  const amount = typeof value === 'number' ? value : Number(value ?? 0)
-  return Number.isFinite(amount) ? amount : 0
-}
-
-function formatMoney(value: number) {
-  if (value <= 0) return '—'
-  return new Intl.NumberFormat('es-AR', {
-    currency: 'ARS',
-    maximumFractionDigits: 0,
-    style: 'currency',
-  }).format(value)
 }
 
 function kpiValue(value: number, suffix = '') {
@@ -55,14 +20,14 @@ function kpiValue(value: number, suffix = '') {
 }
 
 export default function ClubReportesPage() {
-  const { activeClub } = useSession()
+  const { activeClub, clubRole } = useSession()
+  const canReadFinance = hasAnyClubPermission(clubRole, ['finance:view'])
+  const [retry, setRetry] = useState(0)
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [report, setReport] = useState<ReportState>({
     activePlayers: 0,
-    payments: [],
-    paymentsAvailable: true,
     matches: 0,
     registrations: 0,
     tournaments: 0,
@@ -86,8 +51,6 @@ export default function ClubReportesPage() {
       if (!activeClub?.id) {
         setReport({
           activePlayers: 0,
-          payments: [],
-          paymentsAvailable: true,
           matches: 0,
           registrations: 0,
           tournaments: 0,
@@ -100,7 +63,7 @@ export default function ClubReportesPage() {
       setError('')
 
       try {
-        const [clubResult, playersResult, tournamentsResult, registrationsResult, matchesResult, paymentsResult] = await Promise.all([
+        const [clubResult, playersResult, tournamentsResult, registrationsResult, matchesResult] = await Promise.all([
           supabase.from('clubs').select('theme_key').eq('id', activeClub.id).maybeSingle(),
           supabase
             .from('club_players')
@@ -120,11 +83,6 @@ export default function ClubReportesPage() {
             .from('tournament_matches')
             .select('id', { count: 'exact', head: true })
             .eq('club_id', activeClub.id),
-          supabase
-            .from('tournament_payments')
-            .select('amount,status')
-            .eq('club_id', activeClub.id)
-            .limit(500),
         ])
 
         if (!alive) return
@@ -135,28 +93,14 @@ export default function ClubReportesPage() {
         if (registrationsResult.error) throw registrationsResult.error
         if (matchesResult.error) throw matchesResult.error
 
-        let payments: PaymentRow[] = []
-        let paymentsAvailable = true
-        if (paymentsResult.error) {
-          if (isMissingRelation(paymentsResult.error)) {
-            paymentsAvailable = false
-          } else {
-            throw paymentsResult.error
-          }
-        } else {
-          payments = (paymentsResult.data ?? []) as PaymentRow[]
-        }
-
         setThemeKey((clubResult.data?.theme_key as string | null) ?? null)
         setReport({
           activePlayers: playersResult.count ?? 0,
-          payments,
-          paymentsAvailable,
           matches: matchesResult.count ?? 0,
           registrations: registrationsResult.count ?? 0,
           tournaments: tournamentsResult.count ?? 0,
         })
-      } catch (loadError) {
+      } catch {
         if (!alive) return
         setError('No pudimos cargar los reportes del club. Intentá nuevamente.')
       } finally {
@@ -168,23 +112,7 @@ export default function ClubReportesPage() {
     return () => {
       alive = false
     }
-  }, [activeClub?.id])
-
-  const paymentSummary = useMemo(() => {
-    return report.payments.reduce(
-      (acc, payment) => {
-        const status = normalizeStatus(payment.status)
-        if (status === 'APPROVED' || status === 'PAID') {
-          acc.approved += 1
-          acc.approvedTotal += toAmount(payment.amount)
-        }
-        if (status === 'PENDING') acc.pending += 1
-        if (status === 'REJECTED') acc.rejected += 1
-        return acc
-      },
-      { approved: 0, approvedTotal: 0, pending: 0, rejected: 0 },
-    )
-  }, [report.payments])
+  }, [activeClub?.id, retry])
 
   const conversionRate = report.tournaments > 0 ? Math.round((report.registrations / report.tournaments) * 10) / 10 : 0
 
@@ -193,17 +121,17 @@ export default function ClubReportesPage() {
       <div className="club-panel club-reportPage" style={themeStyle}>
         <PageHeader backHref="/club/admin" title="Reportes" eyebrow="CLUB ADMIN"
           description={`Actividad de ${activeClub?.name ?? 'tu club'}`}
-          actions={<Link className="club-reportSecondary" href="/club/contabilidad">
+          actions={canReadFinance ? <Link className="club-reportSecondary" href="/club/contabilidad">
             Ver finanzas
-          </Link>} />
+          </Link> : undefined} />
 
         {!activeClub?.id ? (
           <div className="club-reportEmpty">Primero seleccioná un club activo.</div>
         ) : (
           <>
-            {error ? <div className="club-reportAlert">{error}</div> : null}
+            {error ? <div className="club-reportAlert" role="alert">{error} <button type="button" className="px-btn px-btn--ghost" onClick={() => setRetry(value => value + 1)}>Reintentar</button></div> : null}
 
-            <section className="club-reportStats" aria-label="Indicadores principales">
+            {!error && <section className="club-reportStats" aria-label="Indicadores principales">
               <article>
                 <span>Jugadores activos</span>
                 <strong>{loading ? '...' : kpiValue(report.activePlayers)}</strong>
@@ -217,12 +145,12 @@ export default function ClubReportesPage() {
                 <strong>{loading ? '...' : kpiValue(report.registrations)}</strong>
               </article>
               <article>
-                <span>Total aprobado</span>
-                <strong>{loading ? '...' : formatMoney(paymentSummary.approvedTotal)}</strong>
+                <span>Partidos registrados</span>
+                <strong>{loading ? '...' : kpiValue(report.matches)}</strong>
               </article>
-            </section>
+            </section>}
 
-            <section className="club-reportGrid">
+            {!error && <section className="club-reportGrid">
               <article className="club-reportCard">
                 <div className="club-reportCardHead">
                   <div>
@@ -236,21 +164,9 @@ export default function ClubReportesPage() {
                     <span>Inscripciones por torneo</span>
                     <strong>{loading ? '...' : report.tournaments > 0 ? `${conversionRate}` : '—'}</strong>
                   </div>
-                  <div>
-                    <span>Pagos pendientes</span>
-                    <strong>{loading ? '...' : report.paymentsAvailable ? kpiValue(paymentSummary.pending) : 'No disponible'}</strong>
-                  </div>
-                  <div>
-                    <span>Pagos rechazados</span>
-                    <strong>{loading ? '...' : report.paymentsAvailable ? kpiValue(paymentSummary.rejected) : 'No disponible'}</strong>
-                  </div>
-                  <div>
-                    <span>Partidos registrados</span>
-                    <strong>{loading ? '...' : kpiValue(report.matches)}</strong>
-                  </div>
                 </div>
               </article>
-            </section>
+            </section>}
 
             {!loading && !error && report.activePlayers === 0 && report.tournaments === 0 && report.registrations === 0 ? (
               <div className="club-reportEmpty">
@@ -259,11 +175,7 @@ export default function ClubReportesPage() {
               </div>
             ) : null}
 
-            {!report.paymentsAvailable ? (
-              <div className="club-reportNotice">
-                Las métricas de pagos todavía no están disponibles. El resto del reporte sigue operativo.
-              </div>
-            ) : null}
+            {canReadFinance && <p className="club-reportNotice">Saldos, cobros y conciliaciones se consultan en Finanzas, usando el registro financiero canónico.</p>}
           </>
         )}
       </div>

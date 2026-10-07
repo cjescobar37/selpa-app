@@ -20,7 +20,10 @@ export async function assertPlatformAdmin(req: NextRequest) {
     .eq('user_id', user.id)
     .maybeSingle()
 
-  if (paErr) return { error: NextResponse.json({ error: paErr.message }, { status: 500 }), user: null }
+  if (paErr) {
+    console.error('[platform:auth]', { operation:'VERIFY_ADMIN', code:/^[A-Z0-9_]+$/.test(paErr.code ?? '') ? paErr.code : 'READ_FAILURE' })
+    return { error: NextResponse.json({ error: 'No pudimos verificar los permisos. Reintentá.' }, { status: 500 }), user: null }
+  }
   if (!pa?.user_id) return { error: NextResponse.json({ error: 'No autorizado.' }, { status: 403 }), user: null }
   return { error: null, user }
 }

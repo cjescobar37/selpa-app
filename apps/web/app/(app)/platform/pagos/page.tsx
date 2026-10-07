@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import Link from 'next/link'
+import PageHeader from '@/components/navigation/PageHeader'
 
 type AlertState =
   | { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string }
@@ -132,7 +134,8 @@ export default function PlatformPagosPage() {
   }
 
   useEffect(() => {
-    load()
+    const timer = window.setTimeout(() => { void load() }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   const filtered = useMemo(() => {
@@ -203,7 +206,7 @@ export default function PlatformPagosPage() {
     }
 
     const nextUsers = Array.from(usersMap.values()).sort((a, b) => a.label.localeCompare(b.label))
-    const nextClubs = ((clubsJson?.rows ?? []) as any[])
+    const nextClubs = ((clubsJson?.rows ?? []) as Array<{ id: string; name: string | null; brand_name: string | null; city: string | null }>)
       .filter((club) => club?.id)
       .map((club) => ({
         id: club.id,
@@ -347,20 +350,15 @@ export default function PlatformPagosPage() {
   return (
     <div className="platform-shell">
       <div className="px-platform px-platform--finance">
-        <div className="px-platformHead">
-          <div>
-            <h1 className="px-platformTitle">Pagos</h1>
-            <div className="px-platformSub">Monitoreo compacto de cobros, estados y reembolsos operativos.</div>
-          </div>
-          <div className="px-toolbar">
+        <PageHeader backHref="/platform" title="Pagos legacy" description="Archivo anterior. No representa cobros de Facturación SELPA." actions={<div className="px-toolbar">
             <button className="px-btn" onClick={openManualModal} disabled={!financeReady || loading}>
               Pago manual
             </button>
             <button className="px-btn px-btn--ghost" onClick={load} disabled={loading}>
               {loading ? (<><span className="px-spinner" /> Recargando…</>) : 'Recargar'}
             </button>
-          </div>
-        </div>
+          </div>} />
+        <div className="px-platformNoteBox" style={{ marginTop:12 }}>Planes, deuda y pagos Club → SELPA se gestionan en <Link href="/platform/facturacion">Facturación SELPA</Link>. Este circuito anterior permanece separado.</div>
 
         <div className="px-kpis px-kpis--platformAdmin" style={{ marginTop: 16 }}>
           <div className="px-platformMetricCard"><span>Total pagos</span><strong>{rows.length}</strong></div>

@@ -344,7 +344,7 @@ Migration aditiva: `20261007094742_20261007013543_club_finance_f1f_reports_recon
 
 ## F2 — SELPA Billing (club → SELPA)
 
-Migration: `20261007100803_platform_billing_f2_core.sql`. Contexto independiente: diez tablas `platform_billing_*`, ledger propio; jamás suma ni escribe Club Finance, provider F1E ni legacy `payments/commissions/settlements/settlement_items/platformFinance.ts`. Ese circuito legacy queda separado/deprecated, intacto, sin backfill.
+Migration: `20261007131222_20261007100803_platform_billing_f2_core.sql` (version live `20261007131222`). Contexto independiente: diez tablas `platform_billing_*`, ledger propio; jamás suma ni escribe Club Finance, provider F1E ni legacy `payments/commissions/settlements/settlement_items/platformFinance.ts`. Ese circuito legacy queda separado/deprecated, intacto, sin backfill.
 
 Catálogo ARS configurable por Platform Admin, sin precios comerciales seed. FREE exige $0 y genera período sin factura. MONTHLY/ANNUAL admiten $0: comprobante PAID derivado, sin revenue. Primer período comienza en fecha explícita; siguientes consecutivos con fin exclusivo, sumando mes/año de calendario. TRIAL cambia a ACTIVE al generar su primer período. No cron ni prorrateo. Cancelación al cierre se efectiviza al pedir el siguiente período; suspensión sólo explícita, no bloquea actividad deportiva ni cancela deuda.
 

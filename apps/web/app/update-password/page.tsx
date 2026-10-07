@@ -1,5 +1,7 @@
 'use client'
 
+import controls from '@/components/auth/AuthControls.module.css'
+
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -35,7 +37,13 @@ export default function UpdatePasswordPage() {
     setLoading(true)
     setAlert({ variant: 'info', title: 'Actualizando contraseña...' })
 
-    const { error } = await supabase.auth.updateUser({ password })
+    let error
+    try { ({ error } = await supabase.auth.updateUser({ password })) }
+    catch {
+      setLoading(false)
+      setAlert({ variant: 'error', title: 'No se pudo actualizar', message: 'Revisá tu conexión y volvé a guardar la contraseña.' })
+      return
+    }
 
     if (error) {
       setAlert({ variant: 'error', title: 'No se pudo actualizar', message: error.message })
@@ -49,7 +57,7 @@ export default function UpdatePasswordPage() {
   }
 
   return (
-    <div className="px-auth">
+    <div className={`px-auth px-authModern px-loginAuth ${controls.form}`}>
       <div className="px-authCard">
         <div className="px-authTop">
           <div className="px-authBrand">

@@ -9,6 +9,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
 import { supabase } from '@/lib/supabaseClient'
+import PageBackAction from '@/components/navigation/PageBackAction'
 
 type Membership = {
   club_id: string
@@ -28,37 +29,44 @@ export default function PerfilPage() {
   const profile = session.globalProfile
   const [memberships, setMemberships] = useState<Membership[]>([])
   const [loadingMemberships, setLoadingMemberships] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [retry, setRetry] = useState(0)
 
   useEffect(() => {
     if (session.status !== 'ready' || !session.user) return
     let alive = true
     async function loadMemberships() {
-      const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      if (!token) return setLoadingMemberships(false)
-      const response = await fetch('/api/clubs/my-memberships', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
-      const result = await response.json().catch(() => null) as { memberships?: Membership[] } | null
-      if (alive) {
-        setMemberships(response.ok ? result?.memberships ?? [] : [])
-        setLoadingMemberships(false)
-      }
+      setLoadingMemberships(true)
+      setLoadError(false)
+      try {
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        if (!token) throw new Error('SESSION')
+        const response = await fetch('/api/clubs/my-memberships', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+        if (!response.ok) throw new Error('READ')
+        const result = await response.json().catch(() => null) as { memberships?: Membership[] } | null
+        if (!result) throw new Error('READ')
+        if (alive) setMemberships(result.memberships ?? [])
+      } catch { if (alive) setLoadError(true) }
+      finally { if (alive) setLoadingMemberships(false) }
     }
-    void loadMemberships()
-    return () => { alive = false }
-  }, [session.status, session.user])
+    const timer = window.setTimeout(() => { void loadMemberships() }, 0)
+    return () => { alive = false; window.clearTimeout(timer) }
+  }, [session.status, session.user, retry])
 
   const approved = memberships.filter((item) => item.status === 'APPROVED' && item.approved_at && item.club)
   const preferredPlayer = approved.find((item) => item.club_id === session.activeClubId && item.player_id) ?? approved.find((item) => item.player_id)
 
   useEffect(() => {
-    if (!loadingMemberships && preferredPlayer?.player_id) {
+    if (!loadingMemberships && !loadError && preferredPlayer?.player_id) {
       router.replace(`/jugadores/${preferredPlayer.player_id}?own=1`)
     }
-  }, [loadingMemberships, preferredPlayer?.player_id, router])
+  }, [loadingMemberships, loadError, preferredPlayer?.player_id, router])
 
   if (session.status === 'loading') return <PlayerStatePanel kind="loading" title="Cargando perfil" message="Preparando tu perfil público" viewport />
   if (!session.user) return <PlayerStatePanel kind="empty" title="Ingresá para ver tu perfil" message="Tu perfil público estará disponible al iniciar sesión." action={{ label: 'Ingresar', href: '/login' }} viewport />
   if (loadingMemberships) return <PlayerStatePanel kind="loading" title="Cargando perfil" message="Preparando tu perfil deportivo" viewport />
+  if (loadError) return <PlayerStatePanel kind="error" title="No pudimos cargar tu perfil" message="Revisá tu conexión y reintentá. No cambiamos tus clubes ni tu perfil." onRetry={() => setRetry(value => value + 1)} viewport />
 
   const pending = memberships.filter((item) => item.status === 'PENDING' && item.club)
   const playerName = profile?.display_name || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || session.user.name
@@ -70,6 +78,7 @@ export default function PerfilPage() {
 
   return <PlayerSpaceLayout><main className="publicPlayerProfile">
     <section className="publicPlayerProfile__cover" style={profile?.cover_url ? { backgroundImage: `linear-gradient(180deg,rgba(5,20,42,.08),rgba(5,20,42,.62)),url(${profile.cover_url})` } : undefined}>
+      <PageBackAction href="/player" tone="dark" />
       <span>Perfil público</span>
     </section>
     <section className="publicPlayerProfile__identity">

@@ -7,6 +7,7 @@ import PairRankingBoard, { type PairRankingRow } from '@/components/ranking/Pair
 import PublicRankingClubCard from '@/components/public/PublicRankingClubCard'
 import { buildAssetProxyUrl } from '@/lib/clubAssets'
 import { BRAND } from '@/lib/branding'
+import { publicRankingGender } from '@/lib/productPresentation'
 import {
   filterRankingRows,
   formatRankingCategory,
@@ -51,19 +52,21 @@ export default function PublicRankingExperience({
   clubs,
   initialClubId,
   initialCategory,
+  initialGender,
 }: {
   players: PublicRankingPlayer[]
   pairs: PublicRankingPair[]
   clubs: string[]
   initialClubId?: string | null
   initialCategory?: string | null
+  initialGender?: string | null
 }) {
   const initialClubName = initialClubId ? players.find((player) => player.clubId === initialClubId)?.clubName ?? null : null
   const normalizedInitialCategory = initialCategory && categories.includes(initialCategory) ? initialCategory : 'all'
   const [selectedClub, setSelectedClub] = useState<string | null>(initialClubName)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState(normalizedInitialCategory)
-  const [gender, setGender] = useState('all')
+  const [gender, setGender] = useState(publicRankingGender(initialGender))
   const [rankingMode, setRankingMode] = useState<'individual' | 'pairs'>('individual')
 
   const clubCards = useMemo(() => {
@@ -173,7 +176,7 @@ export default function PublicRankingExperience({
           <section className="publicRankingFilters">
             <div className="publicRankingMode" role="tablist" aria-label="Tipo de ranking"><button type="button" role="tab" aria-selected={rankingMode === 'individual'} className={rankingMode === 'individual' ? 'is-active' : ''} onClick={() => setRankingMode('individual')}>Individual</button><button type="button" role="tab" aria-selected={rankingMode === 'pairs'} className={rankingMode === 'pairs' ? 'is-active' : ''} onClick={() => setRankingMode('pairs')}>Parejas</button></div>
             <label><span>Categoría</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : formatRankingCategory(Number(item))}</option>)}</select></label>
-            <label><span>Género</span><select value={gender} onChange={(event) => setGender(event.target.value)}>{genders.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+            <label><span>Género</span><select value={gender} onChange={(event) => setGender(publicRankingGender(event.target.value))}>{genders.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
             <label className="publicRankingSearch"><span>Buscar</span><div><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Jugador" /></div></label>
           </section>
 
@@ -193,15 +196,15 @@ export default function PublicRankingExperience({
         .publicRankingSelected button { background: linear-gradient(135deg, var(--accent, #06b6d4), var(--accent2, #ec4899)); border: 0; border-radius: 999px; box-shadow: 0 12px 24px color-mix(in srgb, var(--accent, #06b6d4) 18%, transparent); color: #fff; cursor: pointer; font: inherit; font-size: 12px; font-weight: 950; padding: 11px 15px; transition: transform .16s ease, filter .16s ease; white-space: nowrap; }
         .publicRankingSelected button:hover { filter: saturate(1.08); transform: translateY(-1px); }
         .publicRankingSelected { align-items: center; background: rgba(255,255,255,.94); border: 1px solid #e2e8f0; border-radius: 20px; box-shadow: 0 14px 34px rgba(15,23,42,.06); display: flex; gap: 14px; justify-content: space-between; padding: 14px; }
-        .publicRankingSelected button { align-items: center; background: #fff; border: 1px solid #dbe6f0; color: #075985; display: inline-flex; gap: 7px; }
+        .publicRankingSelected button { align-items: center; background: #fff; border: 1px solid #dbe6f0; color: #075985; display: inline-flex; gap: 7px; min-height:44px; }
         .publicRankingSelected strong { display: block; font-size: 24px; font-weight: 950; letter-spacing: -.04em; }
         .publicRankingFilters { background: rgba(255,255,255,.9); border: 1px solid #e2e8f0; border-radius: 22px; box-shadow: 0 18px 48px rgba(15,23,42,.07); display: grid; gap: 12px; grid-template-columns: 140px 150px minmax(0,1fr); padding: 13px; }
         .publicRankingMode { background:#f8fafc; border:1px solid #dbe6f0; border-radius:999px; display:grid; gap:4px; grid-column:1 / -1; grid-template-columns:repeat(2,minmax(0,1fr)); padding:4px; }
-        .publicRankingMode button { background:transparent; border:0; border-radius:999px; color:#64748b; cursor:pointer; font:inherit; font-size:12px; font-weight:850; min-height:34px; }
+        .publicRankingMode button { background:transparent; border:0; border-radius:999px; color:#64748b; cursor:pointer; font:inherit; font-size:12px; font-weight:650; min-height:44px; }
         .publicRankingMode button.is-active { background:#061b3a; color:#fff; }
         .publicRankingFilters label { display: grid; gap: 6px; min-width: 0; }
         .publicRankingFilters label > span { color: #0284c7; font-size: 11px; font-weight: 950; text-transform: uppercase; }
-        .publicRankingFilters select, .publicRankingFilters input { background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; color: #061b3a; font: inherit; font-weight: 850; min-width: 0; padding: 10px 11px; }
+        .publicRankingFilters select, .publicRankingFilters input { background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; color: #061b3a; font: inherit; font-weight: 650; min-width: 0; min-height:44px; padding: 10px 11px; }
         .publicRankingSearch div { align-items: center; background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; display: flex; gap: 8px; padding-left: 10px; }
         .publicRankingSearch input { background: transparent; border: 0; flex: 1; }
         .publicRankingBoard { align-items: start; display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0,1fr)); }

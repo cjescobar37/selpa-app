@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import AuthAlert from '@/components/AuthAlert'
+import PageHeader from '@/components/navigation/PageHeader'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 
 type AlertState =
@@ -91,7 +93,8 @@ export default function PlatformConfiguracionPage() {
   }
 
   useEffect(() => {
-    load()
+    const timer = window.setTimeout(() => { void load() }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   const changed = useMemo(() => {
@@ -146,17 +149,11 @@ export default function PlatformConfiguracionPage() {
   return (
     <div className="platform-shell">
       <div className="px-platform px-platform--settings">
-        <div className="px-platformHead">
-          <div>
-            <h1 className="px-platformTitle">Configuración</h1>
-            <div className="px-platformSub">Parámetros globales simples para operar Platform con una sola fuente de verdad.</div>
-          </div>
-          <div className="px-toolbar">
+        <PageHeader backHref="/platform" title="Configuración" description="Identidad y parámetros de plataforma." actions={<div className="px-toolbar">
             <button className="px-btn px-btn--ghost" type="button" onClick={load} disabled={loading}>
               {loading ? (<><span className="px-spinner" /> Recargando…</>) : 'Recargar'}
             </button>
-          </div>
-        </div>
+          </div>} />
 
         {!settingsReady ? (
           <div style={{ marginTop: 14 }}>
@@ -173,20 +170,21 @@ export default function PlatformConfiguracionPage() {
         <div className="px-settingsLayout">
           <form className="px-platformCard px-settingsForm" onSubmit={save}>
             <section>
-              <div className="px-sectionTitle">Finanzas</div>
+              <div className="px-sectionTitle">Parámetros del circuito legacy</div>
+              <p className="px-muted">No configuran planes, moneda ni precios de Facturación SELPA. <Link href="/platform/facturacion">Administrar Billing</Link></p>
               <div className="px-settingsGrid">
                 <label>
-                  <span>Comisión default</span>
+                  <span>Comisión legacy · bps</span>
                   <input
                     className="px-input"
                     inputMode="numeric"
                     value={draft.default_commission_bps}
                     onChange={(event) => setDraft((current) => ({ ...current, default_commission_bps: event.target.value }))}
                   />
-                  <small>Basis points. {commissionPercent(Number(draft.default_commission_bps))}</small>
+                  <small>100 puntos básicos = 1%. Actual: {commissionPercent(Number(draft.default_commission_bps))}</small>
                 </label>
                 <label>
-                  <span>Moneda default</span>
+                  <span>Moneda legacy</span>
                   <input
                     className="px-input"
                     maxLength={3}

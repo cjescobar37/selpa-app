@@ -1,5 +1,7 @@
 'use client'
 
+import controls from '@/components/auth/AuthControls.module.css'
+
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -31,7 +33,13 @@ export default function ResetPasswordPage() {
     setLoading(true)
     setAlert({ variant: 'info', title: 'Enviando link…' })
 
-    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo })
+    let error
+    try { ({ error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo })) }
+    catch {
+      setLoading(false)
+      setAlert({ variant: 'error', title: 'No se pudo enviar', message: 'Revisá tu conexión y volvé a solicitar el link.' })
+      return
+    }
 
     if (error) {
       setAlert({ variant: 'error', title: 'No se pudo enviar', message: error.message })
@@ -48,7 +56,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="px-auth px-authModern px-loginAuth">
+    <div className={`px-auth px-authModern px-loginAuth ${controls.form}`}>
       <div className="px-authCard">
         <div className="px-authTop">
           <div className="px-authBrand">

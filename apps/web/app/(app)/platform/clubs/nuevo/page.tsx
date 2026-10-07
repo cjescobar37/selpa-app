@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
+import PageHeader from '@/components/navigation/PageHeader'
 import { CLUB_THEMES, CLUB_THEME_LABELS, getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
 
 type AlertState =
@@ -88,8 +89,8 @@ export default function PlatformCreateClubPage() {
         message: `Club: ${json.clubName}. Acceso OWNER: ${v.owner_email}. Podés entrar también con el slug ${json.slug}.`,
       })
       setTimeout(() => router.push('/platform/clubs'), 900)
-    } catch (err: any) {
-      setAlert({ variant: 'error', title: 'Error', message: err?.message ?? String(err) })
+    } catch {
+      setAlert({ variant: 'error', title: 'No pudimos crear el club', message: 'Revisá tu conexión y reintentá. Conservamos los datos del formulario.' })
     } finally {
       setLoading(false)
     }
@@ -98,12 +99,7 @@ export default function PlatformCreateClubPage() {
   return (
     <div className="platform-shell">
       <div className="px-platform">
-        <div className="px-platformHead">
-          <div>
-            <h1 className="px-platformTitle">Alta de club</h1>
-            <div className="px-platformSub">Crea el club + usuario OWNER + acceso por email / CUIT / slug.</div>
-          </div>
-        </div>
+        <PageHeader backHref="/platform/clubs" title="Alta de club" description="Datos del club y de su administrador." />
 
         {alert ? <div style={{ marginTop: 12 }}><AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /></div> : null}
 

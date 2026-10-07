@@ -14,13 +14,6 @@ export default function Footer({ compact = false }: { compact?: boolean }) {
             Plataforma de gestión de ranking, torneos y actividad deportiva de pádel.
           </p>
 
-          <div className="px-footer-socials">
-            <a href="#" aria-label="Instagram">IG</a>
-            <a href="#" aria-label="X">X</a>
-            <a href="#" aria-label="YouTube">YT</a>
-            <a href="#" aria-label="LinkedIn">IN</a>
-          </div>
-
         </div>
       </div>
 
