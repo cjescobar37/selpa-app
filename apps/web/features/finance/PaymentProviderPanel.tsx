@@ -21,18 +21,18 @@ export function ProviderPanelView({ data, canManage, busy, error, note, onConnec
       {data.issues.map((issue, index) => <li key={`${issue.created_at}-${index}`}><span>{issue.concept}</span><b>{formatFinanceMoney(issue.amount)}</b></li>)}
     </ul></details> : null}
     <details>
-      <summary><span>Configuración · Mercado Pago</span><b>{data ? statusLabels[data.status] ?? 'Requiere revisión' : 'Cargando…'}</b></summary>
+      <summary><span>Configuración · Mercado Pago</span><b>{data ? !data.enabled ? 'No disponible' : statusLabels[data.status] ?? 'Requiere revisión' : 'Cargando…'}</b></summary>
       <div className={styles.content}>
         <p>Los jugadores pagan en Mercado Pago y el club recibe el dinero en su propia cuenta.</p>
         {data && !data.enabled ? <p className={styles.muted}>Los pagos online todavía no están habilitados.</p> : null}
         {note ? <p role="status">{note}</p> : null}
         {error ? <p role="alert">{error}</p> : null}
-        {canManage ? <div className={styles.actions}>
+        {canManage ? data?.enabled ? <div className={styles.actions}>
           <button type="button" disabled={busy || !data?.enabled} onClick={onConnect}>
             {busy ? 'Procesando…' : ['CONNECTED', 'RECONNECT_REQUIRED'].includes(data?.status ?? '') ? 'Reconectar Mercado Pago' : 'Conectar Mercado Pago'}
           </button>
           {data?.enabled && ['CONNECTED', 'RECONNECT_REQUIRED'].includes(data.status) ? <button type="button" className={styles.secondary} disabled={busy} onClick={onDisconnect}>Desconectar</button> : null}
-        </div> : <p className={styles.muted}>La conexión la gestiona un administrador con permiso de Finanzas.</p>}
+        </div> : null : <p className={styles.muted}>La conexión la gestiona un administrador con permiso de Finanzas.</p>}
         {error ? <button type="button" className={styles.refresh} onClick={onRefresh} disabled={busy}>Reintentar</button> : null}
       </div>
     </details>

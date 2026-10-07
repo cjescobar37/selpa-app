@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { oauthChallenge, sha256 } from '@/lib/paymentProviderF1E'
+import { oauthChallenge, reportPaymentProviderEvent, sha256 } from '@/lib/paymentProviderF1E'
 import { requireClubCapability } from '@/lib/clubMembershipServer'
 import { providerFailure, providerHeaders, providerRuntime, providerUnavailable } from '@/lib/paymentProviderServerF1E'
 
@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
       path: '/api/payments/mercado-pago/oauth/callback', maxAge: 600 })
     return response
   } catch {
+    reportPaymentProviderEvent('OAUTH_FAILURE')
     return providerFailure()
   }
 }

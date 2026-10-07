@@ -1,13 +1,19 @@
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { runInNewContext } from 'node:vm'
+import ts from 'typescript'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement, type ComponentType } from 'react'
 import { MercadoPagoProvider, accountAccessToken, oauthChallenge, paymentProviderConfig, providerPaymentSnapshot,
-  verifyMercadoPagoWebhook, type OAuthTokens, type PaymentProvider, type ProviderSecretStore } from './paymentProviderF1E'
+  reportPaymentProviderEvent, verifyMercadoPagoWebhook, type OAuthTokens, type PaymentProvider, type ProviderSecretStore } from './paymentProviderF1E'
 import { completeProviderOAuth, createPaymentCheckout, processPaymentWebhook, type PaymentIntent, type ProviderRepository } from './paymentProviderFlowF1E'
 import { VaultProviderSecretStore, type VaultRpc } from './paymentProviderVaultF1E'
 import { financeMovementMethod } from './clubFinanceF1C'
+import { playerPaymentOptions } from './paymentProviderReadsF1E'
 
 const source = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
 const sql = source('../supabase/migrations/20261007004843_20261006170250_club_payment_provider_f1e_foundation.sql')
@@ -20,6 +26,9 @@ const config = { clientId: 'test-client', clientSecret: 'test-client-secret', we
 const payment = { id: '123456789', status: 'approved', amount: '80', currency: 'ARS', collector_id: '123',
   external_reference: '00000000-0000-4000-8000-000000000002', paid_at: '2026-10-06T17:00:00.000Z', captured: true, live_mode: false }
 const tokens: OAuthTokens = { accessToken: 'private-access', refreshToken: 'private-refresh', accountId: '123', expiresAt: Date.now() + 600000, liveMode: false }
+const configuredEnv: Record<string, string> = { PAYMENTS_MERCADO_PAGO_ENABLED: 'true', PAYMENTS_MERCADO_PAGO_LIVE_MODE: 'false',
+  PAYMENTS_PUBLIC_ORIGIN: config.origin, MERCADO_PAGO_CLIENT_ID: config.clientId, MERCADO_PAGO_CLIENT_SECRET: config.clientSecret,
+  MERCADO_PAGO_WEBHOOK_SECRET: config.webhookSecret, MERCADO_PAGO_REDIRECT_URI: config.redirectUri }
 
 function memoryStore(initial: OAuthTokens = tokens) {
   let current = { ...initial }, holder: string | null = null, uncertain = false
@@ -314,4 +323,112 @@ test('REST adapter sends seller token + zero fee, stable reference and return UR
   assert.equal(body.marketplace_fee, 0)
   assert.equal(body.external_reference, payment.external_reference)
   assert.equal((body.items as Array<{ unit_price: number }>)[0].unit_price, 80)
+})
+
+test('actual HTTP handlers fail closed before auth/provider/ledger work with flag OFF or each missing credential', async () => {
+  const environments = [{ ...configuredEnv, PAYMENTS_MERCADO_PAGO_ENABLED: 'false' },
+    ...['PAYMENTS_PUBLIC_ORIGIN','MERCADO_PAGO_CLIENT_ID','MERCADO_PAGO_CLIENT_SECRET','MERCADO_PAGO_WEBHOOK_SECRET','MERCADO_PAGO_REDIRECT_URI']
+      .map(key => ({ ...configuredEnv, [key]: '' }))]
+  const routes: Array<[string, string[]]> = [
+    ['../app/api/payments/mercado-pago/oauth/start/route.ts', ['POST']],
+    ['../app/api/payments/mercado-pago/oauth/callback/route.ts', ['GET']],
+    ['../app/api/payments/mercado-pago/webhook/route.ts', ['POST']],
+    ['../app/api/player/finance/checkout/route.ts', ['GET','POST']],
+    ['../app/api/clubs/finance/provider/route.ts', ['DELETE']],
+  ]
+  for (const env of environments) for (const [path, handlers] of routes) {
+    const exports: Record<string, (request: unknown) => Promise<Response>> = {}
+    const unexpected = new Proxy({}, { get() { throw new Error('Disabled route touched auth/provider/ledger') } })
+    runInNewContext(ts.transpileModule(source(path), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
+      exports, require(name: string) { return name === '@/lib/paymentProviderServerF1E' ? {
+        providerRuntime: () => paymentProviderConfig(env),
+        providerUnavailable: () => Response.json({ error: 'Los pagos online todavía no están disponibles.' }, { status: 503 }),
+      } : unexpected },
+    })
+    for (const handler of handlers) {
+      const result = await exports[handler](unexpected)
+      assert.equal(result.status, 503, `${path} ${handler}`)
+      const body = await result.json()
+      assert.deepEqual(Object.keys(body), ['error'])
+      assert.doesNotMatch(body.error, /MERCADO_PAGO_|SECRET|TOKEN|SUPABASE|env/i)
+    }
+  }
+  assert.match(source('./paymentProviderServerF1E.ts'), /const config = paymentProviderConfig\(\)/)
+  assert.match(source('./paymentProviderReadsF1E.ts'), /if \(!paymentProviderReady\(\) \|\| rows.length === 0\) return rows/)
+})
+
+test('club panel renders unavailable without a connect CTA; enabled has a usable connect action', () => {
+  const exports: { ProviderPanelView?: ComponentType<Record<string, unknown>> } = {}
+  const require = createRequire(import.meta.url)
+  runInNewContext(ts.transpileModule(source('../features/finance/PaymentProviderPanel.tsx'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText, { exports, require(name: string) {
+    if (name.endsWith('.module.css')) return { default: {} }
+    if (name === '@/lib/clubFinanceF1C') return { formatFinanceMoney: (amount: number) => String(amount) }
+    return require(name)
+  } })
+  assert.ok(exports.ProviderPanelView)
+  const props = { canManage: true, busy: false, error: '', note: '', onConnect() {}, onDisconnect() {}, onRefresh() {} }
+  const disabled = renderToStaticMarkup(createElement(exports.ProviderPanelView, { ...props,
+    data: { enabled: false, status: 'NOT_CONNECTED', reconciliation_required: 0 } }))
+  assert.match(disabled, /No disponible/)
+  assert.doesNotMatch(disabled, /Conectar Mercado Pago/)
+  const enabled = renderToStaticMarkup(createElement(exports.ProviderPanelView, { ...props,
+    data: { enabled: true, status: 'NOT_CONNECTED', reconciliation_required: 0 } }))
+  assert.match(enabled, /Conectar Mercado Pago/)
+})
+
+test('flag OFF and incomplete config leave player reads unchanged, with no payment eligibility RPC or CTA', async () => {
+  const keys = Object.keys(configuredEnv), previous = keys.map(key => process.env[key])
+  const rows = [{ id: 'obligation', balance: 80 }]
+  const client = { async rpc() { throw new Error('Disabled player read called provider RPC') } } as unknown as Parameters<typeof playerPaymentOptions>[0]
+  try {
+    for (const env of [{ ...configuredEnv, PAYMENTS_MERCADO_PAGO_ENABLED: 'false' }, { ...configuredEnv, MERCADO_PAGO_CLIENT_SECRET: '' }]) {
+      for (const key of keys) process.env[key] = env[key]
+      const result = await playerPaymentOptions(client, rows)
+      assert.equal(result, rows)
+      assert.ok(result.every(row => !('online_payable' in row)))
+    }
+  } finally {
+    keys.forEach((key, index) => { if (previous[index] === undefined) delete process.env[key]; else process.env[key] = previous[index] })
+  }
+  assert.match(content, /row.online_payable && onPay/)
+})
+
+test('checkout allowlist and callback/return URLs use the configured origin, not localhost or legacy domains', async () => {
+  for (const origin of ['https://selpa-preview.example.vercel.app', 'https://selpa.com.ar']) {
+    const s = setup()
+    s.provider.createCheckout = async (_token, input) => {
+      assert.equal(input.returnUrl, `${origin}/player/pagos?paymentReturn=${payment.external_reference}`)
+      assert.equal(input.notificationUrl, `${origin}/api/payments/mercado-pago/webhook?account=account`)
+      return { id: 'preference', url: 'https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=p', accessToken: 'must-not-leak' }
+    }
+    const result = await createPaymentCheckout(s.repo, s.store, s.provider, { obligationId: 'obligation', key: 'key', origin })
+    assert.deepEqual(Object.keys(result), ['checkoutUrl'])
+    assert.ok(!JSON.stringify(result).includes('must-not-leak'))
+    assert.ok(paymentProviderConfig({ ...configuredEnv, PAYMENTS_PUBLIC_ORIGIN: origin,
+      MERCADO_PAGO_REDIRECT_URI: `${origin}/api/payments/mercado-pago/oauth/callback` }))
+  }
+  const callback = source('../app/api/payments/mercado-pago/oauth/callback/route.ts')
+  assert.match(callback, /new URL\('\/club\/contabilidad', provider.config.origin\)/)
+  const getReturn = checkoutRoute.split('export async function GET')[1].split('export async function POST')[0]
+  assert.match(getReturn, /get_player_payment_return_f1e/)
+  assert.doesNotMatch(getReturn, /reconcile|register_club_finance_payment|createPaymentCheckout|providerRepository/)
+  for (const runtime of [callback, source('./paymentProviderFlowF1E.ts')]) assert.doesNotMatch(runtime, /localhost|pamprax/)
+})
+
+test('minimal observability logs fixed event codes only, never caught exceptions or credential values', () => {
+  const original = console.warn, logs: unknown[][] = []
+  try {
+    console.warn = (...args: unknown[]) => { logs.push(args) }
+    for (const event of ['OAUTH_FAILURE','REFRESH_FAILURE','CHECKOUT_FAILURE','WEBHOOK_INVALID','PROVIDER_API_UNAVAILABLE','RECONCILIATION_REQUIRED'] as const)
+      reportPaymentProviderEvent(event)
+  } finally { console.warn = original }
+  assert.equal(logs.length, 6)
+  for (const args of logs) assert.equal(args.length, 2)
+  assert.ok(logs.every(args => args[0] === '[finance:F1E]' && /^[A-Z_]+$/.test(String(args[1]))))
+  assert.doesNotMatch(JSON.stringify(logs), /private-access|private-refresh|test-client-secret|test-hook-secret/)
+  const route = source('../app/api/payments/mercado-pago/webhook/route.ts')
+  assert.ok(route.indexOf('verifyWebhook(') < route.indexOf('await req.text()'))
+  assert.ok(route.indexOf('verifyWebhook(') < route.indexOf('await processPaymentWebhook('))
 })

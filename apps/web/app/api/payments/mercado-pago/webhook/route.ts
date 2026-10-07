@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sha256 } from '@/lib/paymentProviderF1E'
+import { reportPaymentProviderEvent, sha256 } from '@/lib/paymentProviderF1E'
 import { processPaymentWebhook } from '@/lib/paymentProviderFlowF1E'
 import { providerFailure, providerHeaders, providerRepository, providerRuntime, providerUnavailable, providerUuid } from '@/lib/paymentProviderServerF1E'
 
@@ -10,7 +10,10 @@ export async function POST(req: NextRequest) {
   if (!provider) return providerUnavailable()
   const accountId = req.nextUrl.searchParams.get('account') ?? '', paymentId = req.nextUrl.searchParams.get('data.id') ?? ''
   const signature = req.headers.get('x-signature') ?? '', requestId = req.headers.get('x-request-id') ?? ''
-  if (!providerUuid.test(accountId) || !provider.provider.verifyWebhook(signature, requestId, paymentId)) return providerFailure(401)
+  if (!providerUuid.test(accountId) || !provider.provider.verifyWebhook(signature, requestId, paymentId)) {
+    reportPaymentProviderEvent('WEBHOOK_INVALID')
+    return providerFailure(401)
+  }
   const raw = await req.text()
   if (raw.length > 8192) return providerFailure(413)
   try {

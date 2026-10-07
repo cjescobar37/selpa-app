@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sha256 } from '@/lib/paymentProviderF1E'
+import { reportPaymentProviderEvent, sha256 } from '@/lib/paymentProviderF1E'
 import { completeProviderOAuth } from '@/lib/paymentProviderFlowF1E'
 import { providerRuntime, providerUnavailable } from '@/lib/paymentProviderServerF1E'
 
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const flow = await completeProviderOAuth(provider.store, provider.provider, sha256(state), sha256(binding), code, provider.config.liveMode)
     connected = true
     connectedClubId = flow.clubId
-  } catch { /* Generic redirect only; no provider bodies, tokens or errors are exposed. */ }
+  } catch { reportPaymentProviderEvent('OAUTH_FAILURE') /* Generic redirect only; never log the code or tokens. */ }
   const destination = new URL('/club/contabilidad', provider.config.origin)
   destination.searchParams.set('provider', connected ? 'connected' : 'failed')
   if (connectedClubId) destination.searchParams.set('providerClub', connectedClubId)

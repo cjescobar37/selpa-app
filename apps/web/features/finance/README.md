@@ -119,7 +119,9 @@ de dos sesiones están en `supabase/qa/20261001153611_club_finance_core_*`.
 
 Migration local: `20261007004843_20261006170250_club_payment_provider_f1e_foundation.sql`.
 QA reversible y carreras: `supabase/qa/20261006170250_club_payment_provider_f1e_*`.
-No aplicada desde este bloque. El dump/resumen histórico no incluye F1A–F1E;
+Ledger informado tras aplicación live: `20261007004843`, nombre
+`20261006170250_club_payment_provider_f1e_foundation`. Este checkpoint no ejecuta SQL.
+El dump/resumen histórico no incluye F1A–F1E;
 los contratos se basan en las migrations aplicadas de cada bloque.
 
 - Marketplace Argentina / Split 1:1, Checkout Pro con token del vendedor obtenido
@@ -235,3 +237,103 @@ Vault: [documentación oficial](https://supabase.com/docs/guides/database/vault)
 Referencias oficiales revisadas: [Split 1:1](https://www.mercadopago.com.ar/developers/es/docs/split-payments/split-1-1/integration-configuration/integrate-marketplace),
 [OAuth/PKCE](https://www.mercadopago.com.ar/developers/es/docs/security/oauth/creation),
 [webhooks](https://www.mercadopago.com.ar/developers/es/docs/checkout-pro-preferences/additional-content/notifications/webhooks).
+
+### Activación sandbox · checklist operativo
+
+Plantilla sin secretos: [mercado-pago.env.example](./mercado-pago.env.example).
+Los siete nombres anteriores son la única convención del runtime; no requiere
+Public Key de MP ni un Access Token estático. Client ID/Secret son de la aplicación
+OAuth del integrador, no `TEST_ACCESS_TOKEN` de un vendedor. El token del vendedor
+se obtiene por OAuth y se almacena en Vault. Las variables Supabase ya existentes
+(`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`)
+siguen siendo necesarias; service role y las credenciales MP son sólo server-side.
+
+Usar un host HTTPS estable para la prueba. `PAYMENTS_PUBLIC_ORIGIN` es únicamente
+el origin, sin path/query/hash; `MERCADO_PAGO_REDIRECT_URI` debe coincidir con ese
+host y el callback exacto. No se toma el host del request ni se usa localhost.
+
+| Ruta real | Vercel Preview | Producción (referencia, no activar) |
+| --- | --- | --- |
+| OAuth callback GET | `https://<preview-host>/api/payments/mercado-pago/oauth/callback` | `https://selpa.com.ar/api/payments/mercado-pago/oauth/callback` |
+| Webhook POST | `https://<preview-host>/api/payments/mercado-pago/webhook?account=<account_uuid>` | `https://selpa.com.ar/api/payments/mercado-pago/webhook?account=<account_uuid>` |
+| Retorno success/pending/failure | `https://<preview-host>/player/pagos?paymentReturn=<reference_uuid>` | `https://selpa.com.ar/player/pagos?paymentReturn=<reference_uuid>` |
+
+Los tres estados vuelven a la misma página: el retorno GET sólo lee estado;
+ningún parámetro del browser confirma ni contabiliza un cobro. `account_uuid`
+es el ID de conexión SELPA (no User ID de MP); la preferencia genera automáticamente
+su `notification_url` con ese parámetro. La URL base del panel Webhooks no lleva
+un UUID inventado: después de conectar, usar la URL específica de esa conexión
+para el simulador. Notificaciones sin `account` válido se rechazan, nunca se
+resuelve el vendedor desde datos no autenticados.
+
+Precondiciones: Preview accesible públicamente por callback/webhook (Deployment
+Protection puede bloquear a MP) y DB de QA aislada con F1A–F1E/Vault instalados.
+**Un Preview no aísla los datos automáticamente**: no usar el proyecto Supabase
+productivo para crear obligaciones/pagos de prueba. No se modifica la protección
+Vercel ni se crea una DB desde este bloque. Mantener flag OFF en producción.
+
+Pasos para el operador, sin credenciales ni movimientos reales en este checkpoint:
+
+1. Entrar a [Tus integraciones](https://www.mercadopago.com.ar/developers/panel/app)
+   del integrador; Crear aplicación, Pagos online → Checkout Pro, modelo Marketplace
+   / Split 1:1 cuando esté disponible. Completar las validaciones que solicite MP;
+   si no ofrece ese modelo, confirmar habilitación con MP antes de continuar.
+2. Abrir Detalles de aplicación / Producción → Credenciales de producción y obtener
+   Client ID (número de aplicación) y Client Secret para OAuth. Si pide activarlas,
+   completar industria, sitio y términos del panel; obtener estas claves no habilita
+   por sí solo pagos reales en SELPA. Guardarlas sólo en configuración segura
+   del servidor del Preview; no pegarlos en tickets, README ni Git.
+3. Detalles → Editar datos → Configuraciones avanzadas: registrar el callback HTTPS
+   exacto, habilitar flujo de autorización con PKCE y permisos lectura/escritura/
+   acceso offline necesarios. No añadir parámetros al redirect URI registrado.
+4. Webhooks → Configurar notificaciones: seleccionar modo pruebas, URL base del
+   Preview y evento **Pagos (`payment`)**; no Orders API ni merchant_order.
+5. Guardar y revelar la clave secreta de Webhooks de esa aplicación/configuración;
+   guardarla como `MERCADO_PAGO_WEBHOOK_SECRET`. No confundirla con Client Secret.
+6. Pruebas → Cuentas de prueba → Crear cuenta: Argentina, vendedor y comprador
+   distintos; usar integrador de prueba si el esquema Marketplace lo requiere.
+   Guardar usuario/contraseña/código de verificación privadamente. Para pagar usar
+   sólo saldo ficticio o [tarjetas de prueba oficiales](https://www.mercadopago.com.ar/developers/es/docs/checkout-pro-preferences/integration-test/test-purchases).
+7. Configurar las siete variables en el entorno **Preview** (sin activar Production),
+   LIVE_MODE=false y ENABLED=true sólo cuando estén completas. Requiere que el
+   deployment tome esas env. Este bloque no cambia env reales ni dispara deploy.
+   En SELPA, admin con finance:manage → Finanzas → Configuración → Conectar Mercado
+   Pago. Autorizar con el vendedor de prueba, en navegador separado del comprador.
+   Callback debe regresar a Finanzas y mostrar Conectado; Vault sólo guarda refs.
+   Si OAuth devuelve modo distinto del configurado, falla cerrado: revisar con MP;
+   no poner LIVE_MODE=true como atajo para pruebas ni conectar un vendedor real.
+8. En la DB aislada, crear una inscripción confirmada/obligación ARS de prueba
+   mediante el flujo canónico. Ejemplo: cargo 100, pago manual previo 20, saldo 80.
+9. Jugador autorizado → Mis pagos → Pagar con Mercado Pago. Verificar preferencia
+   por 80 ARS y marketplace_fee=0; pagar como comprador de prueba en incógnito.
+10. En Webhooks, usar la URL específica con account_uuid para el simulador y revisar
+    los envíos del pago real de prueba. La simulación sin un payment API verificable
+    no acredita dinero. Firma inválida → 401 antes de inbox/ledger; fallo temporal
+    API/DB → 503 para retry. Sin sesión SELPA. Consultas externas tienen timeout 6s,
+    handler presupuesto 20s; ACK sólo después de evidencia durable, no fire-and-forget.
+11. Verificar con QA autorizado exactamente un payment POSTED F1A + PAYMENT_RECEIVED,
+    vínculo del intent APPROVED y saldo 0. Replay del mismo evento no duplica ledger.
+    Si hubo cobro manual concurrente: RECONCILIATION_REQUIRED, sin doble asignación.
+12. Comprobar UI club/player: Mercado Pago, saldo pagado, resumen actualizado.
+    Retorno pendiente permite Actualizar estado sin registrar dinero. Al terminar,
+    apagar flag en Preview y seguir la política de cleanup/conciliación existente.
+
+OFF o enabled con configuración incompleta → runtime null, sin CTA player ni
+Conectar del club; panel No disponible, sin crash ni nombres de env en errores.
+OAuth start/callback, checkout GET/POST, webhook y disconnect responden 503 antes
+de acciones; reads F1C/F1D siguen funcionando. La instalación SQL no activa pagos.
+State hash + binding HttpOnly/Secure + PKCE + expiración/one-time y capability
+siguen iguales. Callback sólo devuelve redirect y checkout sólo `{ checkoutUrl }`.
+
+Observabilidad mínima: logs server `[finance:F1E]` con códigos fijos OAUTH_FAILURE,
+REFRESH_FAILURE, CHECKOUT_FAILURE, WEBHOOK_INVALID, PROVIDER_API_UNAVAILABLE y
+RECONCILIATION_REQUIRED. Correlacionar con request/timestamp en logs Vercel y estado
+durable del inbox/intents; no hay plataforma nueva ni payload/error crudo en logs.
+No registrar query completa del callback (authorization code), headers/body/RPC args,
+tokens, Client Secret, webhook secret ni PKCE. Revisar redacción del hosting/APM.
+Esta preparación valida guards y mocks locales; OAuth/MP real y entrega de Webhooks
+quedan pendientes de credenciales, host accesible y QA aislado. No se cambió SQL.
+
+Guías de panel: [Detalles/PKCE](https://www.mercadopago.com.ar/developers/es/docs/your-integrations/application-details),
+[Cuentas de prueba](https://www.mercadopago.com.ar/developers/es/docs/your-integrations/test/accounts),
+[Webhooks](https://www.mercadopago.com.ar/developers/es/docs/checkout-pro-preferences/additional-content/notifications/webhooks).

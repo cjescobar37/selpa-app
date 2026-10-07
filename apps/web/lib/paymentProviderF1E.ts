@@ -1,6 +1,11 @@
 // Server adapter. Never import into a client component.
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 
+type ProviderEvent = 'OAUTH_FAILURE' | 'REFRESH_FAILURE' | 'CHECKOUT_FAILURE' | 'WEBHOOK_INVALID'
+  | 'PROVIDER_API_UNAVAILABLE' | 'RECONCILIATION_REQUIRED'
+// Existing server logs only: fixed event codes, never errors, request bodies or secrets.
+export function reportPaymentProviderEvent(event: ProviderEvent) { console.warn('[finance:F1E]', event) }
+
 export type OAuthTokens = { accessToken: string; refreshToken: string; expiresAt: number; accountId: string; liveMode: boolean }
 export interface ProviderSecretStore {
   claimCredentials(accountId: string, claim: string, purpose: 'CHECKOUT' | 'WEBHOOK'): Promise<CredentialClaim>
@@ -88,11 +93,12 @@ export class MercadoPagoProvider implements PaymentProvider {
       method, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(6000),
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(key ? { 'X-Idempotency-Key': key } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
-    })
+    }).catch(cause => { reportPaymentProviderEvent('PROVIDER_API_UNAVAILABLE'); throw cause })
     if (!response.ok) {
       const invalid = await response.json().catch(() => ({})) as { error?: string }
       const reconnect = [401, 403].includes(response.status) || (path === '/oauth/token' && invalid.error === 'invalid_grant')
       if (path === '/oauth/token' && response.status === 429) throw new Error('PAYMENT_PROVIDER_REFRESH_RETRY')
+      if (!reconnect) reportPaymentProviderEvent('PROVIDER_API_UNAVAILABLE')
       throw new Error(reconnect ? 'PAYMENT_PROVIDER_RECONNECT_REQUIRED' : 'PAYMENT_PROVIDER_UNAVAILABLE')
     }
     return await response.json() as Record<string, unknown>
@@ -161,6 +167,7 @@ export async function refreshProviderCredentials(accountId: string, claim: strin
     await store.rotateCredentials(accountId, claim, next)
     return next.accessToken
   } catch (cause) {
+    reportPaymentProviderEvent('REFRESH_FAILURE')
     const message = cause instanceof Error ? cause.message : ''
     const definitive = message === 'PAYMENT_PROVIDER_RECONNECT_REQUIRED'
     // Timeout/invalid response/DB failure after rotation may have consumed the remote refresh token.

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { accountAccessToken, validCheckoutUrl, type OAuthTokens, type PaymentProvider, type ProviderSecretStore } from './paymentProviderF1E'
+import { accountAccessToken, reportPaymentProviderEvent, validCheckoutUrl, type OAuthTokens, type PaymentProvider, type ProviderSecretStore } from './paymentProviderF1E'
 
 export interface ProviderOAuthStore {
   consumeOAuth(stateHash: string, bindingHash: string): Promise<{ club_id: string; verifier: string }>
@@ -56,6 +56,7 @@ export async function createPaymentCheckout(repo: ProviderRepository, store: Pro
     await repo.finish(claimed.id, claim, checkout.id, checkout.url)
     return { checkoutUrl: checkout.url }
   } catch (cause) {
+    reportPaymentProviderEvent('CHECKOUT_FAILURE')
     if (accountId && cause instanceof Error && cause.message === 'PAYMENT_PROVIDER_RECONNECT_REQUIRED') await repo.reconnect(accountId)
     // Preference creation may have succeeded despite a timeout. Never blindly create a second one.
     await repo.fail(intent.id, claim)
@@ -72,7 +73,9 @@ export async function processPaymentWebhook(repo: ProviderRepository, store: Pro
     const token = await accountAccessToken(account.id, store, provider, 'WEBHOOK')
     // DB validates identity, collector, reference, amount and currency from the API snapshot.
     const payment = await provider.getPayment(token, input.paymentId)
-    return await repo.reconcile(eventId, payment)
+    const status = await repo.reconcile(eventId, payment)
+    if (status === 'RECONCILIATION_REQUIRED') reportPaymentProviderEvent('RECONCILIATION_REQUIRED')
+    return status
   } catch (cause) {
     if (cause instanceof Error && cause.message === 'PAYMENT_PROVIDER_RECONNECT_REQUIRED') await repo.reconnect(input.accountId)
     await repo.retry(eventId)
