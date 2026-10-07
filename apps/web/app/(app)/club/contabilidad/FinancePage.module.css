@@ -1,4 +1,42 @@
 .page{color:#071e3d;max-width:980px;margin:0 auto;padding:12px 15px 64px;min-width:0}
+.page *{box-sizing:border-box}
+.page button:focus-visible,.page input:focus-visible,.page select:focus-visible,.page textarea:focus-visible,.page summary:focus-visible{outline:2px solid #008ca5;outline-offset:3px}
+.caption{color:#60738a;font-size:11.5px;line-height:1.45;margin:8px 0}
+.attention{align-items:center;display:flex;justify-content:space-between;width:100%;min-height:44px;margin-top:8px;padding:8px 12px;border:1px solid #ead4a0;background:#fff7e7;color:#76500b;border-radius:9px;font-size:12px;font-weight:650;cursor:pointer}
+.searchBar{display:flex;gap:7px;margin:8px 0;min-width:0}
+.searchBar input{min-width:0;flex:1;background:#fff;border:1px solid #ccdae4;border-radius:9px;font-size:16px;min-height:44px;padding:8px 10px;color:#071e3d}
+.dateRange{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.dateRange label,.exportSelect{display:grid;gap:4px;min-width:0;font-size:11px;color:#536780}
+.dateRange input,.exportSelect select{min-width:0;max-width:100%;width:100%;min-height:44px;border:1px solid #cddae4;border-radius:9px;padding:7px;font-size:16px;background:#fff;color:#071e3d}
+.reportMetrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1px solid #e3ebf0;padding-top:12px;gap:10px}
+.reportSections{align-items:start}
+.reportMetrics>div{display:grid;gap:4px;min-width:0}
+.reportMetrics span{font-size:11px;color:#60738a}
+.reportMetrics strong{font-size:20px;line-height:1.2;overflow-wrap:anywhere;letter-spacing:-.025em}
+.exportBar{display:flex;align-items:end;flex-wrap:wrap;gap:7px;margin-top:12px}
+.exportSelect{flex:1 1 140px}
+.exportBar button{display:inline-flex;gap:5px;align-items:center;justify-content:center;min-height:44px;padding:8px 10px}
+.compactLine{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-top:1px solid #e7edf2;font-size:12px}
+.compactLine span{min-width:0;color:#536780}
+.compactLine b{white-space:nowrap;font-size:12px}
+.tournamentHead,.tournamentRow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:center}
+.tournamentHead{background:#071e3d;color:#fff;border-radius:7px 7px 0 0;padding:8px;font-size:10px}
+.tournamentHead span:not(:first-child),.tournamentRow span,.tournamentRow b{text-align:right;overflow-wrap:anywhere}
+.tournamentRow{padding:11px 8px;border-bottom:1px solid #e4ecf1;font-size:11.5px}
+.tournamentRow strong{font-weight:600;overflow-wrap:anywhere}
+.technical{margin:10px 0;color:#61758c;font-size:11px}
+.technical summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
+.technical p{overflow-wrap:anywhere;line-height:1.5}
+.historyTitle{font-size:14px;margin:14px 0 8px}
+.historyEntry{border-left:2px solid #c8e8ed;padding:4px 8px;margin:8px 0}
+.historyEntry span{font-size:10px;color:#60738a}
+.historyEntry p{font-size:12px;margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.reviewActions{display:flex;flex-wrap:wrap;gap:6px;position:sticky;bottom:0;background:#fff;padding:9px 0 0}
+.reviewActions button{flex:1;min-height:44px;white-space:nowrap;font-size:12px;padding:8px}
+.exportBar .submit,.reviewActions .submit,.reviewActions .cancel{border-radius:9px;cursor:pointer;font-weight:650}
+.page button:disabled{cursor:not-allowed;opacity:.55}
+@media(min-width:768px){.reportMetrics strong{font-size:24px}.tournamentRow{font-size:13px}.tournamentHead{font-size:11px}}
+@media(max-width:759px){.tournamentHead{display:none}.tournamentRow{grid-template-columns:repeat(2,minmax(0,1fr));padding:11px 0;gap:6px 12px}.tournamentRow strong{grid-column:1/-1;font-size:12px}.tournamentRow span,.tournamentRow b{text-align:left;white-space:normal;overflow-wrap:anywhere}.tournamentRow span::before,.tournamentRow b::before{display:block;font-size:10px;font-weight:500;color:#60738a;margin-bottom:3px}.tournamentRow span::before{content:'Neto del período'}.tournamentRow b::before{content:'Saldo actual'}}
 .header{display:flex;align-items:end;justify-content:space-between;margin:8px 0 14px}
 .eyebrow,.sectionTitle span,.sheet header span{color:#4c8f07;font-size:10px;font-weight:800;letter-spacing:.08em}
 .header h1{font-size:27px;line-height:1.1;letter-spacing:-.025em;margin:3px 0 4px}
@@ -9,8 +47,8 @@
 .overview span{font-size:11px;color:#5c6c80;font-weight:650}
 .overview strong{font-size:21px;letter-spacing:-.03em;overflow-wrap:anywhere;line-height:1.13}
 .overview p{border-top:1px solid #e4ebf1;grid-column:1/-1;margin:0;padding:7px 13px;color:#607289;font-size:11px}
-.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:13px 0 10px;border-bottom:1px solid #d5e0e8}
-.tabs button{appearance:none;background:transparent;border:0;border-bottom:3px solid transparent;color:#65768d;cursor:pointer;font:inherit;font-size:12px;font-weight:700;min-height:44px;padding:8px 4px}
+.tabs{display:flex;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;margin:13px 0 10px;border-bottom:1px solid #d5e0e8;max-width:100%}
+.tabs button{appearance:none;background:transparent;border:0;border-bottom:3px solid transparent;color:#65768d;cursor:pointer;flex:1 0 auto;font:inherit;font-size:12px;font-weight:700;min-height:44px;padding:8px 12px}
 .tabs button.tabActive{border-color:#65a30d;color:#082044}
 .sections{display:grid;gap:12px}
 .section{background:#fff;border:1px solid #dce5ec;border-radius:13px;padding:11px 12px;min-width:0;box-shadow:0 4px 16px rgba(11,36,61,.035)}

@@ -6,6 +6,9 @@ import ClubBackLink from '@/components/club/ClubBackLink'
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import PaymentProviderPanel from '@/features/finance/PaymentProviderPanel'
+import FinanceReports from '@/features/finance/FinanceReports'
+import FinanceReconciliations from '@/features/finance/FinanceReconciliations'
+import { movementFilters } from '@/lib/clubFinanceF1F'
 import {
   financeMethodLabels, financeMovementMethod, financeStatusLabels, formatFinanceMoney, normalizeFinanceOverview, validFinanceAmount,
   type FinanceCursor, type FinanceFilter, type FinanceMethod,
@@ -13,16 +16,18 @@ import {
 } from '@/lib/clubFinanceF1C'
 import styles from './FinancePage.module.css'
 
-type Tab = 'summary' | 'obligations' | 'movements'
+type Tab = 'summary' | 'obligations' | 'movements' | 'reports' | 'reconciliations'
+type OperationalFilter = FinanceFilter | 'CANCELLED'
 type Sheet = { kind: 'payment'; obligation: FinanceObligation; key: string }
   | { kind: 'reverse'; movement: FinanceMovement; key: string }
   | null
 
-const filters: Array<{ value: FinanceFilter; label: string }> = [
+const filters: Array<{ value: OperationalFilter; label: string }> = [
   { value: 'ALL', label: 'Todos' },
   { value: 'PENDING', label: 'Pendientes' },
   { value: 'PARTIAL', label: 'Parciales' },
   { value: 'PAID', label: 'Pagados' },
+  { value: 'CANCELLED', label: 'Cancelados' },
 ]
 
 function localDateTime(date: Date) {
@@ -52,7 +57,12 @@ export default function ClubFinancePage() {
   const { activeClub } = useSession()
   const clubId = activeClub?.id ?? null
   const [tab, setTab] = useState<Tab>('summary')
-  const [filter, setFilter] = useState<FinanceFilter>('PENDING')
+  const [filter, setFilter] = useState<OperationalFilter>('PENDING')
+  const [searchDraft, setSearchDraft] = useState('')
+  const [search, setSearch] = useState('')
+  const [movementFilter, setMovementFilter] = useState('ALL')
+  const [requiresReview, setRequiresReview] = useState(false)
+  const [f1fAvailable, setF1fAvailable] = useState(true)
   const [overview, setOverview] = useState<FinanceOverview>(emptyOverview)
   const [obligations, setObligations] = useState<FinancePage<FinanceObligation>>(emptyObligations)
   const [movements, setMovements] = useState<FinancePage<FinanceMovement>>(emptyMovements)
@@ -99,20 +109,24 @@ export default function ClubFinancePage() {
     setLoading(true)
     setError('')
     try {
-      const params = new URLSearchParams({ clubId, view: 'dashboard', filter })
-      const data = await request(`/api/clubs/finance/core?${params}`)
+      const params = new URLSearchParams({ clubId, view: 'dashboard', filter: tab === 'summary' ? 'PENDING' : filter,
+        search: tab === 'summary' ? '' : search, method: tab === 'summary' ? 'ALL' : movementFilter })
+      const data = await request(`/api/clubs/finance/operations?${params}`)
       if (refreshId.current !== requestId) return
       setOverview(normalizeFinanceOverview(data.overview ?? null))
       setObligations(data.obligations ?? emptyObligations)
       setMovements(data.movements ?? emptyMovements)
       setCanManage(Boolean(data.canManage))
+      setRequiresReview(Boolean(data.requiresReview))
+      setF1fAvailable(data.f1fAvailable !== false)
+      if (data.f1fAvailable === false && (tab === 'reports' || tab === 'reconciliations')) setTab('summary')
       setLoadedClubId(clubId)
     } catch (cause) {
       if (refreshId.current === requestId) setError(cause instanceof Error ? cause.message : 'No pudimos cargar las finanzas.')
     } finally {
       if (refreshId.current === requestId) setLoading(false)
     }
-  }, [clubId, filter, request])
+  }, [clubId, filter, search, movementFilter, tab, request])
 
   // Fetching remote state when club/filter changes is intentional.
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -142,7 +156,9 @@ export default function ClubFinancePage() {
         clubId, view: kind, beforeAt: cursor.at, beforeId: cursor.id,
       })
       if (kind === 'obligations') params.set('filter', filter)
-      const data = await request(`/api/clubs/finance/core?${params}`)
+      if (kind === 'obligations') params.set('search', search)
+      if (kind === 'movements') params.set('method', movementFilter)
+      const data = await request(`/api/clubs/finance/operations?${params}`)
       if (requestId !== refreshId.current) return
       if (kind === 'obligations') setObligations((previous) => mergePage(previous, data.obligations))
       else setMovements((previous) => mergePage(previous, data.movements))
@@ -244,7 +260,8 @@ export default function ClubFinancePage() {
         <span className={styles.rowMeta}>{financeMovementMethod(row)} · {row.status === 'REVERSED' ? 'Revertido' : 'Cobrado'}</span>
       </div>
       <div className={styles.rowSide}>
-        <b className={row.status === 'REVERSED' ? styles.reversed : ''}>+ {formatFinanceMoney(row.amount)}</b>
+        <b className={row.status === 'REVERSED' ? styles.reversed : ''}>{row.status === 'REVERSED' ? '' : '+ '}{formatFinanceMoney(row.amount)}</b>
+        {row.status === 'REVERSED' ? <small>No suma al neto</small> : null}
         {canManage && row.status === 'POSTED' ? <button type="button" className={styles.textAction} onClick={() => openReverse(row)}>Revertir cobro</button> : null}
       </div>
     </article>
@@ -259,18 +276,23 @@ export default function ClubFinancePage() {
     {error ? <p role="alert" className={styles.error}>{error}</p> : null}
     {feedback ? <p role="status" className={styles.success}>{feedback}</p> : null}
 
-    <section className={styles.overview} aria-label="Resumen financiero">
+    {tab !== 'reports' ? <section className={styles.overview} aria-label="Resumen financiero">
       <div><span>Pendiente</span><strong>{currentData ? formatFinanceMoney(overview.total_pending) : '—'}</strong></div>
       <div><span>Cobrado</span><strong>{currentData ? formatFinanceMoney(overview.total_received) : '—'}</strong></div>
       <p>{currentData ? `${overview.open_obligations} obligaciones abiertas` : 'Preparando resumen'}</p>
-    </section>
+    </section> : null}
+    {currentData && requiresReview ? <button type="button" className={styles.attention} onClick={() => setTab('reconciliations')}>Requiere revisión <ArrowRight size={16} /></button> : null}
 
     <nav className={styles.tabs} aria-label="Secciones de Finanzas">
-      {([['summary', 'Resumen'], ['obligations', 'Cobros'], ['movements', 'Movimientos']] as const).map(([value, label]) =>
-        <button key={value} type="button" aria-current={tab === value ? 'page' : undefined}
+      {([['summary', 'Resumen'], ['obligations', 'Cobros'], ['movements', 'Movimientos'], ['reports', 'Reportes'], ['reconciliations', 'Conciliaciones']] as const).map(([value, label]) =>
+        <button key={value} type="button" disabled={!f1fAvailable && (value === 'reports' || value === 'reconciliations')} aria-current={tab === value ? 'page' : undefined}
           className={tab === value ? styles.tabActive : ''} onClick={() => setTab(value)}>{label}</button>)}
     </nav>
-    {clubId && currentData ? <PaymentProviderPanel key={clubId} clubId={clubId} canManage={canManage} request={request} /> : null}
+    {currentData && !f1fAvailable ? <p className={styles.caption}>Reportes y conciliaciones estarán disponibles al instalar F1F. Tus cobros siguen operativos.</p> : null}
+    {clubId && currentData && tab === 'summary' ? <PaymentProviderPanel key={clubId} clubId={clubId} canManage={canManage} request={request} /> : null}
+
+    {clubId && currentData && tab === 'reports' ? <FinanceReports key={clubId} clubId={clubId} request={request} /> : null}
+    {clubId && currentData && tab === 'reconciliations' ? <FinanceReconciliations key={clubId} clubId={clubId} canManage={canManage} request={request} onChanged={() => void refresh()} /> : null}
 
     {loading ? <div className={styles.loading} aria-label="Cargando finanzas"><span /><span /><span /></div> : null}
     {!loading && currentData && tab === 'summary' ? <div className={styles.sections}>
@@ -288,8 +310,13 @@ export default function ClubFinancePage() {
 
     {!loading && currentData && tab === 'obligations' ? <section className={styles.section}>
       <div className={styles.sectionTitle}><div><span>COBROS</span><h2>Obligaciones</h2></div></div>
+      {f1fAvailable ? <form className={styles.searchBar} onSubmit={e => { e.preventDefault(); setSearch(searchDraft.trim()) }}>
+        <input type="search" aria-label="Buscar jugador, pareja o torneo" placeholder="Jugador, pareja o torneo" maxLength={120} value={searchDraft} onChange={e => setSearchDraft(e.target.value)} />
+        <button type="submit" className={styles.smallAction}>Buscar</button>
+      </form> : null}
+      {search ? <button className={styles.textAction} onClick={() => { setSearch(''); setSearchDraft('') }}>Limpiar búsqueda</button> : null}
       <div className={styles.filters} role="group" aria-label="Filtrar cobros">
-        {filters.map((option) => <button type="button" key={option.value}
+        {filters.filter(option => f1fAvailable || option.value !== 'CANCELLED').map((option) => <button type="button" key={option.value}
           aria-pressed={filter === option.value} onClick={() => setFilter(option.value)}>{option.label}</button>)}
       </div>
       {obligations.items.length === 0 ? <div className={styles.empty}><strong>{filter === 'PENDING' ? 'No hay cobros pendientes.' : 'No hay obligaciones en este filtro.'}</strong><p>Las nuevas inscripciones confirmadas con cargo aparecerán acá.</p></div>
@@ -299,6 +326,9 @@ export default function ClubFinancePage() {
 
     {!loading && currentData && tab === 'movements' ? <section className={styles.section}>
       <div className={styles.sectionTitle}><div><span>ACTIVIDAD</span><h2>Movimientos</h2></div></div>
+      {f1fAvailable ? <div className={styles.filters} aria-label="Método del cobro">
+        {movementFilters.map(([value, label]) => <button key={value} aria-pressed={movementFilter === value} onClick={() => setMovementFilter(value)}>{label}</button>)}
+      </div> : null}
       {movements.items.length === 0 ? <div className={styles.empty}><strong>Todavía no hay movimientos.</strong></div>
         : movements.items.map((row) => <MovementRow key={row.id} row={row} />)}
       {movements.nextCursor ? <button className={styles.more} type="button" disabled={loadingMore} onClick={() => void loadMore('movements')}>{loadingMore ? 'Cargando…' : 'Ver más'}</button> : null}

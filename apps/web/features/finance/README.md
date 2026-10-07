@@ -337,3 +337,62 @@ quedan pendientes de credenciales, host accesible y QA aislado. No se cambió SQ
 Guías de panel: [Detalles/PKCE](https://www.mercadopago.com.ar/developers/es/docs/your-integrations/application-details),
 [Cuentas de prueba](https://www.mercadopago.com.ar/developers/es/docs/your-integrations/test/accounts),
 [Webhooks](https://www.mercadopago.com.ar/developers/es/docs/checkout-pro-preferences/additional-content/notifications/webhooks).
+
+## F1F · Reportes, exports y conciliación administrativa
+
+Migration aditiva: `20261007013543_club_finance_f1f_reports_reconciliation.sql`.
+QA descartable con rollback: `supabase/qa/20261007013543_club_finance_f1f_validation.sql`.
+No modifica SQL, lifecycles, permisos ni datos existentes F1A–F1E; no habilita MP.
+
+- Lecturas exclusivamente F1A y vínculos canónicos F1E/F1B, ARS. Tres views
+  internas `security_invoker`, sin grants Data API; RPCs con search_path fijo,
+  auth.uid + finance:view y club scoping. Las pantallas reciben aggregates y
+  páginas keyset de 20 filas, no el ledger entero. La clasificación MP funciona
+  aunque el flag esté OFF: sólo un intent enlazado a finance_payment_id acredita
+  el método, nunca texto libre ni solicitudes legacy.
+- Período inclusivo de fechas Argentina: cobrado neto = pagos con paid_at dentro
+  del rango que actualmente siguen POSTED. Revertir excluye ese pago del neto;
+  no se reconstruye un balance histórico. Pendiente, counts, aging y Obligaciones
+  exportadas son la cartera actual completa, sin restringirla por creación.
+  Por torneo asigna el neto de allocations POSTED del período y el saldo actual.
+  Se explicita este alcance en UI y workbook; no confundirlo con flujo de caja
+  histórico. Movimientos exporta los journals PAYMENT_RECEIVED/PAYMENT_REVERSED,
+  con signo y fecha de cobro/reversión; su suma por período puede diferir del
+  neto de pagos de ese período si una reversión corresponde a un cobro anterior.
+- Aging sólo usa due_date financiera explícita, con fecha actual Argentina.
+  F1B due_date=NULL permanece «Sin vencimiento»; no inventa mora deportiva.
+- Exports backend JWT + finance:view (DB lo revalida), sin service_role para leer.
+  Pagina en lotes de 500, aborta ante errores y nunca entrega archivos truncados.
+  Máximo 367 días inclusivos y 20.000 filas por conjunto por seguridad de memoria;
+  un rango/conjunto mayor requiere export masivo futuro, no un download parcial.
+  No son snapshots transaccionales entre páginas: reflejan estado actual durante
+  la extracción. Para conciliaciones de cierre, exportar sin actividad concurrente.
+  CSV UTF-8 BOM, separador `;`, decimal `,`, texto protegido contra fórmulas.
+  XLSX real: Resumen/Obligaciones/Pagos/Movimientos/Por torneo; fechas locales,
+  números, headers navy, widths útiles y primera fila fija. `write-excel-file`
+  4.1.1 (sólo servidor, dependencia fflate) evita añadir un SDK de planillas al móvil.
+- Conciliaciones incluyen intents y últimos resultados de eventos F1E que necesitan
+  revisión, deduplicando eventos representados por un intent pendiente. Sin secretos,
+  Vault refs ni payloads; sólo importe/moneda allowlisted de evidencia verificada
+  para eventos no vinculados. IDs y motivo técnico están únicamente en detalle.
+- Historial nuevo append-only, raw RLS sin grants. finance:manage deriva el actor
+  de auth.uid; NOTE/REVIEWED/RESOLVED requieren nota, origen real del mismo club,
+  source_version vigente e idempotency key. Una nota no reabre; REVIEWED sigue
+  requiriendo atención y RESOLVED deja de contar. Un nuevo updated_at del intent
+  reabre una nueva versión del caso. Historial administrativo y evidencia F1E
+  permanecen intactos; no hay refund, revisión de payment, journal o webhook.
+  RPCs sólo aceptan los parámetros administrativos explícitos, nunca actor_id.
+  Ver detalle/historial y las acciones administrativas exigen finance:manage;
+  el listado de atención, reportes y exports requieren finance:view.
+- Índices nuevos: lookup parcial del vínculo intent→finance_payment_id y dos
+  índices del historial para latest disposition/case detail. Reutiliza índices
+  de fechas/club de F1A–F1E, sin agregar índices especulativos por cada filtro.
+
+Antes de producción: instalar y ejecutar QA F1F en PostgreSQL/Supabase descartable;
+verificar ACL/RLS con roles reales, transición F1E posterior a resolución, carreras
+de review/idempotency y EXPLAIN ANALYZE con volumen representativo (agregados,
+búsquedas y exports). QA local de componentes usa datos ficticios, sin DB ni MP.
+La revisión de dependencia usa [write-excel-file](https://gitlab.com/catamphetamine/write-excel-file);
+los guards RPC siguen la [guía de functions](https://supabase.com/docs/guides/database/functions).
+Si falta la migration F1F (PGRST202), el Preview conserva las lecturas/acciones F1C
+y muestra las pestañas nuevas deshabilitadas. Otros errores no se ocultan con fallback.
