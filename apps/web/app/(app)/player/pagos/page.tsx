@@ -1,8 +1,8 @@
 'use client'
 
-import Link from 'next/link'
+import PageHeader from '@/components/navigation/PageHeader'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { ArrowLeft, WalletCards } from 'lucide-react'
+import { WalletCards } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
@@ -158,8 +158,8 @@ export default function PlayerPaymentsPage() {
   }
 
   return <PlayerSpaceLayout><main className={styles.page}>
-    <Link href="/player" className={styles.back}><ArrowLeft size={16} aria-hidden="true" />Mi espacio</Link>
-    <header className={styles.heading}><div><span>Tu actividad</span><h1>Mis pagos</h1><p>Tus cargos en todos los clubes</p></div><WalletCards size={25} aria-hidden="true" /></header>
+    <PageHeader backHref="/player" title="Mis pagos" eyebrow="TU ACTIVIDAD" description="Tus cargos en todos los clubes"
+      actions={<WalletCards size={25} aria-hidden="true" />} />
     {paymentReturn ? <section className={styles.returnNotice} role="status"><strong>{returnStatus === 'APPROVED' ? 'Pago confirmado' : returnStatus === 'VERIFYING' ? 'Estamos verificando tu pago' : ['RECONCILIATION_REQUIRED', 'REVERSED'].includes(returnStatus) ? 'El club está revisando tu pago' : ['REJECTED', 'CANCELLED', 'EXPIRED'].includes(returnStatus) ? 'El pago no se completó' : 'Pago en proceso'}</strong>
       <p>{returnStatus === 'APPROVED' ? 'El cobro ya está registrado en SELPA.' : 'El estado se actualiza cuando Mercado Pago confirma el cobro.'}</p>
       <button type="button" onClick={() => { setRetry(value => value + 1); setReturnRefresh(value => value + 1) }}>Actualizar estado</button></section> : null}

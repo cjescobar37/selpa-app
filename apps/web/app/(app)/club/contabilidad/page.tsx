@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowRight, RotateCcw, X } from 'lucide-react'
-import ClubBackLink from '@/components/club/ClubBackLink'
+import PageHeader from '@/components/navigation/PageHeader'
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import PaymentProviderPanel from '@/features/finance/PaymentProviderPanel'
@@ -83,7 +83,7 @@ export default function ClubFinancePage() {
   const submitting = useRef(false)
   const refreshId = useRef(0)
   const previousClubId = useRef(clubId)
-  const currentData = loadedClubId === clubId
+  const currentData = Boolean(clubId) && loadedClubId === clubId
 
   const token = useCallback(async () => {
     const { data } = await supabase.auth.getSession()
@@ -99,7 +99,7 @@ export default function ClubFinancePage() {
       headers: { Authorization: `Bearer ${accessToken}`, ...init?.headers },
     })
     const json = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(json?.error ?? 'No pudimos cargar las finanzas.')
+    if (!response.ok) throw new Error(`${json?.error ?? 'No pudimos cargar las finanzas.'}${json?.code ? ` (${json.code})` : ''}`)
     return json
   }, [token])
 
@@ -268,12 +268,12 @@ export default function ClubFinancePage() {
   }
 
   return <main className={styles.page}>
-    <ClubBackLink href="/club/admin" label="Volver a Club Admin" />
-    <header className={styles.header}>
-      <div><span className={styles.eyebrow}>CLUB ADMIN</span><h1>Finanzas</h1><p>{activeClub?.name ?? 'Tu club'} · Cobros reales</p></div>
-    </header>
+    <PageHeader backHref="/club/admin" title="Finanzas" eyebrow="CLUB ADMIN"
+      description={`${activeClub?.name ?? 'Tu club'} · Cobros reales`} />
 
-    {error ? <p role="alert" className={styles.error}>{error}</p> : null}
+    {!clubId ? <p className={styles.caption}>Seleccioná un club para consultar sus finanzas.</p> : null}
+
+    {error ? <div role="alert" className={styles.error}><p>{error}</p><button type="button" className={styles.cancel} disabled={loading} onClick={() => void refresh()}>Reintentar</button></div> : null}
     {feedback ? <p role="status" className={styles.success}>{feedback}</p> : null}
 
     {tab !== 'reports' ? <section className={styles.overview} aria-label="Resumen financiero">

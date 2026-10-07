@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import PageHeader from '@/components/navigation/PageHeader'
 import { CalendarDays, ChevronRight, RotateCcw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '@/components/session/SessionProvider'
@@ -164,18 +165,8 @@ export default function ClubTournamentCalendarPage() {
 
   return (
     <main className={styles.page}>
-      <nav className={styles.backNav} aria-label="Navegación secundaria">
-        <Link href="/club/torneos">← Volver a torneos</Link>
-      </nav>
-
-      <header className={styles.header}>
-        <div>
-          <span>Competencia</span>
-          <h1>Calendario</h1>
-          <p>Fechas y estado de los torneos de {activeClub?.name ?? 'tu club'}.</p>
-        </div>
-        <CalendarDays aria-hidden="true" size={24} />
-      </header>
+      <PageHeader backHref="/club/torneos" title="Calendario" eyebrow="COMPETENCIA"
+        description={`Fechas de ${activeClub?.name ?? 'tu club'}`} actions={<CalendarDays aria-hidden="true" size={24} />} />
 
       <div className={styles.filters} aria-label="Filtrar calendario">
         <button aria-pressed={status === 'all'} onClick={() => setStatus('all')} type="button">Todos</button>

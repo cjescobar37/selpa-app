@@ -4,6 +4,8 @@ import ClubAdminHubNav, { type ClubAdminHubLink } from '@/components/club/ClubAd
 import { getClubTheme } from '@/lib/clubThemes'
 import { useSession } from '@/components/session/SessionProvider'
 import type { CSSProperties } from 'react'
+import PageHeader from '@/components/navigation/PageHeader'
+import styles from './ClubAdminPage.module.css'
 
 const items: readonly ClubAdminHubLink[] = [
   { href: '/club/usuarios', label: 'Equipo y roles', description: 'Personas y permisos', icon: 'team', requiredAnyCapabilities: ['roles:view', 'roles:manage'] as const },
@@ -19,14 +21,9 @@ const items: readonly ClubAdminHubLink[] = [
 export default function ClubAdminPage() {
   const { activeClub } = useSession()
   const theme = getClubTheme(null)
-  return <main className="club-shell">
-    <section className="club-panel" style={{ '--club-admin-accent': theme.vars.accent, '--club-admin-soft': theme.vars.soft } as CSSProperties}>
-      <div style={{ display: 'grid', gap: 4, marginBottom: 4 }}>
-        <span className="club-kicker">CLUB</span>
-        <h1 className="club-title" style={{ fontSize: 'clamp(24px, 6vw, 32px)', margin: 0 }}>Administración del club</h1>
-        <p className="club-sub" style={{ margin: 0 }}>Gestioná el equipo, la operación y la configuración de {activeClub?.name ?? 'tu club'}.</p>
-      </div>
-      <ClubAdminHubNav label="Administración del club" primaryLabel="Gestión" secondaryLabel="Configuración" items={items} />
-    </section>
+  return <main className={styles.page} style={{ '--club-admin-accent': theme.vars.accent, '--club-admin-soft': theme.vars.soft } as CSSProperties}>
+    <PageHeader backHref="/club" title="Administración del club" eyebrow="TU CLUB"
+      description={activeClub?.name ?? 'Equipo, operación y configuración'} />
+    <ClubAdminHubNav label="Administración del club" primaryLabel="Gestión" secondaryLabel="Configuración" items={items} variant="administration" />
   </main>
 }

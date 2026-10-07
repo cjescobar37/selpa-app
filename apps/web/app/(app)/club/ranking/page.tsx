@@ -7,7 +7,7 @@ import RankingGenderTabs from '@/components/ranking/RankingGenderTabs'
 import PairRankingBoard, { type PairRankingRow } from '@/components/ranking/PairRankingBoard'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
-import ClubBackLink from '@/components/club/ClubBackLink'
+import PageHeader from '@/components/navigation/PageHeader'
 import { getClubTheme } from '@/lib/clubThemes'
 import {
   filterRankingRows,
@@ -255,23 +255,18 @@ export default function ClubRankingPage() {
           ['--club-admin-soft' as string]: theme.vars.soft,
         }}
       >
-        <ClubBackLink href="/club/competition" label="Volver a Competencia" />
+        {!activeClub?.id ? <PageHeader title="Ranking del club" backHref="/club/competition" /> : null}
         {!activeClub?.id ? (
           <div className="px-empty">Primero seleccioná un club activo.</div>
         ) : (
           <>
             {message ? <div className="club-rankingAlert club-rankingAlert--danger"><strong>No pudimos cargar el ranking</strong><p>{message}</p><button type="button" onClick={() => void loadRanking()}>Reintentar</button></div> : null}
 
-            <header className="club-rankingContentHead">
-              <div>
-                <span className="club-rankingContentKicker">Competencia del club</span>
-                <h2>Ranking del club</h2>
-                <p>{activeClub?.name ?? 'Club'} · Actualizado {formatUpdatedAt(data?.meta?.generatedAt)}</p>
-              </div>
-              <button type="button" className="club-rankingRefresh" onClick={loadRanking} disabled={loading || !activeClub?.id}>
+            <PageHeader title="Ranking del club" backHref="/club/competition" eyebrow="COMPETENCIA"
+              description={`${activeClub?.name ?? 'Club'} · Actualizado ${formatUpdatedAt(data?.meta?.generatedAt)}`}
+              actions={<button type="button" className="club-rankingRefresh" onClick={loadRanking} disabled={loading || !activeClub?.id}>
                 {loading ? 'Actualizando...' : 'Actualizar'}
-              </button>
-            </header>
+              </button>} />
 
             {!loading && data?.meta?.pipeline && !data.meta.pipeline.hasPublishedSettlement ? <div className="club-rankingAlert club-rankingAlert--pending"><strong>Aún no hay puntos publicados.</strong><p>{data.meta.pipeline.message ?? 'La primera fecha todavía está pendiente de homologación.'}</p></div> : null}
 

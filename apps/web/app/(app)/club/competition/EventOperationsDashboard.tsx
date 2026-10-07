@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, ArrowRight, CalendarDays, Check, Circle, MapPin, RefreshCw, Trophy } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
-import ClubBackLink from '@/components/club/ClubBackLink'
+import PageHeader from '@/components/navigation/PageHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { hasClubCapability } from '@/lib/clubPermissions'
 import { continueTournamentCompetitionClosure } from '@/lib/continueTournamentCompetitionClosure'
@@ -157,8 +157,10 @@ export default function EventOperationsDashboard({ seriesId, eventId }: { series
   })
 
   return <main className={styles.page}>
-    <ClubBackLink href={`/club/competition/series/${seriesId}?tab=dates`} label="Volver al circuito" />
-    <header className={styles.hero}><div className={styles.eyebrow}><span>OPERACIÓN DE FECHA</span><b className={`${styles.badge} ${styles[`status_${operationalState.key === 'OPEN' ? 'SCHEDULED' : event.status}`]} ${operationalState.tone==='success'?styles.badgeSuccess:''}`}>{operationalState.label}</b></div><div className={styles.title}><div><h1>{event.name}</h1><p><CalendarDays size={14} />{formatCompetitionEventOperationDate(event)}{event.venue_name ? <><MapPin size={14} />{event.venue_name}</> : null}</p></div>{primaryAction}</div><div className={styles.meta}><div className={styles.metaChips}><span>{eventTypes[event.event_type]}</span>{event.tournament_status ? <span>{['OPEN', 'RUNNING', 'FINISHED'].includes(event.tournament_status) ? 'Torneo publicado' : 'Torneo sin publicar'}</span> : <span>{event.is_public ? 'Pública' : 'Privada'}</span>}<span>Rev. {event.revision}</span></div><Link className={styles.secondary} href={eventEditorHref}>{configurationAction.label}</Link></div></header>
+    <PageHeader backHref={`/club/competition/series/${seriesId}?tab=dates`} title={event.name} eyebrow="OPERACIÓN DE FECHA"
+      description={<><CalendarDays size={14} /> {formatCompetitionEventOperationDate(event)}{event.venue_name ? <> · <MapPin size={14} /> {event.venue_name}</> : null}</>}
+      actions={<><b className={`${styles.badge} ${operationalState.tone==='success'?styles.badgeSuccess:''}`}>{operationalState.label}</b>{primaryAction}</>}
+      meta={<div className={styles.meta}><div className={styles.metaChips}><span>{eventTypes[event.event_type]}</span>{event.tournament_status ? <span>{['OPEN', 'RUNNING', 'FINISHED'].includes(event.tournament_status) ? 'Torneo publicado' : 'Torneo sin publicar'}</span> : <span>{event.is_public ? 'Pública' : 'Privada'}</span>}<span>Rev. {event.revision}</span></div><Link className={styles.secondary} href={eventEditorHref}>{configurationAction.label}</Link></div>} />
 
     <section className={styles.kpis}><div><strong>{activeDivisions.length}</strong><small>Divisiones</small></div><div><strong>{summary.ready}</strong><small>Listas</small></div><div><strong>{summary.linked}</strong><small>Torneos</small></div></section>
     {issues.length ? <section className={styles.alerts}>{issues.map(item => <p key={competitionEventIssueCode(item) || String(item)}><AlertCircle size={15} />{competitionEventIssueLabel(item)}</p>)}</section> : null}

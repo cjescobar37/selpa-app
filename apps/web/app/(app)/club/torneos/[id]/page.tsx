@@ -2,6 +2,7 @@
 import { toast } from '@/lib/toastStore'
 
 import Link from 'next/link'
+import PageBackAction from '@/components/navigation/PageBackAction'
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
@@ -4673,7 +4674,7 @@ export default function ClubTournamentDetailPage() {
       <div className={`club-panel club-tournamentDetail ${activeTab === 'playoff' ? 'club-detail--playoff' : ''}`} style={themeStyle}>
         {actionFeedback ? <ActionFeedbackNotice {...actionFeedback} onDismiss={() => setActionFeedback(null)} autoDismissMs={actionFeedback.tone === 'success' ? 4000 : undefined} /> : null}
         <div className="club-detailTopbar">
-          <Link href={circuitBackTarget} className="club-backBtn"><span className="club-backDesktop">{circuitBackLabel ? `Volver a ${circuitBackLabel}` : 'Volver a torneos'}</span><span className="club-backMobile"><ChevronLeft aria-hidden="true" size={18} />{circuitBackLabel ?? 'Volver'}</span></Link>
+          <PageBackAction href={circuitBackTarget} label={circuitBackLabel ? `Volver a ${circuitBackLabel}` : 'Volver a torneos'} />
           <div className="club-topbarActions">
             <div className="club-mobileActionMenu">
               <button type="button" className="club-mobileMenuTrigger" aria-label="Más acciones" aria-expanded={mobileActionsOpen} onClick={() => setMobileActionsOpen((open) => !open)}>

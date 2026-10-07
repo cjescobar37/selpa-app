@@ -3,7 +3,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { ArrowLeft, ChevronDown, ChevronRight, Mail, ShieldCheck, Trophy, UserRound } from 'lucide-react'
+import { ChevronDown, ChevronRight, Mail, ShieldCheck, Trophy, UserRound } from 'lucide-react'
+import PageHeader from '@/components/navigation/PageHeader'
 import { useParams } from 'next/navigation'
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
@@ -49,7 +50,7 @@ export default function PlayerAdministrationPage() {
     setError(''); setDetail(payload)
   }, [activeClubId, id])
   useEffect(() => { void Promise.resolve().then(loadDetail) }, [loadDetail])
-  if (!detail) return <main className={`${styles.page} app-page`}><Link href="/club/jugadores" className={styles.back}><ArrowLeft size={17} />Jugadores</Link>{error ? <p className={styles.error}>{error}</p> : <SelpaLoader title="Preparando ficha" subtitle="" />}</main>
+  if (!detail) return <main className={`${styles.page} app-page`}><PageHeader title="Ficha del jugador" backHref="/club/jugadores" />{error ? <p className={styles.error}>{error}</p> : <SelpaLoader title="Preparando ficha" subtitle="" />}</main>
   const status = detail.membership?.status ?? (detail.player.approved_at ? 'APPROVED' : 'PENDING')
   const toggle = (key: string) => setOpen(open === key ? null : key)
   const canMessage = detail.player.account_kind === 'REGISTERED' && detail.player.user_id && detail.permissions.can_view_messages && detail.permissions.can_reply_messages
@@ -91,8 +92,9 @@ export default function PlayerAdministrationPage() {
     setFeedback({ tone: 'success', ...notice })
   }
   return <main className={`${styles.page} app-page`}>
-    <Link href="/club/jugadores" className={styles.back}><ArrowLeft size={17} />Jugadores</Link>
-    <header className={styles.hero}><div className={styles.identity}><span className={`${styles.avatar} ${refinement.avatar}`}>{detail.player.avatar_url ? <Image src={detail.player.avatar_url} alt="" fill sizes="88px" /> : getClubInitials(detail.player.full_name)}</span><div><span>FICHA ADMINISTRATIVA</span><h1>{detail.player.full_name}</h1><p>{detail.player.category ? String(detail.player.category) + 'ª' : 'Sin categoría'} · {branch(detail.player.gender)}</p></div></div><b className={detail.player.operational_status === 'BLOCKED' ? styles.status_banned : detail.player.operational_status === 'LEFT' ? styles.status_rejected : styles['status_' + String(status).toLowerCase()]}>{detail.player.operational_status === 'BLOCKED' ? 'Bloqueo temporal' : detail.player.operational_status === 'LEFT' ? 'Baja del club' : label(status)}</b></header>
+    <PageHeader backHref="/club/jugadores" title={detail.player.full_name} eyebrow="FICHA ADMINISTRATIVA"
+      description={`${detail.player.category ? String(detail.player.category) + 'ª' : 'Sin categoría'} · ${branch(detail.player.gender)}`}
+      actions={<><span className={`${styles.avatar} ${refinement.headerAvatar}`}>{detail.player.avatar_url ? <Image src={detail.player.avatar_url} alt="" fill sizes="52px" /> : getClubInitials(detail.player.full_name)}</span><b className={`${refinement.headerBadge} ${detail.player.operational_status === 'BLOCKED' ? styles.status_banned : detail.player.operational_status === 'LEFT' ? styles.status_rejected : styles['status_' + String(status).toLowerCase()]}`}>{detail.player.operational_status === 'BLOCKED' ? 'Bloqueo temporal' : detail.player.operational_status === 'LEFT' ? 'Baja del club' : label(status)}</b></>} />
     <section className={styles.summary}><div><span>Ranking</span><strong>{detail.player.ranking_points} pts</strong></div><div><span>Torneos</span><strong>{detail.stats.tournaments_played}</strong></div><div><span>Inscripciones</span><strong>{detail.stats.registrations}</strong></div><div><span>Alta</span><strong>{date(detail.membership?.approved_at ?? detail.player.approved_at)}</strong></div></section>
     <section className={styles.sections}>
       {detail.permissions.can_view_private ? <Panel icon={<UserRound size={17} />} title="Datos personales" subtitle={detail.player.account_kind === 'MANUAL' ? 'Registro manual del club' : detail.player.personal?.city || 'Datos del jugador'} open={open === 'personal'} onClick={() => toggle('personal')}><div className={styles.disclosureBody}>{detail.player.account_kind === 'MANUAL' ? <p>Este jugador fue registrado manualmente por el club. No tiene una cuenta SELPA vinculada.</p> : <dl>{detail.player.personal?.email ? <><dt>Email</dt><dd>{detail.player.personal.email}</dd></> : null}{detail.player.personal?.city ? <><dt>Ciudad</dt><dd>{detail.player.personal.city}</dd></> : null}{detail.player.personal?.birth_date ? <><dt>Fecha de nacimiento</dt><dd>{date(detail.player.personal.birth_date)}</dd></> : null}{human(detail.player.personal?.dominant_hand) ? <><dt>Mano hábil</dt><dd>{human(detail.player.personal?.dominant_hand)}</dd></> : null}{human(detail.player.personal?.preferred_position) ? <><dt>Posición</dt><dd>{human(detail.player.personal?.preferred_position)}</dd></> : null}</dl>}</div></Panel> : null}

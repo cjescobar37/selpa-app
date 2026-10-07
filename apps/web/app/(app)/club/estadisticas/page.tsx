@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { AlertTriangle, BarChart3, CalendarRange, ChevronDown } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
-import ClubBackLink from '@/components/club/ClubBackLink'
+import PageHeader from '@/components/navigation/PageHeader'
 import styles from './estadisticas.module.css'
 
 type Section = 'summary' | 'players' | 'tournaments' | 'activity' | 'finance' | 'content'
@@ -131,12 +131,10 @@ export default function ClubAnalyticsPage() {
   const updated = data ? new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(new Date(data.generatedAt)) : null
 
   return <main className={styles.page}>
-    <ClubBackLink />
-    <header className={styles.header}>
-      <div><span>CLUB ADMIN</span><h1>Estadísticas</h1><p>{data ? periodLabel(from, to) : 'Información operativa del club'}</p></div>
-      <button className={styles.filterButton} onClick={() => setFilterOpen(true)}><CalendarRange size={17} /><span>{presets.find((item) => item.id === preset)?.label}</span><ChevronDown size={15} /></button>
-      {updated ? <small>Actualizado {updated}</small> : null}
-    </header>
+    <PageHeader backHref="/club/admin" title="Estadísticas" eyebrow="CLUB ADMIN" tone="dark"
+      description={data ? periodLabel(from, to) : 'Información operativa del club'}
+      actions={<button className={styles.filterButton} title={`Período: ${presets.find((item) => item.id === preset)?.label}`} aria-label="Cambiar período" onClick={() => setFilterOpen(true)}><CalendarRange size={17} /><span>{presets.find((item) => item.id === preset)?.label}</span><ChevronDown size={15} /></button>}
+      meta={updated ? `Actualizado ${updated}` : null} />
     <div className={styles.selector}>
       <label htmlFor="analytics-section">Sección</label>
       <select id="analytics-section" value={section} onChange={(event) => setSection(event.target.value as Section)}>

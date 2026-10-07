@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import {
   Activity,
-  ArrowLeft,
   Check,
   ImageIcon,
   Pencil,
@@ -23,6 +22,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials, uploadPlayerProfileImage } from '@/lib/clubAssets'
 import { formatRankingCategory, formatRankingGender, formatRankingPoints } from '@/lib/ranking'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
+import PageBackAction from '@/components/navigation/PageBackAction'
 
 type ProfileData = {
   user_id: string
@@ -464,7 +464,7 @@ export default function ClubJugadorDetailPage() {
                   <Image className="playerProfileV3__coverBackdrop" src={heroCover} alt="" fill sizes="1200px" priority />
                   <Image className="playerProfileV3__coverImage" src={heroCover} alt="" fill sizes="1200px" priority />
                 </> : null}
-                <Link className="playerProfileV3__back" href={isOwnProfile ? '/player' : pathname.startsWith('/club/') ? '/club/jugadores' : '/ranking'} aria-label="Volver"><ArrowLeft size={17} /><span>Volver</span></Link>
+                <div className="playerProfileV3__backWrap"><PageBackAction href={isOwnProfile ? '/player' : pathname.startsWith('/club/') ? '/club/jugadores' : '/ranking'} tone="dark" /></div>
                 {isOwnProfile ? <>
                   <label className="playerProfileV3__coverEdit" htmlFor="player-profile-cover-file"><ImageIcon size={15} />Editar portada</label>
                   <input id="player-profile-cover-file" className="playerProfileV3__quickFile" type="file" accept="image/*" disabled={editSaving} onChange={(event) => { void handleQuickProfileImage('cover', event.target.files?.[0]); event.currentTarget.value = '' }} />
@@ -611,8 +611,7 @@ export default function ClubJugadorDetailPage() {
         .playerProfileV3__cover::after { background: linear-gradient(180deg, rgba(2,6,23,0) 58%, rgba(2,6,23,.28) 100%); content: ''; inset: 0; pointer-events: none; position: absolute; }
         .playerProfileV3__coverBackdrop { display: none; }
         .playerProfileV3__coverImage { object-fit: cover; object-position: center 48%; opacity: 1; }
-        .playerProfileV3__back { align-items: center; backdrop-filter: blur(8px); background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.34); border-radius: 999px; color: #fff; display: inline-flex; font-size: 12px; font-weight: 700; gap: 5px; left: 14px; min-height: 32px; padding: 6px 9px; position: absolute; text-decoration: none; top: 12px; transition: background .16s ease, transform .16s ease; z-index: 2; }
-        .playerProfileV3__back:hover { background: rgba(255,255,255,.25); transform: translateX(-1px); }
+        .playerProfileV3__backWrap { left:14px; position:absolute; top:12px; z-index:2; }
         .playerProfileV3__coverEdit { align-items: center; background: rgba(2,6,23,.64); border: 1px solid rgba(255,255,255,.28); border-radius: 10px; bottom: 12px; color: #fff; cursor: pointer; display: inline-flex; font: inherit; font-size: 12px; font-weight: 700; gap: 6px; min-height: 36px; padding: 0 10px; position: absolute; right: 14px; z-index: 3; }
         .playerProfileV3__quickFile { display: none; }
         .playerProfileV3__intro { align-items: start; display: grid; gap: 26px; grid-template-columns: 226px minmax(0, 1fr) minmax(320px, auto); margin: -82px auto 0; max-width: 1100px; padding: 0 34px; position: relative; width: 100%; z-index: 2; }
@@ -677,9 +676,7 @@ export default function ClubJugadorDetailPage() {
           .playerProfileV3__coverBackdrop { display: none; }
           .playerProfileV3__coverImage { object-fit: cover; object-position: center; opacity: .74; }
           .playerProfileV3__cover::after { background: linear-gradient(180deg, transparent 28%, rgba(2,6,23,.62)); }
-          .playerProfileV3__back { left: 10px; top: 8px; }
-          .playerProfileV3__back span { display: none; }
-          .playerProfileV3__back { height: 32px; justify-content: center; padding: 0; width: 32px; }
+          .playerProfileV3__backWrap { left:10px; top:8px; }
           .playerProfileV3__coverEdit { bottom:auto; font-size:10px; gap:4px; min-height:28px; padding:0 8px; right:10px; top:8px; }
           .playerProfileV3__coverEdit svg { height:13px; width:13px; }
           .playerProfileV3__intro { align-items: center; display: flex; flex-direction: column; gap: 8px; margin-top: -76px; padding: 0 12px; text-align: center; }

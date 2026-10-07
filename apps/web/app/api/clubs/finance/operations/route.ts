@@ -23,9 +23,9 @@ export async function GET(req: NextRequest) {
   })
   const page = (data: unknown, dateKey: string) => financePage(
     ((data ?? []) as Array<{ item: { id: string; [key: string]: unknown } }>).map(r => r.item), 20, dateKey)
-  async function failureOrLegacy(error: { code?: string } | null) {
+  async function failureOrLegacy(error: { code?: string } | null, operation: string) {
     // A Preview may share a database where F1F is not installed yet. Keep F1C usable.
-    if (error?.code !== 'PGRST202') return financeFailure(error)
+    if (error?.code !== 'PGRST202') return financeFailure(error, operation)
     const url = new URL(req.url)
     if (filter === 'CANCELLED') url.searchParams.set('filter', 'ALL')
     const fallback = await coreRead(new NextRequest(url, { headers: req.headers }))
@@ -34,15 +34,19 @@ export async function GET(req: NextRequest) {
   }
   if (view !== 'dashboard') {
     const result = await read(view === 'obligations' ? 'OBLIGATIONS' : 'MOVEMENTS')
-    if (result.error) return failureOrLegacy(result.error)
+    if (result.error) return failureOrLegacy(result.error, `list_club_finance_f1f:${view === 'obligations' ? 'OBLIGATIONS' : 'PAYMENTS'}`)
     return NextResponse.json({ [view]: page(result.data, view === 'obligations' ? 'created_at' : 'paid_at') }, { headers: { 'Cache-Control': 'no-store' } })
   }
   const [overview, obligations, movements, cases] = await Promise.all([
     access.client.rpc('get_club_finance_overview_f1c', { p_club_id: clubId }), read('OBLIGATIONS'), read('MOVEMENTS'),
     access.client.rpc('list_club_finance_f1f', { p_club_id: clubId, p_kind: 'CASES', p_filter: 'OPEN', p_limit: 1 }),
   ])
-  const failure = overview.error ?? obligations.error ?? movements.error ?? cases.error
-  if (failure) return failureOrLegacy(failure)
+  const results = [
+    ['get_club_finance_overview_f1c', overview], ['list_club_finance_f1f:OBLIGATIONS', obligations],
+    ['list_club_finance_f1f:PAYMENTS', movements], ['list_club_finance_f1f:CASES', cases],
+  ] as const
+  const failed = results.find(([, result]) => result.error)
+  if (failed) return failureOrLegacy(failed[1].error, failed[0])
   return NextResponse.json({ f1fAvailable: true, canManage: access.canManage, overview: overview.data,
     requiresReview: Boolean(cases.data?.length), obligations: page(obligations.data, 'created_at'), movements: page(movements.data, 'paid_at') },
   { headers: { 'Cache-Control': 'no-store' } })

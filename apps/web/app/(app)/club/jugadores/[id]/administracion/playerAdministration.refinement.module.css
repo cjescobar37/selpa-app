@@ -1,20 +1,24 @@
-.avatar {
+.headerAvatar {
   aspect-ratio: 1;
   border-radius: 16px;
-  flex: 0 0 88px;
+  flex: 0 0 52px;
   font-size: 20px;
-  height: 88px;
-  min-height: 88px;
-  min-width: 88px;
+  height: 52px;
+  min-height: 52px;
+  min-width: 52px;
   overflow: hidden;
-  width: 88px;
+  width: 52px;
 }
 
-.avatar img {
+.headerAvatar img {
   height: 100%;
   object-fit: cover;
   object-position: center;
   width: 100%;
+}
+
+.headerBadge {
+  position: static;
 }
 
 .messageTrigger {

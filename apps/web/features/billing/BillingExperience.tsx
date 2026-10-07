@@ -1,8 +1,8 @@
 'use client'
 
-import Link from 'next/link'
+import PageHeader from '@/components/navigation/PageHeader'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, Download, Plus, RotateCcw, X } from 'lucide-react'
+import { Download, Plus, RotateCcw, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { billingDate, billingLabels, billingMoney, type BillingCursor, type BillingOverview, type BillingPage, type BillingRow } from '@/lib/platformBillingF2'
 import styles from './BillingExperience.module.css'
@@ -160,7 +160,8 @@ export default function BillingExperience({platform=false,clubId}:{platform?:boo
   const subscription=overview?.subscription
   const planView=(s:BillingRow)=><section className={styles.plan}><div className={styles.rowHead}><div><small>Plan actual</small><h2>{s.plan_name}</h2></div><Badge row={s}/></div><p>{billingMoney(s.price)} · {label(s.billing_interval)}</p><div className={styles.pair}><span>Período<strong>{billingDate(s.current_period_start)} → {billingDate(s.current_period_end)}<small>Fin exclusivo</small></strong></span><span>Próxima renovación<strong>{s.cancel_at_period_end?'Cancelación al cierre':billingDate(s.current_period_end)}</strong></span></div>{s.next_plan_name?<p className={styles.hint}>Próximo plan: {s.next_plan_name}</p>:null}{s.description?<p>{s.description}</p>:null}{s.config?.features?.length?<ul>{s.config.features.map((f:string)=><li key={f}>{f}</li>)}</ul>:null}<div className={styles.instructions}><strong>Cómo pagar a SELPA</strong><p>{s.config?.payment_instructions||'Contactá a SELPA para recibir las instrucciones de pago. No envíes dinero sin confirmar el destino.'}</p></div></section>
   return <main className={styles.shell}>
-    <header className={styles.head}><div><Link href={platform?'/platform':'/club'} className={styles.back}><ArrowLeft size={15}/>{platform?'Plataforma':'Club'}</Link><small>CLUB → SELPA · ARS</small><h1>Facturación</h1></div><button className={styles.icon} onClick={()=>void refresh()} disabled={loading} aria-label="Actualizar facturación"><RotateCcw size={18}/></button></header>
+    <PageHeader backHref={platform?'/platform':'/club'} title="Facturación" eyebrow="CLUB → SELPA · ARS"
+      actions={<button className={styles.icon} onClick={()=>void refresh()} disabled={loading} aria-label="Actualizar facturación"><RotateCcw size={18}/></button>} />
     <nav className={styles.tabs} aria-label="Secciones de facturación">{tabs.map(t=><button key={t} className={tab===t?styles.active:''} onClick={()=>{setTab(t);setNotice('')}}>{tabLabels[t]}</button>)}</nav>
     {platform&&['overview','reports'].includes(tab)?<div className={styles.dateFilters}><label>Cobrado desde<input type="date" value={from} max={to} onChange={e=>{if(e.target.value)setFrom(e.target.value)}}/></label><label>Hasta<input type="date" value={to} min={from} onChange={e=>{if(e.target.value)setTo(e.target.value)}}/></label></div>:null}
     {notice?<p role="status" className={styles.notice}>{notice}</p>:null}

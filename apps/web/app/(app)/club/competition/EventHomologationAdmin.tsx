@@ -4,7 +4,7 @@ import { toast } from '@/lib/toastStore'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, CircleAlert, FileCheck2, LoaderCircle, RefreshCw, ShieldCheck, X } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
-import ClubBackLink from '@/components/club/ClubBackLink'
+import PageHeader from '@/components/navigation/PageHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { hasClubCapability } from '@/lib/clubPermissions'
 import type { Homologation } from '@/features/competition/homologation/competition-homologation.types'
@@ -148,7 +148,7 @@ export default function EventHomologationAdmin({ seriesId, eventId, eventDivisio
   if (!clubId) return <main className={styles.page}><div className={styles.state}>Seleccioná un club.</div></main>
   if (loading) return <main className={styles.page}><div className={styles.skeleton}><LoaderCircle />Cargando homologación…</div></main>
   if (error && fatal && !detail) { const message = error.status === 401 ? 'Volvé a iniciar sesión.' : error.status === 403 ? 'Tu rol no puede acceder a la homologación.' : error.status === 404 ? 'La división ya no existe.' : error.status === 409 ? 'El estado actual no permite esta operación.' : error.status === 412 ? 'La revisión cambió. Recargamos los datos.' : error.message; return <main className={styles.page}><div className={styles.state}><CircleAlert /><strong>No pudimos abrir la homologación</strong><p>{message}</p><button type="button" onClick={() => void load()}><RefreshCw size={16} />Reintentar</button></div></main> }
-  if (!detail) return <main className={styles.page}><ClubBackLink href={back} label="Volver a la fecha" /><header className={styles.hero}><div><span>HOMOLOGACIÓN</span><h1>Revisar resultados</h1><p>Detectá participantes y posiciones del torneo vinculado.</p></div></header>{error ? <p className={styles.error}><AlertCircle size={15} />{error.status === 409 ? 'Primero cerrá la fecha desde Operación de fecha.' : error.message}</p> : null}<div className={styles.empty}><FileCheck2 /><strong>Resultados todavía no detectados</strong><p>{canManage ? 'SELPA preparará la revisión usando el torneo vinculado.' : 'Esperando que un administrador prepare la revisión.'}</p>{canManage ? <button type="button" disabled={Boolean(busy)} onClick={() => void createDraft()}>{busy ? 'Preparando…' : 'Revisar resultados'}</button> : null}</div></main>
+  if (!detail) return <main className={styles.page}><PageHeader backHref={back} title="Revisar resultados" eyebrow="HOMOLOGACIÓN" description="Participantes y posiciones del torneo vinculado" />{error ? <p className={styles.error}><AlertCircle size={15} />{error.status === 409 ? 'Primero cerrá la fecha desde Operación de fecha.' : error.message}</p> : null}<div className={styles.empty}><FileCheck2 /><strong>Resultados todavía no detectados</strong><p>{canManage ? 'SELPA preparará la revisión usando el torneo vinculado.' : 'Esperando que un administrador prepare la revisión.'}</p>{canManage ? <button type="button" disabled={Boolean(busy)} onClick={() => void createDraft()}>{busy ? 'Preparando…' : 'Revisar resultados'}</button> : null}</div></main>
 
   const h = detail.homologation
   const extracted = Boolean(h.source_results_revision)
@@ -174,8 +174,9 @@ export default function EventHomologationAdmin({ seriesId, eventId, eventDivisio
           : null
 
   return <main className={styles.page}>
-    <ClubBackLink href={back} label="Volver a la fecha" />
-    <div className={styles.reviewHeader}><header className={styles.hero}><div className={styles.heroTop}><span>REVISIÓN DE RESULTADOS</span><b className={`${styles.badge} ${styles[`status_${h.status}`]}`}>{statusLabel[h.status]}</b></div><div className={styles.heading}><div><h1>{value(detail.tournament, ['name'], 'Torneo')}</h1>{sportContext ? <p title={sportContext}>{sportContext}</p> : null}<p>{detail.participants.length} participantes · {teamResults.length} resultados · {blockerCount} problemas</p></div><ShieldCheck size={24} /></div></header>
+    <div className={styles.reviewHeader}><PageHeader backHref={back} title={value(detail.tournament, ['name'], 'Torneo')} eyebrow="REVISIÓN DE RESULTADOS" description={sportContext}
+      actions={<><b className={`${styles.badge} ${styles[`status_${h.status}`]}`}>{statusLabel[h.status]}</b><ShieldCheck size={24} /></>}
+      meta={`${detail.participants.length} participantes · ${teamResults.length} resultados · ${blockerCount} problemas`} />
       <nav className={styles.reviewTabs} aria-label="Revisión de homologación">
         <button type="button" className={tab === 'participants' ? styles.activeTab : ''} onClick={() => chooseTab('participants')}>Participantes <span>{detail.participants.length}</span></button>
         <button type="button" className={tab === 'results' ? styles.activeTab : ''} onClick={() => chooseTab('results')}>Resultados <span>{teamResults.length}</span></button>

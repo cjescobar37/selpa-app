@@ -1,9 +1,9 @@
 'use client'
 import { toast } from '@/lib/toastStore'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ChevronRight, CircleAlert, Plus, X } from 'lucide-react'
+import { ChevronRight, CircleAlert, Plus, X } from 'lucide-react'
+import PageHeader from '@/components/navigation/PageHeader'
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import styles from './CompetitionDivisionsAdmin.module.css'
@@ -130,10 +130,8 @@ export default function CompetitionDivisionsAdmin() {
   if (!clubId) return <main className={styles.page}><p className={styles.state}>Seleccioná un club para continuar.</p></main>
   const divisions = data?.divisions ?? []
   return <main className={styles.page}>
-    <header className={styles.hero}>
-      <Link href="/club/competition" className={styles.back}><ArrowLeft size={17} /> Competencias</Link>
-      <span>CONFIGURACIÓN</span><h1>Configuración competitiva</h1><p>Definí las categorías y divisiones que podrá usar el club.</p>
-    </header>
+    <PageHeader backHref="/club/competition" title="Configuración competitiva" eyebrow="CONFIGURACIÓN"
+      description="Categorías y divisiones del club" />
 
     {notice ? <aside className={`${styles.notice} ${styles[notice.kind]}`} role="status"><CircleAlert size={18} /><p>{notice.text}</p><button type="button" onClick={() => setNotice(null)} aria-label="Cerrar mensaje"><X size={17} /></button></aside> : null}
 

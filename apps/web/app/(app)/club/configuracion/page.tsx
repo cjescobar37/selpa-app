@@ -1,6 +1,6 @@
 'use client'
 
-import ClubBackLink from '@/components/club/ClubBackLink'
+import PageHeader from '@/components/navigation/PageHeader'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
@@ -489,20 +489,9 @@ export default function ClubConfiguracionPage() {
   return (
     <div className="club-shell">
       <div className="club-panel club-config" style={themeStyle}>
-        <div className="club-configHead">
-          <div>
-            <ClubBackLink />
-            <span className="club-kicker">CLUB</span>
-            <h1 className="club-title">Configuración del club</h1>
-            <p className="club-sub">Datos del club, branding, contacto y reglamento PDF.</p>
-          </div>
-          <div className="club-configOps">
-            <div>
-              <span>Estado del club</span>
-              <strong>{getStatusLabel(review?.status)}</strong>
-            </div>
-          </div>
-        </div>
+        <PageHeader backHref="/club/admin" title="Configuración del club"
+          description="Datos, identidad y contacto"
+          actions={<span className="club-configStatus">{getStatusLabel(review?.status)}</span>} />
 
         <Banner banner={banner} />
 
@@ -598,6 +587,7 @@ export default function ClubConfiguracionPage() {
           right: 0;
           top: 0;
         }
+        .club-configStatus { border:1px solid #d5e4cd; background:#f1f8ec; color:#356917; border-radius:999px; font-size:11px; padding:6px 9px; }
         .club-configHead {
           align-items: flex-start;
           background: linear-gradient(135deg, rgba(248,250,252,.98), var(--club-admin-soft));

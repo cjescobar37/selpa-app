@@ -18,6 +18,7 @@ import {
   Sparkles,
   Trophy,
   Users,
+  WalletCards,
   type LucideIcon,
 } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
@@ -40,7 +41,7 @@ type Props = {
   primaryLabel?: string
   secondaryLabel?: string
   items: readonly ClubAdminHubLink[]
-  variant?: 'default' | 'competition'
+  variant?: 'default' | 'competition' | 'administration'
 }
 
 const icons: Record<HubIcon, LucideIcon> = {
@@ -55,7 +56,7 @@ const icons: Record<HubIcon, LucideIcon> = {
   requests: Bell,
   registrations: ClipboardList,
   team: ShieldCheck,
-  finance: BadgeDollarSign,
+  finance: WalletCards,
   analytics: BarChart3,
   reports: FileText,
   profile: Users,
@@ -82,14 +83,14 @@ export default function ClubAdminHubNav({ label, primaryLabel = 'Operación', se
         const Icon = icons[item.icon]
         const active = pathname === item.href || (item.href !== '/club' && pathname.startsWith(`${item.href}/`))
         return <Link key={item.href} className={`${styles.link} ${active ? styles.active : ''}`} href={item.href} aria-current={active ? 'page' : undefined}>
-          <Icon aria-hidden="true" size={18} strokeWidth={2.2} />
+          <span className={styles.icon}><Icon aria-hidden="true" size={20} strokeWidth={2} /></span>
           <span><strong>{item.label}</strong><small>{item.description}</small></span>
         </Link>
       })}
     </div>
   </section> : null
 
-  return <nav className={`${styles.hub} ${variant === 'competition' ? styles.competition : ''}`} aria-label={label}>
+  return <nav className={`${styles.hub} ${variant === 'competition' ? styles.competition : ''} ${variant === 'administration' ? styles.administration : ''}`} aria-label={label}>
     {renderGroup(primary, secondary.length ? primaryLabel : undefined)}
     {renderGroup(secondary, secondaryLabel)}
   </nav>

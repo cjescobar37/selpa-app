@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
-import ClubBackLink from '@/components/club/ClubBackLink'
+import PageHeader from '@/components/navigation/PageHeader'
 import type { ClubRole } from '@/lib/clubMembershipRules'
 import {
   getCanonicalClubPermissionRole,
@@ -1077,20 +1077,14 @@ export default function ClubUsuariosPage() {
 
   return (
     <div className="px-wrap">
-      <ClubBackLink />
       <div className="club-panel club-users" style={themeStyle}>
-        <div className="club-usersHead">
-          <div>
-            <span className="club-kicker">Club Core</span>
-            <h1 className="club-title">Equipo y roles</h1>
-            <p className="club-sub">Administración interna de staff, invitaciones y permisos de {activeClub?.name ?? 'tu club'}.</p>
-          </div>
-          <div className="club-usersStats">
+        <PageHeader backHref="/club/admin" title="Equipo y roles" eyebrow="CLUB ADMIN"
+          description={activeClub?.name ?? 'Staff, invitaciones y permisos'}
+          meta={<div className="club-usersStats">
             <span><b>{staffMetrics.active}</b> staff activo</span>
             <span><b>{pendingInvites.length}</b> invitaciones</span>
             <span><b>{staffMetrics.rolesCovered}</b> roles cubiertos</span>
-          </div>
-        </div>
+          </div>} />
 
         {message ? <div className="club-message" role="status" aria-live="polite">{message}</div> : null}
         {schemaWarning ? <div className="club-warning">{schemaWarning}</div> : null}

@@ -5,7 +5,7 @@ import { Building2, ChevronRight, GripVertical, ImagePlus, MapPin, Plus, Trash2,
 import { useSession } from '@/components/session/SessionProvider'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubTheme } from '@/lib/clubThemes'
-import ClubBackLink from '@/components/club/ClubBackLink'
+import PageHeader from '@/components/navigation/PageHeader'
 
 type Media = { id: string; kind: 'COVER' | 'STORY' | 'GALLERY'; storage_path: string; public_url: string; alt_text: string | null; caption: string | null; sort_order: number; is_visible: boolean }
 type Facility = { id?: string; facility_key: string; label: string; description?: string | null; is_available: boolean; sort_order?: number }
@@ -116,16 +116,16 @@ export default function ClubPublicProfilePage() {
     changed(setFacilities, current ? facilities.filter((item) => item.facility_key !== key) : [...facilities, { facility_key: key, label, is_available: true }])
   }
 
-  if (loading) return <main className="clubProfilePage"><ClubBackLink /><div className="clubProfileSkeleton">Cargando perfil del club…</div><Styles /></main>
-  if (!data) return <main className="clubProfilePage"><ClubBackLink /><div className="clubProfileError">{message || 'Perfil no disponible.'}</div><Styles /></main>
+  if (loading) return <main className="clubProfilePage"><PageHeader title="Perfil del club" backHref="/club/admin" /><div className="clubProfileSkeleton">Cargando perfil del club…</div><Styles /></main>
+  if (!data) return <main className="clubProfilePage"><PageHeader title="Perfil del club" backHref="/club/admin" /><div className="clubProfileError">{message || 'Perfil no disponible.'}</div><Styles /></main>
   const location = [clubFields.city, clubFields.province].filter(Boolean).join(' · ') || data.club.country || 'Ubicación sin completar'
   const status = data.profile.publication_status
   const publicHref = `/clubs/${data.club.id}`
   const style = { '--profile-accent': theme.vars.accent, '--profile-soft': theme.vars.soft } as CSSProperties
 
   return <main className="clubProfilePage" style={style}>
-    <ClubBackLink />
-    <header className="clubProfileHead"><div><span>IDENTIDAD PÚBLICA</span><h1>Perfil del club</h1></div><div className="clubProfileHeadActions"><em data-status={status}>{status === 'PUBLISHED' ? 'Publicado' : 'Borrador'}</em><a href={publicHref} target="_blank" rel="noreferrer">Ver perfil público</a></div></header>
+    <PageHeader backHref="/club/admin" title="Perfil del club" eyebrow="IDENTIDAD PÚBLICA"
+      actions={<div className="clubProfileHeadActions"><em data-status={status}>{status === 'PUBLISHED' ? 'Publicado' : 'Borrador'}</em><a href={publicHref} target="_blank" rel="noreferrer">Ver perfil público</a></div>} />
     {message ? <p className="clubProfileMessage">{message}</p> : null}
     <section className="clubProfilePreview" style={cover ? { backgroundImage: `linear-gradient(180deg,rgba(4,17,37,.12),rgba(4,17,37,.84)),url(${cover.public_url})` } : undefined}>
       <div className="clubProfileLogo">{data.club.logo_url ? <img src={data.club.logo_url} alt={`Logo de ${data.club.name}`} /> : <Building2 />}</div>

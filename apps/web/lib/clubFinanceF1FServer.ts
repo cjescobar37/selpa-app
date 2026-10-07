@@ -17,9 +17,14 @@ export async function financeAccess(req: NextRequest, clubId: string, write = fa
     global: { headers: { Authorization: req.headers.get('authorization') ?? '' } },
   }) }
 }
-export function financeFailure(error: { code?: string } | null) {
+export function financeFailure(error: { code?: string } | null, operation = 'finance') {
+  // Never log JWTs, request headers, DB messages/details or financial payloads.
+  console.error('[club-finance]', { operation, code: error?.code ?? 'UNKNOWN' })
   return NextResponse.json({ error: error?.code === '40001'
-    ? 'El caso cambió. Actualizá el detalle antes de continuar.' : 'No pudimos completar la operación financiera.' },
+    ? 'El caso cambió. Actualizá el detalle antes de continuar.'
+    : error?.code === '42501' ? 'No tenés permiso para consultar las finanzas de este club.'
+    : 'No pudimos consultar las finanzas. Reintentá; si continúa, informá el código técnico.',
+    code: error?.code ?? 'UNKNOWN' },
   { status: error?.code === '42501' ? 403 : error?.code === '40001' ? 409 : 400 })
 }
 export function financeRangeParams(params: URLSearchParams) {

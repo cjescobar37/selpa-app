@@ -7,6 +7,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import SelpaLoader from '@/components/SelpaLoader'
+import PageHeader from '@/components/navigation/PageHeader'
 
 type InboxScope = 'player' | 'club' | 'platform'
 
@@ -51,6 +52,7 @@ type PampraxInboxProps = {
   scope: InboxScope
   title: string
   subtitle: string
+  backHref?: string
   /** Opens the existing composer with a recipient supplied by the calling context. */
   lockedRecipient?: { clubId: string; userId: string; fullName: string }
   /** Renders only the composer sheet; used from contextual administrative screens. */
@@ -103,6 +105,7 @@ export default function PampraxInbox({
   scope,
   title,
   subtitle,
+  backHref,
   lockedRecipient,
   composerOnly = false,
   onComposerClose,
@@ -437,13 +440,7 @@ export default function PampraxInbox({
 
   return (
     <main className={`px-inboxShell${composerOnly ? ' is-composerOnly' : ''}`} style={themeStyle}>
-      <section className="px-inboxHero">
-        <div className="px-inboxHero__copy">
-          <span>Mensajes</span>
-          <h1>{title}</h1>
-          <p>{subtitle}</p>
-        </div>
-        <button
+      <PageHeader backHref={backHref} title={title} eyebrow="Mensajes" description={subtitle} actions={<button
           type="button"
           className="px-newMessageBtn"
           onClick={openComposer}
@@ -452,8 +449,7 @@ export default function PampraxInbox({
         >
           <Plus size={17} />
           Nuevo mensaje
-        </button>
-      </section>
+        </button>} />
 
       {error ? <div className="px-inboxAlert">{error}</div> : null}
       {notice ? <div className="px-inboxNotice">{notice}</div> : null}

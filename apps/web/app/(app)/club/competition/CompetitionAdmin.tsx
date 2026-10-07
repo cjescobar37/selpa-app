@@ -7,7 +7,7 @@ import { Activity, CalendarDays, ChevronLeft, ChevronRight, CircleAlert, ListChe
 import { useSession } from '@/components/session/SessionProvider'
 import { ActionFeedbackNotice } from '@/components/ui/ActionFeedbackNotice'
 import ClubAdminHubNav from '@/components/club/ClubAdminHubNav'
-import ClubBackLink from '@/components/club/ClubBackLink'
+import PageHeader from '@/components/navigation/PageHeader'
 import { hasAnyClubPermission } from '@/lib/clubPermissions'
 import { supabase } from '@/lib/supabaseClient'
 import type { CompetitionSeries, CompetitionSeriesDetail, CompetitionSeriesListItem } from '@/features/competition/series/competition-series.types'
@@ -64,10 +64,7 @@ function ErrorState({ error, retry }: { error: Error & { status?: number; setupR
 }
 
 function Header({ title, detail, back, action }: { title: string; detail: string; back?: string; action?: ReactNode }) {
-  return <header className={styles.hero}>
-    <div className={styles.heroTop}>{back ? <ClubBackLink href={back} label="Volver a Competencia" /> : null}<span>COMPETENCIAS</span></div>
-    <div className={styles.heading}><div><h1>{title}</h1><p>{detail}</p></div>{action}</div>
-  </header>
+  return <PageHeader title={title} description={detail} backHref={back} eyebrow="COMPETENCIAS" actions={action} />
 }
 
 const pointsRuleLabels: Record<string, string> = {
@@ -276,12 +273,11 @@ export default function CompetitionAdmin({ screen, mode = 'hub' }: { screen: Scr
     }
     return <div className={styles.page}>
       {feedback ? <ActionFeedbackNotice tone={feedback.tone} title={feedback.title} message={feedback.message} onDismiss={() => setFeedback(null)} /> : null}
-      <section className={styles.controlHero}>
-        <ClubBackLink href="/club/competition/circuits" label="Volver a Circuitos" className={styles.controlBack} />
-        <span className={`${styles.badge} ${styles[`status_${item.status}`]}`}>{statusLabels[item.status]}</span>
-        <small>CENTRO DE CONTROL</small><h1>{item.name}</h1><p>{[seasonName, sportSummary].filter(Boolean).join(' · ')}</p><em>{plannedLabel}</em>
-        {isFinalized ? <button className={styles.controlPrimary} type="button" onClick={() => setDetailTab('ranking')}>Ver ranking final</button> : canFinalize ? <button className={styles.controlPrimary} type="button" onClick={() => setFinalizeOpen(true)}>Finalizar circuito</button> : canActivate ? <button className={styles.controlPrimary} type="button" disabled={scheduling} onClick={() => void activateSeries()}>{scheduling ? 'Activando…' : 'Activar circuito'}</button> : primaryActionHref ? <Link className={styles.controlPrimary} href={primaryActionHref}>{primaryActionLabel}</Link> : canSchedule ? <button className={styles.controlPrimary} type="button" disabled={scheduling} onClick={() => void scheduleSeries()}>{scheduling ? 'Programando…' : 'Programar circuito'}</button> : <button className={styles.controlPrimary} type="button" onClick={() => setDetailTab('rules')}>Completar configuración</button>}
-      </section>
+      <PageHeader backHref="/club/competition/circuits" title={item.name} eyebrow="CENTRO DE CONTROL"
+        description={[seasonName, sportSummary].filter(Boolean).join(' · ')} meta={plannedLabel}
+        actions={<><span className={`${styles.badge} ${styles[`status_${item.status}`]}`}>{statusLabels[item.status]}</span>
+          {isFinalized ? <button className={styles.controlPrimary} type="button" onClick={() => setDetailTab('ranking')}>Ver ranking final</button> : canFinalize ? <button className={styles.controlPrimary} type="button" onClick={() => setFinalizeOpen(true)}>Finalizar circuito</button> : canActivate ? <button className={styles.controlPrimary} type="button" disabled={scheduling} onClick={() => void activateSeries()}>{scheduling ? 'Activando…' : 'Activar circuito'}</button> : primaryActionHref ? <Link className={styles.controlPrimary} href={primaryActionHref}>{primaryActionLabel}</Link> : canSchedule ? <button className={styles.controlPrimary} type="button" disabled={scheduling} onClick={() => void scheduleSeries()}>{scheduling ? 'Programando…' : 'Programar circuito'}</button> : <button className={styles.controlPrimary} type="button" onClick={() => setDetailTab('rules')}>Completar configuración</button>}
+        </>} />
       <section className={styles.controlStrip}><div><small>Fechas</small><strong>{item.planned_events_count ? `${events.length}/${item.planned_events_count}` : events.length || '—'}</strong></div><div><small>Próxima</small><strong>{nextEventDate}</strong></div><div><small>Ranking</small><strong>{publishedEvents.length ? 'Actualizado' : focusState ? 'Pendiente' : 'Sin puntos'}</strong></div></section>
       <nav className={styles.controlTabs} aria-label="Centro del circuito">{([['general','General'],['dates','Fechas'],['ranking','Ranking'],['points','Puntos'],['rules','Reglas']] as const).map(([key,label]) => <button className={detailTab === key ? styles.controlTabActive : ''} type="button" onClick={() => setDetailTab(key)} key={key}>{label}</button>)}</nav>
       {detailTab === 'general' ? <>

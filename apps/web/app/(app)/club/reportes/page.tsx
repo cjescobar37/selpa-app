@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
-import ClubBackLink from '@/components/club/ClubBackLink'
+import PageHeader from '@/components/navigation/PageHeader'
 
 type PaymentRow = {
   amount: number | string | null
@@ -190,18 +190,12 @@ export default function ClubReportesPage() {
 
   return (
     <div className="club-shell">
-      <ClubBackLink />
       <div className="club-panel club-reportPage" style={themeStyle}>
-        <header className="club-reportHero">
-          <div>
-            <span className="club-reportKicker">Club Admin</span>
-            <h1 className="club-title">Reportes</h1>
-            <p className="club-sub">Resumen operativo de jugadores, torneos, inscripciones y pagos de {activeClub?.name ?? 'tu club'}.</p>
-          </div>
-          <Link className="club-reportSecondary" href="/club/contabilidad">
+        <PageHeader backHref="/club/admin" title="Reportes" eyebrow="CLUB ADMIN"
+          description={`Actividad de ${activeClub?.name ?? 'tu club'}`}
+          actions={<Link className="club-reportSecondary" href="/club/contabilidad">
             Ver finanzas
-          </Link>
-        </header>
+          </Link>} />
 
         {!activeClub?.id ? (
           <div className="club-reportEmpty">Primero seleccioná un club activo.</div>
