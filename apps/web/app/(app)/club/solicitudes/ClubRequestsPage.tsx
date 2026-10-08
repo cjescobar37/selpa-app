@@ -1,5 +1,8 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+import { humanizeUiError } from '@/lib/productPresentation'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -25,6 +28,7 @@ function paymentMethodLabel(value?: string | null) {
 }
 
 export default function ClubRequestsPage() {
+  const write = useWriteGuard()
   const { activeClub } = useSession()
   const searchParams = useSearchParams()
   const requestedTab = searchParams.get('tab')
@@ -41,26 +45,38 @@ export default function ClubRequestsPage() {
     if (!activeClub?.id) return
     setLoading(true)
     setMessage('')
-    const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) { setMessage('Sesión inválida.'); setLoading(false); return }
-    const response = await fetch(`/api/clubs/${activeClub.id}/requests`, { headers: { Authorization: `Bearer ${token}` } })
-    const json = await response.json().catch(() => ({}))
-    if (!response.ok) { setMessage(json.error ?? 'No pude cargar las solicitudes.'); setLoading(false); return }
-    setMemberships(json.memberships ?? [])
-    setCancellations(json.cancellations ?? [])
-    setPayments(json.payments ?? [])
-    setLoading(false)
+    try {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (!token) throw new Error('Tu sesión venció. Volvé a ingresar.')
+      const response = await fetch(`/api/clubs/${activeClub.id}/requests`, { headers: { Authorization: `Bearer ${token}` } })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(json.error ?? 'No pudimos cargar las solicitudes.')
+      setMemberships(json.memberships ?? [])
+      setCancellations(json.cancellations ?? [])
+      setPayments(json.payments ?? [])
+    } catch (cause) {
+      setMessage(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos cargar las solicitudes. Reintentá.'))
+    } finally { setLoading(false) }
   }
 
   useEffect(() => {
-    if (!activeClub?.id) { setLoading(false); return }
-    void load()
+    let alive = true
+    queueMicrotask(() => {
+      if (!alive) return
+      if (!activeClub?.id) { setLoading(false); return }
+      void load()
+    })
+    return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClub?.id])
 
   useEffect(() => {
-    if (requestedTab === 'altas' || requestedTab === 'bajas' || requestedTab === 'pagos') setTab(requestedTab)
+    let alive = true
+    queueMicrotask(() => {
+      if (alive && (requestedTab === 'altas' || requestedTab === 'bajas' || requestedTab === 'pagos')) setTab(requestedTab)
+    })
+    return () => { alive = false }
   }, [requestedTab])
 
   useEffect(() => {
@@ -69,35 +85,47 @@ export default function ClubRequestsPage() {
   }, [focusRequestId, loading])
 
   async function resolveCancellation(request: CancellationRequest, status: 'APPROVED' | 'REJECTED') {
-    if (!activeClub?.id) return
-    setSavingId(request.id)
-    const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) { setMessage('Sesión inválida.'); setSavingId(null); return }
-    const response = await fetch(`/api/clubs/${activeClub.id}/registration-change-requests/${request.id}`, {
-      method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+    return write(async()=>{
+      try {
+        if (!activeClub?.id) return
+        setSavingId(request.id)
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        if (!token) { setMessage('Sesión inválida.'); setSavingId(null); return }
+        const response = await fetch(`/api/clubs/${activeClub.id}/registration-change-requests/${request.id}`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+        })
+        const json = await response.json().catch(() => ({}))
+        setSavingId(null)
+        if (!response.ok) { setMessage(json.error ?? 'No pude resolver la baja.'); return }
+        setMessage(status === 'APPROVED' ? 'Baja aprobada y notificada.' : 'Baja rechazada y notificada.')
+        setCancellations((current) => current.filter((item) => item.id !== request.id))
+      } catch(cause) {
+        setMessage(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))
+      } finally { setSavingId(null) }
     })
-    const json = await response.json().catch(() => ({}))
-    setSavingId(null)
-    if (!response.ok) { setMessage(json.error ?? 'No pude resolver la baja.'); return }
-    setMessage(status === 'APPROVED' ? 'Baja aprobada y notificada.' : 'Baja rechazada y notificada.')
-    setCancellations((current) => current.filter((item) => item.id !== request.id))
   }
 
   async function resolvePayment(request: PaymentRequest, status: 'APPROVED' | 'REJECTED') {
-    if (!activeClub?.id) return
-    setSavingId(request.id)
-    const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) { setMessage('Sesión inválida.'); setSavingId(null); return }
-    const response = await fetch(`/api/clubs/${activeClub.id}/payments/${request.id}`, {
-      method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+    return write(async()=>{
+      try {
+        if (!activeClub?.id) return
+        setSavingId(request.id)
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        if (!token) { setMessage('Sesión inválida.'); setSavingId(null); return }
+        const response = await fetch(`/api/clubs/${activeClub.id}/payments/${request.id}`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+        })
+        const json = await response.json().catch(() => ({}))
+        setSavingId(null)
+        if (!response.ok) { setMessage(json.error ?? 'No pude resolver el pago.'); return }
+        setMessage(status === 'APPROVED' ? 'Pago aprobado y notificado.' : 'Pago rechazado y notificado.')
+        setPayments((current) => current.filter((item) => item.id !== request.id))
+      } catch(cause) {
+        setMessage(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))
+      } finally { setSavingId(null) }
     })
-    const json = await response.json().catch(() => ({}))
-    setSavingId(null)
-    if (!response.ok) { setMessage(json.error ?? 'No pude resolver el pago.'); return }
-    setMessage(status === 'APPROVED' ? 'Pago aprobado y notificado.' : 'Pago rechazado y notificado.')
-    setPayments((current) => current.filter((item) => item.id !== request.id))
   }
 
   const total = memberships.length + cancellations.length + payments.length
@@ -125,9 +153,9 @@ export default function ClubRequestsPage() {
       {tabs.map((item) => <button key={item.id} type="button" className={tab === item.id ? 'is-active' : ''} onClick={() => setTab(item.id)}><span>{item.label}</span><b>{item.count}</b></button>)}
     </nav>
 
-    {message ? <p className="club-requestsMessage">{message}</p> : null}
+    {message ? <p className="club-requestsMessage">{humanizeUiError(message)} <button type="button" disabled={loading} onClick={() => void load()}>Actualizar</button></p> : null}
     {loading ? <div className="club-requestsEmpty">Cargando solicitudes...</div> : null}
-    {!loading && total === 0 ? <div className="club-requestsEmpty"><strong>Todo al día</strong><span>No hay solicitudes pendientes para resolver.</span></div> : null}
+    {!loading && !message && total === 0 ? <div className="club-requestsEmpty"><strong>Todo al día</strong><span>No hay solicitudes pendientes para resolver.</span></div> : null}
 
     {!loading && visible.memberships.length > 0 ? <section className="club-requestsSection">
       <div className="club-requestsSectionHead"><div><span>Altas al club</span><h2>Personas que quieren sumarse</h2></div><b>{visible.memberships.length}</b></div>

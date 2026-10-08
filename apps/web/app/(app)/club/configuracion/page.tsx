@@ -1,5 +1,8 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+import { humanizeUiError } from '@/lib/productPresentation'
+
 import PageHeader from '@/components/navigation/PageHeader'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
@@ -132,7 +135,7 @@ function Banner({ banner }: { banner: BannerState }) {
         fontWeight: 700,
       }}
     >
-      {banner.text}
+      {humanizeUiError(banner.text)}
     </div>
   )
 }
@@ -200,6 +203,7 @@ function serializeOpeningHours(values: OpeningHourValues) {
 }
 
 export default function ClubConfiguracionPage() {
+  const write = useWriteGuard()
   const { activeClub, refresh } = useSession()
 
   const [v, setV] = useState<ClubForm>(empty)
@@ -321,169 +325,198 @@ export default function ClubConfiguracionPage() {
 
   async function hardSyncBranding() {
     await refresh()
-    setTimeout(() => {
-      window.location.reload()
-    }, 120)
   }
 
   async function onLogoFileChange(file: File | null) {
-    if (!file || !activeClub?.id) return
+    return write(async () => {
+      try {
+        if (!file || !activeClub?.id) return
 
-    const localPreview = buildLocalPreview(file)
-    setLogoPreview(localPreview)
-    setUploadingLogo(true)
-    setBanner({ type: 'info', text: 'Subiendo logo…' })
+        const localPreview = buildLocalPreview(file)
+        setLogoPreview(localPreview)
+        setUploadingLogo(true)
+        setBanner({ type: 'info', text: 'Subiendo logo…' })
 
-    try {
-      const { data: sess } = await supabase.auth.getSession()
-      const token = sess?.session?.access_token
+        try {
+          const { data: sess } = await supabase.auth.getSession()
+          const token = sess?.session?.access_token
 
-      if (!token) throw new Error('Sesión inválida.')
+          if (!token) throw new Error('Sesión inválida.')
 
-      const form = new FormData()
-      form.append('clubId', activeClub.id)
-      form.append('assetType', 'logo')
-      form.append('file', file)
+          const form = new FormData()
+          form.append('clubId', activeClub.id)
+          form.append('assetType', 'logo')
+          form.append('file', file)
 
-      const res = await fetch('/api/club-branding', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      })
+          const res = await fetch('/api/club-branding', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: form,
+          })
 
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error ?? 'No pude subir el logo.')
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json?.error ?? 'No pude subir el logo.')
 
-      await loadClubData(activeClub.id)
-      setBanner({ type: 'success', text: 'Logo subido y guardado correctamente.' })
-      await hardSyncBranding()
-    } catch (err: unknown) {
-      setBanner({ type: 'error', text: getErrorMessage(err, 'No pude subir el logo.') })
-    } finally {
-      setUploadingLogo(false)
-    }
+          await loadClubData(activeClub.id)
+          setBanner({ type: 'success', text: 'Logo subido y guardado correctamente.' })
+          await hardSyncBranding()
+        } catch (err: unknown) {
+          setBanner({ type: 'error', text: getErrorMessage(err, 'No pude subir el logo.') })
+        } finally {
+          setUploadingLogo(false)
+        }
+      } catch (cause) {
+        setBanner({ type: 'error', text: humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos guardar. Reintentá.') })
+      } finally {
+        setSaving(false)
+      }
+    })
   }
 
   async function onRulesFileChange(file: File | null) {
-    if (!file || !activeClub?.id) return
+    return write(async () => {
+      try {
+        if (!file || !activeClub?.id) return
 
-    setUploadingRules(true)
-    setSelectedRulesName(file.name)
-    setBanner({ type: 'info', text: 'Subiendo reglamento PDF…' })
+        setUploadingRules(true)
+        setSelectedRulesName(file.name)
+        setBanner({ type: 'info', text: 'Subiendo reglamento PDF…' })
 
-    try {
-      const { data: sess } = await supabase.auth.getSession()
-      const token = sess?.session?.access_token
+        try {
+          const { data: sess } = await supabase.auth.getSession()
+          const token = sess?.session?.access_token
 
-      if (!token) throw new Error('Sesión inválida.')
+          if (!token) throw new Error('Sesión inválida.')
 
-      const form = new FormData()
-      form.append('clubId', activeClub.id)
-      form.append('assetType', 'rules')
-      form.append('file', file)
+          const form = new FormData()
+          form.append('clubId', activeClub.id)
+          form.append('assetType', 'rules')
+          form.append('file', file)
 
-      const res = await fetch('/api/club-branding', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      })
+          const res = await fetch('/api/club-branding', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: form,
+          })
 
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error ?? 'No pude subir el PDF.')
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json?.error ?? 'No pude subir el PDF.')
 
-      await loadClubData(activeClub.id)
-      setBanner({ type: 'success', text: 'Reglamento PDF subido y guardado correctamente.' })
-    } catch (err: unknown) {
-      setBanner({ type: 'error', text: getErrorMessage(err, 'No pude subir el PDF.') })
-    } finally {
-      setUploadingRules(false)
-    }
+          await loadClubData(activeClub.id)
+          setBanner({ type: 'success', text: 'Reglamento PDF subido y guardado correctamente.' })
+        } catch (err: unknown) {
+          setBanner({ type: 'error', text: getErrorMessage(err, 'No pude subir el PDF.') })
+        } finally {
+          setUploadingRules(false)
+        }
+      } catch (cause) {
+        setBanner({ type: 'error', text: humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos guardar. Reintentá.') })
+      } finally {
+        setSaving(false)
+      }
+    })
   }
 
   async function save() {
-    if (!activeClub?.id) return
+    return write(async () => {
+      try {
+        if (!activeClub?.id) return
 
-    setSaving(true)
-    setBanner(null)
+        setSaving(true)
+        setBanner(null)
 
-    const payload: Record<string, string | number | boolean | null> = {
-      name: v.name || null,
-      brand_name: v.brand_name || null,
-      legal_name: v.legal_name || null,
-      cuit: v.cuit.replace(/\D/g, '') || null,
-      city: v.city || null,
-      province: v.province || null,
-      country: v.country || null,
-      address: v.address || null,
-      phone: v.phone || null,
-      contact_email: v.contact_email || null,
-      website: v.website || null,
-      instagram: v.instagram || null,
-      opening_hours: v.opening_hours || null,
-      courts_count: v.courts_count ? Number(v.courts_count) : null,
-      courts_surface: v.courts_surface || null,
-      logo_url: normalizeUrl(v.logo_url) || null,
-      rules_pdf_url: normalizeUrl(v.rules_pdf_url) || null,
-      notes: v.notes || null,
-    }
-    const { data: sessionData } = await supabase.auth.getSession()
-    const token = sessionData?.session?.access_token
+        const payload: Record<string, string | number | boolean | null> = {
+          name: v.name || null,
+          brand_name: v.brand_name || null,
+          legal_name: v.legal_name || null,
+          cuit: v.cuit.replace(/\D/g, '') || null,
+          city: v.city || null,
+          province: v.province || null,
+          country: v.country || null,
+          address: v.address || null,
+          phone: v.phone || null,
+          contact_email: v.contact_email || null,
+          website: v.website || null,
+          instagram: v.instagram || null,
+          opening_hours: v.opening_hours || null,
+          courts_count: v.courts_count ? Number(v.courts_count) : null,
+          courts_surface: v.courts_surface || null,
+          logo_url: normalizeUrl(v.logo_url) || null,
+          rules_pdf_url: normalizeUrl(v.rules_pdf_url) || null,
+          notes: v.notes || null,
+        }
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData?.session?.access_token
 
-    if (!token) {
-      setSaving(false)
-      setBanner({ type: 'error', text: 'Sesión inválida.' })
-      return
-    }
+        if (!token) {
+          setSaving(false)
+          setBanner({ type: 'error', text: 'Sesión inválida.' })
+          return
+        }
 
-    const response = await fetch(`/api/clubs/${activeClub.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
+        const response = await fetch(`/api/clubs/${activeClub.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        })
+        const json = await response.json().catch(() => ({}))
+
+        setSaving(false)
+
+        if (!response.ok) {
+          setBanner({ type: 'error', text: json?.error ?? 'No pude guardar los cambios.' })
+          return
+        }
+
+        await loadClubData(activeClub.id)
+        await refresh()
+
+        setBanner({ type: 'success', text: 'Cambios guardados.' })
+      } catch (cause) {
+        setBanner({ type: 'error', text: humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos guardar. Reintentá.') })
+      } finally {
+        setSaving(false)
+      }
     })
-    const json = await response.json().catch(() => ({}))
-
-    setSaving(false)
-
-    if (!response.ok) {
-      setBanner({ type: 'error', text: json?.error ?? 'No pude guardar los cambios.' })
-      return
-    }
-
-    await loadClubData(activeClub.id)
-    await refresh()
-
-    setBanner({ type: 'success', text: 'Cambios guardados.' })
   }
 
   async function submitThemeRequest(themeKey: ClubThemeKey) {
-    if (!activeClub?.id || saving) return
-    setSaving(true)
-    setBanner(null)
-    const { data: sessionData } = await supabase.auth.getSession()
-    const token = sessionData.session?.access_token
-    if (!token) {
-      setSaving(false)
-      setBanner({ type: 'error', text: 'Tu sesión venció. Volvé a ingresar.' })
-      return
-    }
-    const response = await fetch(`/api/clubs/${activeClub.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ theme_key: themeKey }),
+    return write(async () => {
+      try {
+        if (!activeClub?.id || saving) return
+        setSaving(true)
+        setBanner(null)
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        if (!token) {
+          setSaving(false)
+          setBanner({ type: 'error', text: 'Tu sesión venció. Volvé a ingresar.' })
+          return
+        }
+        const response = await fetch(`/api/clubs/${activeClub.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ theme_key: themeKey }),
+        })
+        const json = await response.json().catch(() => ({}))
+        setSaving(false)
+        if (!response.ok) {
+          setBanner({ type: 'error', text: json?.error ?? 'No pudimos actualizar la identidad visual.' })
+          return
+        }
+        setPendingThemeKey(null)
+        await loadClubData(activeClub.id)
+        await refresh()
+        setBanner({ type: 'success', text: 'Identidad visual actualizada.' })
+      } catch (cause) {
+        setBanner({ type: 'error', text: humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos guardar. Reintentá.') })
+      } finally {
+        setSaving(false)
+      }
     })
-    const json = await response.json().catch(() => ({}))
-    setSaving(false)
-    if (!response.ok) {
-      setBanner({ type: 'error', text: json?.error ?? 'No pudimos actualizar la identidad visual.' })
-      return
-    }
-    setPendingThemeKey(null)
-    await loadClubData(activeClub.id)
-    await refresh()
-    setBanner({ type: 'success', text: 'Identidad visual actualizada.' })
   }
 
   return (

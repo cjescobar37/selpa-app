@@ -47,14 +47,16 @@ test('H–L: legacy payment state stays separate, cancellation cannot erase post
   assert.match(readme, /tournament_payments\.APPROVED/)
   assert.match(readme, /club_finance_payments\.POSTED/)
   assert.match(readme, /no reinterpretará obligaciones históricas/)
-  assert.match(legacyApprovalRoute, /rpc\(\s*'transition_tournament_registration_finance_f1b'/)
-  assert.match(legacyApprovalRoute, /p_actor_id: user\.id/)
-  assert.match(legacyApprovalRoute, /p_legacy_payment_id: paymentId/)
+  assert.match(legacyApprovalRoute, /rpc\('resolve_tournament_payment_request_pass3'/)
+  assert.match(legacyApprovalRoute, /p_actor_id:auth.user.id/)
+  const integration = source('../supabase/migrations/20261008101837_product_write_flows_pass3.sql')
+  assert.match(integration, /perform public.transition_tournament_registration_finance_f1b\([\s\S]*'CONFIRMED',p_actor_id,p_payment_id/)
   assert.ok(
-    legacyApprovalRoute.indexOf("'transition_tournament_registration_finance_f1b'") <
-      legacyApprovalRoute.indexOf('.update(updatePayload)'),
+    integration.indexOf('perform public.transition_tournament_registration_finance_f1b(') <
+      integration.indexOf('update public.tournament_payments set status='),
     'registration confirmation must precede legacy request approval'
   )
+  assert.doesNotMatch(legacyApprovalRoute, /\.update\(/, 'HTTP must not leave a partial legacy approval')
 })
 
 test('F1B actor is the authorized human who confirmed, never registration creator', () => {
@@ -71,7 +73,8 @@ test('F1B actor is the authorized human who confirmed, never registration creato
   assert.match(registrationRoute, /rpc\(\s*'transition_tournament_registration_finance_f1b'/)
   assert.match(manualRoute, /status: 'PENDING'/)
   assert.match(manualRoute, /p_actor_id: user\.id/)
-  assert.match(cancellationRoute, /rpc\(\s*'transition_tournament_registration_finance_f1b'/)
+  assert.match(cancellationRoute, /rpc\(\s*'resolve_registration_change_request_pass3'/)
+  assert.match(source('../supabase/migrations/20261008101837_product_write_flows_pass3.sql'), /perform public\.transition_tournament_registration_finance_f1b\(\s*p_club_id,v_request\.tournament_id,v_request\.registration_id,'CANCELLED',p_actor_id/)
   for (const marker of [
     'QA_F1B_ADMIN_A_ACTOR_NOT_RECORDED',
     'QA_F1B_CREATOR_NOT_DISTINCT_FROM_APPROVER',

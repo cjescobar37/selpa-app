@@ -1,5 +1,8 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+import { humanizeUiError } from '@/lib/productPresentation'
+
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -185,6 +188,7 @@ function validateProfileImage(file: File, kind: 'avatar' | 'cover') {
 }
 
 export default function ClubJugadorDetailPage() {
+  const write = useWriteGuard()
   const params = useParams<{ id: string }>()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -308,43 +312,50 @@ export default function ClubJugadorDetailPage() {
   }
 
   async function sendPartnerInvite() {
-    if (!activeClub?.id || !player?.id || !selectedInvitePlayerId) return
-    setPartnerActionBusy(true)
-    setPartnerActionMessage('')
-    const token = await getToken()
-    if (!token) {
-      setPartnerActionMessage('Sesión inválida.')
-      setPartnerActionBusy(false)
-      return
-    }
+    return write(async()=>{
+      try {
+        if (!activeClub?.id || !player?.id || !selectedInvitePlayerId) return
+        setPartnerActionBusy(true)
+        setPartnerActionMessage('')
+        const token = await getToken()
+        if (!token) {
+          setPartnerActionMessage('Sesión inválida.')
+          setPartnerActionBusy(false)
+          return
+        }
 
-    const res = await fetch(`/api/clubs/${activeClub.id}/partner-invites`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        senderClubPlayerId: player.id,
-        receiverClubPlayerId: selectedInvitePlayerId,
-        message: inviteMessage,
-      }),
+        const res = await fetch(`/api/clubs/${activeClub.id}/partner-invites`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            senderClubPlayerId: player.id,
+            receiverClubPlayerId: selectedInvitePlayerId,
+            message: inviteMessage,
+          }),
+        })
+        const json = (await res.json().catch(() => ({}))) as { error?: string }
+
+        if (!res.ok) {
+          setPartnerActionMessage(json.error ?? 'No pude enviar la invitación.')
+          if (res.status === 409) await refreshPartnerState()
+          setPartnerActionBusy(false)
+          return
+        }
+
+        setPartnerActionMessage('Invitación enviada correctamente.')
+        setInviteOpen(false)
+        setInviteQuery('')
+        setInviteMessage('')
+        setSelectedInvitePlayerId('')
+        await refreshPartnerState()
+        setPartnerActionBusy(false)
+      } catch(cause) {
+        setPartnerActionMessage(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))
+      } finally { setPartnerActionBusy(false); setEditSaving(false) }
     })
-    const json = (await res.json().catch(() => ({}))) as { error?: string }
-
-    if (!res.ok) {
-      setPartnerActionMessage(json.error ?? 'No pude enviar la invitación.')
-      setPartnerActionBusy(false)
-      return
-    }
-
-    setPartnerActionMessage('Invitación enviada correctamente.')
-    setInviteOpen(false)
-    setInviteQuery('')
-    setInviteMessage('')
-    setSelectedInvitePlayerId('')
-    await refreshPartnerState()
-    setPartnerActionBusy(false)
   }
 
   function openInviteModal() {
@@ -356,36 +367,42 @@ export default function ClubJugadorDetailPage() {
   }
 
   async function handleQuickProfileImage(kind: 'avatar' | 'cover', file?: File | null) {
-    if (!file || !activeClub?.id || !player) return
-    setEditSaving(true)
-    setMessage('')
-    try {
-      validateProfileImage(file, kind)
-      const token = await getToken()
-      if (!token) throw new Error('Sesión inválida.')
-      const uploaded = await uploadPlayerProfileImage({ file, userId: player.user_id, kind })
-      const res = await fetch(`/api/clubs/${activeClub.id}/players/${player.id}/profile`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          display_name: player.full_name,
-          city: profile?.city ?? '',
-          birth_date: profile?.birth_date ?? '',
-          height_cm: profile?.height_cm ? String(profile.height_cm) : '',
-          dominant_hand: profile?.dominant_hand ?? '',
-          preferred_position: player.preferred_position ?? '',
-          avatar_url: kind === 'avatar' ? uploaded.publicUrl : profile?.avatar_url ?? null,
-          cover_url: kind === 'cover' ? uploaded.publicUrl : profile?.cover_url ?? null,
-        }),
-      })
-      const json = (await res.json().catch(() => ({}))) as { error?: string; player?: Partial<PlayerProfileResponse['player']>; profile?: ProfileData }
-      if (!res.ok) throw new Error(json.error ?? 'No pude actualizar la imagen.')
-      setData((current) => current ? { ...current, player: { ...current.player, ...json.player }, profile: json.profile ?? current.profile } : current)
-    } catch (error: unknown) {
-      setMessage(error instanceof Error ? error.message : 'No pude actualizar la imagen.')
-    } finally {
-      setEditSaving(false)
-    }
+    return write(async()=>{
+      try {
+        if (!file || !activeClub?.id || !player) return
+        setEditSaving(true)
+        setMessage('')
+        try {
+          validateProfileImage(file, kind)
+          const token = await getToken()
+          if (!token) throw new Error('Sesión inválida.')
+          const uploaded = await uploadPlayerProfileImage({ file, userId: player.user_id, kind })
+          const res = await fetch(`/api/clubs/${activeClub.id}/players/${player.id}/profile`, {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              display_name: player.full_name,
+              city: profile?.city ?? '',
+              birth_date: profile?.birth_date ?? '',
+              height_cm: profile?.height_cm ? String(profile.height_cm) : '',
+              dominant_hand: profile?.dominant_hand ?? '',
+              preferred_position: player.preferred_position ?? '',
+              avatar_url: kind === 'avatar' ? uploaded.publicUrl : profile?.avatar_url ?? null,
+              cover_url: kind === 'cover' ? uploaded.publicUrl : profile?.cover_url ?? null,
+            }),
+          })
+          const json = (await res.json().catch(() => ({}))) as { error?: string; player?: Partial<PlayerProfileResponse['player']>; profile?: ProfileData }
+          if (!res.ok) throw new Error(json.error ?? 'No pude actualizar la imagen.')
+          setData((current) => current ? { ...current, player: { ...current.player, ...json.player }, profile: json.profile ?? current.profile } : current)
+        } catch (error: unknown) {
+          setMessage(error instanceof Error ? error.message : 'No pude actualizar la imagen.')
+        } finally {
+          setEditSaving(false)
+        }
+      } catch(cause) {
+        setPartnerActionMessage(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))
+      } finally { setPartnerActionBusy(false); setEditSaving(false) }
+    })
   }
 
   function goToProfileSection(section: typeof profileTab) {
@@ -441,7 +458,7 @@ export default function ClubJugadorDetailPage() {
   return (
     <div className="px-wrap">
       <div className={`club-panel player-premium${isOwnProfile ? ' is-own-profile' : ''}`}>
-        {message ? <div className="player-message">{message}</div> : null}
+        {message ? <div className="player-message">{humanizeUiError(message)}</div> : null}
 
         {!profileClub?.id ? (
           <PlayerStatePanel kind="empty" title="Seleccioná un club activo" message="Necesitamos un club para mostrar tu perfil deportivo." action={{ label: 'Seleccionar club', href: '/seleccionar-club' }} compact />
@@ -580,7 +597,7 @@ export default function ClubJugadorDetailPage() {
                     <span>Mensaje opcional</span>
                     <textarea value={inviteMessage} onChange={(event) => setInviteMessage(event.target.value)} maxLength={500} rows={3} placeholder="Ej: ¿Armamos pareja para los próximos torneos?" />
                   </label>
-                  {partnerActionMessage ? <p className="player-partnerFeedback">{partnerActionMessage}</p> : null}
+                  {partnerActionMessage ? <p className="player-partnerFeedback">{humanizeUiError(partnerActionMessage)}</p> : null}
                   <footer>
                     <button type="button" onClick={() => setInviteOpen(false)}>Cancelar</button>
                     <button type="button" onClick={sendPartnerInvite} disabled={!selectedInvitePlayerId || partnerActionBusy}>

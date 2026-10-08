@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { humanizeUiError } from '@/lib/productPresentation'
+import { useWriteGuard } from '@/lib/useWriteGuard'
 import styles from '@/components/product/ProductFlow.module.css'
 
 type RequestRow = {
@@ -19,6 +20,8 @@ export default function PublicClubRequests({ focusId }: { focusId?: string | nul
   const [busy, setBusy] = useState('')
   const [limit, setLimit] = useState(5)
   const [reviewId, setReviewId] = useState<string | null>(null)
+  const [reason, setReason] = useState('')
+  const write = useWriteGuard()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -48,7 +51,9 @@ export default function PublicClubRequests({ focusId }: { focusId?: string | nul
     if (focusId && reviewId === focusId) document.getElementById(`club-request-${focusId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [focusId, reviewId, loading])
 
-  async function approve(row: RequestRow) {
+  async function decide(row: RequestRow, action: 'approve' | 'reject') {
+    return write(async () => {
+    if (action === 'reject' && !reason.trim()) { setError('Indicá el motivo del rechazo.'); return }
     setBusy(row.id)
     setError('')
     setNotice('')
@@ -57,16 +62,18 @@ export default function PublicClubRequests({ focusId }: { focusId?: string | nul
       if (!data.session) throw new Error('Tu sesión venció. Volvé a iniciar sesión.')
       const res = await fetch(`/api/club-requests/${row.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}` },
-        body: JSON.stringify({ action: 'approve' }),
+        body: JSON.stringify({ action, rejectionReason: reason.trim() }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(humanizeUiError(json.error, 'No pudimos aprobar este club.'))
       setRows(current => current.filter(item => item.id !== row.id))
       setReviewId(null)
-      setNotice(`${row.club_name} quedó aprobado. Podés administrarlo desde Clubes.`)
+      setReason('')
+      setNotice(action === 'approve' ? `${row.club_name} quedó aprobado. Podés administrarlo desde Clubes.` : `${row.club_name}: solicitud rechazada.`)
     } catch (cause) {
       setError(humanizeUiError(cause instanceof Error ? cause.message : cause, 'No pudimos aprobar este club. Intentá nuevamente.'))
     } finally { setBusy('') }
+    })
   }
 
   return <section className={styles.panel} aria-label="Solicitudes públicas de alta" style={{ marginTop: 12 }}>
@@ -81,8 +88,9 @@ export default function PublicClubRequests({ focusId }: { focusId?: string | nul
       {reviewId === row.id && <div className={styles.grid}>
         <div><p>Responsable: {row.owner_name || 'Sin completar'}</p><p>{row.owner_email || 'Email sin completar'}</p><p>Contacto: {row.contact_email || row.phone || 'Sin completar'}</p></div>
         <div><p>{row.address || 'Dirección sin completar'} · {row.courts_count ?? 'Sin datos de'} canchas</p><p>{row.notes || 'Sin observaciones'}</p></div>
-        <p>Al confirmar se creará el club con el responsable indicado. Si todavía no tiene cuenta, debe registrarse con ese email.</p>
-        <button type="button" className={styles.button} disabled={Boolean(busy)} onClick={() => approve(row)}>{busy === row.id ? 'Aprobando…' : 'Confirmar aprobación'}</button>
+        <p>Al confirmar se creará el club con el responsable indicado. Debe tener una cuenta registrada con ese email.</p>
+        <label className={styles.field}>Motivo de rechazo · sólo al rechazar<textarea rows={2} value={reason} disabled={Boolean(busy)} onChange={event => setReason(event.target.value)} /></label>
+        <div className={styles.actions}><button type="button" className={styles.button} disabled={Boolean(busy)} onClick={() => decide(row, 'approve')}>{busy === row.id ? 'Procesando…' : 'Confirmar aprobación'}</button><button type="button" className={styles.link} disabled={Boolean(busy)} onClick={() => decide(row, 'reject')}>Confirmar rechazo</button></div>
       </div>}
     </div>)}
     {!error && rows.length > limit && <button type="button" className={styles.link} onClick={() => setLimit(current => current + 5)}>Ver más altas</button>}

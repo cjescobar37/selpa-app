@@ -1,5 +1,8 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+import { humanizeUiError } from '@/lib/productPresentation'
+
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabaseClient'
@@ -239,7 +242,8 @@ function hasAnyCapability(role: ClubPermissionRole, capabilities: ClubCapability
 }
 
 export default function ClubUsuariosPage() {
-  const { activeClub, clubRole, user } = useSession()
+  const write = useWriteGuard()
+  const { activeClub, clubRole, user, refresh } = useSession()
   const [activeTab, setActiveTab] = useState<TeamTab>('staff')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -454,120 +458,160 @@ export default function ClubUsuariosPage() {
 
   async function createInvite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!activeClub?.id || !canManageTeam) return
+    return write(async () => {
+      try {
+        if (!activeClub?.id || !canManageTeam) return
 
-    const normalizedEmail = email.trim().toLowerCase()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setEmailError('Ingresá un email válido.')
-      return
-    }
+        const normalizedEmail = email.trim().toLowerCase()
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+          setEmailError('Ingresá un email válido.')
+          return
+        }
 
-    setSaving(true)
-    setMessage('')
-    setFlowSuccess(null)
-    setEmailError('')
-    setSchemaWarning('')
-    setStaffWarning('')
+        setSaving(true)
+        setMessage('')
+        setFlowSuccess(null)
+        setEmailError('')
+        setSchemaWarning('')
+        setStaffWarning('')
 
-    const token = await getToken()
-    if (!token) {
-      setMessage('Sesión inválida.')
-      setSaving(false)
-      return
-    }
+        const token = await getToken()
+        if (!token) {
+          setMessage('Sesión inválida.')
+          setSaving(false)
+          return
+        }
 
-    const res = await fetch('/api/clubs/internal-users', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        clubId: activeClub.id,
-        email: normalizedEmail,
-        role,
-      }),
-    })
-    const json = await res.json().catch(() => ({}))
+        const res = await fetch('/api/clubs/internal-users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            clubId: activeClub.id,
+            email: normalizedEmail,
+            role,
+          }),
+        })
+        const json = await res.json().catch(() => ({}))
 
-    setSaving(false)
+        setSaving(false)
 
-    if (!res.ok) {
-      if (json?.code === 'CLUB_INTERNAL_USERS_SCHEMA_MISSING') {
-        setSchemaWarning(json?.error ?? 'Falta inicializar la gestión interna del club.')
-      } else {
-        setMessage(json?.error ?? 'No pudimos enviar la invitación.')
+        if (!res.ok) {
+          if (json?.code === 'CLUB_INTERNAL_USERS_SCHEMA_MISSING') {
+            setSchemaWarning(json?.error ?? 'Falta inicializar la gestión interna del club.')
+          } else {
+            setMessage(json?.error ?? 'No pudimos enviar la invitación.')
+          }
+          return
+        }
+
+        setEmail('')
+        setRole('ADMIN')
+        setFlowSuccess({ mode: 'email', title: `Invitación enviada a ${normalizedEmail}.` })
+        await loadClubCore()
+      } catch (cause) {
+        setMessage(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos completar el cambio. Reintentá.'))
+      } finally {
+        setSaving(false); setSavingId(null)
       }
-      return
-    }
-
-    setEmail('')
-    setRole('ADMIN')
-    setFlowSuccess({ mode: 'email', title: `Invitación enviada a ${normalizedEmail}.` })
-    await loadClubCore()
+    })
   }
 
   async function cancelInvite(inviteId: string) {
-    if (!window.confirm('¿Cancelar esta invitación? La persona ya no podrá aceptarla.')) return
-    setSavingId(inviteId)
-    setMessage('')
+    return write(async () => {
+      try {
+        if (!window.confirm('¿Cancelar esta invitación? La persona ya no podrá aceptarla.')) return
+        setSavingId(inviteId)
+        setMessage('')
 
-    const token = await getToken()
-    if (!token) {
-      setMessage('Sesión inválida.')
-      setSavingId(null)
-      return
-    }
+        const token = await getToken()
+        if (!token) {
+          setMessage('Sesión inválida.')
+          setSavingId(null)
+          return
+        }
 
-    const res = await fetch(`/api/clubs/internal-users/invites/${inviteId}/cancel`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+        const res = await fetch(`/api/clubs/internal-users/invites/${inviteId}/cancel`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const json = await res.json().catch(() => ({}))
+        setSavingId(null)
+
+        if (!res.ok) {
+          setMessage(json?.error ?? 'No pudimos cancelar la invitación.')
+          return
+        }
+
+        setMessage('Invitación cancelada.')
+        await loadClubCore()
+      } catch (cause) {
+        setMessage(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos completar el cambio. Reintentá.'))
+      } finally {
+        setSaving(false); setSavingId(null)
+      }
     })
-    const json = await res.json().catch(() => ({}))
-    setSavingId(null)
-
-    if (!res.ok) {
-      setMessage(json?.error ?? 'No pudimos cancelar la invitación.')
-      return
-    }
-
-    setMessage('Invitación cancelada.')
-    await loadClubCore()
   }
 
   async function updateRole(member: StaffMember, nextRole: ManageableRole) {
-    if (!activeClub?.id || member.role === 'OWNER') return
-    setOpenActionsId(null)
-    setSavingId(member.id)
-    const token = await getToken()
-    const res = await fetch('/api/clubs/internal-users', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ clubId: activeClub.id, membershipId: member.id, role: nextRole }) })
-    const json = await res.json().catch(() => ({}))
-    setSavingId(null)
-    setMessage(res.ok ? 'Rol actualizado.' : json?.error ?? 'No pudimos cambiar el rol.')
-    if (res.ok && token) await loadInternalUsers(token)
+    return write(async () => {
+      try {
+        if (!activeClub?.id || member.role === 'OWNER') return
+        setOpenActionsId(null)
+        setSavingId(member.id)
+        const token = await getToken()
+        const res = await fetch('/api/clubs/internal-users', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ clubId: activeClub.id, membershipId: member.id, role: nextRole }) })
+        const json = await res.json().catch(() => ({}))
+        setSavingId(null)
+        setMessage(res.ok ? 'Rol actualizado.' : json?.error ?? 'No pudimos cambiar el rol.')
+        if (res.ok && token) await loadInternalUsers(token)
+      } catch (cause) {
+        setMessage(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos completar el cambio. Reintentá.'))
+      } finally {
+        setSaving(false); setSavingId(null)
+      }
+    })
   }
 
   async function removeMember(member: StaffMember) {
-    if (!activeClub?.id || member.role === 'OWNER' || !window.confirm(`¿Remover a ${member.full_name} del equipo interno?`)) return
-    setOpenActionsId(null)
-    setSavingId(member.id)
-    const token = await getToken()
-    const res = await fetch('/api/clubs/internal-users', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ clubId: activeClub.id, membershipId: member.id }) })
-    const json = await res.json().catch(() => ({}))
-    setSavingId(null)
-    setMessage(res.ok ? 'Miembro removido.' : json?.error ?? 'No pude remover al miembro.')
-    if (res.ok && token) await loadInternalUsers(token)
+    return write(async () => {
+      try {
+        if (!activeClub?.id || member.role === 'OWNER' || !window.confirm(`¿Remover a ${member.full_name} del equipo interno?`)) return
+        setOpenActionsId(null)
+        setSavingId(member.id)
+        const token = await getToken()
+        const res = await fetch('/api/clubs/internal-users', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ clubId: activeClub.id, membershipId: member.id }) })
+        const json = await res.json().catch(() => ({}))
+        setSavingId(null)
+        setMessage(res.ok ? 'Miembro removido.' : json?.error ?? 'No pude remover al miembro.')
+        if (res.ok && token) await loadInternalUsers(token)
+      } catch (cause) {
+        setMessage(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos completar el cambio. Reintentá.'))
+      } finally {
+        setSaving(false); setSavingId(null)
+      }
+    })
   }
 
   async function transferOwnership(member: StaffMember) {
-    if (!activeClub?.id || !ownerOnly || member.role === 'OWNER' || !window.confirm(`Vas a transferir la propiedad a ${member.full_name}. Tu rol pasará a ADMIN. ¿Continuar?`)) return
-    setSavingId(member.id)
-    const token = await getToken()
-    const res = await fetch('/api/clubs/internal-users/transfer-ownership', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ clubId: activeClub.id, membershipId: member.id }) })
-    const json = await res.json().catch(() => ({}))
-    setSavingId(null)
-    setMessage(res.ok ? 'Propiedad transferida correctamente.' : json?.error ?? 'No pude transferir la propiedad.')
-    if (res.ok) window.location.reload()
+    return write(async () => {
+      try {
+        if (!activeClub?.id || !ownerOnly || member.role === 'OWNER' || !window.confirm(`Vas a transferir la propiedad a ${member.full_name}. Tu rol pasará a ADMIN. ¿Continuar?`)) return
+        setSavingId(member.id)
+        const token = await getToken()
+        const res = await fetch('/api/clubs/internal-users/transfer-ownership', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ clubId: activeClub.id, membershipId: member.id }) })
+        const json = await res.json().catch(() => ({}))
+        setSavingId(null)
+        setMessage(res.ok ? 'Propiedad transferida correctamente.' : json?.error ?? 'No pude transferir la propiedad.')
+        if (res.ok) { await refresh(); await loadClubCore() }
+      } catch (cause) {
+        setMessage(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos completar el cambio. Reintentá.'))
+      } finally {
+        setSaving(false); setSavingId(null)
+      }
+    })
   }
 
   function renderPerson(profile: Profile | null, name: string, fallbackEmail?: string | null, compact = false) {
@@ -923,7 +967,7 @@ export default function ClubUsuariosPage() {
             <span><b>{staffMetrics.rolesCovered}</b> roles cubiertos</span>
           </div>} />
 
-        {message ? <div className="club-message" role="status" aria-live="polite">{message}</div> : null}
+        {message ? <div className="club-message" role="status" aria-live="polite">{humanizeUiError(message)}</div> : null}
         {schemaWarning ? <div className="club-warning">{schemaWarning}</div> : null}
 
         {!activeClub?.id ? (

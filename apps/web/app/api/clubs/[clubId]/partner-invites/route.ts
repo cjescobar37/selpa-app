@@ -10,6 +10,7 @@ import {
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { STAFF_PLAYER_MESSAGE } from '@/lib/accountRolePolicy'
+import { writeErrorResponse } from '@/lib/writeFlowServer'
 
 type ClubPlayerRow = {
   id: string
@@ -143,6 +144,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
     if (!senderClubPlayerId || !receiverClubPlayerId) {
       return NextResponse.json({ error: 'Seleccioná los dos jugadores de la invitación.' }, { status: 400 })
     }
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuid.test(senderClubPlayerId) || !uuid.test(receiverClubPlayerId)) {
+      return NextResponse.json({ error: 'Seleccioná jugadores válidos.', kind: 'VALIDATION' }, { status: 400 })
+    }
 
     if (senderClubPlayerId === receiverClubPlayerId) {
       return NextResponse.json({ error: 'No podés invitar al mismo jugador.' }, { status: 400 })
@@ -150,8 +155,19 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
 
     await assertClubPlayersAvailable(clubId, [senderClubPlayerId, receiverClubPlayerId])
 
+    const replay = async () => {
+      const existing = await supabaseAdmin.from('player_partner_invites').select('*')
+        .eq('club_id', clubId).eq('sender_club_player_id', senderClubPlayerId)
+        .eq('receiver_club_player_id', receiverClubPlayerId).eq('status', 'PENDING').maybeSingle()
+      if (existing.error) throw existing.error
+      return existing.data && existing.data.message === message && existing.data.expires_at === expiresAt
+        ? NextResponse.json({ invite: existing.data as PartnerInviteRow, replayed: true }) : null
+    }
+
     const duplicated = await hasPendingInviteBetween(clubId, senderClubPlayerId, receiverClubPlayerId)
     if (duplicated) {
+      const receipt = await replay()
+      if (receipt) return receipt
       return NextResponse.json({ error: 'Ya existe una invitación pendiente entre estos jugadores.' }, { status: 409 })
     }
 
@@ -173,10 +189,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ clubId
       .select('*')
       .single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      if (error.code === '23505') { const receipt = await replay(); if (receipt) return receipt }
+      return writeErrorResponse('create_partner_invite', error)
+    }
     return NextResponse.json({ invite: data as PartnerInviteRow }, { status: 201 })
   } catch (error: unknown) {
     const message = getErrorMessage(error, 'Error creando invitación de pareja.')
-    return NextResponse.json({ error: message }, { status: message === STAFF_PLAYER_MESSAGE ? 403 : 500 })
+    if (message === STAFF_PLAYER_MESSAGE) return NextResponse.json({ error: message, kind: 'FORBIDDEN' }, { status: 403 })
+    if (['Alguno de los jugadores no pertenece a este club.', 'Ambos jugadores deben estar aprobados para formar pareja.'].includes(message)) {
+      return NextResponse.json({ error: message, kind: 'VALIDATION' }, { status: 400 })
+    }
+    return writeErrorResponse('create_partner_invite', { code: 'UNEXPECTED' })
   }
 }

@@ -1,5 +1,7 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import AuthAlert from '@/components/AuthAlert'
 import PageHeader from '@/components/navigation/PageHeader'
@@ -29,6 +31,7 @@ function commissionPercent(bps: number) {
 }
 
 export default function PlatformConfiguracionPage() {
+  const write = useWriteGuard()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [settingsReady, setSettingsReady] = useState(true)
@@ -108,42 +111,49 @@ export default function PlatformConfiguracionPage() {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    return write(async () => {
+      try {
+        const nextSettings = {
+          default_commission_bps: Number(draft.default_commission_bps),
+          default_currency: draft.default_currency.trim().toUpperCase(),
+          platform_public_name: draft.platform_public_name.trim(),
+          contact_email: draft.contact_email.trim(),
+        }
 
-    const nextSettings = {
-      default_commission_bps: Number(draft.default_commission_bps),
-      default_currency: draft.default_currency.trim().toUpperCase(),
-      platform_public_name: draft.platform_public_name.trim(),
-      contact_email: draft.contact_email.trim(),
-    }
+        const accessToken = await token()
+        if (!accessToken) {
+          setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
+          return
+        }
 
-    const accessToken = await token()
-    if (!accessToken) {
-      setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
-      return
-    }
+        setSaving(true)
+        const res = await fetch('/api/platform/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ settings: nextSettings }),
+        })
+        const json = await res.json().catch(() => ({}))
+        setSaving(false)
 
-    setSaving(true)
-    const res = await fetch('/api/platform/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify({ settings: nextSettings }),
+        if (json?.code === 'SETTINGS_NOT_INITIALIZED') {
+          setSettingsReady(false)
+          setAlert({ variant: 'info', title: 'Configuración aún no inicializada', message: 'Aplicá la migración de platform_settings y recargá.' })
+          return
+        }
+
+        if (!res.ok) {
+          setAlert({ variant: 'error', title: 'No pude guardar', message: json?.error ?? 'Error inesperado.' })
+          return
+        }
+
+        hydrate(json?.settings ?? nextSettings)
+        setAlert({ variant: 'success', title: 'Configuración guardada', message: 'Los parámetros globales quedaron actualizados y auditados.' })
+      } catch (cause) {
+        setAlert({ variant: 'error', title: 'No pudimos completar el cambio', message: 'Revisá tu conexión y reintentá. Conservamos los datos del formulario.' })
+      } finally {
+        setSaving(false)
+      }
     })
-    const json = await res.json().catch(() => ({}))
-    setSaving(false)
-
-    if (json?.code === 'SETTINGS_NOT_INITIALIZED') {
-      setSettingsReady(false)
-      setAlert({ variant: 'info', title: 'Configuración aún no inicializada', message: 'Aplicá la migración de platform_settings y recargá.' })
-      return
-    }
-
-    if (!res.ok) {
-      setAlert({ variant: 'error', title: 'No pude guardar', message: json?.error ?? 'Error inesperado.' })
-      return
-    }
-
-    hydrate(json?.settings ?? nextSettings)
-    setAlert({ variant: 'success', title: 'Configuración guardada', message: 'Los parámetros globales quedaron actualizados y auditados.' })
   }
 
   return (

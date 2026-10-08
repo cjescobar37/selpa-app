@@ -1,5 +1,8 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+import { humanizeUiError } from '@/lib/productPresentation'
+
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Calendar, ExternalLink, ImageIcon, Megaphone, MoreVertical, Plus, Upload, UsersRound, X } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
@@ -89,6 +92,7 @@ function effectiveSponsorStatus(sponsor: Sponsor) {
 }
 
 export default function ClubAdvertisingPage() {
+  const write = useWriteGuard()
   const { activeClub } = useSession()
   const [section, setSection] = useState<Section>('sponsors')
   const [sponsors, setSponsors] = useState<Sponsor[]>([])
@@ -159,63 +163,101 @@ export default function ClubAdvertisingPage() {
     setEditingCampaign(row ?? null); setCampaignForm(campaignState(row)); setModal('campaign'); setMessage('')
   }
   async function saveSponsor(event: FormEvent) {
-    event.preventDefault(); if (!activeClub?.id) return
-    setSaving(true)
-    try {
-      const url = editingSponsor ? `/api/clubs/${activeClub.id}/sponsors/${editingSponsor.id}` : `/api/clubs/${activeClub.id}/sponsors`
-      const res = await fetch(url, {
-        method: editingSponsor ? 'PATCH' : 'POST',
-        headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(sponsorForm),
-      })
-      const json = await res.json(); if (!res.ok) throw new Error(json.error)
-      setModal(null); setMessage(editingSponsor ? 'Sponsor actualizado.' : 'Sponsor creado.'); await load()
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'No pudimos guardar el sponsor.') }
-    finally { setSaving(false) }
+    event.preventDefault()
+    return write(async()=>{
+      try {
+        if (!activeClub?.id) return
+        setSaving(true)
+        try {
+          const url = editingSponsor ? `/api/clubs/${activeClub.id}/sponsors/${editingSponsor.id}` : `/api/clubs/${activeClub.id}/sponsors`
+          const res = await fetch(url, {
+            method: editingSponsor ? 'PATCH' : 'POST',
+            headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(sponsorForm),
+          })
+          const json = await res.json(); if (!res.ok) throw new Error(json.error)
+          setModal(null); setMessage(editingSponsor ? 'Sponsor actualizado.' : 'Sponsor creado.'); await load()
+        } catch (error) { setMessage(error instanceof Error ? error.message : 'No pudimos guardar el sponsor.') }
+        finally { setSaving(false) }
+      } catch(cause) {
+        setMessage(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))
+      } finally { setSaving(false) }
+    })
   }
   async function saveCampaign(event: FormEvent) {
-    event.preventDefault(); if (!activeClub?.id) return
-    setSaving(true)
-    try {
-      const url = editingCampaign ? `/api/clubs/${activeClub.id}/campaigns/${editingCampaign.id}` : `/api/clubs/${activeClub.id}/campaigns`
-      const res = await fetch(url, {
-        method: editingCampaign ? 'PATCH' : 'POST',
-        headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...campaignForm, startsAt: isoFromLocal(campaignForm.startsAt), endsAt: isoFromLocal(campaignForm.endsAt) }),
-      })
-      const json = await res.json(); if (!res.ok) throw new Error(json.error)
-      setModal(null); setMessage(editingCampaign ? 'Campaña actualizada.' : 'Campaña creada.'); await load()
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'No pudimos guardar la campaña.') }
-    finally { setSaving(false) }
+    event.preventDefault()
+    return write(async()=>{
+      try {
+        if (!activeClub?.id) return
+        setSaving(true)
+        try {
+          const url = editingCampaign ? `/api/clubs/${activeClub.id}/campaigns/${editingCampaign.id}` : `/api/clubs/${activeClub.id}/campaigns`
+          const res = await fetch(url, {
+            method: editingCampaign ? 'PATCH' : 'POST',
+            headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...campaignForm, startsAt: isoFromLocal(campaignForm.startsAt), endsAt: isoFromLocal(campaignForm.endsAt) }),
+          })
+          const json = await res.json(); if (!res.ok) throw new Error(json.error)
+          setModal(null); setMessage(editingCampaign ? 'Campaña actualizada.' : 'Campaña creada.'); await load()
+        } catch (error) { setMessage(error instanceof Error ? error.message : 'No pudimos guardar la campaña.') }
+        finally { setSaving(false) }
+      } catch(cause) {
+        setMessage(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))
+      } finally { setSaving(false) }
+    })
   }
   async function remove(kind: 'sponsors' | 'campaigns', id: string) {
-    if (!activeClub?.id || !window.confirm('Esta acción no se puede deshacer. ¿Continuar?')) return
-    const res = await fetch(`/api/clubs/${activeClub.id}/${kind}/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${await token()}` } })
-    const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage('Elemento eliminado.'); await load() }
+    return write(async()=>{
+      try {
+        if (!activeClub?.id || !window.confirm('Esta acción no se puede deshacer. ¿Continuar?')) return
+        const res = await fetch(`/api/clubs/${activeClub.id}/${kind}/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${await token()}` } })
+        const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage('Elemento eliminado.'); await load() }
+      } catch(cause) {
+        setMessage(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))
+      } finally { setSaving(false) }
+    })
   }
   async function quickCampaignStatus(campaign: Campaign, status: Campaign['status']) {
-    setCampaignForm(campaignState(campaign))
-    const payload = { ...campaignState(campaign), status, startsAt: campaign.starts_at, endsAt: campaign.ends_at }
-    const res = await fetch(`/api/clubs/${activeClub!.id}/campaigns/${campaign.id}`, {
-      method: 'PATCH', headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    return write(async()=>{
+      try {
+        setCampaignForm(campaignState(campaign))
+        const payload = { ...campaignState(campaign), status, startsAt: campaign.starts_at, endsAt: campaign.ends_at }
+        const res = await fetch(`/api/clubs/${activeClub!.id}/campaigns/${campaign.id}`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        })
+        const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage(`Campaña ${campaignLabels[status].toLowerCase()}.`); await load() }
+      } catch(cause) {
+        setMessage(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))
+      } finally { setSaving(false) }
     })
-    const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage(`Campaña ${campaignLabels[status].toLowerCase()}.`); await load() }
   }
   async function quickSponsorStatus(sponsor: Sponsor) {
-    if (!activeClub?.id) return
-    const payload = { ...sponsorState(sponsor), status: sponsor.status === 'active' ? 'inactive' : 'active' }
-    const res = await fetch(`/api/clubs/${activeClub.id}/sponsors/${sponsor.id}`, {
-      method: 'PATCH', headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    return write(async()=>{
+      try {
+        if (!activeClub?.id) return
+        const payload = { ...sponsorState(sponsor), status: sponsor.status === 'active' ? 'inactive' : 'active' }
+        const res = await fetch(`/api/clubs/${activeClub.id}/sponsors/${sponsor.id}`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        })
+        const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage(payload.status === 'active' ? 'Sponsor activado.' : 'Sponsor desactivado.'); await load() }
+      } catch(cause) {
+        setMessage(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))
+      } finally { setSaving(false) }
     })
-    const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage(payload.status === 'active' ? 'Sponsor activado.' : 'Sponsor desactivado.'); await load() }
   }
   async function duplicateCampaign(campaign: Campaign) {
-    if (!activeClub?.id) return
-    const payload = { ...campaignState(campaign), internalName: `${campaign.internal_name ?? campaign.title} (copia)`, status: 'draft', startsAt: campaign.starts_at, endsAt: campaign.ends_at }
-    const res = await fetch(`/api/clubs/${activeClub.id}/campaigns`, {
-      method: 'POST', headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    return write(async()=>{
+      try {
+        if (!activeClub?.id) return
+        const payload = { ...campaignState(campaign), internalName: `${campaign.internal_name ?? campaign.title} (copia)`, status: 'draft', startsAt: campaign.starts_at, endsAt: campaign.ends_at }
+        const res = await fetch(`/api/clubs/${activeClub.id}/campaigns`, {
+          method: 'POST', headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        })
+        const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage('Campaña duplicada como borrador.'); await load() }
+      } catch(cause) {
+        setMessage(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))
+      } finally { setSaving(false) }
     })
-    const json = await res.json(); if (!res.ok) setMessage(json.error); else { setMessage('Campaña duplicada como borrador.'); await load() }
   }
 
   return (
@@ -233,7 +275,7 @@ export default function ClubAdvertisingPage() {
           </div>
           <button className={styles.primary} onClick={() => section === 'sponsors' ? openSponsor() : openCampaign()}><Plus size={17} /> {section === 'sponsors' ? 'Nuevo sponsor' : 'Nueva campaña'}</button>
         </div>
-        {message ? <div className={styles.message} role="status">{message}<button onClick={() => setMessage('')} aria-label="Cerrar"><X size={15} /></button></div> : null}
+        {message ? <div className={styles.message} role="status">{humanizeUiError(message)}<button onClick={() => setMessage('')} aria-label="Cerrar"><X size={15} /></button></div> : null}
         {loading ? <div className={styles.loading}>Cargando contenido…</div> : section === 'sponsors' ? (
           sponsors.length ? <div className={styles.list}>
             {sponsors.map((sponsor) => {

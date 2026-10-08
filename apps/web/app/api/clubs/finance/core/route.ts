@@ -10,7 +10,7 @@ import {
 } from '@/lib/clubFinanceF1C'
 
 const pageSize = 20
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const methods = new Set(['CASH', 'BANK_TRANSFER', 'CARD', 'OTHER'])
 const filters = new Set<FinanceFilter>(['ALL', 'PENDING', 'PARTIAL', 'PAID'])
 

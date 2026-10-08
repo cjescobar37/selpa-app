@@ -23,14 +23,14 @@ export function billingFailure(error:{code?:string;message?:string},operation='b
     BILLING_CURRENT_SUBSCRIPTION_EXISTS:'Este club ya tiene una suscripción vigente.',
     BILLING_REVERSE_PAYMENTS_BEFORE_VOID:'Revertí los pagos aplicados antes de anular este comprobante.',
     BILLING_ACTIVE_PLAN_REQUIRED:'Seleccioná un plan activo. El plan actual puede haber sido desactivado.',
-    BILLING_IDEMPOTENCY_CONFLICT:'La operación ya fue enviada con otros datos. Cerrá y volvé a abrir la acción.',
+    BILLING_IDEMPOTENCY_CONFLICT:'La operación ya fue enviada con otros datos. Verificá el intento pendiente antes de crear otro.',
     BILLING_REVISION_CONFLICT:'Los datos cambiaron. Actualizá antes de continuar.',
     BILLING_NEXT_PERIOD_REQUIRED:'El siguiente período debe comenzar al finalizar el actual.',
     BILLING_SUBSCRIPTION_SUSPENDED:'Reactivá la suscripción antes de generar un período.',
     BILLING_PAYMENT_ALREADY_REVERSED:'El pago ya fue revertido.',
   }
   const match=Object.keys(messages).find(key=>error.message?.includes(key))
-  return NextResponse.json({error: match ? messages[match] : error.code==='40001' ? 'Operación concurrente. Reintentá con la misma acción.' : 'No pudimos completar la operación de facturación.'},
+  return NextResponse.json({code:match??'BILLING_UNCONFIRMED',error: match ? messages[match] : error.code==='40001' ? 'Operación concurrente. Reintentá con la misma acción.' : 'No pudimos completar la operación de facturación.'},
     {status:error.code==='42501'?403:error.code==='40001'||error.code==='23505'||match?409:400})
 }
 export async function billingGet(req:NextRequest,platform:boolean) {

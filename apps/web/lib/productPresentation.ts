@@ -2,6 +2,7 @@
 export function humanizeUiError(value: unknown, fallback = 'No pudimos completar esta acción. Intentá nuevamente.') {
   if (typeof value !== 'string' || !value.trim()) return fallback
   const message = value.trim()
+  if (/\b(?:40P01|WRITE_[A-Z_]+)\b/.test(message)) return fallback
   if (/invalid login credentials/i.test(message)) return 'El email o la contraseña no son correctos.'
   if (/email not confirmed/i.test(message)) return 'Confirmá tu email antes de ingresar.'
   if (/rate limit|too many requests/i.test(message)) return 'Hubo demasiados intentos. Esperá unos minutos y volvé a intentar.'

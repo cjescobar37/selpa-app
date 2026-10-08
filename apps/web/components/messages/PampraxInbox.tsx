@@ -1,5 +1,9 @@
 'use client'
 
+import { readWriteIntent, prepareWriteIntent, type WriteIntent } from '@/lib/writeIntentRecovery'
+import { useWriteGuard } from '@/lib/useWriteGuard'
+import { humanizeUiError } from '@/lib/productPresentation'
+
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Plus, Send, MessageSquareText, X } from 'lucide-react'
@@ -112,6 +116,7 @@ export default function PampraxInbox({
   onComposerClose,
   onMessageSent,
 }: PampraxInboxProps) {
+  const write = useWriteGuard()
   const session = useSession()
   const searchParams = useSearchParams()
   const requestedThreadId = searchParams.get('thread')
@@ -130,6 +135,19 @@ export default function PampraxInbox({
   const [sending, setSending] = useState(false)
   const [themeKey, setThemeKey] = useState<string | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
+  const composerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!composerOpen) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const frame = requestAnimationFrame(() => composerRef.current?.querySelector<HTMLElement>('input:not(:disabled),button:not(:disabled)')?.focus())
+    return () => {
+      cancelAnimationFrame(frame)
+      document.body.style.overflow = previousOverflow
+      if (previousFocus?.isConnected) previousFocus.focus()
+    }
+  }, [composerOpen])
   const [composerSubject, setComposerSubject] = useState('')
   const [composerMessage, setComposerMessage] = useState('')
   const [composerClubId, setComposerClubId] = useState('')
@@ -140,6 +158,31 @@ export default function PampraxInbox({
   const [composerError, setComposerError] = useState('')
   const [composerSending, setComposerSending] = useState(false)
   const [loadingPlayers, setLoadingPlayers] = useState(false)
+  const [composerPending,setComposerPending]=useState<WriteIntent|null>(null)
+  const [replyPending,setReplyPending]=useState<WriteIntent|null>(null)
+  const composerIntentScope = session.user?.id ? `selpa.write-intent.message:${session.user.id}:${scope}:${lockedRecipient?.clubId??''}:${lockedRecipient?.userId??''}` : null
+  const replyIntentScope = session.user?.id && selectedThreadId ? `selpa.write-intent.reply:${session.user.id}:${selectedThreadId}` : null
+  useEffect(()=>{
+    let alive=true
+    queueMicrotask(()=>{
+    if(!alive||!composerIntentScope)return
+    try {
+      const intent=readWriteIntent(sessionStorage,composerIntentScope);setComposerPending(intent)
+      if(intent){setComposerSubject(String(intent.payload.subject??''));setComposerMessage(String(intent.payload.message??''));setComposerClubId(String(intent.payload.clubId??''));setComposerPlayerUserId(String(intent.payload.playerUserId??''))}
+    } catch(cause){setComposerError(humanizeUiError(cause instanceof Error?cause.message:null))}
+    })
+    return()=>{alive=false}
+  },[composerIntentScope])
+  useEffect(()=>{
+    let alive=true
+    queueMicrotask(()=>{
+    if(!alive)return
+    if(!replyIntentScope){setReplyPending(null);return}
+    try{const intent=readWriteIntent(sessionStorage,replyIntentScope);setReplyPending(intent);setReply(intent?String(intent.payload.message??''):'')}
+    catch(cause){setError(humanizeUiError(cause instanceof Error?cause.message:null))}
+    })
+    return()=>{alive=false}
+  },[replyIntentScope])
 
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.id === selectedThreadId) ?? null,
@@ -230,11 +273,11 @@ export default function PampraxInbox({
     setComposerOpen(true)
     setComposerError('')
     setNotice('')
-    setComposerSubject('')
-    setComposerMessage('')
-    setComposerPlayerUserId(lockedRecipient?.userId ?? '')
+    setComposerSubject(String(composerPending?.payload.subject??''))
+    setComposerMessage(String(composerPending?.payload.message??''))
+    setComposerPlayerUserId(String(composerPending?.payload.playerUserId??lockedRecipient?.userId??''))
     setComposerPlayerSearch('')
-    const initialClubId = lockedRecipient?.clubId ?? session.activeClub?.id ?? clubOptions[0]?.id ?? ''
+    const initialClubId = (composerPending?.payload.clubId as string | undefined) ?? lockedRecipient?.clubId ?? session.activeClub?.id ?? clubOptions[0]?.id ?? ''
     setComposerClubId(initialClubId)
     if (scope === 'club' && initialClubId && !lockedRecipient) {
       loadClubPlayers(initialClubId)
@@ -248,65 +291,73 @@ export default function PampraxInbox({
   }
 
   async function sendNewMessage() {
-    if (composerSending || scope === 'platform') return
-    const subject = composerSubject.replace(/\s+/g, ' ').trim()
-    const message = composerMessage.trim()
-    if (subject.length < 3) {
-      setComposerError('Escribí un asunto.')
-      return
-    }
-    if (message.length < 4) {
-      setComposerError('Escribí un mensaje.')
-      return
-    }
-    if (!composerClubId) {
-      setComposerError('Seleccioná un club.')
-      return
-    }
-    if (scope === 'club' && !composerPlayerUserId) {
-      setComposerError('Seleccioná un jugador.')
-      return
-    }
+    return write(async () => {
+      try {
+        if (composerSending || scope === 'platform') return
+        const subject = composerSubject.replace(/\s+/g, ' ').trim()
+        const message = composerMessage.trim()
+        if (subject.length < 3) {
+          setComposerError('Escribí un asunto.')
+          return
+        }
+        if (message.length < 4) {
+          setComposerError('Escribí un mensaje.')
+          return
+        }
+        if (!composerClubId) {
+          setComposerError('Seleccioná un club.')
+          return
+        }
+        if (scope === 'club' && !composerPlayerUserId) {
+          setComposerError('Seleccioná un jugador.')
+          return
+        }
 
-    setComposerSending(true)
-    setComposerError('')
+        setComposerSending(true)
+        setComposerError('')
 
-    const token = await getToken()
-    if (!token) {
-      setComposerError('Sesión inválida.')
-      setComposerSending(false)
-      return
-    }
+        const token = await getToken()
+        if (!token) {
+          setComposerError('Sesión inválida.')
+          setComposerSending(false)
+          return
+        }
 
-    const response = await fetch('/api/message-threads', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        scope,
-        clubId: composerClubId,
-        playerUserId: scope === 'club' ? composerPlayerUserId : undefined,
-        subject,
-        message,
-      }),
+        if(!composerIntentScope)return
+        const key=crypto.randomUUID()
+        const intent=composerPending??prepareWriteIntent(sessionStorage,composerIntentScope,{scope,clubId:composerClubId,playerUserId:scope==='club'?composerPlayerUserId:undefined,subject,message,messageId:key},key)
+        setComposerPending(intent)
+        const response = await fetch('/api/message-threads', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(intent.payload),
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          setComposerError(composerFailureMessage(payload))
+          setComposerSending(false)
+          return
+        }
+
+        sessionStorage.removeItem(composerIntentScope)
+        setComposerPending(null)
+        setComposerOpen(false)
+        setComposerSubject('')
+        setComposerMessage('')
+        setComposerPlayerUserId('')
+        setNotice('Mensaje enviado.')
+        if (!composerOnly) await loadThreads(payload?.threadId ?? null)
+        onMessageSent?.()
+        setComposerSending(false)
+      } catch (cause) {
+        setComposerError(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos enviar. Conservamos tu mensaje para reintentar.'))
+      } finally {
+        setComposerSending(false)
+      }
     })
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      setComposerError(composerFailureMessage(payload))
-      setComposerSending(false)
-      return
-    }
-
-    setComposerOpen(false)
-    setComposerSubject('')
-    setComposerMessage('')
-    setComposerPlayerUserId('')
-    setNotice('Mensaje enviado.')
-    if (!composerOnly) await loadThreads(payload?.threadId ?? null)
-    onMessageSent?.()
-    setComposerSending(false)
   }
 
   async function loadThreads(preferredThreadId?: string | null) {
@@ -375,38 +426,52 @@ export default function PampraxInbox({
   }
 
   async function sendReply() {
-    if (!selectedThreadId || reply.trim().length < 4 || sending) return
-    setSending(true)
-    setError('')
+    return write(async () => {
+      try {
+        if (!selectedThreadId || reply.trim().length < 4 || sending) return
+        setSending(true)
+        setError('')
 
-    const token = await getToken()
-    if (!token) {
-      setError('Sesión inválida.')
-      setSending(false)
-      return
-    }
+        const token = await getToken()
+        if (!token) {
+          setError('Sesión inválida.')
+          setSending(false)
+          return
+        }
 
-    const response = await fetch(`/api/message-threads/${selectedThreadId}/messages`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ message: reply.trim() }),
+        if(!replyIntentScope)return
+        const key=crypto.randomUUID()
+        const intent=replyPending??prepareWriteIntent(sessionStorage,replyIntentScope,{message:reply.trim(),messageId:key},key)
+        setReplyPending(intent)
+        const response = await fetch(`/api/message-threads/${selectedThreadId}/messages`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(intent.payload),
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          setError(payload?.error ?? 'No pude enviar el mensaje.')
+          setSending(false)
+          return
+        }
+
+        sessionStorage.removeItem(replyIntentScope)
+        setReplyPending(null)
+        setReply('')
+        try {
+          await loadThreads(selectedThreadId)
+        } finally {
+          setSending(false)
+        }
+      } catch (cause) {
+        setError(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos enviar. Conservamos tu respuesta para reintentar.'))
+      } finally {
+        setSending(false)
+      }
     })
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      setError(payload?.error ?? 'No pude enviar el mensaje.')
-      setSending(false)
-      return
-    }
-
-    setReply('')
-    try {
-      await loadThreads(selectedThreadId)
-    } finally {
-      setSending(false)
-    }
   }
 
   useEffect(() => {
@@ -543,13 +608,13 @@ export default function PampraxInbox({
 
               <div className="px-replyBox">
                 <textarea
-                  value={reply}
+                  disabled={sending || Boolean(replyPending)} value={reply}
                   onChange={(event) => setReply(event.target.value)}
                   placeholder="Escribí tu respuesta..."
                   rows={3}
                 />
                 <button type="button" disabled={reply.trim().length < 4 || sending} onClick={sendReply}>
-                  {sending ? 'Enviando...' : 'Enviar'}
+                  {sending ? 'Enviando...' : replyPending ? 'Reintentar envío' : 'Enviar'}
                   <Send size={16} />
                 </button>
               </div>
@@ -566,7 +631,14 @@ export default function PampraxInbox({
 
       {composerOpen ? (
         <div className="px-composerOverlay" onClick={closeComposer}>
-          <div className="px-composerModal" onClick={(event) => event.stopPropagation()}>
+          <div ref={composerRef} className="px-composerModal" role="dialog" aria-modal="true" aria-label="Nuevo mensaje" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
+            if (event.key === 'Escape') { event.preventDefault(); closeComposer(); return }
+            if (event.key !== 'Tab') return
+            const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')].filter(node => node.getClientRects().length > 0)
+            const first = controls[0], last = controls.at(-1)
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+          }}>
             <div className="px-composerHead">
               <div>
                 <span>Nuevo mensaje</span>
@@ -584,7 +656,7 @@ export default function PampraxInbox({
                   <select
                     value={composerClubId}
                     onChange={(event) => setComposerClubId(event.target.value)}
-                    disabled={clubOptions.length <= 1}
+                    disabled={clubOptions.length <= 1 || composerSending || Boolean(composerPending)}
                   >
                     {clubOptions.map((club) => (
                       <option key={club.id} value={club.id}>{club.name}</option>
@@ -605,7 +677,7 @@ export default function PampraxInbox({
                 <div className="px-composeField">
                   <span>Jugador del club</span>
                   <input
-                    value={composerPlayerSearch}
+                    disabled={composerSending || Boolean(composerPending)} value={composerPlayerSearch}
                     onChange={(event) => setComposerPlayerSearch(event.target.value)}
                     placeholder="Buscar jugador..."
                   />
@@ -634,21 +706,22 @@ export default function PampraxInbox({
 
               <label className="px-composeField">
                 <span>Asunto</span>
-                <input value={composerSubject} onChange={(event) => setComposerSubject(event.target.value)} placeholder="Ej: Consulta sobre inscripción" />
+                <input disabled={composerSending || Boolean(composerPending)} value={composerSubject} onChange={(event) => setComposerSubject(event.target.value)} placeholder="Ej: Consulta sobre inscripción" />
               </label>
 
               <label className="px-composeField">
                 <span>Mensaje</span>
-                <textarea value={composerMessage} onChange={(event) => setComposerMessage(event.target.value)} rows={5} placeholder="Escribí tu mensaje..." />
+                <textarea disabled={composerSending || Boolean(composerPending)} value={composerMessage} onChange={(event) => setComposerMessage(event.target.value)} rows={5} placeholder="Escribí tu mensaje..." />
               </label>
 
+              {composerPending?<p role="status">Este intento conserva el mensaje original. Reintentá para confirmar su envío.</p>:null}
               {composerError ? <div className="px-composerError">{composerError}</div> : null}
             </div>
 
             <div className="px-composerActions">
               <button type="button" className="px-composeCancel" onClick={closeComposer} disabled={composerSending}>Cancelar</button>
               <button type="button" className="px-composeSubmit" onClick={sendNewMessage} disabled={composerSending}>
-                {composerSending ? 'Enviando...' : 'Enviar mensaje'}
+                {composerSending ? 'Enviando...' : composerPending ? 'Reintentar envío' : 'Enviar mensaje'}
                 <Send size={15} />
               </button>
             </div>
@@ -704,7 +777,7 @@ export default function PampraxInbox({
         .px-messageBubble span { font-size: 10px; font-weight: 800; opacity: .72; }
         .px-messageBubble p { font-size: 13px; font-weight: 760; line-height: 1.45; margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
         .px-replyBox { align-items: end; border-top: 1px solid rgba(15,23,42,.08); display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; padding: 12px; }
-        .px-replyBox textarea { background: #fff; border: 1px solid rgba(15,23,42,.12); border-radius: 14px; color: #061b3a; font-size: 13px; font-weight: 760; min-width: 0; outline: none; padding: 10px 12px; resize: vertical; width: 100%; }
+        .px-replyBox textarea { background: #fff; border: 1px solid rgba(15,23,42,.12); border-radius: 14px; color: #061b3a; font-size: 16px; font-weight: 760; min-width: 0; outline: none; padding: 10px 12px; resize: vertical; width: 100%; }
         .px-replyBox textarea:focus { border-color: color-mix(in srgb, var(--px-inbox-accent) 48%, transparent); box-shadow: 0 0 0 3px var(--px-inbox-glow); }
         .px-replyBox button { align-items: center; background: #061b3a; border: 1px solid color-mix(in srgb, var(--px-inbox-accent) 32%, transparent); border-radius: 999px; box-shadow: 0 12px 26px var(--px-inbox-glow); color: #fff; cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 950; gap: 7px; min-height: 42px; padding: 0 16px; transition: transform .18s ease, box-shadow .18s ease; }
         .px-replyBox button:hover:not(:disabled) { box-shadow: 0 16px 32px var(--px-inbox-glow); transform: translateY(-1px); }
@@ -729,7 +802,7 @@ export default function PampraxInbox({
         .px-composerBody { display: grid; gap: 12px; padding: 18px; }
         .px-composeField { display: grid; gap: 7px; min-width: 0; }
         .px-composeField > span { color: #475569; font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
-        .px-composeField input, .px-composeField select, .px-composeField textarea { background: #fff; border: 1px solid rgba(15,23,42,.12); border-radius: 15px; color: #061b3a; font-size: 13px; font-weight: 780; min-height: 44px; min-width: 0; outline: none; padding: 10px 12px; width: 100%; }
+        .px-composeField input, .px-composeField select, .px-composeField textarea { background: #fff; border: 1px solid rgba(15,23,42,.12); border-radius: 15px; color: #061b3a; font-size: 16px; font-weight: 780; min-height: 44px; min-width: 0; outline: none; padding: 10px 12px; width: 100%; }
         .px-composeField textarea { line-height: 1.45; resize: vertical; }
         .px-lockedRecipient { align-items: center; background: var(--px-inbox-soft); border: 1px solid color-mix(in srgb, var(--px-inbox-accent) 28%, transparent); border-radius: 14px; color: #061b3a; display: flex; gap: 9px; min-height: 44px; padding: 8px 10px; }
         .px-lockedRecipient > span { align-items: center; background: #fff; border-radius: 999px; color: var(--px-inbox-accent); display: inline-flex; font-size: 11px; font-weight: 950; height: 28px; justify-content: center; letter-spacing: 0; text-transform: none; width: 28px; }

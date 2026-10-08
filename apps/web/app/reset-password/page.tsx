@@ -1,5 +1,7 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+
 import controls from '@/components/auth/AuthControls.module.css'
 
 import { useMemo, useState } from 'react'
@@ -11,6 +13,7 @@ import { BRAND } from '@/lib/branding'
 type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string } | null
 
 export default function ResetPasswordPage() {
+  const write = useWriteGuard()
   const [email, setEmail] = useState('')
   const [alert, setAlert] = useState<AlertState>(null)
   const [loading, setLoading] = useState(false)
@@ -22,37 +25,38 @@ export default function ResetPasswordPage() {
 
   async function sendReset(e?: React.FormEvent) {
     e?.preventDefault()
+    return write(async () => {
+      const cleanEmail = email.trim().toLowerCase()
 
-    const cleanEmail = email.trim().toLowerCase()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        setAlert({ variant: 'warning', title: 'Falta el email', message: 'Ingresá tu email para enviarte el link.' })
+        return
+      }
 
-    if (!cleanEmail) {
-      setAlert({ variant: 'warning', title: 'Falta el email', message: 'Ingresá tu email para enviarte el link.' })
-      return
-    }
+      setLoading(true)
+      setAlert({ variant: 'info', title: 'Enviando link…' })
 
-    setLoading(true)
-    setAlert({ variant: 'info', title: 'Enviando link…' })
+      let error
+      try { ({ error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo })) }
+      catch {
+        setLoading(false)
+        setAlert({ variant: 'error', title: 'No se pudo enviar', message: 'Revisá tu conexión y volvé a solicitar el link.' })
+        return
+      }
 
-    let error
-    try { ({ error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo })) }
-    catch {
+      if (error) {
+        setAlert({ variant: 'error', title: 'No se pudo enviar', message: error.message })
+        setLoading(false)
+        return
+      }
+
+      setAlert({
+        variant: 'success',
+        title: 'Email enviado',
+        message: 'Revisá tu bandeja y abrí el link para crear una contraseña nueva.',
+      })
       setLoading(false)
-      setAlert({ variant: 'error', title: 'No se pudo enviar', message: 'Revisá tu conexión y volvé a solicitar el link.' })
-      return
-    }
-
-    if (error) {
-      setAlert({ variant: 'error', title: 'No se pudo enviar', message: error.message })
-      setLoading(false)
-      return
-    }
-
-    setAlert({
-      variant: 'success',
-      title: 'Email enviado',
-      message: 'Revisá tu bandeja y abrí el link para crear una contraseña nueva.',
     })
-    setLoading(false)
   }
 
   return (

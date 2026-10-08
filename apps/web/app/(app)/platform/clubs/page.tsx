@@ -1,5 +1,7 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
@@ -45,6 +47,7 @@ function formatDate(value: string) {
 }
 
 export default function PlatformClubsPage() {
+  const write = useWriteGuard()
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -135,51 +138,59 @@ export default function PlatformClubsPage() {
   }
 
   async function applyClubAction(club: ClubRow, action: ClubAction) {
-    const { data: sess } = await supabase.auth.getSession()
-    const token = sess?.session?.access_token
-    if (!token) {
-      setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
-      return
-    }
+    return write(async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession()
+        const token = sess?.session?.access_token
+        if (!token) {
+          setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
+          return
+        }
 
-    let reason = ''
-    if (action === 'reject' || action === 'request_changes' || action === 'suspend') {
-      const label =
-        action === 'reject'
-          ? 'rechazo'
-          : action === 'request_changes'
-            ? 'correcciones'
-            : 'suspensión'
-      reason = window.prompt(`Motivo de ${label} para ${club.name}`)?.trim() ?? ''
-      if (!reason) {
-        setAlert({ variant: 'warning', title: 'Falta motivo', message: 'Indicá un motivo para registrar la acción.' })
-        return
+        let reason = ''
+        if (action === 'reject' || action === 'request_changes' || action === 'suspend') {
+          const label =
+            action === 'reject'
+              ? 'rechazo'
+              : action === 'request_changes'
+                ? 'correcciones'
+                : 'suspensión'
+          reason = window.prompt(`Motivo de ${label} para ${club.name}`)?.trim() ?? ''
+          if (!reason) {
+            setAlert({ variant: 'warning', title: 'Falta motivo', message: 'Indicá un motivo para registrar la acción.' })
+            return
+          }
+        }
+
+        setBusyId(club.id)
+        const res = await fetch('/api/platform/clubs-admin', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ clubId: club.id, action, reason }),
+        })
+        const json = await res.json().catch(() => ({}))
+        setBusyId(null)
+
+        if (!res.ok) {
+          setAlert({ variant: 'error', title: 'No pude actualizar el club', message: json?.error ?? 'Error inesperado.' })
+          return
+        }
+
+        setAlert({
+          variant: 'success',
+          title: 'Estado actualizado',
+          message: `${club.name} quedó como ${clubStatusLabel(json?.club?.status ?? club.status)}.`,
+        })
+        await load()
+      } catch (cause) {
+        setAlert({ variant: 'error', title: 'No pudimos completar el cambio', message: 'Revisá tu conexión y reintentá. Conservamos los datos del formulario.' })
+      } finally {
+        setBusyId(null)
       }
-    }
-
-    setBusyId(club.id)
-    const res = await fetch('/api/platform/clubs-admin', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ clubId: club.id, action, reason }),
     })
-    const json = await res.json().catch(() => ({}))
-    setBusyId(null)
-
-    if (!res.ok) {
-      setAlert({ variant: 'error', title: 'No pude actualizar el club', message: json?.error ?? 'Error inesperado.' })
-      return
-    }
-
-    setAlert({
-      variant: 'success',
-      title: 'Estado actualizado',
-      message: `${club.name} quedó como ${clubStatusLabel(json?.club?.status ?? club.status)}.`,
-    })
-    await load()
   }
 
   return (

@@ -31,6 +31,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
 import { hasAnyClubPermission } from '@/lib/clubPermissions'
 import { supabase } from '@/lib/supabaseClient'
+import { useWriteGuard } from '@/lib/useWriteGuard'
 import { BRAND } from '@/lib/branding'
 import { getClubPresentationName, getFirstPresentationName } from '@/lib/presentationNames'
 
@@ -272,6 +273,19 @@ export default function AppNavbarClient() {
   }
 
   const { role, clubRole, user, activeClub, clubs, setActiveClub, signOut } = useSession()
+  const logoutWrite = useWriteGuard()
+  const notificationWrite = useWriteGuard()
+  const [logoutError, setLogoutError] = useState('')
+  const [loggingOut, setLoggingOut] = useState(false)
+  async function logout() {
+    return logoutWrite(async () => {
+      setLogoutError('')
+      setLoggingOut(true)
+      try { await signOut(); closeAllMenus() }
+      catch { setLogoutError('No pudimos cerrar la sesión. Revisá la conexión y reintentá.') }
+      finally { setLoggingOut(false) }
+    })
+  }
   const currentSearch = searchParams.toString()
   const cfg = useMemo(() => NAV_CONFIG[role || 'guest'], [role])
 
@@ -649,8 +663,14 @@ export default function AppNavbarClient() {
   }
 
   async function openNotification(item: PreviewNotification) {
+    return notificationWrite(async () => {
+    setNotificationError('')
+    try {
     if (!item.read) {
-      await supabase.from('notifications').update({ read: true }).eq('id', item.id)
+      if (!user?.id) return
+      const { data, error } = await supabase.from('notifications').update({ read: true })
+        .eq('id', item.id).eq('user_id', user.id).select('id').maybeSingle()
+      if (error || !data) { setNotificationError('No pudimos marcar la notificación como leída. Reintentá.'); return }
       setNotificationPreview((cur) => cur.map((n) => (n.id === item.id ? { ...n, read: true } : n)))
       setUnreadNotifications((cur) => Math.max(0, cur - 1))
     }
@@ -666,6 +686,8 @@ export default function AppNavbarClient() {
     }
 
     setPreviewModal(item)
+    } catch { setNotificationError('No pudimos conectar. La notificación sigue sin leer; reintentá.') }
+    })
   }
 
   function ClubLogo() {
@@ -719,7 +741,7 @@ export default function AppNavbarClient() {
           <Link className="px-ddItem" href="/actividad" onClick={closeAllMenus}><Activity size={18} />Mi actividad</Link>
           <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}><Settings size={18} />Preferencias</Link>
           <div className="px-ddSep" />
-          <button className="px-ddItem px-ddItem--danger" onClick={() => { closeAllMenus(); void signOut() }}><LogOut size={18} />Cerrar sesión</button>
+          <button className="px-ddItem px-ddItem--danger" disabled={loggingOut} onClick={() => void logout()}><LogOut size={18} />{loggingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
         </div>
       )
     }
@@ -742,7 +764,7 @@ export default function AppNavbarClient() {
           <Link className="px-ddItem" href="/reset-password" onClick={closeAllMenus}>Seguridad</Link>
           <Link className="px-ddItem" href={clubPublicHomeHref} onClick={closeAllMenus}>Ver página pública del club</Link>
           {clubRole === 'OWNER' || clubRole === 'ADMIN' ? <Link className="px-ddItem" href="/club/facturacion" onClick={closeAllMenus}>Facturación SELPA</Link> : null}
-          <button className="px-ddItem px-ddItem--danger" onClick={() => { closeAllMenus(); void signOut() }}>Cerrar sesión</button>
+          <button className="px-ddItem px-ddItem--danger" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
         </div>
       )
     }
@@ -756,7 +778,7 @@ export default function AppNavbarClient() {
           <Link className="px-ddItem" href="/reset-password" onClick={closeAllMenus}>Seguridad</Link>
           <Link className="px-ddItem" href="/platform/facturacion" onClick={closeAllMenus}>Facturación SELPA</Link>
           <Link className="px-ddItem" href="/platform/logs">Auditoría</Link>
-          <button className="px-ddItem px-ddItem--danger" onClick={signOut}>Cerrar sesión</button>
+          <button className="px-ddItem px-ddItem--danger" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
         </div>
       )
     }
@@ -768,7 +790,7 @@ export default function AppNavbarClient() {
         <Link className="px-ddItem" href="/actividad">Mi actividad</Link>
         {role === 'player' ? <Link className="px-ddItem" href="/player/pagos" onClick={closeAllMenus}><WalletCards size={18} />Mis pagos</Link> : null}
         <Link className="px-ddItem" href="/ajustes">Preferencias</Link>
-        <button className="px-ddItem px-ddItem--danger" onClick={signOut}>Cerrar sesión</button>
+        <button className="px-ddItem px-ddItem--danger" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
       </div>
     )
   }
@@ -1299,6 +1321,10 @@ export default function AppNavbarClient() {
         {renderMobileMenu()}
         {renderSearchPanel()}
       </header>
+
+      {logoutError ? <div role="alert" style={{ padding: '8px 16px', color: '#8b1d38', background: '#fff4f5', fontSize: 14 }}>
+        {logoutError} <button type="button" className="px-btn px-btn--ghost" disabled={loggingOut} onClick={() => void logout()}>Reintentar</button>
+      </div> : null}
 
       {previewModal ? (
         <div className="px-overlay" onClick={() => setPreviewModal(null)}>

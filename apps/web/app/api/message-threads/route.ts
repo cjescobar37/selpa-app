@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { insertMessageOnce, afterMessageCommit } from '@/lib/messageWriteServer'
+import { writeErrorResponse } from '@/lib/writeFlowServer'
 import { NextRequest, NextResponse } from 'next/server'
 import { userHasClubCapability, ensureValidActiveClubForUser, getApprovedMembership } from '@/lib/clubMembershipServer'
 import { createOperationalNotification, getClubAdminUserIds, notifyClubAdmins } from '@/lib/operationalNotifications'
@@ -238,6 +241,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const scope = (String(body?.scope ?? 'player') || 'player') as ThreadScope
   const subject = String(body?.subject ?? '').replace(/\s+/g, ' ').trim()
+  const messageId = String(body?.messageId ?? randomUUID())
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageId)) return NextResponse.json({error:'Intento de mensaje inválido.',kind:'VALIDATION'},{status:400})
   const message = String(body?.message ?? body?.body ?? '').trim()
   const requestedClubId = String(body?.clubId ?? '').trim() || null
   const requestedPlayerUserId = String(body?.playerUserId ?? '').trim() || null
@@ -293,9 +298,8 @@ export async function POST(req: NextRequest) {
 
     const recipientUserId = senderIsClubSide ? playerUserId : adminIds[0]
     const now = new Date().toISOString()
-    const { data: inserted, error: insertError } = await supabaseAdmin
-      .from('messages')
-      .insert({
+    const inserted = await insertMessageOnce({
+      id: messageId,
         thread_id: thread.id,
         sender_user_id: user.id,
         recipient_user_id: recipientUserId,
@@ -308,12 +312,10 @@ export async function POST(req: NextRequest) {
           source: 'manual_inbox',
         },
       })
-      .select('id')
-      .single()
+    if (inserted.replayed) return NextResponse.json({ok:true,threadId:thread.id,messageId:inserted.id})
 
-    if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
-
-    await supabaseAdmin.from('message_threads').update({ updated_at: now }).eq('id', thread.id)
+    await afterMessageCommit(async () => {
+  await supabaseAdmin.from('message_threads').update({ updated_at: now }).eq('id', thread.id)
 
     if (senderIsClubSide) {
       await createOperationalNotification({
@@ -339,11 +341,13 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ ok: true, threadId: thread.id, messageId: inserted.id })
+    })
+
+  return NextResponse.json({ ok: true, threadId: thread.id, messageId: inserted.id })
   } catch (error: any) {
     if (isMissingSchemaObjectError(error)) {
       return NextResponse.json({ error: 'Falta aplicar la migración de message_threads/messages.' }, { status: 503 })
     }
-    return NextResponse.json({ error: error?.message ?? 'No pude crear el mensaje.' }, { status: 500 })
+    return writeErrorResponse('create_message', error,'No pudimos confirmar el envío. Conservá el intento y reintentá.')
   }
 }

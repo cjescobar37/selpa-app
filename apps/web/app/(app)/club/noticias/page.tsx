@@ -1,5 +1,7 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+
 import { FormEvent, type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, Edit3, Eye, FileText, ImageIcon, MoreVertical, Plus, Send, Trash2, X } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
@@ -73,6 +75,7 @@ function statusClass(status?: string | null) {
 }
 
 export default function ClubNoticiasPage() {
+  const write = useWriteGuard()
   const { activeClub } = useSession()
   const clubId = activeClub?.id ?? null
   const clubName = activeClub?.name ?? 'tu club'
@@ -241,88 +244,94 @@ export default function ClubNoticiasPage() {
 
   async function saveNews(event?: FormEvent<HTMLFormElement>, forcedStatus?: NewsStatus) {
     event?.preventDefault()
-    if (!clubId || saving) return
-    setSaving(true)
-    setError(null)
-    setFeedback(null)
-    try {
-      const token = await getToken()
-      if (!token) throw new Error('Sesión inválida.')
-      const endpoint = editing ? `/api/clubs/${clubId}/news/${editing.id}` : `/api/clubs/${clubId}/news`
-      const res = await fetch(endpoint, {
-        method: editing ? 'PATCH' : 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: buildFormData(forcedStatus ?? form.status),
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(payload?.error || 'No pude guardar la noticia.')
-      setModalOpen(false)
-      setFeedback(forcedStatus === 'PUBLISHED' || form.status === 'PUBLISHED' ? 'Noticia publicada.' : 'Noticia guardada.')
-      await loadRows()
-    } catch (err: unknown) {
-      setError(errorMessage(err, 'No pude guardar la noticia.'))
-    } finally {
-      setSaving(false)
-    }
+    return write(async () => {
+      if (!clubId || saving) return
+      setSaving(true)
+      setError(null)
+      setFeedback(null)
+      try {
+        const token = await getToken()
+        if (!token) throw new Error('Sesión inválida.')
+        const endpoint = editing ? `/api/clubs/${clubId}/news/${editing.id}` : `/api/clubs/${clubId}/news`
+        const res = await fetch(endpoint, {
+          method: editing ? 'PATCH' : 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: buildFormData(forcedStatus ?? form.status),
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(payload?.error || 'No pude guardar la noticia.')
+        setModalOpen(false)
+        setFeedback(forcedStatus === 'PUBLISHED' || form.status === 'PUBLISHED' ? 'Noticia publicada.' : 'Noticia guardada.')
+        await loadRows()
+      } catch (err: unknown) {
+        setError(errorMessage(err, 'No pude guardar la noticia.'))
+      } finally {
+        setSaving(false)
+      }
+    })
   }
 
   async function changeStatus(row: ClubNewsRow, status: NewsStatus) {
-    if (!clubId || saving) return
-    setSaving(true)
-    setError(null)
-    setFeedback(null)
-    try {
-      const token = await getToken()
-      if (!token) throw new Error('Sesión inválida.')
-      const data = new FormData()
-      data.set('title', row.title)
-      data.set('excerpt', row.excerpt ?? '')
-      data.set('body', row.body ?? '')
-      data.set('cover_url', row.cover_url ?? '')
-      data.set('featured_rank', row.metadata?.featured_rank ? String(row.metadata.featured_rank) : '')
-      data.set('status', status)
-      data.set('keepCover', '1')
-      data.set('keepInlineImages', '1')
-      data.set('existingInlineImages', JSON.stringify(row.metadata?.inline_images ?? []))
-      const res = await fetch(`/api/clubs/${clubId}/news/${row.id}`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` },
-        body: data,
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(payload?.error || 'No pude actualizar el estado.')
-      setFeedback(status === 'PUBLISHED' ? 'Noticia publicada.' : 'Noticia despublicada.')
-      await loadRows()
-    } catch (err: unknown) {
-      setError(errorMessage(err, 'No pude actualizar el estado.'))
-    } finally {
-      setSaving(false)
-    }
+    return write(async () => {
+      if (!clubId || saving) return
+      setSaving(true)
+      setError(null)
+      setFeedback(null)
+      try {
+        const token = await getToken()
+        if (!token) throw new Error('Sesión inválida.')
+        const data = new FormData()
+        data.set('title', row.title)
+        data.set('excerpt', row.excerpt ?? '')
+        data.set('body', row.body ?? '')
+        data.set('cover_url', row.cover_url ?? '')
+        data.set('featured_rank', row.metadata?.featured_rank ? String(row.metadata.featured_rank) : '')
+        data.set('status', status)
+        data.set('keepCover', '1')
+        data.set('keepInlineImages', '1')
+        data.set('existingInlineImages', JSON.stringify(row.metadata?.inline_images ?? []))
+        const res = await fetch(`/api/clubs/${clubId}/news/${row.id}`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+          body: data,
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(payload?.error || 'No pude actualizar el estado.')
+        setFeedback(status === 'PUBLISHED' ? 'Noticia publicada.' : 'Noticia despublicada.')
+        await loadRows()
+      } catch (err: unknown) {
+        setError(errorMessage(err, 'No pude actualizar el estado.'))
+      } finally {
+        setSaving(false)
+      }
+    })
   }
 
   async function deleteNews(row: ClubNewsRow) {
-    if (!clubId || saving) return
-    const confirmed = window.confirm(`¿Eliminar "${row.title}"? Esta acción no se puede deshacer.`)
-    if (!confirmed) return
-    setSaving(true)
-    setError(null)
-    setFeedback(null)
-    try {
-      const token = await getToken()
-      if (!token) throw new Error('Sesión inválida.')
-      const res = await fetch(`/api/clubs/${clubId}/news/${row.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(payload?.error || 'No pude eliminar la noticia.')
-      setFeedback('Noticia eliminada.')
-      await loadRows()
-    } catch (err: unknown) {
-      setError(errorMessage(err, 'No pude eliminar la noticia.'))
-    } finally {
-      setSaving(false)
-    }
+    return write(async () => {
+      if (!clubId || saving) return
+      const confirmed = window.confirm(`¿Eliminar "${row.title}"? Esta acción no se puede deshacer.`)
+      if (!confirmed) return
+      setSaving(true)
+      setError(null)
+      setFeedback(null)
+      try {
+        const token = await getToken()
+        if (!token) throw new Error('Sesión inválida.')
+        const res = await fetch(`/api/clubs/${clubId}/news/${row.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(payload?.error || 'No pude eliminar la noticia.')
+        setFeedback('Noticia eliminada.')
+        await loadRows()
+      } catch (err: unknown) {
+        setError(errorMessage(err, 'No pude eliminar la noticia.'))
+      } finally {
+        setSaving(false)
+      }
+    })
   }
 
   const style = {

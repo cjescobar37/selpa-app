@@ -1,4 +1,6 @@
 'use client'
+
+import { useWriteGuard } from '@/lib/useWriteGuard'
 import { toast } from '@/lib/toastStore'
 
 import Link from 'next/link'
@@ -188,6 +190,7 @@ type TournamentWizardDraft = {
   selectedCompetitionDivisionId: string
   selectedEventTierId: string
   competitionIdempotencyKey: string
+  createdTournamentId?: string | null
   manualAssignment: 'RANKING' | 'RANDOM' | 'MANUAL'
   manualScheduleExpanded: boolean
   flyerEditorOpen: boolean
@@ -477,6 +480,7 @@ function ChoiceChips<T extends string>({
 }
 
 export default function ClubNuevoTorneoPage() {
+  const write = useWriteGuard()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { activeClub } = useSession()
@@ -581,6 +585,7 @@ export default function ClubNuevoTorneoPage() {
         setSelectedEventTierId(nextDraft.selectedEventTierId)
         setCompetitionIdempotencyKey(nextDraft.competitionIdempotencyKey)
         competitionKeyRef.current = nextDraft.competitionIdempotencyKey
+        createdTournamentRef.current = nextDraft.createdTournamentId ?? null
         setManualAssignment(nextDraft.manualAssignment)
         setManualScheduleExpanded(nextDraft.manualScheduleExpanded)
         setFlyerEditorOpen(nextDraft.flyerEditorOpen)
@@ -608,6 +613,7 @@ export default function ClubNuevoTorneoPage() {
         selectedCompetitionDivisionId,
         selectedEventTierId,
         competitionIdempotencyKey,
+        createdTournamentId: createdTournamentRef.current,
         manualAssignment,
         manualScheduleExpanded,
         flyerEditorOpen,
@@ -1039,150 +1045,171 @@ export default function ClubNuevoTorneoPage() {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setMessage('')
+    return write(async () => {
+      try {
+        setMessage('')
 
-    if (!activeClub?.id || errors.length) {
-      setMessage(errors[0] ?? 'Revisá los datos del torneo.')
-      return
-    }
-
-    setSaving(true)
-
-    const { data } = await supabase.auth.getSession()
-    const token = data?.session?.access_token
-    if (!token) {
-      setMessage('Sesión inválida.')
-      setSaving(false)
-      return
-    }
-
-    const tournamentTypeLabel = typeOptions.find((option) => option.value === form.type)?.label ?? form.type
-    const tournamentGenderLabel = genderOptions.find((option) => option.value === form.gender)?.label ?? form.gender
-    let preparedFlyerConfig: FlyerConfig
-    try {
-      preparedFlyerConfig = await prepareFlyerConfigForSubmit(
-        flyerConfig,
-        activeClub.id,
-        `${tournamentTypeLabel} ${tournamentGenderLabel}`
-      )
-      if (preparedFlyerConfig !== flyerConfig) setFlyerConfig(preparedFlyerConfig)
-    } catch {
-      setMessage('No pudimos preparar el flyer. Revisá el archivo e intentá nuevamente.')
-      setSaving(false)
-      return
-    }
-
-    const tournamentConfig = buildTournamentConfigPayload(form)
-    const tournamentPayload = {
-      name: form.name,
-      type: form.type,
-      gender: form.gender,
-      category_id: form.segmentType === 'LIBRES' ? Number(form.categoryId) : null,
-      category_rule: form.categoryRule,
-      category_sum_target: form.categoryRule === 'CATEGORY_SUM' ? Number(form.categorySumTarget) : null,
-      age_category_id: form.segmentType === 'LIBRES' ? null : form.ageCategoryId,
-      segment_type: tournamentConfig.segment_type,
-      segment: tournamentConfig.segment_type,
-      public_description: tournamentConfig.public_description,
-      prizes: tournamentConfig.prizes,
-      competition_system: tournamentConfig.competition_system,
-      venue_name: tournamentConfig.venue_name,
-      schedule_config: tournamentConfig.schedule_config,
-      points_config: isCompetitionDate ? { ...tournamentConfig.points_config, enabled: false, editable: false, winner: 0, finalist: 0, semifinalist: 0, quarterfinalist: 0, eighthFinalist: 0, participation: 0 } : tournamentConfig.points_config,
-      group_tiebreakers: tournamentConfig.group_tiebreakers,
-      start_date: form.startDate,
-      end_date: form.endDate || null,
-      registration_deadline: form.registrationDeadline || null,
-      price_per_player: form.pricePerPlayer,
-      min_pairs: form.minPairs,
-      max_pairs: form.maxPairs || null,
-      flyer: buildFlyerPayload(preparedFlyerConfig, `${tournamentTypeLabel} ${tournamentGenderLabel}`),
-    }
-    const dateKey = competitionKeyRef.current || competitionIdempotencyKey || crypto.randomUUID()
-    if (!competitionKeyRef.current) {
-      competitionKeyRef.current = dateKey
-      setCompetitionIdempotencyKey(dateKey)
-    }
-    const requestUrl = isCompetitionDate && competitionSeriesId
-      ? `/api/clubs/${activeClub.id}/competition/series/${competitionSeriesId}/date-creation`
-      : `/api/clubs/${activeClub.id}/tournaments`
-    const requestBody = isCompetitionDate && competitionContext && selectedCompetitionDivision
-      ? {
-          idempotencyKey: dateKey,
-          seriesRevision: competitionContext.series_revision,
-          seriesDivisionId: selectedCompetitionDivision.series_division_id,
-          ruleId: selectedCompetitionDivision.rule_id,
-          ruleRevision: selectedCompetitionDivision.rule_revision,
-          eventPayload: {
-            name: form.name,
-            event_type: 'STANDARD',
-            scoring_mode: selectedCompetitionDivision.points_scheme_id ? 'POINTS' : 'NON_SCORING',
-            event_tier_id: selectedCompetitionDivision.points_scheme_id ? selectedEventTierId : null,
-            planned_starts_at: form.startDate || null,
-            planned_ends_at: form.endDate || form.startDate || null,
-            timezone: resolveCompetitionTimezone({ clubTimezone: competitionContext.timezone, deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
-            venue_name: form.venueName || null,
-            is_public: false,
-          },
-          tournamentPayload,
+        if (!activeClub?.id || errors.length) {
+          setMessage(errors[0] ?? 'Revisá los datos del torneo.')
+          return
         }
-      : tournamentPayload
-    let tournamentId = createdTournamentRef.current
-    if (!tournamentId) {
-      const res = await fetch(requestUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'Idempotency-Key': dateKey,
-        },
-        body: JSON.stringify(requestBody),
-      })
-      const json = await res.json().catch(() => ({}))
 
-      if (!res.ok) {
-        setMessage(json?.error ?? 'No pude crear el torneo.')
+        setSaving(true)
+
+        const { data } = await supabase.auth.getSession()
+        const token = data?.session?.access_token
+        if (!token) {
+          setMessage('Sesión inválida.')
+          setSaving(false)
+          return
+        }
+
+        const tournamentTypeLabel = typeOptions.find((option) => option.value === form.type)?.label ?? form.type
+        const tournamentGenderLabel = genderOptions.find((option) => option.value === form.gender)?.label ?? form.gender
+        let preparedFlyerConfig: FlyerConfig
+        try {
+          preparedFlyerConfig = await prepareFlyerConfigForSubmit(
+            flyerConfig,
+            activeClub.id,
+            `${tournamentTypeLabel} ${tournamentGenderLabel}`
+          )
+          if (preparedFlyerConfig !== flyerConfig) setFlyerConfig(preparedFlyerConfig)
+        } catch {
+          setMessage('No pudimos preparar el flyer. Revisá el archivo e intentá nuevamente.')
+          setSaving(false)
+          return
+        }
+
+        const tournamentConfig = buildTournamentConfigPayload(form)
+        const tournamentPayload = {
+          name: form.name,
+          type: form.type,
+          gender: form.gender,
+          category_id: form.segmentType === 'LIBRES' ? Number(form.categoryId) : null,
+          category_rule: form.categoryRule,
+          category_sum_target: form.categoryRule === 'CATEGORY_SUM' ? Number(form.categorySumTarget) : null,
+          age_category_id: form.segmentType === 'LIBRES' ? null : form.ageCategoryId,
+          segment_type: tournamentConfig.segment_type,
+          segment: tournamentConfig.segment_type,
+          public_description: tournamentConfig.public_description,
+          prizes: tournamentConfig.prizes,
+          competition_system: tournamentConfig.competition_system,
+          venue_name: tournamentConfig.venue_name,
+          schedule_config: tournamentConfig.schedule_config,
+          points_config: isCompetitionDate ? { ...tournamentConfig.points_config, enabled: false, editable: false, winner: 0, finalist: 0, semifinalist: 0, quarterfinalist: 0, eighthFinalist: 0, participation: 0 } : tournamentConfig.points_config,
+          group_tiebreakers: tournamentConfig.group_tiebreakers,
+          start_date: form.startDate,
+          end_date: form.endDate || null,
+          registration_deadline: form.registrationDeadline || null,
+          price_per_player: form.pricePerPlayer,
+          min_pairs: form.minPairs,
+          max_pairs: form.maxPairs || null,
+          flyer: buildFlyerPayload(preparedFlyerConfig, `${tournamentTypeLabel} ${tournamentGenderLabel}`),
+        }
+        const dateKey = competitionKeyRef.current || competitionIdempotencyKey || crypto.randomUUID()
+        if (!competitionKeyRef.current) {
+          competitionKeyRef.current = dateKey
+          setCompetitionIdempotencyKey(dateKey)
+        }
+        // Persist synchronously BEFORE dispatch, not on the debounced draft effect.
+        // The accepted tournament ID also survives a failed court-assignment step.
+        const persistAttempt = (createdTournamentId: string | null) => {
+          if (!draftKey) throw new Error('No pudimos conservar el intento de creación. Volvé a ingresar.')
+          localStorage.setItem(draftKey, JSON.stringify({
+            version: tournamentWizardDraftVersion, form,
+            flyer: { ...flyerConfig, manualFlyer: flyerConfig.manualFlyer?.publicUrl ? flyerConfig.manualFlyer : null },
+            step: mobileStep, courtVenueIds, selectedCompetitionDivisionId, selectedEventTierId,
+            competitionIdempotencyKey: dateKey, createdTournamentId,
+            manualAssignment, manualScheduleExpanded, flyerEditorOpen, updatedAt: new Date().toISOString(),
+          } satisfies TournamentWizardDraft))
+        }
+        persistAttempt(createdTournamentRef.current)
+        const requestUrl = isCompetitionDate && competitionSeriesId
+          ? `/api/clubs/${activeClub.id}/competition/series/${competitionSeriesId}/date-creation`
+          : `/api/clubs/${activeClub.id}/tournaments`
+        const requestBody = isCompetitionDate && competitionContext && selectedCompetitionDivision
+          ? {
+              idempotencyKey: dateKey,
+              seriesRevision: competitionContext.series_revision,
+              seriesDivisionId: selectedCompetitionDivision.series_division_id,
+              ruleId: selectedCompetitionDivision.rule_id,
+              ruleRevision: selectedCompetitionDivision.rule_revision,
+              eventPayload: {
+                name: form.name,
+                event_type: 'STANDARD',
+                scoring_mode: selectedCompetitionDivision.points_scheme_id ? 'POINTS' : 'NON_SCORING',
+                event_tier_id: selectedCompetitionDivision.points_scheme_id ? selectedEventTierId : null,
+                planned_starts_at: form.startDate || null,
+                planned_ends_at: form.endDate || form.startDate || null,
+                timezone: resolveCompetitionTimezone({ clubTimezone: competitionContext.timezone, deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+                venue_name: form.venueName || null,
+                is_public: false,
+              },
+              tournamentPayload,
+            }
+          : tournamentPayload
+        let tournamentId = createdTournamentRef.current
+        if (!tournamentId) {
+          const res = await fetch(requestUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+              'Idempotency-Key': dateKey,
+            },
+            body: JSON.stringify(requestBody),
+          })
+          const json = await res.json().catch(() => ({}))
+
+          if (!res.ok) {
+            setMessage(json?.error ?? 'No pude crear el torneo.')
+            setSaving(false)
+            return
+          }
+
+          const createdTournament = json?.tournament ?? json?.result?.tournament ?? json?.result
+          tournamentId = typeof createdTournament?.id === 'string'
+            ? createdTournament.id
+            : typeof json?.tournament_id === 'string'
+              ? json.tournament_id
+              : typeof json?.result?.tournament_id === 'string'
+                ? json.result.tournament_id
+                : null
+          if (tournamentId) { createdTournamentRef.current = tournamentId; persistAttempt(tournamentId) }
+        }
+        if (!tournamentId || !primaryCourtVenue) {
+          setMessage('El torneo se creó, pero no pude confirmar la sede para guardar las canchas.')
+          setSaving(false)
+          return
+        }
+
+        const assignmentResponse = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            action: 'replace_tournament_court_assignments',
+            primary_venue_id: primaryCourtVenue.id,
+            court_ids: form.tournamentCourts.map((court) => court.id).filter((id): id is string => Boolean(id)),
+          }),
+        })
+        const assignmentPayload = await assignmentResponse.json().catch(() => ({}))
+        if (!assignmentResponse.ok) {
+          setMessage(assignmentPayload?.error ?? 'El torneo se creó, pero no pude guardar las canchas seleccionadas.')
+          setSaving(false)
+          return
+        }
+
         setSaving(false)
-        return
+        createdTournamentRef.current = null
+        if (draftKey) localStorage.removeItem(draftKey)
+        toast.success('El torneo ya está creado.', { title: 'Torneo creado correctamente' })
+        setCreationSuccess({ id: tournamentId, name: form.name.trim() || 'tu torneo' })
+      } catch (cause) {
+        setMessage('No pudimos confirmar el guardado. Revisá tu conexión y reintentá; conservamos este intento.')
+      } finally {
+        setSaving(false)
       }
-
-      const createdTournament = json?.tournament ?? json?.result?.tournament ?? json?.result
-      tournamentId = typeof createdTournament?.id === 'string'
-        ? createdTournament.id
-        : typeof json?.tournament_id === 'string'
-          ? json.tournament_id
-          : typeof json?.result?.tournament_id === 'string'
-            ? json.result.tournament_id
-            : null
-      if (tournamentId) createdTournamentRef.current = tournamentId
-    }
-    if (!tournamentId || !primaryCourtVenue) {
-      setMessage('El torneo se creó, pero no pude confirmar la sede para guardar las canchas.')
-      setSaving(false)
-      return
-    }
-
-    const assignmentResponse = await fetch(`/api/clubs/${activeClub.id}/tournaments/${tournamentId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        action: 'replace_tournament_court_assignments',
-        primary_venue_id: primaryCourtVenue.id,
-        court_ids: form.tournamentCourts.map((court) => court.id).filter((id): id is string => Boolean(id)),
-      }),
     })
-    const assignmentPayload = await assignmentResponse.json().catch(() => ({}))
-    if (!assignmentResponse.ok) {
-      setMessage(assignmentPayload?.error ?? 'El torneo se creó, pero no pude guardar las canchas seleccionadas.')
-      setSaving(false)
-      return
-    }
-
-    setSaving(false)
-    createdTournamentRef.current = null
-    if (draftKey) localStorage.removeItem(draftKey)
-    toast.success('El torneo ya está creado.', { title: 'Torneo creado correctamente' })
-    setCreationSuccess({ id: tournamentId, name: form.name.trim() || 'tu torneo' })
   }
 
   const flyerPreviewData = {

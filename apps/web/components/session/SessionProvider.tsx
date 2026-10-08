@@ -13,6 +13,7 @@ import {
 } from '@/lib/clubMembershipRules'
 import { resolveFastAuthorization, type FastAuthorization, type SessionMembership } from '@/lib/sessionFastAuthorization'
 import { hasStaffAccountMembership } from '@/lib/accountRolePolicy'
+import { useWriteGuard } from '@/lib/useWriteGuard'
 
 export type AppRole = 'guest' | 'player' | 'club' | 'platform'
 export type PostLoginDestination = '/login' | '/completar-perfil' | '/seleccionar-club' | '/club' | '/player' | '/platform' | `/clubs/${string}`
@@ -417,10 +418,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [clubs, isPlatformAdmin, role]
   )
 
-  const signOut = useCallback(async () => {
-    try {
-      await supabase.auth.signOut({ scope: 'global' })
-    } finally {
+  const logoutWrite = useWriteGuard()
+  const signOut = useCallback(async () => logoutWrite(async () => {
+      const { error } = await supabase.auth.signOut({ scope: 'global' })
+      if (error) throw new Error('No pudimos cerrar la sesión. Revisá la conexión y reintentá.')
       hasResolvedContextRef.current = false
       setRole('guest')
       setIsPlatformAdmin(false)
@@ -438,8 +439,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== 'undefined') {
         window.location.href = '/login'
       }
-    }
-  }, [])
+  }), [logoutWrite])
 
   useEffect(() => {
     let alive = true

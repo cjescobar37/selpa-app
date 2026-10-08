@@ -22,6 +22,7 @@ import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import PublicHomeEmbed from '@/components/public/PublicHomeEmbed'
 import ModeSegmentedControl, { type HomeMode } from '@/components/ModeSegmentedControl'
 import { humanizeUiError } from '@/lib/productPresentation'
+import { useWriteGuard } from '@/lib/useWriteGuard'
 
 type ClubPlayerRow = {
   id: string
@@ -170,6 +171,9 @@ function PlayerHomeLoader() {
 }
 
 export default function PlayerHomePage() {
+  const write = useWriteGuard()
+  const [partnerBusy,setPartnerBusy]=useState<string|null>(null)
+  const [partnerFeedback,setPartnerFeedback]=useState('')
   const session = useSession()
   const [players, setPlayers] = useState<ClubPlayerRow[]>([])
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
@@ -462,6 +466,25 @@ export default function PlayerHomePage() {
       alive = false
     }
   }, [session.status, session.user?.id, session.clubs, loadAttempt])
+
+  async function resolvePartnerInvite(invite: PartnerInvite, action: 'accept'|'decline'|'cancel') {
+    return write(async()=>{
+      setPartnerBusy(invite.id);setPartnerFeedback('')
+      try {
+        const {data}=await supabase.auth.getSession()
+        if(!data.session)throw new Error('Tu sesión venció. Volvé a ingresar.')
+        const response=await fetch(`/api/clubs/${invite.club_id}/partner-invites/${invite.id}/${action}`,{
+          method:'POST',headers:{Authorization:`Bearer ${data.session.access_token}`},
+        })
+        const payload=await response.json()
+        if(!response.ok)throw new Error(humanizeUiError(payload.error))
+        setInvites(current=>current.filter(row=>row.id!==invite.id))
+        setPartnerFeedback(action==='accept'?'Pareja confirmada.':action==='decline'?'Invitación rechazada.':'Invitación cancelada.')
+        setLoadAttempt(current=>current+1)
+      }catch(cause){setPartnerFeedback(humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar el cambio. Reintentá.'))}
+      finally{setPartnerBusy(null)}
+    })
+  }
 
   async function activateClub(clubId: string) {
     try {
@@ -772,6 +795,7 @@ export default function PlayerHomePage() {
               </div>
             )}
 
+            {partnerFeedback?<p role="status">{partnerFeedback}</p>:null}
             {pendingInvites.length ? (
               <div className="playerInviteStack">
                 <b><Bell size={15} /> Invitaciones pendientes</b>
@@ -783,6 +807,13 @@ export default function PlayerHomePage() {
                     <div key={invite.id}>
                       <span>{other?.full_name ?? 'Jugador'}</span>
                       <small>{club?.name ?? 'Club'} · {formatDate(invite.created_at)}</small>
+                      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:8}}>
+                        {(invite.receiver_club_player_id===player?.id?['accept','decline']:['cancel']).map(action=><button
+                          key={action} type="button" disabled={Boolean(partnerBusy)}
+                          style={{minHeight:44,padding:'8px 12px',border:'1px solid #d9e5ee',borderRadius:10,background:action==='accept'?'#061b3a':'#fff',color:action==='accept'?'#fff':'#061b3a',fontSize:13}}
+                          onClick={()=>void resolvePartnerInvite(invite,action as 'accept'|'decline'|'cancel')}
+                        >{partnerBusy===invite.id?'Procesando…':action==='accept'?'Aceptar pareja':action==='decline'?'Rechazar':'Cancelar invitación'}</button>)}
+                      </div>
                     </div>
                   )
                 })}

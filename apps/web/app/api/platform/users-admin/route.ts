@@ -7,6 +7,8 @@ import {
 } from '@/lib/clubMembershipServer'
 import { isApprovedMembership } from '@/lib/clubMembershipRules'
 import { logPlatformAction } from '@/lib/platformAudit'
+import { createClient } from '@supabase/supabase-js'
+import { writeErrorResponse } from '@/lib/writeFlowServer'
 
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
@@ -174,6 +176,23 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     const clubName = club?.name ?? 'el club'
+
+    if (membership.role === 'PLAYER') {
+      if (action === 'approve') {
+        const denial = await roleAssignmentDenial(membership.user_id, 'PLAYER')
+        if (denial) return denial
+      }
+      const url=process.env.NEXT_PUBLIC_SUPABASE_URL, key=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if(!url||!key)return NextResponse.json({error:'La gestión de solicitudes no está disponible.',kind:'SERVER'},{status:503})
+      const client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Authorization:req.headers.get('authorization')??''}}})
+      const {data,error}=await client.rpc('resolve_player_membership_pass3',{
+        p_membership_id:membershipId,p_action:action,p_reason:rejectionReason||null,
+      })
+      if(error)return writeErrorResponse('platform_player_membership',error)
+      if(!data?.replayed)await logPlatformAction({actorUserId:auth.user!.id,action:`user.${action}`,entityType:'club_membership',entityId:membershipId,entityLabel:clubName,metadata:{previous_status:membership.status,next_status:data.status},req})
+        .catch(()=>console.error('[platform-audit]',{code:'DELIVERY_PENDING'}))
+      return NextResponse.json(data)
+    }
 
     if (action === 'reject') {
       if (!rejectionReason) {

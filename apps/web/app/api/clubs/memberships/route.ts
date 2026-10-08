@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { writeErrorResponse } from '@/lib/writeFlowServer'
 import { roleAssignmentDenial } from '@/lib/accountRoleServer'
 import {
-  ensureValidActiveClubForUser,
   userHasClubCapability,
 } from '@/lib/clubMembershipServer'
 
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (membershipError) {
-      return NextResponse.json({ error: membershipError.message }, { status: 500 })
+      return writeErrorResponse('membership.read_for_resolution',membershipError)
     }
 
     if (!membership) {
@@ -110,85 +110,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No tenés permisos para gestionar esta solicitud.' }, { status: 403 })
     }
 
-    const { data: club } = await supabaseAdmin
-      .from('clubs')
-      .select('id, name')
-      .eq('id', membership.club_id)
-      .maybeSingle()
-
-    const clubName = club?.name ?? 'el club'
-
-    if (action === 'reject') {
-      if (!rejectionReason) {
-        return NextResponse.json({ error: 'Tenés que indicar el motivo del rechazo.' }, { status: 400 })
-      }
-
-      const { error: rejectError } = await supabaseAdmin
-        .from('club_memberships')
-        .update({
-          status: 'REJECTED',
-          approved_by: user.id,
-          approved_at: null,
-          rejection_reason: rejectionReason,
-        })
-        .eq('id', membershipId)
-
-      if (rejectError) {
-        return NextResponse.json({ error: rejectError.message }, { status: 500 })
-      }
-
-      try {
-        await ensureValidActiveClubForUser(membership.user_id, null)
-      } catch (settingsError: any) {
-        return NextResponse.json({ error: settingsError?.message ?? 'No pude actualizar club activo.' }, { status: 500 })
-      }
-
-      await supabaseAdmin.from('notifications').insert({
-        user_id: membership.user_id,
-        type: 'club_membership_rejected',
-        title: 'Solicitud rechazada',
-        message: `Tu solicitud para unirte a ${clubName} fue rechazada. Motivo: ${rejectionReason}`,
-        metadata: {
-          club_id: membership.club_id,
-          membership_id: membership.id,
-          rejection_reason: rejectionReason,
-        },
-      })
-
-      return NextResponse.json({ ok: true, status: 'REJECTED' })
+    if (membership.role !== 'PLAYER') return NextResponse.json({ error: 'Esta acción sólo resuelve solicitudes de jugadores.' }, { status: 400 })
+    if (action === 'reject' && !rejectionReason) return NextResponse.json({ error: 'Indicá el motivo del rechazo.' }, { status: 400 })
+    if (action === 'approve') {
+      const denial = await roleAssignmentDenial(membership.user_id, membership.role)
+      if (denial) return denial
     }
-
-    const denial = await roleAssignmentDenial(membership.user_id, membership.role)
-    if (denial) return denial
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (!url || !anonKey) return NextResponse.json({ error: 'Configuración de Supabase incompleta.' }, { status: 500 })
-
+    if (!url || !anonKey) return NextResponse.json({ error: 'No pudimos procesar la solicitud. Reintentá.' }, { status: 503 })
     const userClient = createClient(url, anonKey, {
       global: { headers: { Authorization: `Bearer ${token}` } },
       auth: { persistSession: false, autoRefreshToken: false },
     })
-    const { data: approval, error: approveError } = await userClient
-      .rpc('approve_player_membership_atomic', { p_membership_id: membershipId })
-      .single()
-
-    if (approveError) {
-      return NextResponse.json({ error: approveError.message }, { status: approveError.code === '42501' ? 403 : 500 })
-    }
-
-    await supabaseAdmin.from('notifications').insert({
-      user_id: membership.user_id,
-      type: 'club_membership_approved',
-      title: 'Solicitud aprobada',
-      message: `Tu solicitud para unirte a ${clubName} fue aprobada.`,
-      metadata: {
-        club_id: membership.club_id,
-        membership_id: membership.id,
-      },
+    const { data: result, error: resolveError } = await userClient.rpc('resolve_player_membership_pass3', {
+      p_membership_id: membershipId, p_action: action, p_reason: rejectionReason || null,
     })
-
-    return NextResponse.json({ ok: true, status: 'APPROVED', approval })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Error gestionando solicitud' }, { status: 500 })
+    if (resolveError) return writeErrorResponse('membership.resolve', resolveError)
+    return NextResponse.json(result)
+  } catch {
+    return writeErrorResponse('membership.resolve', { code: 'UNEXPECTED' })
   }
 }

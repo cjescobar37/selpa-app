@@ -1,5 +1,7 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -16,12 +18,13 @@ type AlertState =
 
 const loginInputStyle = {
   fontFamily: '"Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-  fontSize: '14px',
+  fontSize: '16px',
   fontWeight: 400,
   letterSpacing: '.005em',
 }
 
 export default function LoginPageClient() {
+  const write = useWriteGuard()
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -75,71 +78,74 @@ export default function LoginPageClient() {
   }, [nextPath, router])
 
   async function signInWithGoogle() {
-    setAlert(null)
-    setLoading(true)
+    return write(async () => {
+      setAlert(null)
+      setLoading(true)
 
-    // Espera la lectura inicial compartida para no competir por el lock de auth.
-    await getCurrentSession().catch(() => null)
+      // Espera la lectura inicial compartida para no competir por el lock de auth.
+      await getCurrentSession().catch(() => null)
 
-    let error
-    try {
-      ;({ error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } }))
-    } catch {
-      setAlert({ variant: 'error', title: 'No pudimos conectar con Google', message: 'Revisá tu conexión y volvé a intentar.' })
-      setLoading(false)
-      return
-    }
+      let error
+      try {
+        ;({ error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } }))
+      } catch {
+        setAlert({ variant: 'error', title: 'No pudimos conectar con Google', message: 'Revisá tu conexión y volvé a intentar.' })
+        setLoading(false)
+        return
+      }
 
-    if (error) {
-      setAlert({
-        variant: 'error',
-        title: 'No se pudo iniciar sesión',
-        message: error.message,
-      })
-      setLoading(false)
-    }
+      if (error) {
+        setAlert({
+          variant: 'error',
+          title: 'No se pudo iniciar sesión',
+          message: error.message,
+        })
+        setLoading(false)
+      }
+    })
   }
 
   async function signInWithEmail(e?: React.FormEvent) {
     e?.preventDefault()
+    return write(async () => {
+      const cleanEmail = email.trim().toLowerCase()
 
-    const cleanEmail = email.trim().toLowerCase()
+      if (!cleanEmail || !password) {
+        setAlert({
+          variant: 'warning',
+          title: 'Faltan datos',
+          message: 'Completá email y contraseña.',
+        })
+        return
+      }
 
-    if (!cleanEmail || !password) {
-      setAlert({
-        variant: 'warning',
-        title: 'Faltan datos',
-        message: 'Completá email y contraseña.',
-      })
-      return
-    }
+      setLoading(true)
+      setAlert(null)
 
-    setLoading(true)
-    setAlert(null)
+      // La comprobación inicial y el login no deben correr sobre el mismo token a la vez.
+      await getCurrentSession().catch(() => null)
 
-    // La comprobación inicial y el login no deben correr sobre el mismo token a la vez.
-    await getCurrentSession().catch(() => null)
+      let error
+      try {
+        ;({ error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password }))
+      } catch {
+        setAlert({ variant: 'error', title: 'No pudimos iniciar sesión', message: 'Revisá tu conexión y volvé a intentar. Conservamos tu email.' })
+        setLoading(false)
+        return
+      }
 
-    let error
-    try {
-      ;({ error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password }))
-    } catch {
-      setAlert({ variant: 'error', title: 'No pudimos iniciar sesión', message: 'Revisá tu conexión y volvé a intentar. Conservamos tu email.' })
-      setLoading(false)
-      return
-    }
+      if (error) {
+        setAlert({
+          variant: 'error',
+          title: 'Credenciales inválidas',
+          message: error.message,
+        })
+        setLoading(false)
+        return
+      }
 
-    if (error) {
-      setAlert({
-        variant: 'error',
-        title: 'Credenciales inválidas',
-        message: error.message,
-      })
-      setLoading(false)
-      return
-    }
-
-    router.replace(nextPath ? `/auth/post-login?next=${encodeURIComponent(nextPath)}` : '/auth/post-login')
+      router.replace(nextPath ? `/auth/post-login?next=${encodeURIComponent(nextPath)}` : '/auth/post-login')
+    })
   }
 
   return (

@@ -1,5 +1,7 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -38,6 +40,7 @@ function registerAlertFromCode(code: RegisterErrorCode, fallback?: string): Aler
 }
 
 export default function RegisterPage() {
+  const write = useWriteGuard()
   const router = useRouter()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -88,72 +91,76 @@ export default function RegisterPage() {
 
   async function signUp(event: React.FormEvent) {
     event.preventDefault()
-    setAlert(null)
+    return write(async () => {
+      setAlert(null)
 
-    const cleanFirstName = normalizeName(firstName)
-    const cleanLastName = normalizeName(lastName)
-    const cleanEmail = email.trim().toLowerCase()
-    const nextErrors: FieldErrors = {}
+      const cleanFirstName = normalizeName(firstName)
+      const cleanLastName = normalizeName(lastName)
+      const cleanEmail = email.trim().toLowerCase()
+      const nextErrors: FieldErrors = {}
 
-    if (!cleanFirstName) nextErrors.firstName = 'Ingresá tu nombre.'
-    else if (cleanFirstName.length < 2) nextErrors.firstName = 'El nombre debe tener al menos 2 caracteres.'
-    if (!cleanLastName) nextErrors.lastName = 'Ingresá tu apellido.'
-    else if (cleanLastName.length < 2) nextErrors.lastName = 'El apellido debe tener al menos 2 caracteres.'
-    if (!cleanEmail) nextErrors.email = 'Ingresá tu email.'
-    else if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) nextErrors.email = 'Ingresá un email válido.'
-    if (!password) nextErrors.password = 'Ingresá una contraseña.'
-    else if (!meetsPasswordRequirements(password)) nextErrors.password = 'Revisá los requisitos.'
-    if (!password2) nextErrors.password2 = 'Repetí la contraseña.'
-    else if (password !== password2) nextErrors.password2 = 'Las contraseñas no coinciden.'
+      if (!cleanFirstName) nextErrors.firstName = 'Ingresá tu nombre.'
+      else if (cleanFirstName.length < 2) nextErrors.firstName = 'El nombre debe tener al menos 2 caracteres.'
+      if (!cleanLastName) nextErrors.lastName = 'Ingresá tu apellido.'
+      else if (cleanLastName.length < 2) nextErrors.lastName = 'El apellido debe tener al menos 2 caracteres.'
+      if (!cleanEmail) nextErrors.email = 'Ingresá tu email.'
+      else if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) nextErrors.email = 'Ingresá un email válido.'
+      if (!password) nextErrors.password = 'Ingresá una contraseña.'
+      else if (!meetsPasswordRequirements(password)) nextErrors.password = 'Revisá los requisitos.'
+      if (!password2) nextErrors.password2 = 'Repetí la contraseña.'
+      else if (password !== password2) nextErrors.password2 = 'Las contraseñas no coinciden.'
 
-    setFieldErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) {
-      focusFirstInvalidField(nextErrors)
-      return
-    }
+      setFieldErrors(nextErrors)
+      if (Object.keys(nextErrors).length > 0) {
+        focusFirstInvalidField(nextErrors)
+        return
+      }
 
-    setLoading(true)
-    let response: Response
-    let result: { code?: RegisterErrorCode; message?: string } | null
-    try {
-      response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ firstName: cleanFirstName, lastName: cleanLastName, email: cleanEmail, password }),
-      })
-      result = await response.json().catch(() => null) as { code?: RegisterErrorCode; message?: string } | null
-    } catch {
-      setAlert(registerAlertFromCode('NETWORK_ERROR'))
-      setLoading(false)
-      return
-    }
+      setLoading(true)
+      let response: Response
+      let result: { code?: RegisterErrorCode; message?: string } | null
+      try {
+        response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ firstName: cleanFirstName, lastName: cleanLastName, email: cleanEmail, password }),
+        })
+        result = await response.json().catch(() => null) as { code?: RegisterErrorCode; message?: string } | null
+      } catch {
+        setAlert(registerAlertFromCode('NETWORK_ERROR'))
+        setLoading(false)
+        return
+      }
 
-    if (!response.ok) {
-      const code = result?.code ?? 'UNKNOWN_ERROR'
-      setAlert(registerAlertFromCode(code, result?.message))
-      setLoading(false)
-      return
-    }
+      if (!response.ok) {
+        const code = result?.code ?? 'UNKNOWN_ERROR'
+        setAlert(registerAlertFromCode(code, result?.message))
+        setLoading(false)
+        return
+      }
 
-    router.replace(`/register/success?email=${encodeURIComponent(cleanEmail)}`)
+      router.replace(`/register/success?email=${encodeURIComponent(cleanEmail)}`)
+    })
   }
 
   async function signUpWithGoogle() {
-    setAlert(null)
-    setLoading(true)
-    let error
-    try {
-      ;({ error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: oauthRedirectTo } }))
-    } catch {
-      setAlert(registerAlertFromCode('NETWORK_ERROR'))
-      setLoading(false)
-      return
-    }
+    return write(async () => {
+      setAlert(null)
+      setLoading(true)
+      let error
+      try {
+        ;({ error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: oauthRedirectTo } }))
+      } catch {
+        setAlert(registerAlertFromCode('NETWORK_ERROR'))
+        setLoading(false)
+        return
+      }
 
-    if (error) {
-      setAlert({ variant: 'error', title: 'No pudimos continuar con Google.', message: error.message })
-      setLoading(false)
-    }
+      if (error) {
+        setAlert({ variant: 'error', title: 'No pudimos continuar con Google.', message: error.message })
+        setLoading(false)
+      }
+    })
   }
 
   return (

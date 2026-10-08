@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import { withNotificationScope } from '@/lib/notificationScope'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { CLUB_THEMES } from '@/lib/clubThemes'
+import { randomUUID } from 'node:crypto'
+import { writeErrorResponse } from '@/lib/writeFlowServer'
 
 type ClubRequestPayload = {
   club_name?: string
@@ -26,6 +27,7 @@ type ClubRequestPayload = {
   admin_email?: string
   admin_phone?: string
   theme_key?: string
+  requestId?: string
 }
 
 const CLUB_THEME_KEYS = new Set(Object.keys(CLUB_THEMES))
@@ -49,7 +51,7 @@ async function assertPlatformAdmin(req: Request) {
     .eq('user_id', user.id)
     .maybeSingle()
 
-  if (paErr) return { error: NextResponse.json({ error: paErr.message }, { status: 500 }), user: null }
+  if (paErr) return { error: writeErrorResponse('club-request.authorize', paErr), user: null }
   if (!pa?.user_id) return { error: NextResponse.json({ error: 'No autorizado.' }, { status: 403 }), user: null }
   return { error: null, user }
 }
@@ -61,16 +63,20 @@ export async function GET(req: Request) {
   const { data, error } = await supabaseAdmin
     .from('club_requests')
     .select('*')
+    .eq('status', 'PENDING')
     .order('created_at', { ascending: false })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return writeErrorResponse('club-request.list', error, 'No pudimos cargar las altas. Reintentá.')
 
   return NextResponse.json({ rows: data ?? [] })
 }
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as ClubRequestPayload
+    const body = (await req.json().catch(() => null)) as ClubRequestPayload | null
+    if(!body||typeof body!=='object'||Array.isArray(body)||Object.entries(body).some(([key,value])=>
+      key!=='courts_count'&&key!=='actor_id'&&value!=null&&typeof value!=='string'
+    ))return NextResponse.json({error:'Revisá los datos de la solicitud.',kind:'VALIDATION'},{status:400})
     const payload = {
       club_name: (body.club_name ?? '').trim(),
       brand_name: (body.brand_name ?? '').trim() || null,
@@ -99,45 +105,24 @@ export async function POST(req: Request) {
     if (!payload.club_name || !payload.contact_email || !payload.owner_name || !payload.owner_email) {
       return NextResponse.json({ error: 'Faltan campos obligatorios.' }, { status: 400 })
     }
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.contact_email)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.owner_email)
+      ||(payload.courts_count!==null&&(!Number.isInteger(payload.courts_count)||payload.courts_count<1))) {
+      return NextResponse.json({error:'Revisá los emails y la cantidad de canchas.',kind:'VALIDATION'},{status:400})
+    }
     if (!CLUB_THEME_KEYS.has(payload.theme_key)) {
       return NextResponse.json({ error: 'Elegí una identidad visual válida para el club.' }, { status: 400 })
     }
 
-    const { data: inserted, error } = await supabaseAdmin
-      .from('club_requests')
-      .insert(payload)
-      .select('*')
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    const { data: platformAdmins } = await supabaseAdmin
-      .from('platform_admins')
-      .select('user_id')
-
-    const adminIds = (platformAdmins ?? []).map((row: any) => row.user_id).filter(Boolean)
-    if (adminIds.length > 0) {
-      const notifications = adminIds.map((userId: string) => ({
-        user_id: userId,
-        type: 'club_request_created',
-        title: 'Nueva solicitud de club',
-        message: `${payload.club_name} solicitó alta en la plataforma.`,
-        link: `/platform/solicitudes?focus=${inserted.id}`,
-        metadata: withNotificationScope(
-          {
-            club_request_id: inserted.id,
-            club_name: payload.club_name,
-            owner_name: payload.owner_name,
-            owner_email: payload.owner_email,
-          },
-          'platform'
-        ),
-      }))
-      await supabaseAdmin.from('notifications').insert(notifications)
+    const requestId = body.requestId ?? randomUUID()
+    if (!/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(requestId)) {
+      return NextResponse.json({ error: 'Solicitud inválida.', kind: 'VALIDATION' }, { status: 400 })
     }
-
-    return NextResponse.json({ ok: true, id: inserted.id })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'No se pudo guardar la solicitud.' }, { status: 500 })
+    const { data, error } = await supabaseAdmin.rpc('submit_club_request_pass3', {
+      p_request_id: requestId, p_payload: payload,
+    })
+    if (error) return writeErrorResponse('club-request.submit', error)
+    return NextResponse.json(data)
+  } catch {
+    return writeErrorResponse('club-request.submit', { code: 'UNEXPECTED' })
   }
 }

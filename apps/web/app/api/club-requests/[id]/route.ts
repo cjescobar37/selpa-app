@@ -1,264 +1,30 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { roleAssignmentDenial } from '@/lib/accountRoleServer'
-import {
-  ensureValidActiveClubForUser,
-} from '@/lib/clubMembershipServer'
-
-type ActionBody = {
-  action?: 'approve' | 'reject'
-  rejectionReason?: string
-}
-
-type ClubRequestRow = {
-  id: string
-  club_name: string
-  brand_name: string | null
-  legal_name: string | null
-  cuit: string | null
-  contact_email: string | null
-  phone: string | null
-  website: string | null
-  instagram: string | null
-  address: string | null
-  city: string | null
-  province: string | null
-  country: string | null
-  opening_hours: string | null
-  courts_count: number | null
-  courts_surface: string | null
-  logo_url: string | null
-  rules_pdf_url: string | null
-  notes: string | null
-  owner_name: string | null
-  owner_email: string | null
-  owner_phone: string | null
-  theme_key: string | null
-}
-
-function slugify(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-}
-
-async function getTokenUser(req: Request) {
-  const auth = req.headers.get('authorization') || ''
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  if (!token) return null
-  const { data, error } = await supabaseAdmin.auth.getUser(token)
-  if (error || !data?.user) return null
-  return data.user
-}
-
-async function assertPlatformAdmin(req: Request) {
-  const user = await getTokenUser(req)
-  if (!user) return { error: NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 }), user: null }
-
-  const { data: pa, error: paErr } = await supabaseAdmin
-    .from('platform_admins')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (paErr) return { error: NextResponse.json({ error: paErr.message }, { status: 500 }), user: null }
-  if (!pa?.user_id) return { error: NextResponse.json({ error: 'No autorizado.' }, { status: 403 }), user: null }
-  return { error: null, user }
-}
+import { writeErrorResponse } from '@/lib/writeFlowServer'
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await assertPlatformAdmin(req)
-    if (auth.error) return auth.error
-
+    const token = (req.headers.get('authorization') ?? '').replace(/^Bearer /, '')
+    if (!req.headers.get('authorization')?.startsWith('Bearer ') || !token) return NextResponse.json({ error: 'Volvé a iniciar sesión.' }, { status: 401 })
+    const { data: auth, error: authError } = await supabaseAdmin.auth.getUser(token)
+    if (authError || !auth.user) return NextResponse.json({ error: 'Volvé a iniciar sesión.' }, { status: 401 })
+    const { data: admin, error: adminError } = await supabaseAdmin.from('platform_admins').select('user_id').eq('user_id', auth.user.id).maybeSingle()
+    if (adminError) return writeErrorResponse('club-request.authorize', adminError)
+    if (!admin) return NextResponse.json({ error: 'No tenés permiso para resolver altas.' }, { status: 403 })
     const { id } = await params
-    const body = (await req.json()) as ActionBody
-    const action = body.action
-
-    if (!id || !action || !['approve', 'reject'].includes(action)) {
-      return NextResponse.json({ error: 'Acción inválida.' }, { status: 400 })
+    const body = await req.json().catch(() => ({}))
+    if (!/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(id) || !['approve', 'reject'].includes(body.action)) {
+      return NextResponse.json({ error: 'Acción inválida.', kind: 'VALIDATION' }, { status: 400 })
     }
-
-    const { data: requestRow, error: requestErr } = await supabaseAdmin
-      .from('club_requests')
-      .select('*')
-      .eq('id', id)
-      .single()
-
-    if (requestErr || !requestRow) {
-      return NextResponse.json({ error: requestErr?.message ?? 'Solicitud no encontrada.' }, { status: 404 })
-    }
-
-    const request = requestRow as ClubRequestRow
-
-    const { data: requesterProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('user_id, email, display_name, first_name, last_name')
-      .eq('email', (request.owner_email ?? '').toLowerCase())
-      .maybeSingle()
-
-    if (action === 'reject') {
-      const rejectionReason = (body.rejectionReason ?? '').trim()
-      if (!rejectionReason) {
-        return NextResponse.json({ error: 'Indicá el motivo del rechazo.' }, { status: 400 })
-      }
-
-      if (requesterProfile?.user_id) {
-        await supabaseAdmin.from('notifications').insert({
-          user_id: requesterProfile.user_id,
-          type: 'club_request_rejected',
-          title: 'Solicitud de club rechazada',
-          message: `La solicitud para ${request.club_name} fue rechazada. Motivo: ${rejectionReason}`,
-          link: '/unir-mi-club',
-          metadata: {
-            club_request_id: request.id,
-            club_name: request.club_name,
-            rejection_reason: rejectionReason,
-          },
-        })
-      }
-
-      const { error: deleteErr } = await supabaseAdmin.from('club_requests').delete().eq('id', id)
-      if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 500 })
-
-      return NextResponse.json({ ok: true, status: 'REJECTED' })
-    }
-
-    if (requesterProfile?.user_id) {
-      const denial = await roleAssignmentDenial(requesterProfile.user_id, 'OWNER')
-      if (denial) return denial
-    }
-    const existingByName = await supabaseAdmin
-      .from('clubs')
-      .select('id, name')
-      .eq('name', request.club_name)
-      .limit(1)
-      .maybeSingle()
-
-    if (existingByName.data?.id) {
-      return NextResponse.json({ error: 'Ya existe un club con ese nombre o email de contacto.' }, { status: 409 })
-    }
-
-    const baseSlug = slugify(request.club_name) || 'club'
-    let slug = baseSlug
-    for (let i = 1; i <= 20; i++) {
-      const { data: exists } = await supabaseAdmin.from('clubs').select('id').eq('slug', slug).maybeSingle()
-      if (!exists?.id) break
-      slug = `${baseSlug}-${i}`
-    }
-
-    const requesterName =
-      requesterProfile?.display_name ||
-      [requesterProfile?.first_name, requesterProfile?.last_name].filter(Boolean).join(' ').trim() ||
-      request.owner_name ||
-      null
-
-    const { data: clubRow, error: clubErr } = await supabaseAdmin
-      .from('clubs')
-      .insert({
-        name: request.club_name,
-        brand_name: request.brand_name,
-        legal_name: request.legal_name,
-        cuit: request.cuit,
-        slug,
-        city: request.city,
-        province: request.province,
-        country: request.country || 'Argentina',
-        address: request.address,
-        phone: request.phone,
-        contact_email: request.contact_email,
-        website: request.website,
-        instagram: request.instagram,
-        opening_hours: request.opening_hours,
-        courts_count: request.courts_count,
-        courts_surface: request.courts_surface,
-        logo_url: request.logo_url,
-        notes: request.notes,
-        rules_pdf_url: request.rules_pdf_url,
-        owner_name: requesterName,
-        owner_email: request.owner_email,
-        owner_phone: request.owner_phone,
-        owner_user_id: requesterProfile?.user_id ?? null,
-        theme_key: request.theme_key || 'cyan',
-        theme_locked: true,
-        is_active: true,
-        status: 'ACTIVE',
-      })
-      .select('id, name')
-      .single()
-
-    if (clubErr) return NextResponse.json({ error: clubErr.message }, { status: 500 })
-
-    if (requesterProfile?.user_id) {
-      const approvedAt = new Date().toISOString()
-      const { data: existingMembership } = await supabaseAdmin
-        .from('club_memberships')
-        .select('id')
-        .eq('club_id', clubRow.id)
-        .eq('user_id', requesterProfile.user_id)
-        .maybeSingle()
-
-      if (existingMembership?.id) {
-        const { error: membershipErr } = await supabaseAdmin
-          .from('club_memberships')
-          .update({
-            role: 'OWNER',
-            status: 'APPROVED',
-            approved_by: auth.user!.id,
-            approved_at: approvedAt,
-            rejection_reason: null,
-          })
-          .eq('id', existingMembership.id)
-
-        if (membershipErr) {
-          await supabaseAdmin.from('clubs').delete().eq('id', clubRow.id)
-          return NextResponse.json({ error: membershipErr.message }, { status: 500 })
-        }
-      } else {
-        const { error: membershipErr } = await supabaseAdmin.from('club_memberships').insert({
-          club_id: clubRow.id,
-          user_id: requesterProfile.user_id,
-          role: 'OWNER',
-          status: 'APPROVED',
-          approved_by: auth.user!.id,
-          approved_at: approvedAt,
-        })
-
-        if (membershipErr) {
-          await supabaseAdmin.from('clubs').delete().eq('id', clubRow.id)
-          return NextResponse.json({ error: membershipErr.message }, { status: 500 })
-        }
-      }
-
-      try {
-        await ensureValidActiveClubForUser(requesterProfile.user_id, clubRow.id)
-      } catch (consistencyError: any) {
-        await supabaseAdmin.from('clubs').delete().eq('id', clubRow.id)
-        return NextResponse.json({ error: consistencyError?.message ?? 'No pude dejar consistente el owner.' }, { status: 500 })
-      }
-
-      await supabaseAdmin.from('notifications').insert({
-        user_id: requesterProfile.user_id,
-        type: 'club_request_approved',
-        title: 'Solicitud de club aprobada',
-        message: `Tu solicitud para ${clubRow.name} fue aprobada. Ya podés seleccionarlo como club activo.`,
-        link: '/seleccionar-club',
-        metadata: {
-          club_request_id: request.id,
-          club_id: clubRow.id,
-          club_name: clubRow.name,
-        },
-      })
-    }
-
-    const { error: deleteErr } = await supabaseAdmin.from('club_requests').delete().eq('id', id)
-    if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 500 })
-
-    return NextResponse.json({ ok: true, status: 'APPROVED', clubId: clubRow.id, clubName: clubRow.name })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Error procesando solicitud.' }, { status: 500 })
+    const reason = typeof body.rejectionReason === 'string' ? body.rejectionReason.trim() : ''
+    if (body.action === 'reject' && !reason) return NextResponse.json({ error: 'Indicá el motivo del rechazo.', kind: 'VALIDATION' }, { status: 400 })
+    // The actor comes exclusively from verified Auth, never from the request body.
+    const { data, error } = await supabaseAdmin.rpc('resolve_club_request_pass3', {
+      p_request_id: id, p_actor_id: auth.user.id, p_action: body.action, p_reason: reason || null,
+    })
+    if (error) return writeErrorResponse('club-request.resolve', error)
+    return NextResponse.json(data)
+  } catch {
+    return writeErrorResponse('club-request.resolve', { code: 'UNEXPECTED' })
   }
 }

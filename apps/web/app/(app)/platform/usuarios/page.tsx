@@ -1,5 +1,7 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
@@ -46,6 +48,7 @@ function isUserSuspended(row: MembershipRow | null) {
 }
 
 export default function PlatformUsuariosPage() {
+  const write = useWriteGuard()
   const pageSizeOptions = [30, 50]
   const defaultPageSize = pageSizeOptions[0]
   const [loading, setLoading] = useState(true)
@@ -118,81 +121,97 @@ export default function PlatformUsuariosPage() {
   const paginationSummary = `Mostrando ${Math.min(filtered.length, defaultPageSize)} de ${filtered.length} usuarios`
 
   async function handleAction(row: MembershipRow, action: 'approve' | 'reject') {
-    const { data: sess } = await supabase.auth.getSession()
-    const token = sess?.session?.access_token
-    if (!token) {
-      setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
-      return
-    }
+    return write(async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession()
+        const token = sess?.session?.access_token
+        if (!token) {
+          setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
+          return
+        }
 
-    if (action === 'reject' && !rejectionReason.trim()) {
-      setAlert({ variant: 'warning', title: 'Falta un motivo', message: 'Escribí un motivo antes de rechazar.' })
-      return
-    }
+        if (action === 'reject' && !rejectionReason.trim()) {
+          setAlert({ variant: 'warning', title: 'Falta un motivo', message: 'Escribí un motivo antes de rechazar.' })
+          return
+        }
 
-    setBusyId(row.id)
-    const res = await fetch('/api/platform/users-admin', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ membershipId: row.id, action, rejectionReason: rejectionReason.trim() || undefined }),
+        setBusyId(row.id)
+        const res = await fetch('/api/platform/users-admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ membershipId: row.id, action, rejectionReason: rejectionReason.trim() || undefined }),
+        })
+        const json = await res.json().catch(() => ({}))
+        setBusyId(null)
+
+        if (!res.ok) {
+          setAlert({ variant: 'error', title: 'No pude procesar la acción', message: json?.error ?? 'Error inesperado.' })
+          return
+        }
+
+        setAlert({
+          variant: 'success',
+          title: action === 'approve' ? 'Usuario aprobado' : 'Usuario rechazado',
+          message: action === 'approve'
+            ? 'La membresía quedó activa y se notificó al usuario.'
+            : 'La solicitud quedó rechazada y se notificó al usuario.',
+        })
+        setRejectionReason('')
+        await load()
+      } catch (cause) {
+        setAlert({ variant: 'error', title: 'No pudimos completar el cambio', message: 'Revisá tu conexión y reintentá. Conservamos los datos del formulario.' })
+      } finally {
+        setBusyId(null)
+      }
     })
-    const json = await res.json().catch(() => ({}))
-    setBusyId(null)
-
-    if (!res.ok) {
-      setAlert({ variant: 'error', title: 'No pude procesar la acción', message: json?.error ?? 'Error inesperado.' })
-      return
-    }
-
-    setAlert({
-      variant: 'success',
-      title: action === 'approve' ? 'Usuario aprobado' : 'Usuario rechazado',
-      message: action === 'approve'
-        ? 'La membresía quedó activa y se notificó al usuario.'
-        : 'La solicitud quedó rechazada y se notificó al usuario.',
-    })
-    setRejectionReason('')
-    await load()
   }
 
   async function handleUserStatus(row: MembershipRow, action: 'suspend_user' | 'reactivate_user') {
-    if (action === 'suspend_user' && !window.confirm(`Vas a suspender globalmente a ${row.user_name}.`)) return
+    return write(async () => {
+      try {
+        if (action === 'suspend_user' && !window.confirm(`Vas a suspender globalmente a ${row.user_name}.`)) return
 
-    const { data: sess } = await supabase.auth.getSession()
-    const token = sess?.session?.access_token
-    if (!token) {
-      setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
-      return
-    }
+        const { data: sess } = await supabase.auth.getSession()
+        const token = sess?.session?.access_token
+        if (!token) {
+          setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
+          return
+        }
 
-    setBusyId(`user:${row.user_id}`)
-    const res = await fetch('/api/platform/users-admin', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ userId: row.user_id, action }),
+        setBusyId(`user:${row.user_id}`)
+        const res = await fetch('/api/platform/users-admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ userId: row.user_id, action }),
+        })
+        const json = await res.json().catch(() => ({}))
+        setBusyId(null)
+
+        if (!res.ok) {
+          setAlert({ variant: 'error', title: 'No pude actualizar el estado global', message: json?.error ?? 'Error inesperado.' })
+          return
+        }
+
+        setAlert({
+          variant: 'success',
+          title: action === 'suspend_user' ? 'Usuario suspendido' : 'Usuario reactivado',
+          message: action === 'suspend_user'
+            ? 'El usuario mantiene su cuenta, pero queda bloqueado para acciones de jugador.'
+            : 'El usuario vuelve a quedar habilitado globalmente.',
+        })
+        await load()
+      } catch (cause) {
+        setAlert({ variant: 'error', title: 'No pudimos completar el cambio', message: 'Revisá tu conexión y reintentá. Conservamos los datos del formulario.' })
+      } finally {
+        setBusyId(null)
+      }
     })
-    const json = await res.json().catch(() => ({}))
-    setBusyId(null)
-
-    if (!res.ok) {
-      setAlert({ variant: 'error', title: 'No pude actualizar el estado global', message: json?.error ?? 'Error inesperado.' })
-      return
-    }
-
-    setAlert({
-      variant: 'success',
-      title: action === 'suspend_user' ? 'Usuario suspendido' : 'Usuario reactivado',
-      message: action === 'suspend_user'
-        ? 'El usuario mantiene su cuenta, pero queda bloqueado para acciones de jugador.'
-        : 'El usuario vuelve a quedar habilitado globalmente.',
-    })
-    await load()
   }
 
   return (

@@ -1,5 +1,7 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -117,6 +119,7 @@ function VisualCard({ row, onClose }: { row: PendingClubRow; onClose: () => void
 }
 
 export default function PlatformSolicitudesPage() {
+  const write = useWriteGuard()
   const searchParams = useSearchParams()
   const focusId = searchParams.get('focus')
 
@@ -177,57 +180,59 @@ export default function PlatformSolicitudesPage() {
   const selectedId = selected?.id ?? focusId
 
   async function applyAction(row: PendingClubRow, action: 'approve' | 'reject') {
-    if (busyId) return
-    setBusyId(row.id)
-    try {
-    const { data: sess } = await supabase.auth.getSession()
-    const token = sess?.session?.access_token
-    if (!token) {
-      setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
-      return
-    }
+    return write(async () => {
+      if (busyId) return
+      setBusyId(row.id)
+      try {
+      const { data: sess } = await supabase.auth.getSession()
+      const token = sess?.session?.access_token
+      if (!token) {
+        setAlert({ variant: 'warning', title: 'Sesión expirada', message: 'Volvé a iniciar sesión.' })
+        return
+      }
 
-    if (action === 'reject' && !rejectionReason.trim()) {
-      setAlert({ variant: 'warning', title: 'Falta el motivo', message: 'Escribí el motivo del rechazo.' })
-      return
-    }
+      if (action === 'reject' && !rejectionReason.trim()) {
+        setAlert({ variant: 'warning', title: 'Falta el motivo', message: 'Escribí el motivo del rechazo.' })
+        return
+      }
 
-    const res = await fetch('/api/platform/clubs-admin', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        clubId: row.id,
-        action,
-        reason: action === 'reject' ? rejectionReason.trim() || undefined : undefined,
-      }),
+      const res = await fetch('/api/platform/clubs-admin', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          clubId: row.id,
+          action,
+          reason: action === 'reject' ? rejectionReason.trim() || undefined : undefined,
+        }),
+      })
+
+      const json = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setAlert({ variant: 'error', title: 'No pude procesar la solicitud', message: json?.error ?? 'Error' })
+        return
+      }
+
+      const success: AlertState = {
+        variant: 'success',
+        title: action === 'approve' ? 'Solicitud aprobada' : 'Solicitud rechazada',
+        message: action === 'approve'
+          ? 'El club ya quedó habilitado y visible para la operación pública.'
+          : 'Se rechazó la solicitud del club y se actualizó su estado.',
+      }
+      setSelected(null)
+      setRejectionReason('')
+      await load()
+      setAlert(current => current?.variant === 'error' ? current : success)
+      } catch {
+        setAlert({ variant: 'error', title: 'No pudimos procesar la solicitud', message: 'Revisá tu conexión. Antes de reintentar, recargá para comprobar el estado del club.' })
+      } finally {
+        setBusyId(null)
+      }
     })
-
-    const json = await res.json().catch(() => ({}))
-
-    if (!res.ok) {
-      setAlert({ variant: 'error', title: 'No pude procesar la solicitud', message: json?.error ?? 'Error' })
-      return
-    }
-
-    const success: AlertState = {
-      variant: 'success',
-      title: action === 'approve' ? 'Solicitud aprobada' : 'Solicitud rechazada',
-      message: action === 'approve'
-        ? 'El club ya quedó habilitado y visible para la operación pública.'
-        : 'Se rechazó la solicitud del club y se actualizó su estado.',
-    }
-    setSelected(null)
-    setRejectionReason('')
-    await load()
-    setAlert(current => current?.variant === 'error' ? current : success)
-    } catch {
-      setAlert({ variant: 'error', title: 'No pudimos procesar la solicitud', message: 'Revisá tu conexión. Antes de reintentar, recargá para comprobar el estado del club.' })
-    } finally {
-      setBusyId(null)
-    }
   }
 
   return (

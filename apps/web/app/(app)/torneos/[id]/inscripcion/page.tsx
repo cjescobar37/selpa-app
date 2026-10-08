@@ -1,5 +1,7 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+
 import Link from 'next/link'
 import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useState } from 'react'
@@ -262,6 +264,7 @@ const loadingStateStyle: CSSProperties = {
 }
 
 export default function TorneoInscripcionPage() {
+  const write = useWriteGuard()
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const searchParams = useSearchParams()
@@ -464,157 +467,173 @@ export default function TorneoInscripcionPage() {
   }, [detail, registrationSuccess, router])
 
   async function submitRegistration() {
-    if (!detail || !selectedPartner?.userId || !paymentMethod || !availabilityReady) return
-    if (isTournamentRegistrationClosed({ registrationDeadline: detail.tournament.registrationDeadline })) {
-      setActionFeedback({ tone: 'error', title: 'Inscripción cerrada', message: 'La inscripción para este torneo ya finalizó.' })
-      return
-    }
-    setSaving(true)
-    setMessage(paymentMethod === 'CASH_ON_SITE_REQUEST' ? 'Enviando solicitud de pago...' : 'Preparando pago...')
-    try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      if (!token) throw new Error('Iniciá sesión para inscribirte.')
-
-      const response = await fetch(`/api/tournaments/${detail.tournament.id}/registration/submit`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          partnerUserId: selectedPartner.userId,
-          paymentMethod,
-          preferredSlots: availabilityPayload.preferred_slots,
-          availabilityScore: availabilityPayload.availability_score,
-          flexibilityLevel: String(availabilityPayload.flexibility_level),
-        }),
-      })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload?.error ?? 'No se pudo confirmar la inscripción.')
-
-      const paymentResponse = await fetch(`/api/tournaments/${detail.tournament.id}/payments/request`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ method: paymentMethod }),
-      })
-      const paymentPayload = await paymentResponse.json()
-      if (!paymentResponse.ok) {
-        throw new Error(paymentPayload?.error ?? 'La inscripción se creó, pero no pude registrar la solicitud de pago.')
+    return write(async () => {
+      if (!detail || !selectedPartner?.userId || !paymentMethod || !availabilityReady) return
+      if (isTournamentRegistrationClosed({ registrationDeadline: detail.tournament.registrationDeadline })) {
+        setActionFeedback({ tone: 'error', title: 'Inscripción cerrada', message: 'La inscripción para este torneo ya finalizó.' })
+        return
       }
+      setSaving(true)
+      setMessage(paymentMethod === 'CASH_ON_SITE_REQUEST' ? 'Enviando solicitud de pago...' : 'Preparando pago...')
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        if (!token) throw new Error('Iniciá sesión para inscribirte.')
 
-      setMessage('')
-      setRegistrationSuccess(true)
-      const draftKey = getDraftKey(detail.tournament.id, detail.viewer.clubPlayer?.userId)
-      if (draftKey) window.localStorage.removeItem(draftKey)
-    } catch (error) {
-      setActionFeedback({ tone: 'error', title: 'No pudimos confirmar la inscripción', message: error instanceof Error ? error.message : 'Intentá nuevamente en unos instantes.' })
-    } finally {
-      setSaving(false)
-    }
+        const response = await fetch(`/api/tournaments/${detail.tournament.id}/registration/submit`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            partnerUserId: selectedPartner.userId,
+            paymentMethod,
+            preferredSlots: availabilityPayload.preferred_slots,
+            availabilityScore: availabilityPayload.availability_score,
+            flexibilityLevel: String(availabilityPayload.flexibility_level),
+          }),
+        })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload?.error ?? 'No se pudo confirmar la inscripción.')
+
+        const paymentResponse = await fetch(`/api/tournaments/${detail.tournament.id}/payments/request`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ method: paymentMethod }),
+        })
+        const paymentPayload = await paymentResponse.json()
+        if (!paymentResponse.ok) {
+          throw new Error(paymentPayload?.error ?? 'La inscripción se creó, pero no pude registrar la solicitud de pago.')
+        }
+
+        setMessage('')
+        setRegistrationSuccess(true)
+        const draftKey = getDraftKey(detail.tournament.id, detail.viewer.clubPlayer?.userId)
+        if (draftKey) window.localStorage.removeItem(draftKey)
+      } catch (error) {
+        setActionFeedback({ tone: 'error', title: 'No pudimos confirmar la inscripción', message: error instanceof Error ? error.message : 'Intentá nuevamente en unos instantes.' })
+        // Recover a committed registration even when the HTTP acknowledgement/payment request failed.
+        // The existing registered view offers payment-only retry; never invent a new registration.
+        try {
+          const { data } = await supabase.auth.getSession()
+          const token = data.session?.access_token
+          if (token) {
+            const recovered = await fetch(`/api/tournaments/${detail.tournament.id}/public-detail`, { headers: { Authorization: `Bearer ${token}` } })
+            if (recovered.ok) setDetail(await recovered.json())
+          }
+        } catch { /* Keep the original form and error when recovery is also offline. */ }
+      } finally {
+        setSaving(false)
+      }
+    })
   }
 
   async function submitPaymentRequestOnly() {
-    if (!detail || !paymentMethod) return
-    setSaving(true)
-    setMessage(paymentMethod === 'CASH_ON_SITE_REQUEST' ? 'Enviando solicitud de pago...' : 'Preparando pago...')
-    try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      if (!token) throw new Error('Iniciá sesión para solicitar el pago.')
+    return write(async () => {
+      if (!detail || !paymentMethod) return
+      setSaving(true)
+      setMessage(paymentMethod === 'CASH_ON_SITE_REQUEST' ? 'Enviando solicitud de pago...' : 'Preparando pago...')
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        if (!token) throw new Error('Iniciá sesión para solicitar el pago.')
 
-      const paymentResponse = await fetch(`/api/tournaments/${detail.tournament.id}/payments/request`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ method: paymentMethod }),
-      })
-      const paymentPayload = await paymentResponse.json()
-      if (!paymentResponse.ok) throw new Error(paymentPayload?.error ?? 'No pude registrar la solicitud de pago.')
+        const paymentResponse = await fetch(`/api/tournaments/${detail.tournament.id}/payments/request`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ method: paymentMethod }),
+        })
+        const paymentPayload = await paymentResponse.json()
+        if (!paymentResponse.ok) throw new Error(paymentPayload?.error ?? 'No pude registrar la solicitud de pago.')
 
-      setMessage(
-        paymentMethod === 'CASH_ON_SITE_REQUEST'
-          ? 'Solicitud enviada. El club debe aprobar el pago para confirmar tu inscripción.'
-          : 'Solicitud de pago registrada.'
-      )
-      router.replace(`/torneos/${detail.tournament.id}`)
-    } catch (error) {
-      setActionFeedback({ tone: 'error', title: 'No pudimos registrar el pago', message: error instanceof Error ? error.message : 'Intentá nuevamente en unos instantes.' })
-    } finally {
-      setSaving(false)
-    }
+        setMessage(
+          paymentMethod === 'CASH_ON_SITE_REQUEST'
+            ? 'Solicitud enviada. El club debe aprobar el pago para confirmar tu inscripción.'
+            : 'Solicitud de pago registrada.'
+        )
+        router.replace(`/torneos/${detail.tournament.id}`)
+      } catch (error) {
+        setActionFeedback({ tone: 'error', title: 'No pudimos registrar el pago', message: error instanceof Error ? error.message : 'Intentá nuevamente en unos instantes.' })
+      } finally {
+        setSaving(false)
+      }
+    })
   }
 
   async function requestWithdrawal() {
-    if (!detail) return
-    const reason = withdrawalReason.trim()
-    if (reason.length < 8) {
-      setWithdrawalFeedback('Contanos brevemente el motivo de la baja.')
-      return
-    }
-    setWithdrawalSaving(true)
-    setWithdrawalFeedback('')
-    try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      if (!token) throw new Error('Iniciá sesión para solicitar la baja.')
-      const refundEstimate = getRefundEstimate(detail.tournament.startDate, Number(detail.tournament.pricePerPlayer ?? 0) * 2)
+    return write(async () => {
+      if (!detail) return
+      const reason = withdrawalReason.trim()
+      if (reason.length < 8) {
+        setWithdrawalFeedback('Contanos brevemente el motivo de la baja.')
+        return
+      }
+      setWithdrawalSaving(true)
+      setWithdrawalFeedback('')
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        if (!token) throw new Error('Iniciá sesión para solicitar la baja.')
+        const refundEstimate = getRefundEstimate(detail.tournament.startDate, Number(detail.tournament.pricePerPlayer ?? 0) * 2)
 
-      const response = await fetch(`/api/tournaments/${detail.tournament.id}/registration-change-requests`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: 'CANCEL_REGISTRATION',
-          reason,
-          refundEstimatePercent: refundEstimate.percent,
-          refundEstimateAmount: refundEstimate.amount,
-          refundPolicyLabel: refundEstimate.label,
-          hoursBeforeStart: refundEstimate.hoursBeforeStart,
-        }),
-      })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload?.error ?? 'No pude enviar la solicitud de baja.')
+        const response = await fetch(`/api/tournaments/${detail.tournament.id}/registration-change-requests`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'CANCEL_REGISTRATION',
+            reason,
+            refundEstimatePercent: refundEstimate.percent,
+            refundEstimateAmount: refundEstimate.amount,
+            refundPolicyLabel: refundEstimate.label,
+            hoursBeforeStart: refundEstimate.hoursBeforeStart,
+          }),
+        })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload?.error ?? 'No pude enviar la solicitud de baja.')
 
-      setMessage('Solicitud de baja enviada. El club debe revisarla.')
-      setDetail((current) => {
-        if (!current?.viewer.myTeam) return current
-        const request = payload?.request ?? {}
-        return {
-          ...current,
-          viewer: {
-            ...current.viewer,
-            myTeam: {
-              ...current.viewer.myTeam,
-              registrationChangeRequest: {
-                id: String(request.id ?? ''),
-                type: String(request.type ?? 'CANCEL_REGISTRATION'),
-                status: String(request.status ?? 'PENDING'),
-                reason,
-                refundPercent: request.refund_percent ?? null,
-                refundPolicyLabel: request.refund_policy_label ?? 'A confirmar',
-                refundMetadata: request.refund_metadata ?? null,
-                createdAt: request.created_at ?? new Date().toISOString(),
-                resolvedAt: request.resolved_at ?? null,
+        setMessage('Solicitud de baja enviada. El club debe revisarla.')
+        setDetail((current) => {
+          if (!current?.viewer.myTeam) return current
+          const request = payload?.request ?? {}
+          return {
+            ...current,
+            viewer: {
+              ...current.viewer,
+              myTeam: {
+                ...current.viewer.myTeam,
+                registrationChangeRequest: {
+                  id: String(request.id ?? ''),
+                  type: String(request.type ?? 'CANCEL_REGISTRATION'),
+                  status: String(request.status ?? 'PENDING'),
+                  reason,
+                  refundPercent: request.refund_percent ?? null,
+                  refundPolicyLabel: request.refund_policy_label ?? 'A confirmar',
+                  refundMetadata: request.refund_metadata ?? null,
+                  createdAt: request.created_at ?? new Date().toISOString(),
+                  resolvedAt: request.resolved_at ?? null,
+                },
               },
             },
-          },
-        }
-      })
-      setWithdrawalModalOpen(false)
-      setWithdrawalReason('')
-    } catch (error) {
-      setWithdrawalFeedback(error instanceof Error ? error.message : 'No pude enviar la solicitud de baja.')
-    } finally {
-      setWithdrawalSaving(false)
-    }
+          }
+        })
+        setWithdrawalModalOpen(false)
+        setWithdrawalReason('')
+      } catch (error) {
+        setWithdrawalFeedback(error instanceof Error ? error.message : 'No pude enviar la solicitud de baja.')
+      } finally {
+        setWithdrawalSaving(false)
+      }
+    })
   }
 
   async function sendClubMessage() {

@@ -1,5 +1,7 @@
 'use client'
 
+import { useWriteGuard } from '@/lib/useWriteGuard'
+
 import controls from '@/components/auth/AuthControls.module.css'
 
 import { useState } from 'react'
@@ -12,6 +14,7 @@ import PasswordField, { meetsPasswordRequirements, passwordRequirementsMessage }
 type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string } | null
 
 export default function UpdatePasswordPage() {
+  const write = useWriteGuard()
   const router = useRouter()
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
@@ -20,40 +23,40 @@ export default function UpdatePasswordPage() {
 
   async function updatePassword(e?: React.FormEvent) {
     e?.preventDefault()
+    return write(async () => {
+      if (!password) {
+        setAlert({ variant: 'warning', title: 'Falta la contraseña', message: 'Ingresá la nueva contraseña.' })
+        return
+      }
+      if (password !== password2) {
+        setAlert({ variant: 'warning', title: 'No coinciden', message: 'Las contraseñas no coinciden.' })
+        return
+      }
+      if (!meetsPasswordRequirements(password)) {
+        setAlert({ variant: 'warning', title: 'Contraseña débil', message: passwordRequirementsMessage })
+        return
+      }
 
-    if (!password) {
-      setAlert({ variant: 'warning', title: 'Falta la contraseña', message: 'Ingresá la nueva contraseña.' })
-      return
-    }
-    if (password !== password2) {
-      setAlert({ variant: 'warning', title: 'No coinciden', message: 'Las contraseñas no coinciden.' })
-      return
-    }
-    if (!meetsPasswordRequirements(password)) {
-      setAlert({ variant: 'warning', title: 'Contraseña débil', message: passwordRequirementsMessage })
-      return
-    }
+      setLoading(true)
+      setAlert({ variant: 'info', title: 'Actualizando contraseña...' })
 
-    setLoading(true)
-    setAlert({ variant: 'info', title: 'Actualizando contraseña...' })
+      let error
+      try { ({ error } = await supabase.auth.updateUser({ password })) }
+      catch {
+        setLoading(false)
+        setAlert({ variant: 'error', title: 'No se pudo actualizar', message: 'Revisá tu conexión y volvé a guardar la contraseña.' })
+        return
+      }
 
-    let error
-    try { ({ error } = await supabase.auth.updateUser({ password })) }
-    catch {
-      setLoading(false)
-      setAlert({ variant: 'error', title: 'No se pudo actualizar', message: 'Revisá tu conexión y volvé a guardar la contraseña.' })
-      return
-    }
+      if (error) {
+        setAlert({ variant: 'error', title: 'No se pudo actualizar', message: error.message })
+        setLoading(false)
+        return
+      }
 
-    if (error) {
-      setAlert({ variant: 'error', title: 'No se pudo actualizar', message: error.message })
-      setLoading(false)
-      return
-    }
-
-    setAlert({ variant: 'success', title: 'Contraseña actualizada', message: 'Ahora ingresá de nuevo.' })
-    setLoading(false)
-    setTimeout(() => router.replace('/login'), 700)
+      setAlert({ variant: 'success', title: 'Contraseña actualizada', message: 'Ya podés continuar con tu cuenta.' })
+      router.replace('/auth/post-login')
+    })
   }
 
   return (

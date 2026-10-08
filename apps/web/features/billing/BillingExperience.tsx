@@ -1,6 +1,8 @@
 'use client'
 
 import PageHeader from '@/components/navigation/PageHeader'
+import { useSession } from '@/components/session/SessionProvider'
+import { ConfirmedWriteRejection, readWriteIntent, prepareWriteIntent, type WriteIntent } from '@/lib/writeIntentRecovery'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Download, Plus, RotateCcw, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
@@ -17,7 +19,7 @@ function Badge({row}:{row:BillingRow}) {
   return <span className={`${styles.badge} ${['OVERDUE','PAST_DUE','SUSPENDED'].includes(state)?styles.warning:['PAID','POSTED','ACTIVE'].includes(state)?styles.good:''}`}>{label(state)}</span>
 }
 
-function BillingAction({action,request,onSave,onClose,saving,error}:{action:Action;request:Requester;onSave:(payload:Record<string,unknown>)=>Promise<void>;onClose:()=>void;saving:boolean;error:string}) {
+function BillingAction({action,request,onSave,onClose,saving,error,pending,onRetry}:{action:Action;request:Requester;onSave:(payload:Record<string,unknown>)=>Promise<void>;onClose:()=>void;saving:boolean;error:string;pending:boolean;onRetry:()=>void}) {
   const dialog=useRef<HTMLDialogElement>(null); const [plans,setPlans]=useState<BillingPage>({items:[],nextCursor:null}); const [clubs,setClubs]=useState<BillingPage>({items:[],nextCursor:null})
   const [invoices,setInvoices]=useState<BillingPage>({items:[],nextCursor:null}); const [lookupError,setLookupError]=useState(''); const [lookupBusy,setLookupBusy]=useState(false)
   const [club,setClub]=useState(action.row?.club_id??''); const [allocations,setAllocations]=useState<Record<string,string>>({}); const [search,setSearch]=useState('')
@@ -26,7 +28,12 @@ function BillingAction({action,request,onSave,onClose,saving,error}:{action:Acti
   const emissionPrice=row?.generated_current?row.next_plan_price??row.catalog_price??row.price:row?.catalog_price??row?.price
   const emissionInterval=row?.generated_current?row.next_plan_interval??row.catalog_interval??row.billing_interval:row?.catalog_interval??row?.billing_interval
   const titles:Record<string,string>={SAVE_PLAN:row?'Editar plan':'Crear plan',ASSIGN_PLAN:'Asignar plan',CHANGE_PLAN:'Cambiar plan',GENERATE_PERIOD:'Generar período',REGISTER_PAYMENT:'Registrar cobro confirmado',REVERSE_PAYMENT:'Revertir pago',VOID_INVOICE:'Anular comprobante',SUSPEND:'Suspender suscripción',REACTIVATE:'Reactivar suscripción',CANCEL_AT_END:row?.cancel_at_period_end?'Continuar suscripción':'Cancelar al finalizar el período'}
-  useEffect(()=>{dialog.current?.showModal()},[])
+  useEffect(()=>{
+    const previousOverflow=document.body.style.overflow
+    dialog.current?.showModal()
+    document.body.style.overflow='hidden'
+    return()=>{document.body.style.overflow=previousOverflow}
+  },[])
   useEffect(()=>{
     let alive=true
     const load=async()=>{
@@ -45,7 +52,7 @@ function BillingAction({action,request,onSave,onClose,saving,error}:{action:Acti
     finally{setLookupBusy(false)}
   }
   const submit=(event:FormEvent<HTMLFormElement>)=>{
-    event.preventDefault();const data=new FormData(event.currentTarget)
+    event.preventDefault();if(pending){onRetry();return}const data=new FormData(event.currentTarget)
     const payload:Record<string,unknown>={...(row?{id:row.id,club_id:row.club_id,revision:row.revision}:{})}
     if(planForm)Object.assign(payload,{code:data.get('code'),name:data.get('name'),description:data.get('description'),billing_interval:data.get('interval'),price:Number(data.get('price')),active:data.get('active')==='on',
       config:{...row?.config,payment_instructions:data.get('instructions'),features:String(data.get('features')??'').split('\n').map(s=>s.trim()).filter(Boolean)}})
@@ -62,7 +69,7 @@ function BillingAction({action,request,onSave,onClose,saving,error}:{action:Acti
   return <dialog ref={dialog} aria-label={titles[op]} className={styles.dialog} onCancel={event=>{event.preventDefault();if(!saving)onClose()}}>
     <form onSubmit={submit}>
       <header className={styles.dialogHead}><div><small>SELPA Billing</small><h2>{titles[op]}</h2></div><button type="button" className={styles.icon} aria-label="Cerrar" onClick={onClose} disabled={saving}><X size={19}/></button></header>
-      <div className={styles.formBody}>
+      <fieldset disabled={saving||pending} className={styles.formBody} style={{border:0,margin:0,minWidth:0}}>
         {row && !planForm?<p className={styles.context}>{row.club_name}{op==='GENERATE_PERIOD'?'':` · ${row.invoice_number??row.plan_name??billingMoney(row.amount)}`}</p>:null}
         {planForm?<>
           <label>Código<input name="code" required maxLength={48} pattern="[A-Z0-9_-]+" defaultValue={row?.code} readOnly={Boolean(row)}/></label>
@@ -95,24 +102,37 @@ function BillingAction({action,request,onSave,onClose,saving,error}:{action:Acti
         {['VOID_INVOICE','REVERSE_PAYMENT'].includes(op)?<><strong>{op==='VOID_INVOICE'?'Cargo a compensar':'Cobro a revertir'}: {billingMoney(op==='VOID_INVOICE'?row?.total:row?.amount)}</strong><p className={styles.hint}>{op==='VOID_INVOICE'?'Se compensará el cargo sin borrar el comprobante. Primero deben revertirse los pagos aplicados.':'Se compensará el cobro y se reabrirán los saldos aplicados. El pago original se conserva.'}</p><label>Motivo<input name="reason" required minLength={3} maxLength={1000}/></label></>:null}
         {['SUSPEND','REACTIVATE','CANCEL_AT_END'].includes(op)?<p className={styles.hint}>{op==='SUSPEND'?'Suspende la facturación de nuevos períodos. No altera deudas ni bloquea automáticamente la actividad deportiva.':op==='REACTIVATE'?'Reactiva la suscripción. Si existe deuda vencida seguirá mostrando ese estado.':row?.cancel_at_period_end?'Quita la cancelación programada. La próxima generación podrá emitir el siguiente período.':'Conserva el período actual. La siguiente generación cerrará la suscripción sin emitir un cargo nuevo.'}</p>:null}
         {lookupError?<p role="alert" className={styles.error}>{humanizeUiError(lookupError, 'No pudimos cargar las opciones. Reintentá.')}</p>:null}{error?<p role="alert" className={styles.error}>{humanizeUiError(error, 'No pudimos guardar la operación. Reintentá.')}</p>:null}
-      </div>
-      <footer className={styles.dialogFoot}><button type="button" className={styles.secondary} disabled={saving} onClick={onClose}>Cancelar</button><button className={styles.primary} disabled={saving||lookupBusy}>{saving?'Guardando…':planForm?'Guardar plan':'Confirmar operación'}</button></footer>
+      </fieldset>
+      <footer className={styles.dialogFoot}><button type="button" className={styles.secondary} disabled={saving} onClick={onClose}>Cerrar</button><button className={styles.primary} disabled={saving||lookupBusy}>{saving?'Guardando…':pending?'Reintentar operación':planForm?'Guardar plan':'Confirmar operación'}</button></footer>
     </form>
   </dialog>
 }
 
 export default function BillingExperience({platform=false,clubId}:{platform?:boolean;clubId?:string}) {
+  const { user } = useSession()
+  const intentScope = platform && user?.id ? `selpa.write-intent.billing:${user.id}` : null
+  const [pendingIntent,setPendingIntent]=useState<WriteIntent|null>(null)
   const [tab,setTab]=useState(platform?'overview':'plan'); const [overview,setOverview]=useState<BillingOverview|null>(null)
   const [page,setPage]=useState<BillingPage>({items:[],nextCursor:null}); const [loading,setLoading]=useState(true); const [error,setError]=useState('')
   const [action,setAction]=useState<Action|null>(null); const [saving,setSaving]=useState(false); const [actionError,setActionError]=useState(''); const [notice,setNotice]=useState('')
   const [reportKind,setReportKind]=useState('balances'); const [focusClub,setFocusClub]=useState<string|undefined>(); const [moreBusy,setMoreBusy]=useState(false)
   const [from,setFrom]=useState(()=>`${today().slice(0,7)}-01`); const [to,setTo]=useState(today)
+  useEffect(()=>{
+    let alive=true
+    queueMicrotask(()=>{
+      if(!alive)return
+      if(!intentScope){setPendingIntent(null);return}
+      try{setPendingIntent(readWriteIntent(sessionStorage,intentScope))}
+      catch(cause){setError(humanizeUiError(cause instanceof Error?cause.message:null))}
+    })
+    return()=>{alive=false}
+  },[intentScope])
   const activeClub=platform?focusClub:clubId; const requestId=useRef(0); const submitLock=useRef(false)
   const api=platform?'/api/platform/billing':'/api/clubs/billing'
   const http=useCallback(async(url:string,init?:RequestInit)=>{
     const {data}=await supabase.auth.getSession();if(!data.session?.access_token)throw new Error('Tu sesión venció. Volvé a ingresar.')
     const res=await fetch(url,{...init,cache:'no-store',headers:{Authorization:`Bearer ${data.session.access_token}`,...init?.headers}})
-    const json=await res.json();if(!res.ok)throw new Error(json.error??'No pudimos cargar Facturación.');return json
+    const json=await res.json();if(!res.ok)throw new (json.code?.startsWith('BILLING_')&&!['BILLING_IDEMPOTENCY_CONFLICT','BILLING_UNCONFIRMED'].includes(json.code)?ConfirmedWriteRejection:Error)(json.error??'No pudimos cargar Facturación.');return json
   },[])
   const request=useCallback< Requester >(async(kind,club,cursor,search)=>{
     const q=new URLSearchParams({kind,from,to});if(club)q.set('clubId',club);if(cursor){q.set('at',cursor.at);q.set('id',cursor.id)}if(search)q.set('search',search)
@@ -130,12 +150,23 @@ export default function BillingExperience({platform=false,clubId}:{platform?:boo
     finally{if(id===requestId.current)setLoading(false)}
   },[activeClub,api,clubId,from,http,listKind,platform,request,tab,to])
   useEffect(()=>{let alive=true;void Promise.resolve().then(()=>{if(alive)void refresh()});return()=>{alive=false}},[refresh])
-  const open=(operation:string,row?:BillingRow)=>{setActionError('');setAction({operation,row,key:crypto.randomUUID()})}
+  const open=(operation:string,row?:BillingRow)=>{if(pendingIntent){setError('Primero confirmá la operación pendiente.');return}setActionError('');setAction({operation,row,key:crypto.randomUUID()})}
   const save=async(payload:Record<string,unknown>)=>{
-    if(!action||submitLock.current)return
+    if(!action||submitLock.current||!intentScope)return
+    try{
+      const intent=prepareWriteIntent(sessionStorage,intentScope,{operation:action.operation,key:action.key,payload},action.key)
+      setPendingIntent(intent)
+      await dispatchIntent(intent)
+    }catch(cause){setActionError(humanizeUiError(cause instanceof Error?cause.message:null))}
+  }
+  const dispatchIntent=async(intent:WriteIntent)=>{
+    if(!platform||!intentScope||intent.scope!==intentScope||submitLock.current)return
     submitLock.current=true;setSaving(true);setActionError('')
-    try{await http(api,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation:action.operation,key:action.key,payload})});setAction(null);setNotice('Operación registrada.');await refresh()}
-    catch(cause){setActionError(cause instanceof Error?cause.message:'No pudimos guardar.')}
+    try{await http(api,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(intent.payload)});sessionStorage.removeItem(intentScope);setPendingIntent(null);setAction(null);setNotice('Operación registrada.');await refresh()}
+    catch(cause){
+      if(cause instanceof ConfirmedWriteRejection){sessionStorage.removeItem(intentScope);setPendingIntent(null)}
+      const message=humanizeUiError(cause instanceof Error?cause.message:null,'No pudimos confirmar. Reintentá el mismo intento.');setActionError(message);setError(message)
+    }
     finally{submitLock.current=false;setSaving(false)}
   }
   const loadMore=async()=>{
@@ -165,6 +196,7 @@ export default function BillingExperience({platform=false,clubId}:{platform?:boo
       actions={<button className={styles.icon} onClick={()=>void refresh()} disabled={loading} aria-label="Actualizar facturación"><RotateCcw size={18}/></button>} />
     <nav className={styles.tabs} aria-label="Secciones de facturación">{tabs.map(t=><button key={t} className={tab===t?styles.active:''} onClick={()=>{setTab(t);setNotice('')}}>{tabLabels[t]}</button>)}</nav>
     {platform&&['overview','reports'].includes(tab)?<div className={styles.dateFilters}><label>Cobrado desde<input type="date" value={from} max={to} onChange={e=>{if(e.target.value)setFrom(e.target.value)}}/></label><label>Hasta<input type="date" value={to} min={from} onChange={e=>{if(e.target.value)setTo(e.target.value)}}/></label></div>:null}
+    {pendingIntent&&platform?<div role="status" className={styles.notice}>Operación pendiente de confirmar. El reintento conserva los datos originales. <button type="button" className={styles.secondary} disabled={saving} onClick={()=>void dispatchIntent(pendingIntent)}>Reintentar operación</button></div>:null}
     {notice?<p role="status" className={styles.notice}>{notice}</p>:null}
     {error?<p className={styles.error} role="alert">{humanizeUiError(error, 'No pudimos cargar Facturación. Reintentá.')}<button className={styles.secondary} onClick={()=>void refresh()}>Reintentar</button></p>:null}
     {loading?<div className={styles.loading} role="status"><span/>Cargando facturación…</div>:!clubId&&!platform?<p className={styles.empty}>Seleccioná un club para ver su facturación.</p>:overview?<>
@@ -205,6 +237,6 @@ export default function BillingExperience({platform=false,clubId}:{platform?:boo
         {!page.items.length?<p className={styles.empty}>No hay registros en esta vista.</p>:null}{page.nextCursor?<button className={styles.secondary} onClick={()=>void loadMore()} disabled={moreBusy}>{moreBusy?'Cargando…':'Ver más'}</button>:null}
       </>:null}
     </>:null}
-    {action?<BillingAction key={action.key} action={action} request={request} onSave={save} onClose={()=>{if(!saving)setAction(null)}} saving={saving} error={actionError}/>:null}
+    {action?<BillingAction key={action.key} action={action} request={request} onSave={save} onClose={()=>{if(!saving)setAction(null)}} saving={saving} error={actionError} pending={Boolean(pendingIntent)} onRetry={()=>{if(pendingIntent)void dispatchIntent(pendingIntent)}}/>:null}
   </main>
 }

@@ -8,6 +8,7 @@ import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
 import { getTournamentRegistrationIneligibility } from '@/lib/tournamentRegistrationEligibility'
 import { isApprovedMembership, isClubAdminRole } from '@/lib/clubMembershipRules'
+import { afterWriteCommit, writeErrorResponse } from '@/lib/writeFlowServer'
 
 type RegistrationSubmitContext = {
   params: Promise<{ tournamentId: string }>
@@ -60,7 +61,24 @@ async function getRegisteredTeamsCount(tournamentId: string, clubId: string) {
   return activeTeams.size
 }
 
+async function committedRegistration(tournamentId: string, clubId: string, userId: string, partnerUserId: string) {
+  const teams = await supabaseAdmin.from('tournament_teams')
+    .select('id,player1_user_id,player2_user_id').eq('club_id', clubId).eq('tournament_id', tournamentId)
+    .or(`player1_user_id.eq.${userId},player2_user_id.eq.${userId}`)
+  if (teams.error) throw teams.error
+  const team = (teams.data ?? []).find(row =>
+    (row.player1_user_id === userId && row.player2_user_id === partnerUserId)
+    || (row.player2_user_id === userId && row.player1_user_id === partnerUserId))
+  if (!team) return null
+  const registration = await supabaseAdmin.from('tournament_registrations')
+    .select('id,status,payment_status').eq('club_id', clubId).eq('tournament_id', tournamentId)
+    .eq('team_id', team.id).in('status', ['PENDING', 'CONFIRMED']).maybeSingle()
+  if (registration.error) throw registration.error
+  return registration.data ? { team_id: team.id, registration_id: registration.data.id } : null
+}
+
 export async function POST(req: NextRequest, context: RegistrationSubmitContext) {
+  try {
   const { tournamentId } = await context.params
   const token = getBearerToken(req)
   const user = await getTokenUser(req)
@@ -75,6 +93,9 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
   const availabilityScore = normalizeAvailabilityScore(body?.availabilityScore ?? body?.availability_score, preferredSlots.length)
   const flexibilityLevel = String(body?.flexibilityLevel ?? body?.flexibility_level ?? preferredSlots.length).trim() || null
   if (!partnerUserId) return NextResponse.json({ error: 'Seleccioná un compañero.' }, { status: 400 })
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(partnerUserId)) {
+    return NextResponse.json({ error: 'Seleccioná un compañero válido.' }, { status: 400 })
+  }
   const partnerDenial = await playerAccountDenial(partnerUserId)
   if (partnerDenial) return partnerDenial
   if (partnerUserId === user.id) return NextResponse.json({ error: 'No podés inscribirte con vos mismo.' }, { status: 400 })
@@ -176,7 +197,9 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
     if (ineligibility) return NextResponse.json({ error: `${label}: ${ineligibility}` }, { status: 409 })
   }
 
-  if (tournament.maxPairs) {
+  let row = await committedRegistration(tournament.id, tournament.club_id, user.id, partnerUserId)
+  let replayed = Boolean(row)
+  if (!row && tournament.maxPairs) {
     const registeredTeamsCount = await getRegisteredTeamsCount(tournament.id, tournament.club_id)
     if (registeredTeamsCount >= tournament.maxPairs) {
       return NextResponse.json({ error: 'No hay cupos disponibles.' }, { status: 409 })
@@ -192,17 +215,20 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
     global: { headers: { Authorization: `Bearer ${token}` } },
   })
 
-  const { data, error } = await userSupabase.rpc('register_team_for_tournament', {
-    p_tournament_id: tournament.id,
-    p_club_id: tournament.club_id,
-    p_partner_user_id: partnerUserId,
-  })
-
-  if (error) {
-    const mapped = mapTournamentError(error, 'No pudimos registrar la pareja. Intentá nuevamente.')
-    return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status === 500 ? 409 : mapped.status })
+  if (!row) {
+    const { data, error } = await userSupabase.rpc('register_team_for_tournament', {
+      p_tournament_id: tournament.id, p_club_id: tournament.club_id, p_partner_user_id: partnerUserId,
+    })
+    if (error) {
+      // A simultaneous request or a lost committed response may already have created this exact pair.
+      row = await committedRegistration(tournament.id, tournament.club_id, user.id, partnerUserId)
+      replayed = Boolean(row)
+      if (!row) {
+        const mapped = mapTournamentError(error, 'No pudimos registrar la pareja. Intentá nuevamente.')
+        return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status === 500 ? 409 : mapped.status })
+      }
+    } else { row = Array.isArray(data) ? data[0] : data }
   }
-  const row = Array.isArray(data) ? data[0] : data
   const registrationId = row?.registration_id ?? null
 
   if (registrationId && preferredSlots.length > 0) {
@@ -221,11 +247,11 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
     }
 
     if (availabilityError && process.env.NODE_ENV !== 'production') {
-      console.warn('[registration-submit] availability columns unavailable; continuing without persisted availability', availabilityError.message)
+      console.warn('[registration-submit]', { code: 'AVAILABILITY_COLUMNS_UNAVAILABLE' })
     }
   }
 
-  await notifyClubAdmins(tournament.club_id, {
+  if (!replayed) await afterWriteCommit('registration_notification', () => notifyClubAdmins(tournament.club_id, {
     tournamentId: tournament.id,
     actorId: user.id,
     type: 'registration_created',
@@ -239,7 +265,7 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
       team_id: row?.team_id ?? null,
       payment_method: paymentMethod,
     },
-  })
+  }))
 
   return NextResponse.json({
     ok: true,
@@ -247,5 +273,7 @@ export async function POST(req: NextRequest, context: RegistrationSubmitContext)
     registrationId,
     paymentStatus: 'PENDING',
     paymentMethod,
+    replayed,
   })
+  } catch { return writeErrorResponse('registration-submit', { code: 'UNEXPECTED' }) }
 }

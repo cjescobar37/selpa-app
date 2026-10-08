@@ -9,6 +9,7 @@ import PaymentProviderPanel from '@/features/finance/PaymentProviderPanel'
 import FinanceReports from '@/features/finance/FinanceReports'
 import FinanceReconciliations from '@/features/finance/FinanceReconciliations'
 import { movementFilters } from '@/lib/clubFinanceF1F'
+import { ConfirmedWriteRejection, readWriteIntent, prepareWriteIntent, type WriteIntent } from '@/lib/writeIntentRecovery'
 import { humanizeUiError } from '@/lib/productPresentation'
 import {
   financeMethodLabels, financeMovementMethod, financeStatusLabels, formatFinanceMoney, normalizeFinanceOverview, validFinanceAmount,
@@ -55,7 +56,7 @@ const emptyObligations: FinancePage<FinanceObligation> = { items: [], nextCursor
 const emptyMovements: FinancePage<FinanceMovement> = { items: [], nextCursor: null }
 
 export default function ClubFinancePage() {
-  const { activeClub } = useSession()
+  const { activeClub, user } = useSession()
   const clubId = activeClub?.id ?? null
   const [tab, setTab] = useState<Tab>('summary')
   const [filter, setFilter] = useState<OperationalFilter>('PENDING')
@@ -81,10 +82,38 @@ export default function ClubFinancePage() {
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
   const [reason, setReason] = useState('')
+  const [pendingIntent, setPendingIntent] = useState<WriteIntent | null>(null)
+  const intentScope = user?.id && clubId ? `selpa.write-intent.finance:${user.id}:${clubId}` : null
   const submitting = useRef(false)
+  const sheetRef = useRef<HTMLElement>(null)
   const refreshId = useRef(0)
   const previousClubId = useRef(clubId)
   const currentData = Boolean(clubId) && loadedClubId === clubId
+  const sheetKey = sheet?.key
+  useEffect(() => {
+    if (!sheetKey || !currentData) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const frame = requestAnimationFrame(() => sheetRef.current?.querySelector<HTMLElement>('input:not(:disabled),textarea:not(:disabled),button:not(:disabled)')?.focus())
+    const trap = (event: KeyboardEvent) => {
+      const panel = sheetRef.current
+      if (!panel) return
+      if (event.key === 'Escape') { event.preventDefault(); if (!submitting.current) setSheet(null); return }
+      if (event.key !== 'Tab') return
+      const controls = [...panel.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')].filter(node => node.getClientRects().length > 0)
+      const first = controls[0], last = controls.at(-1)
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }
+    document.addEventListener('keydown', trap)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('keydown', trap)
+      document.body.style.overflow = previousOverflow
+      if (previousFocus?.isConnected) previousFocus.focus()
+    }
+  }, [currentData, sheetKey])
   // Depend on the effective query, not the selected presentation tab.
   const readFilter = tab === 'summary' ? 'PENDING' : filter
   const readSearch = tab === 'summary' ? '' : search
@@ -104,7 +133,8 @@ export default function ClubFinancePage() {
       headers: { Authorization: `Bearer ${accessToken}`, ...init?.headers },
     })
     const json = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(json?.code === 'PGRST202'
+    const rejected = ['CLUB_FINANCE_OVER_ALLOCATION', 'CLUB_FINANCE_OBLIGATION_NOT_PAYABLE', 'CLUB_FINANCE_PAYMENT_ALREADY_REVERSED', 'CLUB_FINANCE_REASON_REQUIRED'].includes(json?.code)
+    if (!response.ok) throw new (rejected ? ConfirmedWriteRejection : Error)(json?.code === 'PGRST202'
       ? 'No pudimos cargar las finanzas. Reintentá en unos segundos.'
       : humanizeUiError(json?.error, 'No pudimos cargar las finanzas. Reintentá en unos segundos.'))
     return json
@@ -176,7 +206,19 @@ export default function ClubFinancePage() {
     }
   }
 
+  useEffect(() => {
+    let alive=true
+    queueMicrotask(()=>{
+      if(!alive)return
+      if (!intentScope) { setPendingIntent(null); return }
+      try { setPendingIntent(readWriteIntent(sessionStorage, intentScope)) }
+      catch (cause) { setError(humanizeUiError(cause instanceof Error ? cause.message : null)) }
+    })
+    return()=>{alive=false}
+  }, [intentScope])
+
   function openPayment(obligation: FinanceObligation) {
+    if (pendingIntent) { setError('Primero confirmá el intento pendiente con «Reintentar operación».'); return }
     setAmount(String(obligation.balance))
     setMethod('CASH')
     setPaidAt(localDateTime(new Date()))
@@ -187,13 +229,15 @@ export default function ClubFinancePage() {
   }
 
   function openReverse(movement: FinanceMovement) {
+    if (pendingIntent) { setError('Primero confirmá el intento pendiente con «Reintentar operación».'); return }
     setReason('')
     setError('')
     setSheet({ kind: 'reverse', movement, key: crypto.randomUUID() })
   }
 
   function reviseAttempt() {
-    setSheet((current) => current ? { ...current, key: crypto.randomUUID() } : null)
+    // Once dispatched, its key/payload cannot be replaced by edits or closing the sheet.
+    if (!submitting.current && !pendingIntent) setSheet((current) => current ? { ...current, key: crypto.randomUUID() } : null)
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -207,9 +251,7 @@ export default function ClubFinancePage() {
       setError('Ingresá un motivo de al menos tres caracteres.')
       return
     }
-    submitting.current = true
-    setSaving(true)
-    setError('')
+    if (!intentScope) return
     try {
       const payload = sheet.kind === 'payment'
         ? {
@@ -222,15 +264,37 @@ export default function ClubFinancePage() {
             clubId, action: 'payment.reverse', id: sheet.movement.id,
             reason: reason.trim(), idempotencyKey: sheet.key,
           }
+      const intent = prepareWriteIntent(sessionStorage, intentScope, payload, sheet.key)
+      setPendingIntent(intent)
+      await dispatchIntent(intent)
+    } catch (cause) {
+      setError(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos conservar el intento.'))
+    }
+  }
+
+  async function dispatchIntent(intent: WriteIntent) {
+    if (!intentScope || intent.scope!==intentScope || intent.payload.clubId!==clubId || submitting.current || !canManage) return
+    submitting.current = true
+    setSaving(true)
+    setError('')
+    try {
       await request('/api/clubs/finance/core', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(intent.payload),
       })
+      sessionStorage.removeItem(intentScope)
+      setPendingIntent(null)
       setSheet(null)
-      setFeedback(sheet.kind === 'payment' ? 'Cobro registrado' : 'Cobro revertido')
+      setFeedback(intent.payload.action === 'payment.register' ? 'Cobro registrado' : 'Cobro revertido')
       await refresh()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No pudimos guardar el cambio.')
+      if (cause instanceof ConfirmedWriteRejection) {
+        sessionStorage.removeItem(intentScope)
+        setPendingIntent(null)
+        // A confirmed rollback may be edited; an unknown outcome must retain its command.
+        setSheet(current => current ? { ...current, key: crypto.randomUUID() } : null)
+      }
+      setError(humanizeUiError(cause instanceof Error ? cause.message : null, 'No pudimos confirmar. Reintentá la operación pendiente.'))
     } finally {
       submitting.current = false
       setSaving(false)
@@ -280,6 +344,10 @@ export default function ClubFinancePage() {
 
     {!clubId ? <p className={styles.caption}>Seleccioná un club para consultar sus finanzas.</p> : null}
 
+    {pendingIntent && canManage ? <div role="status" className={styles.error}>
+      <p>Hay un cobro o reversión pendiente de confirmar. El reintento conserva los datos originales y no duplica el movimiento.</p>
+      <button type="button" className={styles.cancel} disabled={saving} onClick={() => void dispatchIntent(pendingIntent)}>Reintentar operación</button>
+    </div> : null}
     {error ? <div role="alert" className={styles.error}><p>{humanizeUiError(error, 'No pudimos completar la operación financiera. Reintentá.')}</p><button type="button" className={styles.cancel} disabled={loading} onClick={() => void refresh()}>Reintentar</button></div> : null}
     {feedback ? <p role="status" className={styles.success}>{feedback}</p> : null}
 
@@ -342,7 +410,7 @@ export default function ClubFinancePage() {
     </section> : null}
 
     {sheet && currentData ? <div className={styles.backdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setSheet(null) }}>
-      <section className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="finance-sheet-title">
+      <section ref={sheetRef} className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="finance-sheet-title">
         <header><div><span>{sheet.kind === 'payment' ? 'COBRO' : 'CORRECCIÓN'}</span><h2 id="finance-sheet-title">{sheet.kind === 'payment' ? 'Registrar cobro' : 'Revertir cobro'}</h2></div><button type="button" aria-label="Cerrar" disabled={saving} onClick={() => setSheet(null)}><X size={20} /></button></header>
         <p className={styles.sheetContext}>{sheet.kind === 'payment' ? sheet.obligation.debtor_name : sheet.movement.debtor_name}</p>
         {sheet.kind === 'payment' ? <p className={styles.sheetBalance}>Saldo pendiente <strong>{formatFinanceMoney(sheet.obligation.balance)}</strong></p>
@@ -350,14 +418,16 @@ export default function ClubFinancePage() {
         {sheet.kind === 'reverse' && sheet.movement.provider === 'MERCADO_PAGO' ? <p className={styles.sheetWarning}>Revertir este cobro corrige el registro en SELPA. No devuelve dinero en Mercado Pago; el pago requerirá revisión.</p> : null}
         <form onSubmit={(event) => void submit(event)} className={styles.form}>
           {sheet.kind === 'payment' ? <>
-            <label>Importe<input required inputMode="decimal" type="number" min="0.01" step="0.01" max={sheet.obligation.balance} value={amount} onChange={(event) => { setAmount(event.target.value); reviseAttempt() }} /></label>
-            <label>Método<select value={method} onChange={(event) => { setMethod(event.target.value as FinanceMethod); reviseAttempt() }}>{Object.entries(financeMethodLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-            <label>Fecha y hora<input required type="datetime-local" value={paidAt} onChange={(event) => { setPaidAt(event.target.value); reviseAttempt() }} /></label>
-            <label>Referencia <span>opcional</span><input maxLength={180} value={reference} onChange={(event) => { setReference(event.target.value); reviseAttempt() }} /></label>
-            <label>Nota <span>opcional</span><textarea maxLength={2000} rows={2} value={notes} onChange={(event) => { setNotes(event.target.value); reviseAttempt() }} /></label>
-          </> : <label>Motivo de la reversión<textarea required minLength={3} maxLength={500} rows={3} value={reason} onChange={(event) => { setReason(event.target.value); reviseAttempt() }} placeholder="Ej.: cobro registrado por error" /></label>}
-          {error ? <p role="alert" className={styles.error}>{error}</p> : null}
-          <div className={styles.sheetActions}><button type="button" className={styles.cancel} disabled={saving} onClick={() => setSheet(null)}>Cancelar</button><button type="submit" className={styles.submit} disabled={saving}>{saving ? 'Guardando…' : sheet.kind === 'payment' ? 'Confirmar cobro' : <><RotateCcw size={16} /> Confirmar reversión</>}</button></div>
+            <label>Importe<input disabled={saving || Boolean(pendingIntent)} required inputMode="decimal" type="number" min="0.01" step="0.01" max={sheet.obligation.balance} value={amount} onChange={(event) => { setAmount(event.target.value); reviseAttempt() }} /></label>
+            <label>Método<select disabled={saving || Boolean(pendingIntent)} value={method} onChange={(event) => { setMethod(event.target.value as FinanceMethod); reviseAttempt() }}>{Object.entries(financeMethodLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+            <label>Fecha y hora<input disabled={saving || Boolean(pendingIntent)} required type="datetime-local" value={paidAt} onChange={(event) => { setPaidAt(event.target.value); reviseAttempt() }} /></label>
+            <label>Referencia <span>opcional</span><input disabled={saving || Boolean(pendingIntent)} maxLength={180} value={reference} onChange={(event) => { setReference(event.target.value); reviseAttempt() }} /></label>
+            <label>Nota <span>opcional</span><textarea disabled={saving || Boolean(pendingIntent)} maxLength={2000} rows={2} value={notes} onChange={(event) => { setNotes(event.target.value); reviseAttempt() }} /></label>
+          </> : <label>Motivo de la reversión<textarea disabled={saving || Boolean(pendingIntent)} required minLength={3} maxLength={500} rows={3} value={reason} onChange={(event) => { setReason(event.target.value); reviseAttempt() }} placeholder="Ej.: cobro registrado por error" /></label>}
+          {error ? <p role="alert" className={styles.error}>{humanizeUiError(error)}</p> : null}
+          <div className={styles.sheetActions}><button type="button" className={styles.cancel} disabled={saving} onClick={() => setSheet(null)}>Cerrar</button>{pendingIntent
+            ? <button type="button" className={styles.submit} disabled={saving} onClick={() => void dispatchIntent(pendingIntent)}>{saving ? 'Confirmando…' : 'Reintentar operación'}</button>
+            : <button type="submit" className={styles.submit} disabled={saving}>{saving ? 'Guardando…' : sheet.kind === 'payment' ? 'Confirmar cobro' : <><RotateCcw size={16} /> Confirmar reversión</>}</button>}</div>
         </form>
       </section>
     </div> : null}

@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { insertMessageOnce, afterMessageCommit } from '@/lib/messageWriteServer'
+import { writeErrorResponse } from '@/lib/writeFlowServer'
 import { NextRequest, NextResponse } from 'next/server'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
 import { createOperationalNotification, getClubAdminUserIds, notifyClubAdmins } from '@/lib/operationalNotifications'
@@ -117,11 +120,14 @@ export async function GET(req: NextRequest, context: Context) {
 }
 
 export async function POST(req: NextRequest, context: Context) {
+  try {
   const user = await getTokenUser(req)
   if (!user) return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
 
   const { threadId } = await context.params
   const body = await req.json().catch(() => ({}))
+  const messageId = String(body?.messageId ?? randomUUID())
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageId)) return NextResponse.json({error:'Intento de mensaje inválido.',kind:'VALIDATION'},{status:400})
   const message = String(body?.message ?? body?.body ?? '').trim()
   if (message.length < 4) return NextResponse.json({ error: 'Escribí un mensaje.' }, { status: 400 })
 
@@ -137,9 +143,8 @@ export async function POST(req: NextRequest, context: Context) {
   const recipientUserId = userIsAdmin ? thread.player_user_id : adminIds[0]
   const now = new Date().toISOString()
 
-  const { data: inserted, error: insertError } = await supabaseAdmin
-    .from('messages')
-    .insert({
+  const inserted = await insertMessageOnce({
+      id: messageId,
       thread_id: threadId,
       sender_user_id: user.id,
       recipient_user_id: recipientUserId,
@@ -151,11 +156,9 @@ export async function POST(req: NextRequest, context: Context) {
         tournament_id: thread.tournament_id,
       },
     })
-    .select('id')
-    .single()
+  if (inserted.replayed) return NextResponse.json({ok:true,threadId:threadId,messageId:inserted.id})
 
-  if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
-
+  await afterMessageCommit(async () => {
   await supabaseAdmin.from('message_threads').update({ updated_at: now }).eq('id', threadId)
 
   if (userIsAdmin) {
@@ -182,5 +185,10 @@ export async function POST(req: NextRequest, context: Context) {
     })
   }
 
+  })
+
   return NextResponse.json({ ok: true, messageId: inserted.id })
+  } catch (error: unknown) {
+    return writeErrorResponse('reply_message', error as {code?:string;message?:string},'No pudimos confirmar el envío. Conservá el intento y reintentá.')
+  }
 }
