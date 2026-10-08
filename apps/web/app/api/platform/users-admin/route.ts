@@ -8,7 +8,31 @@ import {
 import { isApprovedMembership } from '@/lib/clubMembershipRules'
 import { logPlatformAction } from '@/lib/platformAudit'
 import { createClient } from '@supabase/supabase-js'
-import { writeErrorResponse } from '@/lib/writeFlowServer'
+import { serverReadErrorResponse, writeErrorResponse } from '@/lib/writeFlowServer'
+
+type ErrorLike = { message?: string | null }
+type PlatformClubRow = { id: string; name: string; is_active: boolean | null; city: string | null }
+type PlatformProfileRow = {
+  user_id: string
+  display_name: string | null
+  first_name: string | null
+  last_name: string | null
+  email: string | null
+  avatar_url: string | null
+  status?: string | null
+  suspended_at?: string | null
+  suspended_by?: string | null
+}
+type PlatformMembershipRow = {
+  id: string
+  club_id: string
+  user_id: string
+  role: string
+  status: string
+  created_at: string
+  approved_at: string | null
+  rejection_reason: string | null
+}
 
 async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
@@ -29,12 +53,12 @@ async function assertPlatformAdmin(req: NextRequest) {
     .eq('user_id', user.id)
     .maybeSingle()
 
-  if (paErr) return { error: NextResponse.json({ error: paErr.message }, { status: 500 }), user: null }
+  if (paErr) return { error: serverReadErrorResponse('platform-users.authorize', paErr, 'No pudimos verificar los permisos. Reintentá.'), user: null }
   if (!pa?.user_id) return { error: NextResponse.json({ error: 'No autorizado.' }, { status: 403 }), user: null }
   return { error: null, user }
 }
 
-function isMissingProfileStatus(error: any) {
+function isMissingProfileStatus(error: ErrorLike | null | undefined) {
   const message = String(error?.message ?? '').toLowerCase()
   return message.includes('status') && (message.includes('profiles') || message.includes('schema cache') || message.includes('column'))
 }
@@ -53,8 +77,8 @@ export async function GET(req: NextRequest) {
       .select('id,name,is_active,city'),
   ])
 
-  if (membershipsRes.error) return NextResponse.json({ error: membershipsRes.error.message }, { status: 500 })
-  if (clubsRes.error) return NextResponse.json({ error: clubsRes.error.message }, { status: 500 })
+  if (membershipsRes.error) return serverReadErrorResponse('platform-users.memberships', membershipsRes.error)
+  if (clubsRes.error) return serverReadErrorResponse('platform-users.clubs', clubsRes.error)
 
   let profileStatusAvailable = true
   let profilesRes = await supabaseAdmin
@@ -68,12 +92,15 @@ export async function GET(req: NextRequest) {
       .select('user_id,display_name,first_name,last_name,email,avatar_url')
   }
 
-  if (profilesRes.error) return NextResponse.json({ error: profilesRes.error.message }, { status: 500 })
+  if (profilesRes.error) return serverReadErrorResponse('platform-users.profiles', profilesRes.error)
 
-  const clubsMap = new Map((clubsRes.data ?? []).map((club: any) => [club.id, club]))
-  const profilesMap = new Map((profilesRes.data ?? []).map((profile: any) => [profile.user_id, profile]))
+  const clubRows = (clubsRes.data ?? []) as PlatformClubRow[]
+  const profileRows = (profilesRes.data ?? []) as PlatformProfileRow[]
+  const membershipRows = (membershipsRes.data ?? []) as PlatformMembershipRow[]
+  const clubsMap = new Map(clubRows.map((club) => [club.id, club]))
+  const profilesMap = new Map(profileRows.map((profile) => [profile.user_id, profile]))
 
-  const rows = (membershipsRes.data ?? []).map((membership: any) => {
+  const rows = membershipRows.map((membership) => {
     const club = clubsMap.get(membership.club_id)
     const profile = profilesMap.get(membership.user_id)
     const displayName = profile?.display_name || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() || profile?.email || 'Usuario sin nombre'
@@ -92,13 +119,13 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  const suspendedUsers = new Set(rows.filter((row: any) => row.user_status === 'SUSPENDED').map((row: any) => row.user_id))
+  const suspendedUsers = new Set(rows.filter((row) => row.user_status === 'SUSPENDED').map((row) => row.user_id))
 
   const summary = {
     total: rows.length,
-    approved: rows.filter((row: any) => isApprovedMembership(row)).length,
-    pending: rows.filter((row: any) => row.status === 'PENDING').length,
-    rejected: rows.filter((row: any) => row.status === 'REJECTED').length,
+    approved: rows.filter((row) => isApprovedMembership(row)).length,
+    pending: rows.filter((row) => row.status === 'PENDING').length,
+    rejected: rows.filter((row) => row.status === 'REJECTED').length,
     suspended: suspendedUsers.size,
   }
 
@@ -138,7 +165,7 @@ export async function POST(req: NextRequest) {
           { status: 412 },
         )
       }
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (error) return writeErrorResponse('platform-users.status', error, 'No pudimos actualizar el estado del usuario.')
       if (!data?.user_id) return NextResponse.json({ error: 'Perfil de usuario no encontrado.' }, { status: 404 })
 
       await logPlatformAction({
@@ -166,7 +193,7 @@ export async function POST(req: NextRequest) {
       .eq('id', membershipId)
       .maybeSingle()
 
-    if (membershipError) return NextResponse.json({ error: membershipError.message }, { status: 500 })
+    if (membershipError) return serverReadErrorResponse('platform-users.membership', membershipError)
     if (!membership) return NextResponse.json({ error: 'Membresía no encontrada.' }, { status: 404 })
 
     const { data: club } = await supabaseAdmin
@@ -209,12 +236,12 @@ export async function POST(req: NextRequest) {
         })
         .eq('id', membershipId)
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (error) return writeErrorResponse('platform-users.reject', error, 'No pudimos rechazar la membresía.')
 
       try {
         await ensureValidActiveClubForUser(membership.user_id, null)
-      } catch (settingsError: any) {
-        return NextResponse.json({ error: settingsError?.message ?? 'No pude actualizar club activo.' }, { status: 500 })
+      } catch {
+        return writeErrorResponse('platform-users.active-club', { code: 'CONSISTENCY_FAILURE' }, 'No pudimos actualizar el club activo.')
       }
 
       await supabaseAdmin.from('notifications').insert({
@@ -259,7 +286,7 @@ export async function POST(req: NextRequest) {
       })
       .eq('id', membershipId)
 
-    if (approveError) return NextResponse.json({ error: approveError.message }, { status: 500 })
+    if (approveError) return writeErrorResponse('platform-users.approve', approveError, 'No pudimos aprobar la membresía.')
 
     try {
       if (membership.role === 'PLAYER') await ensureClubPlayerForMembership({
@@ -269,8 +296,8 @@ export async function POST(req: NextRequest) {
         approvedAt,
       })
       await ensureValidActiveClubForUser(membership.user_id, membership.club_id)
-    } catch (consistencyError: any) {
-      return NextResponse.json({ error: consistencyError?.message ?? 'No pude dejar consistente la membresía.' }, { status: 500 })
+    } catch {
+      return writeErrorResponse('platform-users.consistency', { code: 'CONSISTENCY_FAILURE' }, 'No pudimos completar la membresía de forma consistente.')
     }
 
     await supabaseAdmin.from('notifications').insert({
@@ -299,7 +326,7 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ ok: true, status: 'APPROVED' })
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message ?? 'No pude gestionar el usuario.' }, { status: 500 })
+  } catch {
+    return writeErrorResponse('platform-users.manage', { code: 'UNEXPECTED' }, 'No pudimos gestionar el usuario.')
   }
 }

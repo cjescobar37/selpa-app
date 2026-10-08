@@ -37,10 +37,11 @@ STAFF≠PLAYER aplicado, diseños aprobados, dependencias ni datos productivos.
 - Evidencia local reproducida durante este trabajo en `output/product-pass-3/`;
   ese directorio sigue excluido del commit. El contrato focal queda en el repo.
 
-## Nueva migration y QA pendientes
+## Migration y QA de Pass 3
 
-`apps/web/supabase/migrations/20261008101837_product_write_flows_pass3.sql`
-es una migration nueva, **NO aplicada**. Agrega cinco columnas de resolución/
+`apps/web/supabase/migrations/20261008133156_20261008101837_product_write_flows_pass3.sql`
+corresponde a la versión de producción `20261008133156`, aplicada y validada.
+Agrega cinco columnas de resolución/
 fingerprint a `club_requests`, siete RPCs y un helper/trigger INTERNAL para
 solapamientos de partnerships. No reemplaza constraints STAFF≠PLAYER, no cambia
 RLS ni motores financieros, ni reescribe migrations aplicadas.
@@ -143,7 +144,7 @@ apps/web/lib/productCompletionPass3Contract.test.ts
 apps/web/lib/useWriteGuard.ts
 apps/web/lib/writeFlowServer.ts
 apps/web/lib/writeIntentRecovery.ts
-apps/web/supabase/migrations/20261008101837_product_write_flows_pass3.sql
+apps/web/supabase/migrations/20261008133156_20261008101837_product_write_flows_pass3.sql
 apps/web/supabase/qa/20261008101837_product_write_flows_pass3_validation.sql
 docs/product-completion-pass-3.md
 ```

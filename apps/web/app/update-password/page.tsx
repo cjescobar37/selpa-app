@@ -49,7 +49,7 @@ export default function UpdatePasswordPage() {
       }
 
       if (error) {
-        setAlert({ variant: 'error', title: 'No se pudo actualizar', message: error.message })
+        setAlert({ variant: 'error', title: 'No se pudo actualizar', message: 'El enlace puede haber vencido. Solicitá uno nuevo e intentá otra vez.' })
         setLoading(false)
         return
       }

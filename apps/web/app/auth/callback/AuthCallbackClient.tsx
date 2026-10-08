@@ -29,13 +29,12 @@ export default function AuthCallbackClient() {
 
     ;(async () => {
       try {
-        const errorDescription = searchParams.get('error_description')
-        if (errorDescription) {
+        if (searchParams.get('error_description') || searchParams.get('error')) {
           if (!active) return
           setAlert({
             variant: 'error',
             title: 'No se pudo completar el acceso',
-            message: errorDescription,
+            message: 'El enlace es inválido o venció. Solicitá uno nuevo e intentá otra vez.',
           })
           return
         }
@@ -49,7 +48,7 @@ export default function AuthCallbackClient() {
             setAlert({
               variant: 'error',
               title: 'No se pudo crear la sesión',
-              message: error.message,
+              message: 'El enlace es inválido o venció. Solicitá uno nuevo e intentá otra vez.',
             })
             return
           }
@@ -71,12 +70,12 @@ export default function AuthCallbackClient() {
           title: 'No encontramos una sesión activa',
           message: 'Volvé a intentar o ingresá manualmente.',
         })
-      } catch (error: unknown) {
+      } catch {
         if (!active) return
         setAlert({
           variant: 'error',
           title: 'Falló la validación',
-          message: error instanceof Error ? error.message : 'Error inesperado.',
+          message: 'No pudimos validar el acceso. Volvé a intentarlo.',
         })
       }
     })()

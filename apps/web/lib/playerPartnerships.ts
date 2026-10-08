@@ -45,6 +45,10 @@ type AuthContext = {
   currentClubPlayer: ClubPlayerRow | null
 }
 
+export type PartnershipAuthResult =
+  | { status: 'authorized'; context: AuthContext }
+  | { status: 'unauthenticated' | 'forbidden'; context: null }
+
 export async function getTokenUser(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
@@ -78,20 +82,28 @@ export async function getCurrentClubPlayer(userId: string, clubId: string) {
 }
 
 export async function getAuthContext(req: NextRequest, clubId: string): Promise<AuthContext | null> {
+  const result = await getPartnershipAuth(req, clubId)
+  return result.context
+}
+
+export async function getPartnershipAuth(req: NextRequest, clubId: string): Promise<PartnershipAuthResult> {
   const user = await getTokenUser(req)
-  if (!user) return null
+  if (!user) return { status: 'unauthenticated', context: null }
 
   const [admin, currentClubPlayer] = await Promise.all([
     userHasClubCapability(user.id, clubId, 'players:manage'),
     getCurrentClubPlayer(user.id, clubId),
   ])
 
-  if (!admin && !currentClubPlayer) return null
+  if (!admin && !currentClubPlayer) return { status: 'forbidden', context: null }
 
   return {
-    userId: user.id,
-    isAdmin: admin,
-    currentClubPlayer,
+    status: 'authorized',
+    context: {
+      userId: user.id,
+      isAdmin: admin,
+      currentClubPlayer,
+    },
   }
 }
 

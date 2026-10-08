@@ -1,11 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { writeErrorResponse } from '@/lib/writeFlowServer'
+import { serverReadErrorResponse, writeErrorResponse } from '@/lib/writeFlowServer'
 import { roleAssignmentDenial } from '@/lib/accountRoleServer'
 import {
   userHasClubCapability,
 } from '@/lib/clubMembershipServer'
+
+type MembershipListRow = {
+  id: string
+  club_id: string
+  user_id: string
+  role: string
+  status: string
+  created_at: string
+  approved_at: string | null
+  rejection_reason: string | null
+}
+
+type MembershipProfile = {
+  user_id: string
+  email: string | null
+  first_name: string | null
+  last_name: string | null
+  display_name: string | null
+  avatar_url: string | null
+}
 
 async function getUserFromRequest(req: NextRequest) {
   const authHeader = req.headers.get('authorization') || ''
@@ -42,14 +62,12 @@ export async function GET(req: NextRequest) {
       .eq('club_id', clubId)
       .order('created_at', { ascending: false })
 
-    if (membershipsError) {
-      return NextResponse.json({ error: membershipsError.message }, { status: 500 })
-    }
+    if (membershipsError) return serverReadErrorResponse('membership.list', membershipsError)
 
-    const rows = memberships ?? []
-    const userIds = Array.from(new Set(rows.map((r: any) => r.user_id).filter(Boolean)))
+    const rows = (memberships ?? []) as MembershipListRow[]
+    const userIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean)))
 
-    let profilesMap = new Map<string, any>()
+    let profilesMap = new Map<string, MembershipProfile>()
 
     if (userIds.length > 0) {
       const { data: profiles, error: profilesError } = await supabaseAdmin
@@ -57,21 +75,19 @@ export async function GET(req: NextRequest) {
         .select('user_id, email, first_name, last_name, display_name, avatar_url')
         .in('user_id', userIds)
 
-      if (profilesError) {
-        return NextResponse.json({ error: profilesError.message }, { status: 500 })
-      }
+      if (profilesError) return serverReadErrorResponse('membership.list_profiles', profilesError)
 
-      profilesMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]))
+      profilesMap = new Map(((profiles ?? []) as MembershipProfile[]).map((profile) => [profile.user_id, profile]))
     }
 
-    const merged = rows.map((m: any) => ({
-      ...m,
-      profiles: profilesMap.get(m.user_id) ?? null,
+    const merged = rows.map((membership) => ({
+      ...membership,
+      profiles: profilesMap.get(membership.user_id) ?? null,
     }))
 
     return NextResponse.json({ memberships: merged })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Error leyendo membresías' }, { status: 500 })
+  } catch {
+    return serverReadErrorResponse('membership.list', { code: 'UNEXPECTED' })
   }
 }
 

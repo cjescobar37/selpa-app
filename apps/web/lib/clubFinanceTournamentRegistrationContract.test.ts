@@ -49,7 +49,7 @@ test('H–L: legacy payment state stays separate, cancellation cannot erase post
   assert.match(readme, /no reinterpretará obligaciones históricas/)
   assert.match(legacyApprovalRoute, /rpc\('resolve_tournament_payment_request_pass3'/)
   assert.match(legacyApprovalRoute, /p_actor_id:auth.user.id/)
-  const integration = source('../supabase/migrations/20261008101837_product_write_flows_pass3.sql')
+  const integration = source('../supabase/migrations/20261008133156_20261008101837_product_write_flows_pass3.sql')
   assert.match(integration, /perform public.transition_tournament_registration_finance_f1b\([\s\S]*'CONFIRMED',p_actor_id,p_payment_id/)
   assert.ok(
     integration.indexOf('perform public.transition_tournament_registration_finance_f1b(') <
@@ -74,7 +74,7 @@ test('F1B actor is the authorized human who confirmed, never registration creato
   assert.match(manualRoute, /status: 'PENDING'/)
   assert.match(manualRoute, /p_actor_id: user\.id/)
   assert.match(cancellationRoute, /rpc\(\s*'resolve_registration_change_request_pass3'/)
-  assert.match(source('../supabase/migrations/20261008101837_product_write_flows_pass3.sql'), /perform public\.transition_tournament_registration_finance_f1b\(\s*p_club_id,v_request\.tournament_id,v_request\.registration_id,'CANCELLED',p_actor_id/)
+  assert.match(source('../supabase/migrations/20261008133156_20261008101837_product_write_flows_pass3.sql'), /perform public\.transition_tournament_registration_finance_f1b\(\s*p_club_id,v_request\.tournament_id,v_request\.registration_id,'CANCELLED',p_actor_id/)
   for (const marker of [
     'QA_F1B_ADMIN_A_ACTOR_NOT_RECORDED',
     'QA_F1B_CREATOR_NOT_DISTINCT_FROM_APPROVER',

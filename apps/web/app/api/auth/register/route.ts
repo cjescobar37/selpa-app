@@ -41,7 +41,6 @@ function logRegisterError(error: unknown) {
   console.error('[register]', {
     status: typeof source?.status === 'number' ? source.status : null,
     code: typeof source?.code === 'string' ? source.code : null,
-    message: typeof source?.message === 'string' ? source.message : 'Unknown registration error',
     name: typeof source?.name === 'string' ? source.name : 'Error',
   })
 }

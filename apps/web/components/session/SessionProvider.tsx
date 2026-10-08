@@ -418,28 +418,32 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [clubs, isPlatformAdmin, role]
   )
 
+  const clearSessionContext = useCallback(() => {
+    hasResolvedContextRef.current = false
+    setRole('guest')
+    setIsPlatformAdmin(false)
+    setUser(null)
+    setGlobalProfile(null)
+    setActiveClubState(null)
+    setActiveClubId(null)
+    setClubs([])
+    setIsApprovedMember(false)
+    setClubRole(null)
+    setMembershipStatus(null)
+    setMembershipApprovedAt(null)
+    setPostLoginDestination('/login')
+    setStatus('ready')
+  }, [])
+
   const logoutWrite = useWriteGuard()
   const signOut = useCallback(async () => logoutWrite(async () => {
       const { error } = await supabase.auth.signOut({ scope: 'global' })
       if (error) throw new Error('No pudimos cerrar la sesión. Revisá la conexión y reintentá.')
-      hasResolvedContextRef.current = false
-      setRole('guest')
-      setIsPlatformAdmin(false)
-      setUser(null)
-      setGlobalProfile(null)
-      setActiveClubState(null)
-      setActiveClubId(null)
-      setClubs([])
-      setIsApprovedMember(false)
-      setClubRole(null)
-      setMembershipStatus(null)
-      setMembershipApprovedAt(null)
-      setPostLoginDestination('/login')
-      setStatus('ready')
+      clearSessionContext()
       if (typeof window !== 'undefined') {
         window.location.href = '/login'
       }
-  }), [logoutWrite])
+  }), [clearSessionContext, logoutWrite])
 
   useEffect(() => {
     let alive = true
@@ -468,6 +472,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // contexto en ese evento remonta las vistas y vuelve a cargar sus datos.
       if (event === 'TOKEN_REFRESHED') return
 
+      if (event === 'SIGNED_OUT') {
+        clearSessionContext()
+        return
+      }
+
       void refresh()
     })
 
@@ -475,7 +484,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       alive = false
       sub?.subscription?.unsubscribe()
     }
-  }, [refresh])
+  }, [clearSessionContext, refresh])
 
   const value: SessionCtx = useMemo(
     () => ({

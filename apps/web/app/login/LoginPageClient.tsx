@@ -62,7 +62,7 @@ export default function LoginPageClient() {
       return {
         variant: 'error',
         title: 'No se pudo completar la validación',
-        message: error,
+        message: 'El enlace es inválido o venció. Solicitá uno nuevo.',
       }
     }
 
@@ -98,7 +98,7 @@ export default function LoginPageClient() {
         setAlert({
           variant: 'error',
           title: 'No se pudo iniciar sesión',
-          message: error.message,
+          message: 'No pudimos conectar con Google. Volvé a intentarlo.',
         })
         setLoading(false)
       }
@@ -138,7 +138,7 @@ export default function LoginPageClient() {
         setAlert({
           variant: 'error',
           title: 'Credenciales inválidas',
-          message: error.message,
+          message: 'Revisá el email y la contraseña e intentá otra vez.',
         })
         setLoading(false)
         return

@@ -31,3 +31,13 @@ export function writeErrorResponse(operation: string, error: WriteError, fallbac
   return NextResponse.json({ error: text, kind }, { status: kind === 'FORBIDDEN' ? 403 : kind === 'NOT_FOUND' ? 404
     : kind === 'VALIDATION' ? 400 : kind === 'CONFLICT' ? 409 : 503 })
 }
+
+export function serverReadErrorResponse(
+  operation: string,
+  error: WriteError,
+  fallback = 'No pudimos cargar la información. Reintentá.',
+) {
+  const code = /^[A-Z0-9_]{1,32}$/.test(error.code ?? '') ? error.code : 'READ_FAILURE'
+  console.error('[server-read]', { operation, code })
+  return NextResponse.json({ error: fallback }, { status: 500 })
+}

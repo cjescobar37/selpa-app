@@ -13,7 +13,7 @@ import * as billing from './platformBillingF2'
 import { hasClubCapability } from './clubPermissions'
 
 const read=(path:string)=>readFileSync(fileURLToPath(new URL(path,import.meta.url)),'utf8')
-const migration=read('../supabase/migrations/20261008101837_product_write_flows_pass3.sql')
+const migration=read('../supabase/migrations/20261008133156_20261008101837_product_write_flows_pass3.sql')
 const club='11111111-1111-4111-8111-111111111111', human='22222222-2222-4222-8222-222222222222'
 function execute(source:string,dependencies:(name:string)=>unknown,globals:Record<string,unknown>={}) {
   const exports:Record<string,unknown>={}
@@ -115,6 +115,33 @@ test('new privileged RPCs service-only; user approval verifies auth.uid; helper 
   }
   assert.match(migration,/v_actor uuid:=auth.uid\(\)/)
   assert.match(migration,/guard_active_partnership_pass3\(\) from public,anon,authenticated,service_role/)
+})
+test('final auth hardening: expiry clears stale role and auth errors never expose provider diagnostics',()=>{
+  const provider=read('../components/session/SessionProvider.tsx')
+  assert.match(provider,/event === 'SIGNED_OUT'[\s\S]*clearSessionContext\(\)/)
+  assert.match(provider,/event === 'TOKEN_REFRESHED'\) return/)
+  for(const path of ['../app/login/LoginPageClient.tsx','../app/auth/callback/AuthCallbackClient.tsx','../app/update-password/page.tsx']){
+    const source=read(path)
+    assert.doesNotMatch(source,/message:\s*error\.message/)
+  }
+  const confirm=read('../app/auth/confirm/route.ts')
+  assert.match(confirm,/!requestedNext\.startsWith\('\/\/'\)/)
+  assert.doesNotMatch(confirm,/encodeURIComponent\(error\.message\)/)
+})
+test('partnership writes distinguish missing session from insufficient capability without a second auth lookup',()=>{
+  const helper=read('./playerPartnerships.ts')
+  assert.match(helper,/status: 'unauthenticated'/)
+  assert.match(helper,/status: 'forbidden'/)
+  for(const action of ['accept','decline','cancel']){
+    const route=read(`../app/api/clubs/[clubId]/partner-invites/[id]/${action}/route.ts`)
+    assert.match(route,/authorization\.status === 'unauthenticated' \? 401 : 403/)
+    assert.doesNotMatch(route,/p_actor_id:\s*body/)
+  }
+})
+test('Pass 3 migration filename matches production history and SQL keeps backend-only club requests',()=>{
+  assert.equal(migration.includes('alter table public.club_requests'),true)
+  assert.match(read('../supabase/migrations/20260923_data_api_tables_hardening.sql'),/alter table public\.club_requests enable row level security;[\s\S]*revoke all on table public\.club_requests from public, anon, authenticated, service_role;[\s\S]*grant select, insert, delete on table public\.club_requests to service_role;/)
+  assert.doesNotMatch(migration,/create policy[\s\S]*club_requests/i)
 })
 
 function clubRequestsApi({platform=true,fail=''}={}) {

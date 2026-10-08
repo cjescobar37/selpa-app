@@ -31,7 +31,10 @@ async function trySyncRegistrationPayment(registrationId: string, status: string
     .eq('id', registrationId)
 
   if (error && !isMissingSchemaObjectError(error)) {
-    console.warn('[payment-request] registration payment sync failed', error.message)
+    console.warn('[payment-request]', {
+      operation: 'SYNC_REGISTRATION_PAYMENT',
+      code: /^[A-Z0-9_]{1,32}$/.test(error.code ?? '') ? error.code : 'UPDATE_FAILURE',
+    })
   }
 }
 
@@ -73,7 +76,10 @@ export async function POST(req: NextRequest, context: PaymentRequestContext) {
     .eq('id', tournamentId)
     .maybeSingle()
 
-  if (tournamentError) return NextResponse.json({ error: tournamentError.message }, { status: 500 })
+  if (tournamentError) {
+    console.error('[payment-request]', { operation: 'READ_TOURNAMENT', code: tournamentError.code ?? 'READ_FAILURE' })
+    return NextResponse.json({ error: 'No pudimos cargar el torneo. Reintentá.' }, { status: 500 })
+  }
   if (!tournament) return NextResponse.json({ error: 'Torneo no encontrado.' }, { status: 404 })
 
   const { data: teams, error: teamsError } = await supabaseAdmin
@@ -83,7 +89,10 @@ export async function POST(req: NextRequest, context: PaymentRequestContext) {
     .eq('club_id', tournament.club_id)
     .or(`player1_user_id.eq.${user.id},player2_user_id.eq.${user.id}`)
 
-  if (teamsError) return NextResponse.json({ error: teamsError.message }, { status: 500 })
+  if (teamsError) {
+    console.error('[payment-request]', { operation: 'READ_TEAMS', code: teamsError.code ?? 'READ_FAILURE' })
+    return NextResponse.json({ error: 'No pudimos verificar tu equipo. Reintentá.' }, { status: 500 })
+  }
 
   const teamIds = (teams ?? []).map((team) => String(team.id))
   if (!teamIds.length) {
@@ -97,7 +106,10 @@ export async function POST(req: NextRequest, context: PaymentRequestContext) {
     .eq('club_id', tournament.club_id)
     .in('team_id', teamIds)
 
-  if (registrationsError) return NextResponse.json({ error: registrationsError.message }, { status: 500 })
+  if (registrationsError) {
+    console.error('[payment-request]', { operation: 'READ_REGISTRATION', code: registrationsError.code ?? 'READ_FAILURE' })
+    return NextResponse.json({ error: 'No pudimos verificar tu inscripción. Reintentá.' }, { status: 500 })
+  }
 
   const registration = (registrations ?? []).find((row) => String(row.status ?? '').toUpperCase() !== 'CANCELLED')
   if (!registration) {
@@ -118,7 +130,10 @@ export async function POST(req: NextRequest, context: PaymentRequestContext) {
 
   if (existingError && isMissingSchemaObjectError(existingError)) return missingPaymentInfraResponse()
 
-  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
+  if (existingError) {
+    console.error('[payment-request]', { operation: 'READ_PAYMENT', code: existingError.code ?? 'READ_FAILURE' })
+    return NextResponse.json({ error: 'No pudimos verificar el pago. Reintentá.' }, { status: 500 })
+  }
 
   if (existing) {
     await trySyncRegistrationPayment(registration.id, existing.status, existing.method)
@@ -145,7 +160,10 @@ export async function POST(req: NextRequest, context: PaymentRequestContext) {
 
   if (paymentError && isMissingSchemaObjectError(paymentError)) return missingPaymentInfraResponse()
 
-  if (paymentError) return NextResponse.json({ error: paymentError.message }, { status: 500 })
+  if (paymentError) {
+    console.error('[payment-request]', { operation: 'CREATE_PAYMENT', code: paymentError.code ?? 'WRITE_FAILURE' })
+    return NextResponse.json({ error: 'No pudimos registrar la solicitud de pago. Reintentá.' }, { status: 500 })
+  }
 
   await trySyncRegistrationPayment(registration.id, 'PENDING', method)
 
