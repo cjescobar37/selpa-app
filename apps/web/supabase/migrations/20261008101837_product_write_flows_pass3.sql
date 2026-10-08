@@ -75,7 +75,12 @@ begin
   end if;
   select * into v_request from public.club_requests where id = p_request_id for update;
   if not found then raise exception 'WRITE_NOT_FOUND' using errcode = 'P0002'; end if;
-  if v_request.status = case p_action when 'approve' then 'APPROVED' else 'REJECTED' end then
+  if v_request.status = (
+    case p_action
+      when 'approve' then 'APPROVED'
+      else 'REJECTED'
+    end
+  ) then
     return jsonb_build_object('ok',true,'status',v_request.status,'clubId',v_request.resolved_club_id,'clubName',v_request.club_name,'replayed',true);
   end if;
   if v_request.status <> 'PENDING' then raise exception 'WRITE_ALREADY_RESOLVED' using errcode = '23505'; end if;

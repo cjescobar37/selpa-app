@@ -70,6 +70,10 @@ for(const [code,kind,status] of [['22023','VALIDATION',400],['42501','FORBIDDEN'
     assert.deepEqual(json(logs),[['[write-flow]',{operation:'fixture.operation',code}]])
   })
 }
+test('club request status CASE comparison is parenthesized for PL/pgSQL IF syntax',()=>{
+  assert.doesNotMatch(migration,/\bstatus\s*=\s*case\b[\s\S]*?\bend\s+then\b/i)
+  assert.match(migration,/if\s+v_request\.status\s*=\s*\(\s*case\s+p_action\s+when\s+'approve'\s+then\s+'APPROVED'\s+else\s+'REJECTED'\s+end\s*\)\s+then\b/i)
+})
 test('SQL transition boundaries: retained requests, owner context, no HTTP compensation or historical cleanup',()=>{
   assert.match(migration,/status='APPROVED',resolved_club_id=v_club_id/)
   assert.match(migration,/insert into public.club_memberships[\s\S]*'OWNER','APPROVED'/)
