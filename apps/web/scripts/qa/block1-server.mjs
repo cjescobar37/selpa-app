@@ -2,8 +2,11 @@
 import http from 'node:http'
 import {createFixture,PLAYER,QA_TOKEN,QA_ACTORS} from './block1-fixture.mjs'
 import {financeReadRpcs,financeRpcResult} from './phase0-finance-fixture.mjs'
+import {addRankingExperienceFixture} from './ranking-experience-fixture.mjs'
 const db=await createFixture()
+if(process.env.SELPA_QA_RANKING==='true') await addRankingExperienceFixture(db)
 let unavailable=false
+let rankingRead='ready'
 let financeScenario='empty',financeFail=''
 const identifier=s=>{if(!/^[a-z_][a-z_0-9]*$/.test(s))throw Error('identifier');return '"'+s+'"'}
 function predicate(key,expression,values) {
@@ -24,6 +27,16 @@ const server=http.createServer(async(request,response)=>{
   const url=new URL(request.url,'http://127.0.0.1:45432')
   if(url.pathname==='/qa/health') return send(200,{ready:true})
   if(url.pathname==='/qa/unavailable') {unavailable=url.searchParams.get('value')==='true';return send(200,{unavailable})}
+  if(url.pathname==='/qa/ranking-read') {
+    const mode=url.searchParams.get('value')??'ready'
+    if(!['ready','missing','transport','context','directory'].includes(mode)) return send(400,{message:'Invalid QA mode'})
+    rankingRead=mode;return send(200,{rankingRead})
+  }
+  if(url.pathname==='/qa/ranking-tie' && process.env.SELPA_QA_RANKING==='true') {
+    const tie=url.searchParams.get('value')==='true'
+    await db.query('update competition_point_transactions set points=$1 where id=$2',[tie?9900:9700,'00000000-0000-4000-8000-000000080003'])
+    return send(200,{tie})
+  }
   if(url.pathname==='/qa/finance') {
     const scenario=url.searchParams.get('value')??'empty'
     if(!['empty','populated'].includes(scenario)) return send(400,{message:'Invalid QA scenario'})
@@ -52,6 +65,8 @@ const server=http.createServer(async(request,response)=>{
     }
     const table=url.pathname.split('/').at(-1)
     if(!url.pathname.startsWith('/rest/v1/')) return send(404,{message:'QA route missing'})
+    if(rankingRead==='missing' && /standings/.test(table))return send(404,{code:'PGRST205',message:'Synthetic missing read model'})
+    if((rankingRead==='transport' && /standings/.test(table)) || (rankingRead==='context' && table==='competition_seasons') || (rankingRead==='directory' && table==='clubs'))return send(503,{code:'PGRST000',message:'Synthetic unavailable read'})
     if(unavailable && /career|standings/.test(table))return send(503,{message:'QA unavailable'})
     const values=[],where=[]
     for(const [key,value] of url.searchParams) {

@@ -7,7 +7,13 @@ import type { CareerHistoryRow, CareerIdentity, CareerRecentRow, CareerStats, Ca
 const STANDING = 'club_player_id,club_id,user_id,player_entry_id,full_name,avatar_url,category,category_name,gender,season_id,season_name,division_id,modality,ranking_points,position,is_tied,ordinal'
 const HISTORY = 'id,tournament_id,tournament_name,sports_date,category,category_name,partner_name,result_role,final_position,points'
 const PAGE_SIZE = 25
-function assertRead(error: unknown) { if (error) throw new Error('SPORTS_READ_UNAVAILABLE') }
+function assertRead(error: unknown) {
+  if (!error) return
+  const failure=new Error('SPORTS_READ_UNAVAILABLE') as Error & {code?:string}
+  const code=typeof error==='object' && 'code' in error ? String(error.code) : ''
+  if (/^[A-Z0-9_]{1,32}$/.test(code)) failure.code=code
+  throw failure
+}
 
 /** Pagination for small context catalogs, never for player rosters/matches/ledger. */
 async function catalog<T>(read: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
@@ -152,6 +158,45 @@ export async function readPublicClubs(page=1) {
   const result=await db.from('clubs').select('id,name,logo_url,theme_key',{count:'exact'}).eq('is_active',true)
     .order('name').order('id').range((pageNumber(String(page))-1)*40,pageNumber(String(page))*40-1)
   assertRead(result.error);return {clubs:result.data ?? [],count:result.count ?? 0}
+}
+
+/** Batch small catalogs for the 40 visible clubs, never an N+1 roster/ledger read. */
+export async function readRankingDirectory(page=1) {
+  const result=await readPublicClubs(page)
+  const clubs=result.clubs.map(club=>({...club,categoryCount:null as number|null}))
+  if (!clubs.length) return {...result,clubs}
+  try {
+    const seasons=await catalog<{id:string;club_id:string}>((from,to)=>db.from('competition_seasons').select('id,club_id')
+      .in('club_id',clubs.map(c=>c.id)).eq('status','ACTIVE').order('id').range(from,to))
+    const unambiguous=seasons.filter(s=>seasons.filter(other=>other.club_id===s.club_id).length===1)
+    const divisions=unambiguous.length ? await catalog<{club_id:string;category_id:string}>((from,to)=>db.from('competition_divisions')
+      .select('club_id,category_id').in('season_id',unambiguous.map(s=>s.id)).in('club_id',clubs.map(c=>c.id))
+      .eq('modality','INDIVIDUAL').eq('is_active',true).is('segment_id',null).order('id').range(from,to)) : []
+    return {...result,clubs:clubs.map(club=>({...club,categoryCount:seasons.filter(s=>s.club_id===club.id).length>1 ? null :
+      new Set(divisions.filter(d=>d.club_id===club.id).map(d=>d.category_id).filter(Boolean)).size}))}
+  } catch {return {...result,clubs}}
+}
+
+/** Full-division counts and a single leader; independent of search/page. */
+export async function readRankingPresentation(contexts:RankingContext[],context:RankingContext|null,modality:string) {
+  const unavailable={counts:{M:null as number|null,F:null as number|null},leaderPoints:null as number|null}
+  if (!context) return unavailable
+  const table=modality==='PAIRS'?'competition_pair_standings_read':'competition_player_standings_read'
+  const field=modality==='PAIRS'?'combined_points':'ranking_points'
+  try {
+    const counts=await Promise.all(['M','F'].map(async gender=>{
+      const branch=contexts.find(c=>c.modality===modality && c.category===context.category && c.gender===gender)
+      if (!branch) return 0
+      const result=await db.from(table).select('position',{count:'exact',head:true})
+        .eq('club_id',branch.clubId).eq('season_id',branch.seasonId).eq('division_id',branch.divisionId)
+      assertRead(result.error);return result.count
+    }))
+    const leader=await db.from(table).select(field).eq('club_id',context.clubId).eq('season_id',context.seasonId)
+      .eq('division_id',context.divisionId).order('position').limit(1)
+    assertRead(leader.error)
+    const row=leader.data?.[0] as unknown as Record<string,number>|undefined
+    return {counts:{M:counts[0],F:counts[1]},leaderPoints:row ? Number(row[field]) : null}
+  } catch {return unavailable}
 }
 
 export async function readClubRankingPreview(clubId: string) {
