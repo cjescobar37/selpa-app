@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { ChevronRight, Dumbbell, LockKeyhole, UserRound, UserRoundPen } from 'lucide-react'
+import { ChevronRight, Dumbbell, LockKeyhole, Settings, UserRound, UserRoundPen } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
 import PlayerSectionHero from '@/components/player/PlayerSectionHero'
-import { isPlayerSession } from '@/lib/accountRolePolicy'
+import { administrativeHome, isPlayerSession } from '@/lib/accountRolePolicy'
+import PageHeader from '@/components/navigation/PageHeader'
 
 export default function MisDatosPage() {
   const session = useSession()
@@ -16,10 +17,12 @@ export default function MisDatosPage() {
   if (!session.user) return <PlayerStatePanel kind="empty" title="Ingresá para editar tus datos" message="Esta información es privada." action={{ label: 'Ingresar', href: '/login' }} viewport />
 
   return <PlayerSpaceLayout><main className="playerDataHub">
-    <PlayerSectionHero badge="Área privada" title="Mis datos" description={player ? 'Administrá tu identidad, tu perfil deportivo y la seguridad de tu cuenta.' : 'Administrá tus datos personales y la seguridad de tu cuenta.'} icon={<UserRoundPen />} />
+    {player ? <PlayerSectionHero badge="Área privada" title="Mis datos" description="Administrá tu identidad, tu perfil deportivo y la seguridad de tu cuenta." icon={<UserRoundPen />} />
+      : <PageHeader backHref={administrativeHome(session)} title="Mi cuenta" description="Datos personales, preferencias y seguridad." />}
     <section className="playerDataHub__menu">
       <Link href={player ? '/completar-perfil?edit=personal' : '/mi-cuenta'}><UserRound /><div><strong>Datos personales</strong><small>{player ? 'Nombre, teléfono, fecha de nacimiento y ubicación' : 'Nombre, apellido, teléfono y foto de cuenta'}</small></div><ChevronRight /></Link>
       {player ? <Link href="/completar-perfil?edit=sports"><Dumbbell /><div><strong>Perfil deportivo</strong><small>Mano hábil, posición, altura, foto y portada</small></div><ChevronRight /></Link> : null}
+      {!player ? <Link href="/ajustes"><Settings /><div><strong>Preferencias</strong><small>Opciones de tu cuenta administrativa</small></div><ChevronRight /></Link> : null}
       <Link href="/reset-password"><LockKeyhole /><div><strong>Cuenta y seguridad</strong><small>Correo de acceso y actualización de contraseña</small></div><ChevronRight /></Link>
     </section>
     <p className="playerDataHub__privacy">{player ? 'Estos datos son privados. En tu perfil público sólo se muestra la información que ayuda a otros jugadores a conocerte.' : 'Esta cuenta es administrativa. Su información no forma parte de un perfil deportivo.'}</p>

@@ -7,8 +7,11 @@ function source(relativePath: string) {
   return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8')
 }
 
-const migration = source('../supabase/migrations/20260930161656_competition_points_scheme_snapshot_consistency.sql')
-const correctionPlan = source('../supabase/qa/noviembre_master_published_settlement_correction_plan.sql')
+// The applied migration was renamed; exercise its canonical SQL, not a duplicate fixture.
+const migration = source('../supabase/migrations/20261001105639_competition_points_scheme_snapshot_consistency.sql')
+// The historical correction is complete: validate its checked-in read-only QA,
+// rather than resurrecting an obsolete execution plan or rewriting applied SQL.
+const correctionValidation = source('../supabase/qa/noviembre_master_published_settlement_validation.sql')
 const oldDraft = source('../supabase/migrations/20260803120000_competition_event_settlement_stage5a5.sql')
 const calculator = source('../supabase/migrations/20260909120000_competition_pairs_ranking_pipeline_fix.sql')
 const adjustment = source('../supabase/migrations/20260929113440_competition_canonical_playoff_placements.sql')
@@ -72,7 +75,8 @@ test('H: published correction preserves history and has an explicit, gated repai
   assert.match(sqlFunction('competition_settlement_scheme_snapshot_mismatch'), /status = 'PUBLISHED'[\s\S]*configured_scheme_verified/)
   assert.match(sqlFunction('guard_competition_settlement_scheme_snapshot'), /new\.status = 'PUBLISHED'[\s\S]*configured_scheme_verified/)
   assert.match(adjustment, /'points_adjustment'[\s\S]*'adjusted_points_scheme_id'/)
-  assert.match(correctionPlan, /reversed_transaction_id/)
+  assert.match(correctionValidation, /reversal\.reversed_transaction_id = old_tx\.id/)
+  assert.match(correctionValidation, /having count\(reversal\.id\) <> 1[\s\S]*old_tx\.points \+ coalesce\(sum\(reversal\.points\), 0\) <> 0/)
   assert.doesNotMatch(migration, /delete\s+from\s+public\.competition_point_transactions|update\s+public\.competition_point_transactions/i)
 })
 
@@ -81,8 +85,11 @@ test('I: MASTER correction fixture contains exactly seven reviewed amounts', () 
     ['CHAMPION', 750], ['RUNNER_UP', 500], ['SEMIFINALIST', 400],
     ['QUARTERFINALIST', 250], ['EIGHTH_FINALIST', 150],
     ['SIXTEENTH_FINALIST', 100], ['PARTICIPANT', 50],
-  ] as const) assert.match(correctionPlan, new RegExp(`\\('${key}', ${points}\\)`))
-  assert.match(correctionPlan, /master_rules_exact/)
+  ] as const) assert.match(correctionValidation, new RegExp(`\\('${key}', ${points}\\)`))
+  assert.match(correctionValidation, /count\(\*\) = 7 from frozen_rules/)
+  assert.match(correctionValidation, /full join frozen_rules f using \(rule_key\)[\s\S]*e\.points is distinct from f\.points/)
+  assert.match(correctionValidation, /begin transaction read only;/)
+  assert.match(correctionValidation.trim(), /rollback;$/)
   assert.doesNotMatch(migration, /68346ad8-3e23-42ad-8e82-8621dad954b3|19bbd434-af09-4684-b791-12f81a9e5184/)
 })
 

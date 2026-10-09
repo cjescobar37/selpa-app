@@ -89,6 +89,7 @@ type PublicClubHomeProps = {
   campaignsBySlot: Record<string, PublicClubCampaign | null>
   tournaments: PublicClubTournament[]
   rankingSummary: PublicClubRankingSummary[]
+  rankingUnavailable?: boolean
   news?: PublicClubNews[]
 }
 
@@ -157,45 +158,6 @@ function rankingBranchOrder(value?: string | null) {
   if (normalized === 'F') return 2
   if (normalized === 'MIXED') return 3
   return 4
-}
-
-function demoRankingCategory(label = '6ta'): { label: string; isDemo: true; branches: PublicClubRankingSummary[] } {
-  return {
-    label,
-    isDemo: true,
-    branches: [
-    {
-      key: `demo-${label}-caballeros`,
-      label,
-      gender: 'M',
-      players: 42,
-      leaderName: 'Joaquín Pereyra',
-      partnerName: 'Marcos Díaz',
-      leaderPoints: 1280,
-    },
-    {
-      key: `demo-${label}-damas`,
-      label,
-      gender: 'F',
-      players: 36,
-      leaderName: 'Lucía Galarza',
-      partnerName: 'Sofía Núñez',
-      leaderPoints: 1215,
-    },
-  ],
-  }
-}
-
-function mergeDemoBranches(realGroup: { label: string; isDemo: boolean; branches: PublicClubRankingSummary[] }) {
-  const demoGroup = demoRankingCategory(realGroup.label)
-  const byGender = new Map<string, PublicClubRankingSummary>()
-  for (const branch of demoGroup.branches) byGender.set(normalizeRankingGender(branch.gender), branch)
-  for (const branch of realGroup.branches) byGender.set(normalizeRankingGender(branch.gender), branch)
-  return {
-    ...realGroup,
-    isDemo: true,
-    branches: Array.from(byGender.values()).sort((current, next) => rankingBranchOrder(current.gender) - rankingBranchOrder(next.gender)).slice(0, 2),
-  }
 }
 
 function splitPlayerName(value?: string | null) {
@@ -336,6 +298,7 @@ export default function PublicClubHomeExperience({
   campaignsBySlot,
   tournaments,
   rankingSummary,
+  rankingUnavailable = false,
   news = [],
 }: PublicClubHomeProps) {
   const theme = getClubTheme(club.themeKey)
@@ -389,24 +352,12 @@ export default function PublicClubHomeExperience({
     const realGroups = Array.from(groups.values())
       .map((group) => ({
         ...group,
-        isDemo: false,
         branches: group.branches
           .sort((current, next) => rankingBranchOrder(current.gender) - rankingBranchOrder(next.gender))
           .slice(0, 2),
       }))
 
-    const hasCompleteRealCategory = realGroups.some((group) => {
-      const genders = new Set(group.branches.map((branch) => normalizeRankingGender(branch.gender)))
-      return genders.has('M') && genders.has('F')
-    })
-
-    const groupsForDisplay = hasCompleteRealCategory
-      ? realGroups
-      : realGroups.length
-        ? [mergeDemoBranches(realGroups[0]), ...realGroups.slice(1)]
-        : [demoRankingCategory()]
-    return groupsForDisplay
-      .slice(0, 6)
+    return realGroups.slice(0, 6)
   }, [rankingSummary])
   const sponsorCampaigns = useMemo(() => {
     return sponsorSlots
@@ -514,15 +465,14 @@ export default function PublicClubHomeExperience({
         <div className="clubPublicRankingGrid">
           {rankingCategories.length ? rankingCategories.map((category) => (
             <Link
-              className={`clubPublicRankingCard ${category.isDemo ? 'is-demo' : ''}`}
+              className={`clubPublicRankingCard${category.branches.every(item=>!item.partnerName && !item.partnerPhotoUrl)?' has-individual-leaders':''}`}
               href={rankingCategoryHref(club.id, category.label)}
-              key={`${category.isDemo ? 'demo' : 'real'}-${category.label}`}
+              key={category.label}
               aria-label={`Ver ranking de ${club.name} en ${category.label}`}
             >
               <div className="clubPublicRankingCategoryHead">
                 <small>Categoría</small>
                 <span>{category.label}</span>
-                {category.isDemo ? <small className="is-demo-label">Vista demo</small> : null}
               </div>
               <div className={`clubPublicRankingBranches ${category.branches.length === 1 ? 'is-single' : ''}`}>
                 {category.branches.map((item) => {
@@ -539,7 +489,7 @@ export default function PublicClubHomeExperience({
                         <span>{branchLabel}</span>
                         <b><i>#1</i><em>{formatRankingPoints(item.leaderPoints)}</em></b>
                       </div>
-                      <div className="clubPublicRankingPair">
+                      <div className={`clubPublicRankingPair${!partnerName && !item.partnerPhotoUrl ? ' is-individual-leader' : ''}`}>
                         <div className="clubPublicRankingPlayer">
                           <RankingAvatar name={hasLeader ? leaderName : null} photoUrl={item.leaderPhotoUrl} tone={branchTone} />
                           <strong><span>{leaderParts.first}</span><span>{leaderParts.last}</span></strong>
@@ -549,12 +499,7 @@ export default function PublicClubHomeExperience({
                             <RankingAvatar name={partnerName} photoUrl={item.partnerPhotoUrl} fallback="P2" tone={branchTone} secondary />
                             <strong><span>{partnerParts.first}</span><span>{partnerParts.last}</span></strong>
                           </div>
-                        ) : (
-                          <div className="clubPublicRankingPlayer is-pending">
-                            <RankingAvatar name={null} photoUrl={null} fallback="P2" tone="neutral" secondary />
-                            <span>Pareja por confirmar</span>
-                          </div>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   )
@@ -568,8 +513,8 @@ export default function PublicClubHomeExperience({
           )) : (
             <div className="clubPublicEmpty">
               <Sparkles size={24} />
-              <strong>Ranking en preparación</strong>
-              <p>Faltan jugadores aprobados o puntos registrados para mostrar el resumen público.</p>
+              <strong>{rankingUnavailable ? 'Ranking pendiente de lectura' : 'Ranking en preparación'}</strong>
+              <p>{rankingUnavailable ? 'No pudimos verificar los resultados competitivos. No mostramos puntos legacy ni ejemplos.' : 'Todavía no hay un ranking competitivo activo para mostrar.'}</p>
             </div>
           )}
         </div>

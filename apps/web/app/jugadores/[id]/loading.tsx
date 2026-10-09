@@ -1,0 +1,2 @@
+import PageHeader from '@/components/navigation/PageHeader'
+export default function LoadingCareer() {return <main aria-busy="true" aria-label="Cargando identidad deportiva"><PageHeader title="Carrera deportiva" backHref="/ranking"/><div style={{minHeight:112,background:'var(--surface,#f1f5f9)',borderRadius:14,marginTop:12}}/><div style={{minHeight:86,background:'var(--surface,#f1f5f9)',borderRadius:10,marginTop:12}}/></main>}

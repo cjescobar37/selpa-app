@@ -760,8 +760,6 @@ export default function AppNavbarClient() {
           </div>
           <Link className="px-ddItem" href="/club" onClick={closeAllMenus}>Administración del club</Link>
           <Link className="px-ddItem" href="/mis-datos" onClick={closeAllMenus}>Mi cuenta</Link>
-          <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}>Preferencias</Link>
-          <Link className="px-ddItem" href="/reset-password" onClick={closeAllMenus}>Seguridad</Link>
           <Link className="px-ddItem" href={clubPublicHomeHref} onClick={closeAllMenus}>Ver página pública del club</Link>
           {clubRole === 'OWNER' || clubRole === 'ADMIN' ? <Link className="px-ddItem" href="/club/facturacion" onClick={closeAllMenus}>Facturación SELPA</Link> : null}
           <button className="px-ddItem px-ddItem--danger" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
@@ -774,8 +772,6 @@ export default function AppNavbarClient() {
         <div className="px-navDropdown px-navDropdown--right" role="menu">
           <Link className="px-ddItem" href="/platform/configuracion">Configuración de la plataforma</Link>
           <Link className="px-ddItem" href="/mis-datos" onClick={closeAllMenus}>Mi cuenta</Link>
-          <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}>Preferencias</Link>
-          <Link className="px-ddItem" href="/reset-password" onClick={closeAllMenus}>Seguridad</Link>
           <Link className="px-ddItem" href="/platform/facturacion" onClick={closeAllMenus}>Facturación SELPA</Link>
           <Link className="px-ddItem" href="/platform/logs">Auditoría</Link>
           <button className="px-ddItem px-ddItem--danger" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>

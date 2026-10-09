@@ -19,3 +19,4 @@
 .nav{display:flex;gap:4px;overflow-x:auto;min-width:0;max-width:100%;border-bottom:1px solid #dce6ec;scrollbar-width:thin}
 .nav a{flex:0 0 auto;min-height:44px;display:flex;align-items:center;padding:0 12px;color:#60748a;text-decoration:none;font-size:13px;border-bottom:3px solid transparent}.nav a[aria-current="page"]{color:#071c3b;border-color:#68a600;font-weight:650}
 @media(min-width:768px){.page{padding:18px 16px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.metrics{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:430px){.page{padding-inline:0}}

@@ -9,4 +9,6 @@
 .rowMenu{flex:1;min-width:120px}.rowMenu summary{min-height:44px;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1px solid #cbdce6;border-radius:9px;background:#f4f9fb;cursor:pointer;font-size:12px;font-weight:600;color:#123451}.rowMenu summary:focus-visible{outline:3px solid #19c5df;outline-offset:2px}.rowMenu>div{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 @media(max-width:374px){.shell{padding:12px}.formGrid{grid-template-columns:1fr}.metrics strong{font-size:19px}.row,.plan{padding:10px}.badge{max-width:105px}.amounts strong{font-size:12px}}
 @media(min-width:768px){.metrics{grid-template-columns:repeat(5,minmax(0,1fr))}.list{grid-template-columns:repeat(2,minmax(0,1fr))}.dateFilters{max-width:430px}.head h1{font-size:30px}.overviewActions>div{width:auto;margin-right:auto}.plan{max-width:720px}.shell{padding:20px 24px 40px}}
+/* Internal cards keep padding; the outer shell must not add a second gutter. */
+@media(max-width:430px){.shell{padding-inline:0}}
 @media(prefers-reduced-motion:reduce){.loading span{animation:none}}

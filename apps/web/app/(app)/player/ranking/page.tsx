@@ -11,13 +11,11 @@ import { useSession } from '@/components/session/SessionProvider'
 import {
   formatRankingCategory,
   formatRankingGender,
-  normalizeRankingGender,
-  sortRankingRows,
-  withRankingPositions,
 } from '@/lib/ranking'
 import { supabase } from '@/lib/supabaseClient'
 
 type RankingRow = {
+  contextualPosition: number
   position: number
   player_id: string
   user_id: string
@@ -33,6 +31,8 @@ type RankingRow = {
 }
 
 type RankingResponse = {
+  leader?: RankingRow | null
+  next?: RankingRow | null
   individual?: RankingRow[]
   meta?: { generatedAt?: string }
   error?: string
@@ -67,7 +67,7 @@ export default function PlayerMyRankingPage() {
         const token = sessionData.session?.access_token
         if (!token) throw new Error('AUTH_REQUIRED')
 
-        const res = await fetch(`/api/clubs/${session.activeClub.id}/ranking`, {
+        const res = await fetch(`/api/player/my-ranking?clubId=${session.activeClub.id}`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
         })
@@ -94,36 +94,10 @@ export default function PlayerMyRankingPage() {
     return (data?.individual ?? []).find((row) => row.user_id === session.user?.id) ?? null
   }, [data?.individual, session.user?.id])
 
-  const contextualRanking = useMemo(() => {
-    if (!myRow) return []
-    return withRankingPositions(
-      sortRankingRows(
-        (data?.individual ?? [])
-          .filter((row) => row.category === myRow.category && normalizeRankingGender(row.gender) === normalizeRankingGender(myRow.gender))
-      ),
-      'contextualPosition',
-    )
-  }, [data?.individual, myRow])
-
-  const myContextRow = useMemo(() => {
-    return contextualRanking.find((row) => row.user_id === session.user?.id) ?? null
-  }, [contextualRanking, session.user?.id])
-
-  const contextualWindow = useMemo(() => {
-    if (!myContextRow) return []
-    const myIndex = contextualRanking.findIndex((row) => row.user_id === myContextRow.user_id)
-    if (myIndex <= 2) return contextualRanking.slice(0, 7)
-    return contextualRanking.slice(Math.max(0, myIndex - 3), myIndex + 4)
-  }, [contextualRanking, myContextRow])
-
-  const nextPlayer = useMemo(() => {
-    if (!myContextRow) return null
-    if (myContextRow.contextualPosition <= 1) return null
-    const higherRows = contextualRanking.filter((row) => row.contextualPosition < myContextRow.contextualPosition)
-    return higherRows[higherRows.length - 1] ?? null
-  }, [contextualRanking, myContextRow])
-
-  const leader = contextualRanking[0] ?? null
+  const contextualWindow = data?.individual ?? []
+  const myContextRow = myRow
+  const nextPlayer = data?.next ?? null
+  const leader = data?.leader ?? null
   const pointsToNext = nextPlayer && myContextRow ? Math.max(0, nextPlayer.ranking_points - myContextRow.ranking_points) : 0
   const pointsToLeader = leader && myContextRow ? Math.max(0, leader.ranking_points - myContextRow.ranking_points) : 0
 
@@ -188,14 +162,14 @@ export default function PlayerMyRankingPage() {
                 const isMe = player.user_id === session.user?.id
                 return (
                   <Link
-                    href={`/jugadores/${player.player_id}`}
+                    href={`/jugadores/${player.user_id}?clubId=${session.activeClubId}`}
                     className={`playerRankContextRow${isMe ? ' is-me' : ''}`}
                     key={player.player_id}
                   >
                     <strong className="playerRankContextPlace">#{player.contextualPosition}</strong>
                     <RankingPlayerAvatar className="playerRankAvatar" name={player.full_name} src={player.avatar_url} sizes="44px" />
                     <div>
-                      <b>{player.full_name}</b>
+                      <b>{player.full_name}{isMe?' · Vos':''}</b>
                       <span>{formatRankingCategory(player.category)} · {formatRankingGender(player.gender)}</span>
                     </div>
                     {isMe ? <em>Vos</em> : null}
@@ -239,7 +213,7 @@ export default function PlayerMyRankingPage() {
         .playerRankHero span { color: var(--rank-accent); font-size: 12px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
         .playerRankHero h1 { font-size: clamp(28px, 4vw, 44px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 4px 0 5px; }
         .playerRankHero p { color: #64748b; font-size: 13px; font-weight: 800; margin: 0; }
-        .playerRankHero a, .playerRankActions a { align-items: center; background: linear-gradient(135deg, var(--rank-accent), var(--rank-accent-2)); border-radius: 999px; color: #fff; display: inline-flex; font-weight: 950; gap: 7px; min-height: 38px; padding: 0 13px; text-decoration: none; white-space: nowrap; }
+        .playerRankHero a, .playerRankActions a { align-items: center; background: linear-gradient(135deg, var(--rank-accent), var(--rank-accent-2)); border-radius: 999px; color: #fff; display: inline-flex; font-weight: 950; gap: 7px; min-height: 44px; padding: 0 13px; text-decoration: none; white-space: nowrap; }
         .playerRankCard { align-items: center; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) 210px; overflow: hidden; padding: 18px 20px; position: relative; }
         .playerRankCard::before { background: linear-gradient(180deg, var(--rank-accent), var(--rank-accent-2)); content: ""; inset: 0 auto 0 0; position: absolute; width: 5px; }
         .playerRankMain { align-items: center; display: grid; gap: 18px; grid-template-columns: 96px minmax(0, 1fr); min-width: 0; }

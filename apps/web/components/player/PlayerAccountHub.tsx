@@ -16,6 +16,7 @@ import {
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import PlayerSectionHero from '@/components/player/PlayerSectionHero'
+import PageHeader from '@/components/navigation/PageHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { administrativeHome, isPlayerSession } from '@/lib/accountRolePolicy'
 
@@ -71,10 +72,9 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
 
   useEffect(() => {
     if (view !== 'activity' || !player || session.status === 'loading') return
-    if (!session.user?.id) {
-      setLoading(false)
-      return
-    }
+    // The signed-out branch renders its own state below; no activity state
+    // update is needed before a verified user is available.
+    if (!session.user?.id) return
 
     const userId = session.user.id
     let alive = true
@@ -181,7 +181,8 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
   if (view === 'preferences') {
     return (
       <main className="playerAccountHub">
-        <PlayerSectionHero badge="Mi cuenta" title="Preferencias" description={player ? 'Todo lo importante de tu perfil y tu experiencia de juego.' : 'Datos de cuenta, notificaciones y seguridad.'} icon={<ShieldCheck />} />
+        {player ? <PlayerSectionHero badge="Mi cuenta" title="Preferencias" description="Todo lo importante de tu perfil y tu experiencia de juego." icon={<ShieldCheck />} />
+          : <PageHeader backHref="/mis-datos" title="Preferencias" description="Opciones de tu cuenta administrativa." />}
 
         <section className="playerPreferenceIdentity">
           <span className="playerPreferenceIdentity__avatar">{session.user.avatarUrl ? <img src={session.user.avatarUrl} alt="" /> : session.user.name.slice(0, 1)}</span>

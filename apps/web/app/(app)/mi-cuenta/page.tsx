@@ -32,7 +32,7 @@ export default function AccountPage() {
     finally { setBusy(false) }
   }
   return <main className={styles.page}>
-    <PageHeader backHref="/mis-datos" title="Mi cuenta" description="Datos personales y foto de cuenta." />
+    <PageHeader backHref="/mis-datos" title="Datos personales" description="Datos personales y foto de cuenta." />
     {error ? <AuthAlert variant="error" title="No pudimos guardar" message={error}/> : null}
     {session.status === 'ready' && session.user ? <form key={version} className={styles.panel} onSubmit={save}>
       <label className={styles.field}>Nombre<input name="firstName" autoComplete="given-name" defaultValue={session.globalProfile?.first_name ?? ''} required minLength={2}/></label>

@@ -59,7 +59,7 @@ export default function PerfilPage() {
 
   useEffect(() => {
     if (!loadingMemberships && !loadError && preferredPlayer?.player_id) {
-      router.replace(`/jugadores/${preferredPlayer.player_id}?own=1`)
+      router.replace(`/player/carrera/${preferredPlayer.player_id}`)
     }
   }, [loadingMemberships, loadError, preferredPlayer?.player_id, router])
 

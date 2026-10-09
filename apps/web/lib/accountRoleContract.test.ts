@@ -160,10 +160,15 @@ test('UI has only account data for staff; Player fields and menu remain conditio
   assert.match(data, /player \? '\/completar-perfil\?edit=personal' : '\/mi-cuenta'/)
   const account = read('../app/(app)/mi-cuenta/page.tsx')
   assert.doesNotMatch(account, /dominantHand|preferredPosition|heightCm|category|cover/)
-  const staffMenu = nav.slice(nav.indexOf("session.role === 'club'"))
+  const menuStart = nav.indexOf("if (role === 'club')", nav.indexOf('function renderUserMenu('))
+  const staffMenu = nav.slice(menuStart, nav.indexOf("if (role === 'platform')", menuStart))
   assert.ok(nav.includes('Administración del club'))
-  assert.ok(nav.includes('Seguridad'))
-  assert.ok(staffMenu || nav)
+  // Phase 0 centralizes these destinations; security remains reachable in the
+  // account hub, not as a second account center in the administrative menu.
+  assert.match(staffMenu, /href="\/mis-datos"[^>]*>Mi cuenta/)
+  assert.doesNotMatch(staffMenu, /href="\/ajustes"|href="\/reset-password"|href="\/perfil"/)
+  assert.match(data, /href="\/reset-password"[\s\S]*Cuenta y seguridad/)
+  assert.match(data, /!player \? <Link href="\/ajustes"/)
   assert.doesNotMatch(read('../app/(app)/club/usuarios/page.tsx'), /promoteSelectedPlayer|Buscar jugador|Promové un jugador/)
   assert.match(read('../app/api/clubs/internal-users/candidates/route.ts'), /status: 409/)
 })

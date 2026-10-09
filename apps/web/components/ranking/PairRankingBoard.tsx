@@ -1,6 +1,7 @@
 'use client'
 
 import RankingPlayerAvatar from '@/components/ranking/RankingPlayerAvatar'
+import {formatRankingGender} from '@/lib/ranking'
 
 export type PairRankingRow = {
   partnership_id: string
@@ -30,7 +31,7 @@ export default function PairRankingBoard({ rows }: { rows: PairRankingRow[] }) {
           </div>
           <div className="pairRankingNames">
             <b>{pair.player1_name} / {pair.player2_name}</b>
-            <small>{pair.category ? `${pair.category}ta` : 'Categoría'}{pair.gender ? ` · ${pair.gender === 'F' ? 'Damas' : 'Caballeros'}` : ''}</small>
+            <small>{pair.category ? `${pair.category}ta` : 'Categoría'}{pair.gender ? ` · ${formatRankingGender(pair.gender)}` : ''}</small>
           </div>
           <div className="pairRankingPoints"><b>{pair.combined_points}</b><small>PTS</small></div>
         </article>
@@ -130,8 +131,11 @@ export default function PairRankingBoard({ rows }: { rows: PairRankingRow[] }) {
 
         @media (max-width: 374px) {
           .pairRankingCard {
-            grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
+            grid-template-columns: 30px 52px minmax(0, 1fr) 50px;
+            gap: 6px;
           }
+
+          .pairRankingPoints { padding: 6px; }
 
           .pairRankingPlayer {
             gap: 5px;

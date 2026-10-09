@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { join } from 'node:path'
+import { runInNewContext } from 'node:vm'
+import ts from 'typescript'
 
 const migration = readFileSync(join(process.cwd(), 'supabase/migrations/20260912225433_competition_series_pair_rankings.sql'), 'utf8')
 const individualMigration = readFileSync(join(process.cwd(), 'supabase/migrations/20260912190000_competition_series_reversal_aware_ranking.sql'), 'utf8')
@@ -113,12 +115,104 @@ test('Postgres QA is fail-closed, synthetic and always rolls back', () => {
   assert.match(postgresQa.trim(), /rollback;$/)
 })
 
-test('ranking endpoint is circuit-scoped and opt-in pairs preserves the existing response', () => {
+test('ranking panel opts into pairs without creating a separate sports calculation', () => {
   assert.match(route, /request\.nextUrl\.searchParams\.get\('include'\) === 'pairs'/)
-  assert.match(route, /if \(!includePairs\) return NextResponse\.json\(\{ ranking, finalized: true \}\)/)
-  assert.match(route, /if \(!includePairs\) return NextResponse\.json\(\{ ranking, finalized: false \}\)/)
   assert.match(route, /'get_competition_series_pair_ranking'/)
   assert.match(route, /'competition_series_final_pair_rankings'/)
   assert.match(panel, /scope=division&include=pairs/)
   assert.match(panel, /groupSeriesRankingByDivision\(pairs, divisions\)/)
+})
+
+// Execute the real handler and the real STAFF presentation filter. The contract
+// is the DTO, scope, immutable points/positions and opt-in, not a one-line return.
+const clubId = '11111111-1111-4111-8111-111111111111'
+const seriesId = '22222222-2222-4222-8222-222222222222'
+const individualRows = [
+  { ranking_position: 1, player_id: 'staff', points: 900, display_name: 'Staff' },
+  { ranking_position: 5, player_id: 'player', points: 700, display_name: 'Jugador' },
+]
+const pairRows = [
+  { ranking_position: 1, player1_user_id: 'staff', player2_user_id: 'other', points: 500 },
+  { ranking_position: 3, player1_user_id: 'player', player2_user_id: 'other', points: 400 },
+]
+function rankingHandler(closed: boolean, denied = false) {
+  const calls: Array<{ name: string; params?: Record<string, unknown>; filters?: Array<[string, string]> }> = []
+  const admin = { from: (table: string) => {
+    const q = { select: () => q, in: () => q, neq: () => q,
+      then: (resolve: (result: unknown) => unknown) => Promise.resolve({ data: table === 'club_memberships' ? [{ user_id: 'staff' }] : [], error: null }).then(resolve) }
+    return q
+  } }
+  const roleExports: Record<string, unknown> = {}
+  runInNewContext(ts.transpileModule(readFileSync(join(process.cwd(), 'lib/accountRoleServer.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText, { exports: roleExports, Set, require: (name: string) => {
+    if (name.endsWith('supabaseAdmin')) return { supabaseAdmin: admin }
+    if (name.endsWith('clubMembershipRules')) return { STAFF_ROLES: ['OWNER', 'ADMIN', 'OPERADOR', 'PLANILLERO'] }
+    if (name === 'next/server') return { NextResponse: { json: Response.json } }
+    return {}
+  } })
+  const client = {
+    from: (name: string) => {
+      const filters: Array<[string, string]> = []
+      calls.push({ name, filters })
+      const result = () => ({ data: name === 'competition_series' ? { status: closed ? 'CLOSED' : 'ACTIVE' }
+        : name === 'competition_series_final_rankings' ? individualRows : pairRows, error: null })
+      const q = { select: () => q, eq: (key: string, value: string) => { filters.push([key, value]); return q }, order: () => q,
+        maybeSingle: async () => result(), then: (resolve: (result: unknown) => unknown) => Promise.resolve(result()).then(resolve) }
+      return q
+    },
+    rpc: async (name: string, params: Record<string, unknown>) => {
+      calls.push({ name, params }); return { data: name === 'get_competition_series_pair_ranking' ? pairRows : individualRows, error: null }
+    },
+  }
+  const exports: Record<string, unknown> = {}
+  runInNewContext(ts.transpileModule(route, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
+    exports, require: (name: string) => {
+      if (name === 'next/server') return { NextResponse: { json: Response.json } }
+      if (name.endsWith('competition-series.auth')) return { authorizeCompetitionSeries: async (_request: unknown, club: string, action: string) => {
+        assert.equal(club, clubId); assert.equal(action, 'read')
+        return denied ? { error: Response.json({ error: 'Sin permiso.' }, { status: 403 }), client: null } : { error: null, client }
+      } }
+      if (name.endsWith('competition-series.validation')) return { isUuid: (value: string) => [clubId, seriesId].includes(value) }
+      if (name.endsWith('supabaseAdmin')) return { supabaseAdmin: admin }
+      if (name.endsWith('competition-ranking.avatars')) return { enrichCompetitionRankingAvatars: async (_admin: unknown, individual: unknown[], pairs: unknown[]) => ({ individual, pairs }) }
+      if (name.endsWith('accountRoleServer')) return roleExports
+      if (name.endsWith('competition-series.http')) return { seriesErrorResponse: () => Response.json({ error: 'Error.' }, { status: 500 }) }
+      throw new Error(name)
+    },
+  })
+  const get = exports.GET as (request: { nextUrl: URL }, context: { params: Promise<{ clubId: string; seriesId: string }> }) => Promise<Response>
+  return { calls, get: (includePairs = false, division = false) => get({ nextUrl: new URL(`https://fixture.invalid/?${includePairs ? 'include=pairs&' : ''}${division ? 'scope=division' : ''}`) }, { params: Promise.resolve({ clubId, seriesId }) }) }
+}
+for (const closed of [false, true]) {
+  for (const includePairs of [false, true]) {
+    test(`real ranking handler ${closed ? 'frozen' : 'open'} pairs=${includePairs}: DTO, STAFF exclusion, original points/positions and circuit scope`, async () => {
+      const app = rankingHandler(closed), response = await app.get(includePairs, true)
+      assert.equal(response.status, 200)
+      const body = await response.json()
+      assert.deepEqual(Object.keys(body).sort(), (includePairs ? ['ranking', 'individual', 'pairs', 'pairsUnavailable', 'finalized'] : ['ranking', 'finalized']).sort())
+      assert.deepEqual(body.ranking, [{ position: 5, player_id: 'player', points: 700, display_name: 'Jugador' }])
+      assert.equal(body.finalized, closed)
+      if (includePairs) {
+        assert.deepEqual(body.individual, body.ranking)
+        assert.deepEqual(body.pairs, [{ position: 3, player1_user_id: 'player', player2_user_id: 'other', points: 400 }])
+        assert.equal(body.pairsUnavailable, false)
+      }
+      assert.equal(app.calls.some(call => /pair/.test(call.name)), includePairs)
+      for (const call of app.calls) {
+        if (call.params) assert.deepEqual(JSON.parse(JSON.stringify(call.params)), { p_club_id: clubId, p_series_id: seriesId })
+        else {
+          assert.ok(call.filters?.some(([key, value]) => key === 'club_id' && value === clubId))
+          assert.ok(call.filters?.some(([key, value]) => key === (call.name === 'competition_series' ? 'id' : 'series_id') && value === seriesId))
+        }
+      }
+      if (closed) assert.ok(app.calls.every(call => !call.params))
+      else assert.ok(app.calls.some(call => call.name === 'get_competition_series_ranking_by_division'))
+    })
+  }
+}
+test('series authorization denial stops all sports reads', async () => {
+  const app = rankingHandler(false, true)
+  assert.equal((await app.get(true)).status, 403)
+  assert.equal(app.calls.length, 0)
 })

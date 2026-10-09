@@ -5500,15 +5500,6 @@
   text-transform:uppercase;
 }
 
-.clubPublicRankingCategoryHead small.is-demo-label{
-  background:rgba(15,23,42,.04);
-  border:1px solid rgba(15,23,42,.08);
-  border-radius:999px;
-  font-size:9px;
-  margin-top:5px;
-  padding:4px 7px;
-}
-
 .clubPublicRankingBranches{
   display:grid;
   gap:0;
@@ -5643,6 +5634,43 @@
   grid-template-columns:repeat(2,minmax(0,1fr));
   justify-items:center;
   min-height:112px;
+}
+
+/* A canonical individual leader is not half an invented pair. */
+.clubPublicHome .clubPublicRankingPair.is-individual-leader {
+  grid-template-columns: minmax(0, 1fr);
+}
+.clubPublicHome .clubPublicRankingCard.has-individual-leaders {
+  grid-template-rows: auto auto auto;
+  min-height: 0;
+}
+.clubPublicHome .clubPublicRankingCard.has-individual-leaders .clubPublicRankingBranch {
+  min-height: 0;
+}
+.clubPublicHome .clubPublicRankingCard.has-individual-leaders .clubPublicRankingPair {
+  min-height: 0;
+}
+.clubPublicHome .clubPublicRankingCard.has-individual-leaders .clubPublicRankingFooter {
+  margin: 0;
+  position: static;
+  width: 100%;
+}
+.clubPublicHome .is-individual-leader .clubPublicRankingPlayer {
+  align-items: center;
+  grid-template-columns: 44px minmax(0, 1fr);
+  justify-items: start;
+  max-width: none;
+  text-align: left;
+  width: 100%;
+}
+.clubPublicHome .is-individual-leader .clubPublicRankingPlayer strong {
+  font-size: 13px;
+  line-height: 1.25;
+  text-align: left;
+}
+.clubPublicHome .is-individual-leader .clubPublicRankingAvatar {
+  height: 44px;
+  width: 44px;
 }
 
 .clubPublicRankingAvatar{
@@ -6406,15 +6434,6 @@
 
   .clubPublicRankingCategoryHead small{
     font-size:8px;
-  }
-
-  .clubPublicRankingCategoryHead small.is-demo-label{
-    font-size:8px;
-    margin:0;
-    padding:2px 5px;
-    position:absolute;
-    right:9px;
-    top:8px;
   }
 
   .clubPublicRankingBranches{
@@ -7634,10 +7653,6 @@ a.clubPublicRankingFooter span{
     font-weight:900;
     letter-spacing:.07em;
     text-transform:uppercase;
-  }
-
-  .clubPublicHome .clubPublicRankingCategoryHead small.is-demo-label{
-    display:none;
   }
 
   .clubPublicHome .clubPublicRankingBranches{

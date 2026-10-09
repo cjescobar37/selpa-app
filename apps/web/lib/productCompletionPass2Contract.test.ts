@@ -135,7 +135,7 @@ test('Club Finance: Guest is 401; failed installed RPCs cannot fabricate empty f
   assert.equal((await response.json()).overview, undefined)
 })
 
-function billingApi(role: string, fail = false) {
+function billingApi(role: string, fail = false, code = 'PGRST202', throws = false) {
   const calls: string[] = [], logs: unknown[][] = []
   const loaded = execute('./platformBillingF2Server.ts', name => {
     if (name === 'next/server') return { NextResponse: { json: Response.json } }
@@ -145,8 +145,9 @@ function billingApi(role: string, fail = false) {
     if (name.endsWith('clubMembershipServer')) return { requireClubCapability: async () => denied(permissions.hasClubCapability(role, 'club:update')) }
     if (name === '@supabase/supabase-js') return { createClient: () => ({ rpc: async (operation: string) => {
       calls.push(operation)
+      if (throws) throw new TypeError('private transport diagnostic')
       return { data: operation.startsWith('get_') ? { currency_code: 'ARS', received: 0, pending: 0, overdue: 0, active_clubs: 0, clubs_with_debt: 0, subscription: null } : page,
-        error: fail ? { code: 'PGRST202', message: 'private DB detail' } : null }
+        error: fail ? { code, message: 'private DB detail' } : null }
     } }) }
     throw new Error(name)
   }, { process: { env: { NEXT_PUBLIC_SUPABASE_URL: 'https://fixture.invalid', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'offline-fixture' } }, console: { error: (...args: unknown[]) => logs.push(args) } })
@@ -166,20 +167,39 @@ for (const role of ['OWNER', 'ADMIN', 'PLATFORM']) {
     assert.deepEqual(app.logs, [])
   })
 }
-for (const role of ['GUEST', 'PLAYER', 'PLANILLERO']) {
+for (const role of ['GUEST', 'PLAYER', 'OPERADOR', 'PLANILLERO']) {
   test(`${role}: Club/Platform Billing API stops unauthorized identity before reads`, async () => {
     const app = billingApi(role)
     for (const platform of [true, false]) assert.equal((await app.get(request(`/api/billing?clubId=${clubId}`, role !== 'GUEST'), platform)).status, role === 'GUEST' ? 401 : 403)
     assert.equal(app.calls.length, 0)
   })
 }
-test('Billing failed RPC: human error and technical operation/code log; no fake empty overview', async () => {
+test('Billing failed read RPC is 503: human error and technical operation/code log; no fake empty overview', async () => {
   const app = billingApi('PLATFORM', true), response = await app.get(request('/api/billing?kind=overview'), true)
-  assert.equal(response.status, 400)
+  assert.equal(response.status, 503)
+  assert.equal(response.headers.get('cache-control'), 'private, no-store')
   const body = await response.json()
   assert.equal(body.subscription, undefined)
   assert.doesNotMatch(JSON.stringify(body), /PGRST|private/)
   assert.equal(JSON.stringify(app.logs), JSON.stringify([['[selpa-billing]', { operation: 'get_platform_billing_overview_f2', code: 'PGRST202' }]]))
+})
+
+for (const [code, status] of [['42501', 403], ['22023', 400], ['22P02', 400], ['XX000', 503]] as const) {
+  test(`Billing read ${code} is ${status}, not an empty or successful balance`, async () => {
+    const response = await billingApi('OWNER', true, code).get(request(`/api/billing?clubId=${clubId}`), false)
+    assert.equal(response.status, status)
+    const body = await response.json()
+    assert.equal(body.pending, undefined)
+    assert.doesNotMatch(JSON.stringify(body), /private|PGRST|XX000|42501|22023|22P02/)
+  })
+}
+test('Billing transport exception becomes safe retryable 503, never a route crash or empty view', async () => {
+  const app = billingApi('ADMIN', false, '', true)
+  const response = await app.get(request(`/api/billing?clubId=${clubId}`), false)
+  assert.equal(response.status, 503)
+  assert.doesNotMatch(JSON.stringify(await response.json()), /private|transport|pending|subscription/)
+  assert.match(JSON.stringify(app.logs), /UNEXPECTED/)
+  assert.doesNotMatch(JSON.stringify(app.logs), /private/)
 })
 
 const privatePlayer = ['/player', '/player/pagos', '/perfil', '/actividad', '/torneos/t/inscripcion']

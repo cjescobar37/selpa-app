@@ -1,3 +1,4 @@
+import { readClubRankingPreview } from '@/features/player-career/player-career.repository'
 import { notFound } from 'next/navigation'
 import PublicClubHomeExperience, {
   type PublicClubCampaign,
@@ -9,7 +10,6 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { TOURNAMENT_SELECT, toTournamentView, type TournamentView } from '@/lib/tournamentHelpers'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
-import { BRAND } from '@/lib/branding'
 import { getTournamentCircuitContexts } from '@/features/competition/events/competition-events.repository'
 
 export const dynamic = 'force-dynamic'
@@ -30,7 +30,6 @@ type ClubPlayerRow = {
   display_name: string | null
   category: number | null
   gender: string | null
-  ranking_points: number | null
   approved_at: string | null
 }
 
@@ -64,22 +63,6 @@ type ClubNewsRow = {
 
 const publicSponsorSlots = ['CLUB_HOME_HERO', 'CLUB_HOME_AFTER_TOURNAMENTS', 'CLUB_HOME_AFTER_NEWS']
 
-function normalizeGender(value?: string | null) {
-  const normalized = String(value ?? '').toUpperCase()
-  if (normalized === 'M' || normalized === 'MALE') return 'Caballeros'
-  if (normalized === 'F' || normalized === 'FEMALE') return 'Damas'
-  if (normalized.includes('MIX')) return 'Mixto'
-  return 'Rama abierta'
-}
-
-function categoryLabel(value?: number | null) {
-  return value ? `${value}ta` : 'Categoría abierta'
-}
-
-function playerName(player: ClubPlayerRow) {
-  return player.display_name || `Jugador ${BRAND.name}`
-}
-
 function isVisibleCampaign(row: CampaignRow, now: number) {
   if (!['active', 'scheduled'].includes(String(row.status ?? '').toLowerCase())) return false
   const starts = row.starts_at ? new Date(row.starts_at).getTime() : null
@@ -112,39 +95,6 @@ function toPublicCampaign(row: CampaignRow, slotId = row.slot_id): PublicClubCam
   }
 }
 
-function buildRankingSummary(players: ClubPlayerRow[]): PublicClubRankingSummary[] {
-  const groups = new Map<string, PublicClubRankingSummary>()
-
-  for (const player of players) {
-    const gender = normalizeGender(player.gender)
-    const label = categoryLabel(player.category)
-    const key = `${label}:${gender}`
-    const points = Number(player.ranking_points ?? 0)
-    const current = groups.get(key)
-    if (!current) {
-      groups.set(key, {
-        key,
-        label,
-        gender,
-        players: 1,
-        leaderName: playerName(player),
-        leaderPoints: points,
-      })
-      continue
-    }
-
-    current.players += 1
-    if (points > current.leaderPoints) {
-      current.leaderName = playerName(player)
-      current.leaderPoints = points
-    }
-  }
-
-  return Array.from(groups.values())
-    .sort((a, b) => b.players - a.players || b.leaderPoints - a.leaderPoints || a.label.localeCompare(b.label))
-    .slice(0, 6)
-}
-
 export default async function PublicClubPage({ params }: { params: Promise<{ clubId: string }> }) {
   const { clubId } = await params
 
@@ -160,10 +110,10 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
   const [{ data: playerRows }, { data: tournamentRows }] = await Promise.all([
     supabaseAdmin
       .from('club_players')
-      .select('id,user_id,display_name,category,gender,ranking_points,approved_at')
+      .select('id,user_id,display_name,category,gender,approved_at')
       .eq('club_id', clubId)
       .not('approved_at', 'is', null)
-      .order('ranking_points', { ascending: false, nullsFirst: false }),
+      .order('id'),
     supabaseAdmin
       .from('tournaments')
       .select(TOURNAMENT_SELECT)
@@ -280,6 +230,9 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
     return acc
   }, {})
 
+  let rankingSummary: PublicClubRankingSummary[] = []
+  let rankingUnavailable = false
+  try { rankingSummary = await readClubRankingPreview(clubId) } catch { rankingUnavailable = true }
   const categories = new Set(players.map((player) => player.category).filter((value): value is number => typeof value === 'number'))
 
   return (
@@ -301,7 +254,8 @@ export default async function PublicClubPage({ params }: { params: Promise<{ clu
       heroCampaign={campaignsBySlot.CLUB_HOME_HERO ?? null}
       campaignsBySlot={campaignsBySlot}
       tournaments={tournaments}
-      rankingSummary={buildRankingSummary(players)}
+      rankingSummary={rankingSummary}
+      rankingUnavailable={rankingUnavailable}
       news={clubNews}
     />
   )

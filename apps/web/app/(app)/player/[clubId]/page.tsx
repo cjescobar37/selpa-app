@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   CalendarDays,
   ChevronRight,
@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
+import CareerRecentResults from '@/components/player/CareerRecentResults'
+import type { CareerStats } from '@/features/player-career/player-career.types'
 import { supabase } from '@/lib/supabaseClient'
 import { getClubTheme } from '@/lib/clubThemes'
 
@@ -48,25 +50,6 @@ type TournamentRow = {
   signup_deadline: string | null
   category: number | null
   gender: string | null
-}
-
-type TeamRow = {
-  id: string
-  tournament_id: string
-  player1_user_id: string
-  player2_user_id: string
-}
-
-type MatchRow = {
-  id: string
-  tournament_id: string
-  team1_id: string
-  team2_id: string
-  status: string
-  winner_team_id: string | null
-  score: unknown
-  scheduled_at: string | null
-  created_at: string
 }
 
 type PartnerPlayer = {
@@ -108,13 +91,6 @@ function initials(value: string) {
   return `${parts[0]?.[0] ?? 'C'}${parts[1]?.[0] ?? ''}`.toUpperCase()
 }
 
-function scoreLabel(score: unknown) {
-  if (!score) return 'Sin score'
-  if (typeof score === 'string') return score
-  if (typeof score === 'object' && 'text' in score && typeof (score as { text?: unknown }).text === 'string') return (score as { text: string }).text
-  return 'Resultado cargado'
-}
-
 export default function PlayerClubHomePage() {
   const params = useParams<{ clubId: string }>()
   const clubId = params?.clubId
@@ -123,8 +99,7 @@ export default function PlayerClubHomePage() {
   const [player, setPlayer] = useState<ClubPlayerRow | null>(null)
   const [rankPosition, setRankPosition] = useState<number | null>(null)
   const [openTournaments, setOpenTournaments] = useState<TournamentRow[]>([])
-  const [teams, setTeams] = useState<TeamRow[]>([])
-  const [matches, setMatches] = useState<MatchRow[]>([])
+  const [careerStats,setCareerStats]=useState<CareerStats|null>(null)
   const [activePartnership, setActivePartnership] = useState<ActivePartnership | null>(null)
   const [loading, setLoading] = useState(true)
   const [hasLoaded, setHasLoaded] = useState(false)
@@ -133,12 +108,6 @@ export default function PlayerClubHomePage() {
   const sessionClub = session.clubs.find((item) => item.id === clubId) ?? null
   const clubTheme = getClubTheme(club?.theme_key)
   const displayClubName = club?.brand_name || club?.name || sessionClub?.name || 'Club'
-  const teamIds = useMemo(() => teams.map((team) => team.id), [teams])
-  const recentMatches = useMemo(() => matches
-    .filter((match) => String(match.status).toUpperCase() === 'PLAYED')
-    .sort((a, b) => String(b.scheduled_at ?? b.created_at).localeCompare(String(a.scheduled_at ?? a.created_at)))
-    .slice(0, 5), [matches])
-  const wins = recentMatches.filter((match) => match.winner_team_id && teamIds.includes(match.winner_team_id)).length
   const activePartner = activePartnership && player
     ? activePartnership.player1_club_player_id === player.id
       ? activePartnership.player2
@@ -168,14 +137,14 @@ export default function PlayerClubHomePage() {
             .maybeSingle(),
           supabase
             .from('club_players')
-            .select('id,club_id,user_id,display_name,category,gender,ranking_points,approved_at')
+            .select('id,club_id,user_id,display_name,category,gender,approved_at')
             .eq('club_id', clubId)
             .eq('user_id', session.user.id)
             .maybeSingle(),
         ])
 
         if (playerError) throw playerError
-        let currentPlayer = (playerData ?? null) as ClubPlayerRow | null
+        let currentPlayer = playerData ? {...playerData,ranking_points:null} as ClubPlayerRow : null
 
         let rank: number | null = null
 
@@ -195,47 +164,21 @@ export default function PlayerClubHomePage() {
             return !deadline || deadline >= today
           })
 
-        let teamRows: TeamRow[] = []
-        let matchRows: MatchRow[] = []
-        if (currentPlayer) {
-          const { data: teamsData } = await supabase
-            .from('tournament_teams')
-            .select('id,tournament_id,player1_user_id,player2_user_id')
-            .eq('club_id', clubId)
-            .or(`player1_user_id.eq.${currentPlayer.user_id},player2_user_id.eq.${currentPlayer.user_id}`)
-          teamRows = (teamsData ?? []) as TeamRow[]
-          const ids = teamRows.map((team) => team.id)
-          if (ids.length) {
-            const [matchesAsOne, matchesAsTwo] = await Promise.all([
-              supabase
-                .from('tournament_matches')
-                .select('id,tournament_id,team1_id,team2_id,status,winner_team_id,score,scheduled_at,created_at')
-                .eq('club_id', clubId)
-                .in('team1_id', ids),
-              supabase
-                .from('tournament_matches')
-                .select('id,tournament_id,team1_id,team2_id,status,winner_team_id,score,scheduled_at,created_at')
-                .eq('club_id', clubId)
-                .in('team2_id', ids),
-            ])
-            const byId = new Map<string, MatchRow>()
-            for (const match of [...((matchesAsOne.data ?? []) as MatchRow[]), ...((matchesAsTwo.data ?? []) as MatchRow[])]) byId.set(match.id, match)
-            matchRows = Array.from(byId.values())
-          }
-        }
-
         const { data: sessionData } = await supabase.auth.getSession()
         const token = sessionData.session?.access_token
         let partnership: ActivePartnership | null = null
+        let sports:CareerStats|null=null
         if (token) {
           const [activeRes,rankingRes] = await Promise.all([
             fetch(`/api/clubs/${clubId}/active-partnerships`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }),
-            fetch(`/api/clubs/${clubId}/ranking`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }),
+            fetch(`/api/player/my-ranking?clubId=${clubId}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }),
           ])
           const activeJson = await activeRes.json().catch(() => ({ partnerships: [] }))
           const rankingJson = await rankingRes.json().catch(() => ({ individual: [] }))
+          sports=rankingRes.ok ? rankingJson.summary?.stats ?? null:null
           const rows = activeRes.ok ? (activeJson.partnerships ?? []) as ActivePartnership[] : []
           const standing = rankingRes.ok ? (rankingJson.individual ?? []).find((row: { user_id?: string }) => row.user_id === session.user?.id) as { ranking_points:number;category:number|null;gender:string|null;position:number }|undefined : undefined
+          if(currentPlayer&&!standing) currentPlayer={...currentPlayer,ranking_points:null}
           if(currentPlayer&&standing){currentPlayer={...currentPlayer,ranking_points:standing.ranking_points,category:standing.category,gender:standing.gender};rank=standing.position}
           const currentPlayerId = currentPlayer?.id
           partnership = currentPlayerId
@@ -248,8 +191,7 @@ export default function PlayerClubHomePage() {
         setPlayer(currentPlayer)
         setRankPosition(rank)
         setOpenTournaments(openRows)
-        setTeams(teamRows)
-        setMatches(matchRows)
+        setCareerStats(sports)
         setActivePartnership(partnership)
       } catch {
         if (!alive) return
@@ -314,9 +256,9 @@ export default function PlayerClubHomePage() {
 
       <section className="playerClubStats">
         <article><ShieldCheck size={18} /><span>Estado</span><strong>{player?.approved_at ? 'Aprobado' : 'Pendiente'}</strong></article>
-        <article><Trophy size={18} /><span>Ranking</span><strong>{rankPosition ? `#${rankPosition}` : 'Pendiente'}</strong><small>{player?.ranking_points ?? 0} pts</small></article>
+        <article><Trophy size={18} /><span>Ranking</span><strong>{rankPosition ? `#${rankPosition}` : 'Pendiente'}</strong><small>{player?.ranking_points === null ? 'Sin lectura' : `${player?.ranking_points ?? '—'} pts`}</small></article>
         <article><UsersRound size={18} /><span>Pareja</span><strong>{activePartner?.full_name ?? 'Sin pareja activa'}</strong></article>
-        <article><Swords size={18} /><span>Últimos</span><strong>{recentMatches.length}</strong><small>{wins} ganados</small></article>
+        <article><Swords size={18} /><span>Partidos de carrera</span><strong>{careerStats?.matches_played ?? '—'}</strong><small>{careerStats ? `${careerStats.wins} ganados`:'Sin lectura confirmada'}</small></article>
       </section>
 
       <section className="playerClubGrid">
@@ -353,18 +295,7 @@ export default function PlayerClubHomePage() {
       <section className="playerClubGrid playerClubGrid--bottom">
         <article className="playerClubPanel">
           <header><span>Últimos partidos</span><h2>Resultados recientes</h2></header>
-          <div className="playerClubMatchList">
-            {recentMatches.length ? recentMatches.map((match) => {
-              const ownTeamId = teamIds.includes(match.team1_id) ? match.team1_id : match.team2_id
-              const result = match.winner_team_id === ownTeamId ? 'Ganado' : 'Perdido'
-              return (
-                <div key={match.id}>
-                  <strong>{result} · {scoreLabel(match.score)}</strong>
-                  <span>{formatDate(match.scheduled_at ?? match.created_at)}</span>
-                </div>
-              )
-            }) : <div className="playerClubEmpty">Sin partidos jugados todavía.</div>}
-          </div>
+          {session.user && clubId ? <CareerRecentResults userId={session.user.id} clubId={clubId}/>:null}
         </article>
 
         <article className="playerClubPanel">
@@ -487,7 +418,7 @@ export default function PlayerClubHomePage() {
           .playerClubHeroActions a,
           .playerClubHeroActions button {
             font-size: 11px;
-            min-height: 32px;
+            min-height: 44px;
             padding: 7px 10px;
           }
           .playerClubStats {

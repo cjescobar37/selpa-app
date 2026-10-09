@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Newspaper,
   ShieldCheck,
-  Swords,
   Trophy,
   UserRound,
   UsersRound,
@@ -23,8 +22,10 @@ import PublicHomeEmbed from '@/components/public/PublicHomeEmbed'
 import ModeSegmentedControl, { type HomeMode } from '@/components/ModeSegmentedControl'
 import { humanizeUiError } from '@/lib/productPresentation'
 import { useWriteGuard } from '@/lib/useWriteGuard'
+import CareerRecentResults from '@/components/player/CareerRecentResults'
 
 type ClubPlayerRow = {
+  ranking_position?: number | null
   id: string
   club_id: string
   user_id: string
@@ -71,19 +72,6 @@ type RegistrationRow = {
   club_id: string
   team_id: string
   status: string | null
-  created_at: string
-}
-
-type MatchRow = {
-  id: string
-  club_id: string
-  tournament_id: string
-  team1_id: string
-  team2_id: string
-  status: string | null
-  winner_team_id: string | null
-  score: unknown
-  scheduled_at: string | null
   created_at: string
 }
 
@@ -177,9 +165,7 @@ export default function PlayerHomePage() {
   const session = useSession()
   const [players, setPlayers] = useState<ClubPlayerRow[]>([])
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
-  const [myTeams, setMyTeams] = useState<TeamRow[]>([])
   const [registrations, setRegistrations] = useState<RegistrationRow[]>([])
-  const [matches, setMatches] = useState<MatchRow[]>([])
   const [partnerships, setPartnerships] = useState<ActivePartnership[]>([])
   const [invites, setInvites] = useState<PartnerInvite[]>([])
   const [loadingData, setLoadingData] = useState(true)
@@ -209,8 +195,8 @@ export default function PlayerHomePage() {
   const activeClub = session.activeClubId ? clubsById.get(session.activeClubId) : undefined
   const activePlayer = activeClub ? playerByClubId.get(activeClub.id) : undefined
   const activeCategoryLabel = activePlayer?.category ? `Categoría ${activePlayer.category}` : 'Categoría por definir'
-  const activePositionLabel = '-'
-  const activePointsLabel = `${activePlayer?.ranking_points ?? 0} pts`
+  const activePositionLabel = activePlayer?.ranking_position ? '#'+activePlayer.ranking_position : 'Sin ranking'
+  const activePointsLabel = activePlayer?.ranking_points === null || activePlayer?.ranking_points === undefined ? 'Sin lectura' : `${activePlayer.ranking_points} pts`
   const activePartnerName = useMemo(() => {
     const activePartnership = partnerships.find((partnership) => (
       activeClub ? partnership.club_id === activeClub.id : true
@@ -252,7 +238,6 @@ export default function PlayerHomePage() {
   }, [session.globalProfile?.first_name, session.globalProfile?.last_name, session.user?.name])
 
   const tournamentById = useMemo(() => new Map(tournaments.map((tournament) => [tournament.id, tournament])), [tournaments])
-  const teamIds = useMemo(() => myTeams.map((team) => team.id), [myTeams])
   const nextTournament = upcomingTournaments[0]
   const nextTournamentClub = nextTournament ? clubsById.get(nextTournament.club_id) : undefined
   const priorityInvite = pendingInvites[0]
@@ -287,13 +272,6 @@ export default function PlayerHomePage() {
       .slice(0, 6)
   }, [clubsById, registrations, tournamentById])
 
-  const recentMatches = useMemo(() => {
-    return matches
-      .filter((match) => String(match.status ?? '').toUpperCase() === 'PLAYED')
-      .sort((a, b) => String(b.scheduled_at ?? b.created_at).localeCompare(String(a.scheduled_at ?? a.created_at)))
-      .slice(0, 5)
-  }, [matches])
-
   const clubNewsFallbacks: ClubContentNotice[] = useMemo(() => (
     session.clubs.slice(0, 3).map((club) => ({
       id: `fallback-${club.id}`,
@@ -322,7 +300,7 @@ export default function PlayerHomePage() {
         const clubIds = session.clubs.map((club) => club.id)
         const playersResult = await supabase
           .from('club_players')
-          .select('id,club_id,user_id,display_name,category,gender,ranking_points,approved_at')
+          .select('id,club_id,user_id,display_name,category,gender,approved_at')
           .eq('user_id', session.user.id)
 
         if (playersResult.error) throw playersResult.error
@@ -330,7 +308,6 @@ export default function PlayerHomePage() {
         let tournamentRows: TournamentRow[] = []
         let teamRows: TeamRow[] = []
         let registrationRows: RegistrationRow[] = []
-        let matchRows: MatchRow[] = []
         if (clubIds.length) {
           const today = new Date().toISOString().slice(0, 10)
           const { data: tournamentData, error: tournamentError } = await supabase
@@ -356,23 +333,11 @@ export default function PlayerHomePage() {
           const ids = teamRows.map((team) => team.id)
 
           if (ids.length) {
-            const [{ data: registrationData }, matchesAsOne, matchesAsTwo] = await Promise.all([
-              supabase
-                .from('tournament_registrations')
-                .select('id,tournament_id,club_id,team_id,status,created_at')
-                .in('team_id', ids)
-                .order('created_at', { ascending: false }),
-              supabase
-                .from('tournament_matches')
-                .select('id,club_id,tournament_id,team1_id,team2_id,status,winner_team_id,score,scheduled_at,created_at')
-                .in('club_id', clubIds)
-                .in('team1_id', ids),
-              supabase
-                .from('tournament_matches')
-                .select('id,club_id,tournament_id,team1_id,team2_id,status,winner_team_id,score,scheduled_at,created_at')
-                .in('club_id', clubIds)
-                .in('team2_id', ids),
-            ])
+            const { data: registrationData } = await supabase
+              .from('tournament_registrations')
+              .select('id,tournament_id,club_id,team_id,status,created_at')
+              .in('team_id', ids)
+              .order('created_at', { ascending: false })
 
             registrationRows = (registrationData ?? []) as RegistrationRow[]
             const missingTournamentIds = Array.from(new Set(registrationRows.map((row) => row.tournament_id)))
@@ -386,11 +351,6 @@ export default function PlayerHomePage() {
               tournamentRows = [...tournamentRows, ...((registeredTournamentData ?? []) as TournamentRow[])]
             }
 
-            const byId = new Map<string, MatchRow>()
-            for (const match of [...((matchesAsOne.data ?? []) as MatchRow[]), ...((matchesAsTwo.data ?? []) as MatchRow[])]) {
-              byId.set(match.id, match)
-            }
-            matchRows = Array.from(byId.values())
           }
         }
 
@@ -398,7 +358,7 @@ export default function PlayerHomePage() {
         const token = sessionData.session?.access_token
         let activeRows: ActivePartnership[] = []
         let inviteRows: PartnerInvite[] = []
-        const standingsByClubAndUser = new Map<string,{ranking_points:number;category:number|null;gender:string|null}>()
+        const standingsByClubAndUser = new Map<string,{ranking_points:number;category:number|null;gender:string|null;position:number}>()
 
         if (token && clubIds.length) {
           const partnerResults = await Promise.all(clubIds.map(async (clubId) => {
@@ -411,7 +371,7 @@ export default function PlayerHomePage() {
                 headers: { Authorization: `Bearer ${token}` },
                 cache: 'no-store',
               }),
-              fetch(`/api/clubs/${clubId}/ranking`, {
+              fetch(`/api/player/my-ranking?clubId=${clubId}`, {
                 headers: { Authorization: `Bearer ${token}` },
                 cache: 'no-store',
               }),
@@ -423,7 +383,7 @@ export default function PlayerHomePage() {
               clubId,
               partnerships: activeRes.ok ? (activeJson.partnerships ?? []) as ActivePartnership[] : [],
               invites: invitesRes.ok ? (invitesJson.invites ?? []) as PartnerInvite[] : [],
-              standings: rankingRes.ok ? (rankingJson.individual ?? []) as Array<{user_id:string;ranking_points:number;category:number|null;gender:string|null}> : [],
+              standings: rankingRes.ok ? (rankingJson.individual ?? []) as Array<{user_id:string;ranking_points:number;category:number|null;gender:string|null;position:number}> : [],
             }
           }))
 
@@ -441,12 +401,10 @@ export default function PlayerHomePage() {
         if (!alive) return
         setPlayers(((playersResult.data ?? []) as ClubPlayerRow[]).map((player) => {
           const standing=standingsByClubAndUser.get(`${player.club_id}:${player.user_id}`)
-          return standing?{...player,ranking_points:standing.ranking_points,category:standing.category,gender:standing.gender}:player
+          return standing?{...player,ranking_points:standing.ranking_points,category:standing.category,gender:standing.gender,ranking_position:standing.position}:{...player,ranking_points:null,ranking_position:null}
         }))
         setTournaments(tournamentRows)
-        setMyTeams(teamRows)
         setRegistrations(registrationRows)
-        setMatches(matchRows)
         setPartnerships(activeRows)
         setInvites(inviteRows)
       } catch (error: unknown) {
@@ -833,7 +791,7 @@ export default function PlayerHomePage() {
               return (
                 <Link key={player.id} href={`/player/${player.club_id}`}>
                   <span>{club?.name ?? 'Club'}</span>
-                  <strong>{player.ranking_points ?? 0} pts</strong>
+                  <strong>{player.ranking_points === null ? 'Sin lectura' : `${player.ranking_points} pts`}</strong>
                   <small>{player.category ?? 'Cat.'} · {normalizeGender(player.gender)}</small>
                 </Link>
               )
@@ -845,22 +803,7 @@ export default function PlayerHomePage() {
               </div>
             )}
 
-            {recentMatches.length ? (
-              <div className="playerRecentStack">
-                <b><Swords size={15} /> Últimos partidos</b>
-                {recentMatches.map((match) => {
-                  const ownTeamId = teamIds.includes(match.team1_id) ? match.team1_id : match.team2_id
-                  const result = match.winner_team_id === ownTeamId ? 'Ganado' : 'Perdido'
-                  const club = clubsById.get(match.club_id)
-                  return (
-                    <div key={match.id}>
-                      <span>{result}</span>
-                      <small>{club?.name ?? 'Club'} · {formatDate(match.scheduled_at ?? match.created_at)}</small>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : null}
+            {session.user?.id && activeClub?.id ? <CareerRecentResults userId={session.user.id} clubId={activeClub.id}/> : null}
           </div>
         </article>
       </section>

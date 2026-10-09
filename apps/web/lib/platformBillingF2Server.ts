@@ -33,7 +33,14 @@ export function billingFailure(error:{code?:string;message?:string},operation='b
   return NextResponse.json({code:match??'BILLING_UNCONFIRMED',error: match ? messages[match] : error.code==='40001' ? 'Operación concurrente. Reintentá con la misma acción.' : 'No pudimos completar la operación de facturación.'},
     {status:error.code==='42501'?403:error.code==='40001'||error.code==='23505'||match?409:400})
 }
+function billingReadFailure(error:{code?:string},operation:string) {
+  console.error('[selpa-billing]',{operation,code:/^[A-Z0-9_]{1,32}$/.test(error.code??'')?error.code:'UNKNOWN'})
+  const status=error.code==='42501'?403:['22023','22P02'].includes(error.code??'')?400:503
+  return NextResponse.json({error:status===403?'No tenés acceso a esta facturación.':status===400?'Filtros inválidos.':'No pudimos cargar Facturación. Reintentá.'},
+    {status,headers:{'Cache-Control':'private, no-store'}})
+}
 export async function billingGet(req:NextRequest,platform:boolean) {
+  try {
   const access=await billingAccess(req,platform); if(access.error || !access.client) return access.error
   const q=req.nextUrl.searchParams; const kind=q.get('kind') ?? 'overview'
   if(kind!=='overview' && !(billingLists as readonly string[]).includes(kind)) return NextResponse.json({error:'Lista inválida.'},{status:400})
@@ -43,8 +50,11 @@ export async function billingGet(req:NextRequest,platform:boolean) {
   const result=await access.client.rpc(kind==='overview'?'get_platform_billing_overview_f2':'list_platform_billing_f2',{
     p_club_id:access.clubId,p_from:from,p_to:to,...(kind==='overview'?{}:{p_kind:kind,p_cursor_at:at,p_cursor_id:id,p_limit:20,p_search:q.get('search')??''}),
   })
-  if(result.error) return billingFailure(result.error,kind==='overview'?'get_platform_billing_overview_f2':'list_platform_billing_f2')
+  if(result.error) return billingReadFailure(result.error,kind==='overview'?'get_platform_billing_overview_f2':'list_platform_billing_f2')
   return NextResponse.json(result.data,{headers:{'Cache-Control':'private, no-store'}})
+  } catch {
+    return billingReadFailure({code:'UNEXPECTED'},'billing_read')
+  }
 }
 export async function billingPost(req:NextRequest) {
   const access=await billingAccess(req,true); if(access.error || !access.client) return access.error
