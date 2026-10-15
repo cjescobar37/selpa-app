@@ -15,6 +15,7 @@ import PublicRankingClubCard from '@/components/public/PublicRankingClubCard'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import { useSession } from '@/components/session/SessionProvider'
 import { isClubAdminRole } from '@/lib/clubMembershipRules'
+import { formatHomeNewsDate as formatDate } from '@/lib/publicHomeDatePresentation'
 
 type NewsItem = {
   id: string
@@ -93,11 +94,6 @@ type PublicMetrics = {
   players: number
   tournaments: number
   matches?: number | null
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return 'Fecha a confirmar'
-  return new Date(value).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).replace('.', '')
 }
 
 function placementLabel(placement: NewsItem['placement']) {

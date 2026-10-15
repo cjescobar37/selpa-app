@@ -9,6 +9,7 @@ import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
 import { getTournamentFlyerUrl } from '@/lib/tournamentFlyers'
 import { formatCategoryLabel, formatGenderLabel, formatSegmentLabel } from '@/lib/tournamentLabels'
+import { formatHomeAgendaDeadline as formatAgendaDeadline } from '@/lib/publicHomeDatePresentation'
 
 export type TournamentPublicCardData = {
   id: string
@@ -92,18 +93,6 @@ function formatAgendaDayWithPreposition(value?: string | null) {
   if (!date) return 'A definir'
   const month = new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(date).replace('.', '')
   return `${date.getDate()} de ${month}`
-}
-
-function formatAgendaDeadline(value?: string | null) {
-  if (!value) return 'A definir'
-  const date = value.includes('T') ? new Date(value) : parseTournamentDate(value)
-  if (!date || Number.isNaN(date.getTime())) return formatAgendaDayWithPreposition(value)
-  const day = String(date.getDate()).padStart(2, '0')
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const year = date.getFullYear()
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `El ${day}/${month}/${year} a las ${hours}:${minutes}`
 }
 
 function formatAgendaRange(start?: string | null, end?: string | null) {
