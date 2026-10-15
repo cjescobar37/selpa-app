@@ -875,8 +875,8 @@
     align-items: center;
     display: flex;
     gap: 0;
-    min-height: calc(46px + env(safe-area-inset-top, 0px));
-    padding: calc(7px + env(safe-area-inset-top, 0px)) 8px 5px;
+    min-height: 46px;
+    padding: 7px 8px 5px;
   }
 
   .px-mobileBar--authed .px-mobileBar__left,

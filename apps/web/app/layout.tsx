@@ -1,8 +1,11 @@
 // app/layout.tsx
 import './globals.css'
+import './pwa.css'
+import type { Metadata, Viewport } from 'next'
 import { Bebas_Neue, Inter, Outfit, Rajdhani } from 'next/font/google'
 import AppShellClient from '@/components/AppShellClient'
 import { BRAND } from '@/lib/branding'
+import { PWA_COLORS, PWA_STARTUP_SCREENS } from '@/lib/pwa'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -32,15 +35,28 @@ const rajdhani = Rajdhani({
   weight: ['600', '700'],
 })
 
-export const metadata = {
+export const metadata: Metadata = {
   title: BRAND.name.toUpperCase(),
   description: BRAND.tagline,
+  applicationName: BRAND.name.toUpperCase(),
+  // Next emits the modern mobile-web-app-capable tag; retain the Apple spelling
+  // as well for older iOS Home Screen implementations.
+  other: { 'apple-mobile-web-app-capable': 'yes' },
+  appleWebApp: {
+    capable: true,
+    title: BRAND.name.toUpperCase(),
+    statusBarStyle: 'black-translucent',
+    startupImage: PWA_STARTUP_SCREENS.map(screen => ({ url: `/pwa/startup/${screen.id}`, media: screen.media })),
+  },
 }
 
 // viewport OK
-export const viewport = {
+export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
+  // Opaque counterpart of the existing --px-nav-bg, not a new brand color.
+  themeColor: PWA_COLORS.theme,
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
