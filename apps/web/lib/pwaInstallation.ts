@@ -2,6 +2,23 @@
 export type InstallMethod = 'native' | 'ios-safari' | 'ios-browser' | 'android-chrome' | 'android-samsung' | null
 export const INSTALL_DISMISS_KEY = 'selpa:pwa-install-dismissed:v1'
 export const INSTALL_DISMISS_MS = 7 * 24 * 60 * 60 * 1000
+// Independent from the inline row: declining the popup must leave it available.
+export const INSTALL_POPUP_SESSION_KEY = 'selpa:pwa-popup-seen:v1'
+export const INSTALL_POPUP_DISMISS_KEY = 'selpa:pwa-popup-dismissed:v1'
+export const INSTALL_POPUP_PHONE_QUERY = '(max-width: 600px), (max-height: 600px) and (max-width: 980px) and (orientation: landscape)'
+export type PopupInstallMethod = Exclude<InstallMethod, null> | 'embedded-ios' | 'embedded-android' | 'android-browser'
+
+export function getPopupInstallMethod(ua: string, platform: string, touchPoints: number, nativePrompt: boolean): PopupInstallMethod | null {
+  // No automatic promotion on tablets or desktop, including touch-enabled iPads.
+  if (/iPad|Tablet/i.test(ua) || (platform === 'MacIntel' && touchPoints > 1)) return null
+  const ios = /iPhone|iPod/.test(ua)
+  const android = /Android/.test(ua) && /Mobile/.test(ua)
+  if (!ios && !android) return null
+  const embedded = /FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv[);]|GSA\//i.test(ua)
+    || (ios && !/Safari\/|CriOS|FxiOS|EdgiOS|OPiOS/.test(ua))
+  if (embedded) return ios ? 'embedded-ios' : 'embedded-android'
+  return getInstallMethod(ua, platform, touchPoints, nativePrompt) ?? 'android-browser'
+}
 
 export function getInstallMethod(ua: string, platform: string, touchPoints: number, nativePrompt: boolean): InstallMethod {
   if (nativePrompt) return 'native'
@@ -24,7 +41,6 @@ export function isInstallDismissed(value: string | null, now: number): boolean {
 }
 
 export function showInstallOnRoute(pathname: string): boolean {
-  // Contextual invitation only at the end of the two homes. Never a form,
-  // payment, tournament, blocking modal or fixed overlay.
+  // Contextual installation only on the two homes, never a transaction route.
   return pathname === '/' || pathname === '/player'
 }

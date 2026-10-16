@@ -4,8 +4,9 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname } from 'next/navigation'
 import { Download, X } from 'lucide-react'
-import { getInstallMethod, INSTALL_DISMISS_KEY, isInstallDismissed, showInstallOnRoute, type InstallMethod } from '@/lib/pwaInstallation'
+import { getInstallMethod, getPopupInstallMethod, INSTALL_DISMISS_KEY, INSTALL_POPUP_PHONE_QUERY, isInstallDismissed, showInstallOnRoute, type InstallMethod, type PopupInstallMethod } from '@/lib/pwaInstallation'
 import homePilot from '@/components/home/HomeMobilePilot.module.css'
+import PwaInstallPopup, { type NativeInstallResult } from './PwaInstallPopup'
 
 interface InstallPrompt extends Event {
   prompt(): Promise<void>
@@ -26,6 +27,7 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
   const trigger = useRef<HTMLButtonElement>(null)
   const dismissed = useRef(false)
   const [method, setMethod] = useState<InstallMethod>(null)
+  const [popupMethod, setPopupMethod] = useState<PopupInstallMethod | null>(null)
   const [guide, setGuide] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -40,10 +42,14 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
       const installed = standalone.matches || fullscreen.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
       setMethod(!installed && mobile.matches && !dismissed.current && !isInstallDismissed(stored, Date.now())
         ? getInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, Boolean(deferred.current)) : null)
+      setPopupMethod(!installed && !dismissed.current
+        ? getPopupInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, Boolean(deferred.current)) : null)
     }
     function available(event: Event) {
-      // Keep the browser's default promotion; merely save the capability for
-      // a later explicit user gesture. No early or automatic prompt.
+      // Only the phone pilot replaces browser promotion. Desktop/tablet and
+      // other routes retain their defaults; prompt() still requires a click.
+      if (showInstallOnRoute(window.location.pathname) && window.matchMedia(INSTALL_POPUP_PHONE_QUERY).matches
+        && getPopupInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, true) === 'native') event.preventDefault()
       deferred.current = event as InstallPrompt
       sync()
     }
@@ -72,29 +78,43 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
     try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())) } catch { /* In-memory dismissal still works. */ }
     setGuide(false)
     setMethod(null)
+    setPopupMethod(null)
   }
 
-  async function install() {
-    setMessage('')
-    if (method !== 'native' || !deferred.current) { setGuide(value => !value); return }
+  async function installNative(): Promise<NativeInstallResult> {
+    if (!deferred.current) return 'unavailable'
     const event = deferred.current
     deferred.current = null // A native prompt may only be used once.
     setBusy(true)
     try {
       await event.prompt()
       const { outcome } = await event.userChoice
-      if (outcome === 'accepted') { dismissed.current = true; setMethod(null) }
-      else dismiss()
+      if (outcome === 'accepted') { dismissed.current = true; setMethod(null); setPopupMethod(null) }
+      else {
+        setMethod(getInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, false))
+        setPopupMethod(getPopupInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, false))
+      }
+      return outcome
     } catch {
       const fallback = getInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, false)
       setMethod(fallback)
-      setGuide(Boolean(fallback))
-      setMessage('No se pudo abrir la instalación. Podés usar el menú del navegador.')
+      setPopupMethod(getPopupInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, false))
+      return 'unavailable'
     } finally { setBusy(false) }
   }
 
-  if (!method || !showInstallOnRoute(pathname)) return null
-  const invitation = (
+  async function install() {
+    setMessage('')
+    if (method !== 'native' || !deferred.current) { setGuide(value => !value); return }
+    const outcome = await installNative()
+    if (outcome === 'dismissed') dismiss()
+    if (outcome === 'unavailable') {
+      setGuide(true)
+      setMessage('No se pudo abrir la instalación. Podés usar el menú del navegador.')
+    }
+  }
+
+  const invitation = method && showInstallOnRoute(pathname) ? (
     <aside className={`pwa-install${compact ? ` ${homePilot.install}` : ''}`} aria-label="Instalar SELPA">
       <div className={`pwa-install__row${compact ? ` ${homePilot.installRow}` : ''}`}>
         <button ref={trigger} type="button" className={`px-btn px-btn--ghost${compact ? ` ${homePilot.installTrigger}` : ''}`} onClick={() => void install()} disabled={busy}
@@ -111,6 +131,9 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
       </div> : null}
       {message ? <p role="status">{message}</p> : null}
     </aside>
-  )
-  return compact ? (target ? createPortal(invitation, target) : null) : invitation
+  ) : null
+  return <>
+    {compact ? (target ? createPortal(invitation, target) : null) : invitation}
+    <PwaInstallPopup method={popupMethod} ready={!compact || Boolean(target)} busy={busy} onInstall={installNative} />
+  </>
 }

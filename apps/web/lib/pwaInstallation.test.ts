@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const { getInstallMethod, isInstallDismissed, INSTALL_DISMISS_MS, showInstallOnRoute } = await import(new URL('./pwaInstallation.ts', import.meta.url).href) as typeof import('./pwaInstallation')
+const { getInstallMethod, getPopupInstallMethod, isInstallDismissed, INSTALL_DISMISS_MS, INSTALL_DISMISS_KEY, INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_SESSION_KEY, showInstallOnRoute } = await import(new URL('./pwaInstallation.ts', import.meta.url).href) as typeof import('./pwaInstallation')
 const source = (p: string) => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 
 test('native capability wins; manual instructions distinguish iOS and Android browsers', () => {
@@ -27,12 +27,14 @@ test('invitation cannot interrupt auth, tournaments, finance or sports detail ro
   for (const p of ['/login', '/register', '/torneos', '/torneos/x/inscripcion', '/player/pagos', '/ranking', '/jugadores/x', '/club']) assert.equal(showInstallOnRoute(p), false)
 })
 
-test('progressive UI preserves SSR and never intercepts native promotion or writes private data', () => {
+test('progressive UI preserves SSR and only customizes native promotion on pilot phones', () => {
   const component = source('components/pwa/PwaInstallInvitation.tsx')
   assert.match(component, /useState<InstallMethod>\(null\)/)
   assert.match(component, /navigator.*standalone/)
   assert.match(component, /localStorage.setItem\(INSTALL_DISMISS_KEY, String\(Date.now\(\)\)\)/)
-  assert.doesNotMatch(component, /preventDefault|setTimeout|fetch\(|access_token|refresh_token|suppressHydrationWarning|serviceWorker|caches\./)
+  assert.match(component, /showInstallOnRoute\(window.location.pathname\).*window.matchMedia\(INSTALL_POPUP_PHONE_QUERY\)/)
+  assert.match(component, /getPopupInstallMethod.*=== 'native'\) event.preventDefault\(\)/)
+  assert.doesNotMatch(component, /setTimeout|fetch\(|access_token|refresh_token|suppressHydrationWarning|serviceWorker|caches\./)
   assert.match(component, /removeEventListener\('beforeinstallprompt'/)
 })
 
@@ -43,4 +45,37 @@ test('opening is short, reduced-motion aware, standalone/mobile only and uses or
   assert.doesNotMatch(css, /animation-delay|visibility: hidden|opacity: 0[;}]/)
   assert.match(startup, /public\/brand\/selpa-wordmark-clean-dark.png/)
   assert.match(startup, /app\/icon.png/)
+})
+
+test('automatic invitation distinguishes phones and embedded browsers without changing tablet/desktop', () => {
+  const iphone = 'iPhone Version/26 Mobile Safari/605'
+  assert.equal(getPopupInstallMethod(iphone, 'iPhone', 5, false), 'ios-safari')
+  assert.equal(getPopupInstallMethod('iPhone CriOS/140 Mobile Safari/605', 'iPhone', 5, false), 'ios-browser')
+  for (const app of ['WhatsApp', 'Instagram', 'FBAN', 'Line/']) {
+    assert.equal(getPopupInstallMethod(iphone + ' ' + app, '', 5, true), 'embedded-ios')
+  }
+  assert.equal(getPopupInstallMethod('iPhone AppleWebKit/605 Mobile/15', '', 5, false), 'embedded-ios')
+  assert.equal(getPopupInstallMethod('Android; wv) Chrome/140 Mobile Safari/537', '', 5, true), 'embedded-android')
+  assert.equal(getPopupInstallMethod('Android Chrome/140 Mobile Safari/537', '', 5, true), 'native')
+  assert.equal(getPopupInstallMethod('Android Firefox/140 Mobile', '', 5, false), 'android-browser')
+  for (const ua of ['iPad Version/26 Safari/605', 'Android Chrome/140 Safari/537', 'Android Tablet Mobile', 'Windows Chrome/140']) assert.equal(getPopupInstallMethod(ua, '', 5, true), null)
+  assert.equal(getPopupInstallMethod('Macintosh Safari/605', 'MacIntel', 5, true), null)
+})
+
+test('popup decline is separate from row dismissal, bounded and session-limited', () => {
+  assert.equal(new Set([INSTALL_DISMISS_KEY, INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_SESSION_KEY]).size, 3)
+  const popup = source('components/pwa/PwaInstallPopup.tsx')
+  assert.match(popup, /sessionStorage.setItem\(INSTALL_POPUP_SESSION_KEY, '1'\)/)
+  assert.match(popup, /localStorage.setItem\(INSTALL_POPUP_DISMISS_KEY, String\(Date.now\(\)\)\)/)
+  assert.doesNotMatch(popup, /localStorage.setItem\(INSTALL_DISMISS_KEY/)
+  assert.match(popup, /dialog\[open\].*\[aria-busy="true"\]/)
+  assert.match(popup, /document.addEventListener\('input', editing, true\)/)
+  assert.match(popup, /document.readyState !== 'complete'/)
+  assert.match(popup, /element!\.showModal\(\)/)
+  assert.match(popup, /aria-labelledby=\{titleId\} aria-describedby=\{descriptionId\}/)
+  assert.doesNotMatch(popup, /fetch\(|serviceWorker|access_token|refresh_token/)
+  const css = source('components/pwa/PwaInstallPopup.module.css')
+  assert.match(css, /max-width: 600px/)
+  assert.match(css, /safe-area-inset-bottom/)
+  assert.doesNotMatch(css, /:root|:global|font-family|#[\da-f]{3,8}/i)
 })

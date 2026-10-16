@@ -1,0 +1,50 @@
+/* Isolated invitation only. The approved homes and inline row are untouched. */
+.dialog { display: none; }
+@media (max-width: 600px), (max-height: 600px) and (max-width: 980px) and (orientation: landscape) {
+  .dialog[open] {
+    display: block;
+    position: fixed;
+    inset: auto 0 0;
+    width: min(440px, calc(100% - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+    max-width: none;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    margin: auto auto max(8px, env(safe-area-inset-bottom, 0px));
+    padding: 20px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--border);
+    border-radius: var(--ds-radius-xl);
+    background: var(--bg);
+    color: var(--text);
+    box-shadow: var(--ds-shadow-lg);
+    font: inherit;
+  }
+  .dialog::backdrop { background: color-mix(in srgb, var(--text) 40%, transparent); }
+  .header { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 56px; height: 56px; flex: none; border-radius: var(--ds-radius-md); }
+  .heading { flex: 1; min-width: 0; }
+  .heading p { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
+  .heading h2 { margin: 0; font-size: 20px; line-height: 1.2; }
+  .close { width: 44px; min-height: 44px; flex: none; padding: 0; }
+  .dialog .close, .dialog .secondary {
+    background: transparent;
+    color: var(--muted);
+    border-color: transparent;
+    box-shadow: none;
+  }
+  .dialog .close:focus-visible, .dialog .secondary:focus-visible {
+    outline: 2px solid var(--cyan);
+    outline-offset: 2px;
+    box-shadow: var(--ds-focus-ring);
+  }
+  .copy { margin: 16px 0; color: var(--muted); line-height: 1.45; }
+  .actions { display: grid; gap: 4px; }
+  .actions button { width: 100%; min-height: 44px; }
+  .hint { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+  .guide h3 { margin: 16px 0 12px; font-size: 16px; }
+  .guide h3:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
+  .steps { display: grid; gap: 12px; margin: 0 0 16px; padding: 0; list-style: none; counter-reset: install; }
+  .steps li { display: flex; align-items: center; gap: 10px; line-height: 1.4; counter-increment: install; }
+  .steps li::before { content: counter(install); display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: var(--ds-radius-pill); background: var(--cyan-soft); color: var(--text); }
+  .steps svg { display: inline; vertical-align: middle; color: var(--text); }
+}
