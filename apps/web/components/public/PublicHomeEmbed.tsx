@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import SelpaLoader from '@/components/SelpaLoader'
 import CommunityTournamentCalendar from '@/components/public/CommunityTournamentCalendar'
 import PublicHomeExperience from '@/components/public/PublicHomeExperience'
@@ -27,7 +27,7 @@ function getOpenRegistrationCount(tournaments: any[]) {
   }).length
 }
 
-export default function PublicHomeEmbed({ userName }: { userName?: string | null }) {
+export default function PublicHomeEmbed({ userName, afterHero }: { userName?: string | null; afterHero?: ReactNode }) {
   const [data, setData] = useState<PublicHomeData | null>(null)
   const [error, setError] = useState('')
 
@@ -52,13 +52,17 @@ export default function PublicHomeEmbed({ userName }: { userName?: string | null
     }
   }, [])
 
-  if (error) return <div className="modeEmbedState">{error}</div>
+  if (error) {
+    const state = <div className="modeEmbedState">{error}</div>
+    return afterHero ? <div className="modePublicHomeEmbed">{null}{afterHero}{state}</div> : state
+  }
   if (!data) {
-    return (
+    const state = (
       <div className="modeEmbedState modeEmbedState--loading">
         <SelpaLoader title="Cargando comunidad..." subtitle="Buscando torneos y clubes" />
       </div>
     )
+    return afterHero ? <div className="modePublicHomeEmbed">{null}{afterHero}{state}</div> : state
   }
   const displayName = String(userName ?? '').trim()
   const openRegistrationCount = getOpenRegistrationCount(data.tournaments)
@@ -87,6 +91,7 @@ export default function PublicHomeEmbed({ userName }: { userName?: string | null
           </div>
         ) : null}
       </section>
+      {afterHero}
       <PublicHomeExperience
         slides={data.slides}
         newsArchive={data.newsArchive}

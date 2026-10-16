@@ -1,21 +1,28 @@
 'use client'
 
+import type { Ref } from 'react'
+
 export type HomeMode = 'space' | 'community'
 
 export default function ModeSegmentedControl({
   value,
   onChange,
+  rootRef,
+  asButtons = false,
 }: {
   value: HomeMode
   onChange: (value: HomeMode) => void
+  rootRef?: Ref<HTMLDivElement>
+  asButtons?: boolean
 }) {
   return (
     <>
-      <div className="homeModeSwitch" role="tablist" aria-label="Modo de inicio">
+      <div ref={rootRef} className="homeModeSwitch" role={asButtons ? 'group' : 'tablist'} aria-label="Modo de inicio">
         <button
           type="button"
-          role="tab"
-          aria-selected={value === 'space'}
+          role={asButtons ? undefined : 'tab'}
+          aria-selected={asButtons ? undefined : value === 'space'}
+          aria-pressed={asButtons ? value === 'space' : undefined}
           className={value === 'space' ? 'is-active' : ''}
           onClick={() => onChange('space')}
         >
@@ -23,8 +30,9 @@ export default function ModeSegmentedControl({
         </button>
         <button
           type="button"
-          role="tab"
-          aria-selected={value === 'community'}
+          role={asButtons ? undefined : 'tab'}
+          aria-selected={asButtons ? undefined : value === 'community'}
+          aria-pressed={asButtons ? value === 'community' : undefined}
           className={value === 'community' ? 'is-active' : ''}
           onClick={() => onChange('community')}
         >

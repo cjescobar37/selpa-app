@@ -16,6 +16,7 @@ import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import { useSession } from '@/components/session/SessionProvider'
 import { isClubAdminRole } from '@/lib/clubMembershipRules'
 import { formatHomeNewsDate as formatDate } from '@/lib/publicHomeDatePresentation'
+import { HomeInstallSlot } from '@/components/pwa/HomeInstallPlacement'
 
 type NewsItem = {
   id: string
@@ -448,6 +449,8 @@ export default function PublicHomeExperience({
           secondaryAction={{ label: 'Explorar torneos', href: '/torneos' }}
         />
       ) : null}
+
+      {!hideHero ? <HomeInstallSlot /> : null}
 
       {activeTournaments.length ? (
         <section className="px-homeTournaments">

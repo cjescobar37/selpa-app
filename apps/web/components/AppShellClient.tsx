@@ -7,6 +7,9 @@ import AppNavbarClient from '@/components/navbar/AppNavbarClient'
 import { ActiveClubThemeProvider } from '@/components/ActiveClubThemeProvider'
 import { SessionProvider } from '@/components/session/SessionProvider'
 import { ToastViewport } from '@/components/ui/ToastViewport'
+import { HomeInstallHost, HomeInstallProvider } from '@/components/pwa/HomeInstallPlacement'
+import { isHomeMobilePilotRoute } from '@/lib/homeMobilePilot'
+import homePilot from '@/components/home/HomeMobilePilot.module.css'
 
 /**
  * AppShellClient
@@ -17,22 +20,28 @@ export default function AppShellClient({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isAuthRoute = ['/login', '/register', '/reset-password', '/update-password', '/completar-perfil'].includes(pathname)
   const isClubAdminRoute = pathname === '/club' || pathname.startsWith('/club/')
+  const pilotClass = isHomeMobilePilotRoute(pathname)
+    ? ` ${homePilot.shell} ${pathname === '/' ? homePilot.publicHome : homePilot.playerHome}`
+    : ''
 
   return (
     <SessionProvider>
       <ActiveClubThemeProvider>
-        <div className={`app-shell${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}${isClubAdminRoute ? ' app-shell--club' : ''}`}>
-          <Suspense fallback={null}>
-            <AppNavbarClient />
-          </Suspense>
+        <HomeInstallProvider>
+          <div className={`app-shell${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}${isClubAdminRoute ? ' app-shell--club' : ''}${pilotClass}`}>
+            <Suspense fallback={null}>
+              <AppNavbarClient />
+            </Suspense>
 
-          <main className="px-main">
-            <div className="px-wrap">{children}</div>
-          </main>
+            <main className="px-main">
+              <div className="px-wrap">{children}</div>
+            </main>
 
-          <Footer compact={isAuthRoute} />
-        </div>
-        <ToastViewport />
+            <HomeInstallHost />
+            <Footer compact={isAuthRoute} />
+          </div>
+          <ToastViewport />
+        </HomeInstallProvider>
       </ActiveClubThemeProvider>
     </SessionProvider>
   )

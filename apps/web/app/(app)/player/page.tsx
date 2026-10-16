@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell,
   CalendarDays,
@@ -23,6 +23,9 @@ import ModeSegmentedControl, { type HomeMode } from '@/components/ModeSegmentedC
 import { humanizeUiError } from '@/lib/productPresentation'
 import { useWriteGuard } from '@/lib/useWriteGuard'
 import CareerRecentResults from '@/components/player/CareerRecentResults'
+import { HomeInstallSlot } from '@/components/pwa/HomeInstallPlacement'
+import { useHomeMobileLayout } from '@/lib/useHomeMobileLayout'
+import PlayerHomeName from '@/components/home/PlayerHomeName'
 
 type ClubPlayerRow = {
   ranking_position?: number | null
@@ -173,6 +176,17 @@ export default function PlayerHomePage() {
   const [message, setMessage] = useState('')
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [homeMode, setHomeMode] = useState<HomeMode>('space')
+  const integratedMobile = useHomeMobileLayout()
+  const controlsNode = useRef<HTMLDivElement | null>(null)
+  const restoreModeFocus = useRef(false)
+  const attachControls = useCallback((node: HTMLDivElement | null) => {
+    if (!node && controlsNode.current?.contains(document.activeElement)) restoreModeFocus.current = true
+    controlsNode.current = node
+    if (node && restoreModeFocus.current) {
+      node.querySelector<HTMLButtonElement>('button[aria-pressed="true"], button[aria-selected="true"]')?.focus({ preventScroll: true })
+      restoreModeFocus.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -468,18 +482,23 @@ export default function PlayerHomePage() {
     )
   }
 
+  const homeControls = <>
+    <ModeSegmentedControl value={homeMode} onChange={changeHomeMode} rootRef={attachControls} asButtons={integratedMobile} />
+    <HomeInstallSlot />
+  </>
+
   return (
     <div className="playerHomeShell">
-      <ModeSegmentedControl value={homeMode} onChange={changeHomeMode} />
+      {!integratedMobile ? homeControls : null}
       <div className={`homeModePane${homeMode === 'community' ? ' is-community' : ''}`}>
       {homeMode === 'community' ? (
-        <PublicHomeEmbed userName={canonicalPlayerName} />
+        <PublicHomeEmbed userName={canonicalPlayerName} afterHero={integratedMobile ? homeControls : undefined} />
       ) : (
       <>
       <section className="playerHomeHero">
         <div>
           <span className="playerHomeKicker">Inicio jugador</span>
-          <h1>Hola, {canonicalPlayerName}</h1>
+          {integratedMobile ? <PlayerHomeName key={canonicalPlayerName} name={canonicalPlayerName} /> : <h1>Hola, {canonicalPlayerName}</h1>}
           {activeClub ? (
             <Link href={`/clubs/${activeClub.id}`} className="playerHomeActiveClub">
               <span className="playerHomeActiveClub__logo" aria-hidden="true">
@@ -514,6 +533,8 @@ export default function PlayerHomePage() {
           </div>
         </div>
       </section>
+
+      {integratedMobile ? homeControls : null}
 
       <section className="playerPriorityPanel" aria-label="Acción principal del jugador">
         {priorityInvite ? (
