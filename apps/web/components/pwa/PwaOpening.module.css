@@ -11,7 +11,6 @@
     pointer-events: none;
     padding: 24px;
     background: var(--opening-background);
-    animation: opening-limit 1000ms linear both;
   }
   .brand { display: grid; justify-items: center; gap: var(--opening-gap); }
   .medallion {
@@ -24,7 +23,7 @@
     border-radius: 50%;
     background: linear-gradient(145deg, #061b3a, #071426) padding-box, linear-gradient(135deg, var(--cyan-border), transparent 48%, color-mix(in srgb, var(--magenta) 45%, transparent)) border-box;
     box-shadow: 0 18px 44px #02061766;
-    animation: symbol-in 460ms cubic-bezier(.2,.7,.2,1) both;
+    animation: breathing 920ms cubic-bezier(.2,.7,.2,1) both;
   }
   .medallion::before {
     content: '';
@@ -32,19 +31,30 @@
     inset: -18px;
     border-radius: inherit;
     background: radial-gradient(circle at 25% 30%, var(--cyan-soft), transparent 64%), radial-gradient(circle at 80% 85%, color-mix(in srgb, var(--magenta) 12%, transparent), transparent 64%);
-    animation: halo 700ms ease-in-out both;
+    animation: halo 920ms ease-in-out both;
+  }
+  .medallion::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border: 2px solid transparent;
+    border-top-color: var(--cyan);
+    border-right-color: color-mix(in srgb, var(--magenta) 65%, transparent);
+    border-radius: inherit;
+    filter: drop-shadow(0 0 5px var(--cyan));
+    animation: orbit 920ms cubic-bezier(.2,.65,.25,1) both;
   }
   .symbol { position: relative; width: var(--opening-symbol); height: var(--opening-symbol); object-fit: contain; }
-  .wordmark { width: var(--opening-wordmark-width); height: var(--opening-wordmark-height); object-fit: contain; animation: wordmark-in 380ms 80ms ease-out both; }
-  .accent { width: var(--opening-accent-width); height: var(--opening-accent-height); border-radius: 2px; background: linear-gradient(90deg, var(--cyan), var(--magenta)); opacity: .6; animation: wordmark-in 380ms 120ms ease-out both; }
-  .layer[data-phase='leaving'] { animation: surface-out 220ms ease-out both; }
+  .wordmark { width: var(--opening-wordmark-width); height: var(--opening-wordmark-height); object-fit: contain; animation: wordmark-in 620ms 40ms cubic-bezier(.2,.7,.2,1) both; }
+  .accent { position: relative; overflow: hidden; width: var(--opening-accent-width); height: var(--opening-accent-height); border-radius: 2px; background: linear-gradient(90deg, var(--cyan), var(--magenta)); opacity: .6; }
+  .accent::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, #fff, transparent); animation: sweep 920ms ease-in-out both; }
 }
-@keyframes opening-limit { 0%, 78% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes surface-out { from { opacity: 1; } to { opacity: 0; } }
-@keyframes symbol-in { from { opacity: .96; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
-@keyframes wordmark-in { from { opacity: .92; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes halo { 0%, 100% { opacity: .45; transform: scale(.96); } 55% { opacity: 1; transform: scale(1.03); } }
+@keyframes breathing { 0% { opacity: .8; transform: scale(.94); } 28% { opacity: 1; transform: scale(1); } 62% { transform: scale(1.035); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes wordmark-in { from { opacity: .45; transform: translateY(5px) scaleX(1.035); filter: drop-shadow(0 0 6px var(--cyan)); } to { opacity: 1; transform: translateY(0) scaleX(1); filter: drop-shadow(0 0 0 transparent); } }
+@keyframes halo { 0% { opacity: .35; transform: scale(.9) rotate(-18deg); } 55% { opacity: 1; transform: scale(1.14) rotate(12deg); } 100% { opacity: .45; transform: scale(1) rotate(26deg); } }
+@keyframes orbit { from { opacity: .15; transform: rotate(-75deg); } 35% { opacity: .7; } to { opacity: 0; transform: rotate(165deg); } }
+@keyframes sweep { from { transform: translateX(-110%); opacity: 0; } 35%, 65% { opacity: .85; } to { transform: translateX(110%); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .layer:not([hidden]) { display: none !important; animation: none; }
-  .brand *, .medallion::before { animation: none; }
+  .brand *, .medallion::before, .medallion::after, .accent::after { animation: none; }
 }

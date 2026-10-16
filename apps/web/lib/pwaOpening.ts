@@ -7,7 +7,7 @@ export const PWA_OPENING = {
   backgroundImage,
   background: `#061b3a ${backgroundImage} center / 100% 100% no-repeat`,
   medallion: 144, symbol: 88, wordmarkWidth: 200, wordmarkHeight: 28, gap: 28,
-  accentWidth: 44, accentHeight: 2, maxMs: 1000, exitMs: 220,
+  accentWidth: 44, accentHeight: 2, revealMs: 680, exitMs: 240,
 } as const
 
 // Parser-time, before the body can paint. Hydration may only retire this layer,
@@ -15,35 +15,59 @@ export const PWA_OPENING = {
 export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
   try {
     const phone = matchMedia('(max-width: 600px), (max-height: 600px) and (max-width: 980px) and (orientation: landscape)');
-    const standalone = matchMedia('(display-mode: standalone)');
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
     const navigation = performance.getEntriesByType('navigation')[0];
-    if (!phone.matches || !(standalone.matches || navigator.standalone === true) || reduced.matches
+    if (!phone.matches || reduced.matches || document.body || document.readyState !== 'loading'
       || !/iPhone|iPod|Android.*Mobile/i.test(navigator.userAgent) || /iPad|Tablet/i.test(navigator.userAgent)
       || !['/', '/player'].includes(location.pathname) || navigation?.type === 'back_forward'
       || document.visibilityState !== 'visible' || performance.getEntriesByName('first-contentful-paint').length) return;
     const style = document.createElement('style');
     style.id = 'selpa-opening-prepaint';
-    style.textContent = '[data-pwa-opening]{display:grid!important;position:fixed;inset:0;z-index:10000;pointer-events:none;background:${PWA_OPENING.background}}';
-    const state = window.__selpaOpening = {active:true, started:performance.now(), finish};
-    let timer;
+    const surface = '[data-pwa-opening]{display:grid!important;position:fixed;inset:0;z-index:10000;pointer-events:none;background:${PWA_OPENING.background};opacity:1;transition:opacity ${PWA_OPENING.exitMs}ms ease-out}';
+    style.textContent = surface;
+    const state = window.__selpaOpening = {active:true, started:performance.now(), shownAt:0, leavingAt:0, finish};
+    let timer, frame, previous = '', stable = 0;
     function finish() {
       if (!state.active) return;
       state.active = false;
       style.remove();
       clearTimeout(timer);
+      cancelAnimationFrame(frame);
       for (const name of ['pointerdown','keydown','focusin','wheel','touchmove']) document.removeEventListener(name, finish, true);
       document.removeEventListener('visibilitychange', changed);
       window.removeEventListener('pagehide', finish);
-      for (const media of [phone, standalone, reduced]) media.removeEventListener('change', changed);
-      state.onFinish?.();
+      for (const media of [phone, reduced]) media.removeEventListener('change', changed);
     }
-    function changed() { if (!phone.matches || !(standalone.matches || navigator.standalone === true) || reduced.matches || document.visibilityState !== 'visible') finish(); }
+    function changed() { if (!phone.matches || reduced.matches || document.visibilityState !== 'visible') finish(); }
+    function check(now) {
+      if (!state.active) return;
+      if (!['/', '/player'].includes(location.pathname)) { finish(); return; }
+      const layer = document.querySelector('[data-pwa-opening]');
+      if (layer?.getClientRects().length && !state.shownAt) state.shownAt = now;
+      const main = document.querySelector('main'), title = main?.querySelector('h1'), nav = document.querySelector('.px-nav');
+      const box = title?.getBoundingClientRect(), header = nav?.getBoundingClientRect();
+      const busy = main?.matches('[aria-busy="true"]') || main?.querySelector('[aria-busy="true"]');
+      const images = document.querySelectorAll('.px-nav img, .playerHomeHero img, .modeCommunityHero img, .pampraxHero img');
+      const ready = document.readyState !== 'loading' && box?.width > 0 && box?.height > 0 && header?.height > 0
+        && !busy && document.fonts?.status !== 'loading' && Array.from(images).filter(image => image.getClientRects().length).every(image => image.complete);
+      const geometry = ready ? [box.x,box.y,box.width,box.height,header.height].join(',') : '';
+      stable = geometry && geometry === previous ? stable + 1 : 0;
+      previous = geometry;
+      if (state.shownAt && stable >= 2 && now - state.shownAt >= ${PWA_OPENING.revealMs}) {
+        state.leavingAt = now;
+        // Only the bootstrap-owned stylesheet changes: no SSR attributes or
+        // React-owned state are mutated before hydration. Home stays underneath.
+        style.textContent = surface + '[data-pwa-opening]{opacity:0}';
+        timer = setTimeout(finish, ${PWA_OPENING.exitMs});
+        return;
+      }
+      frame = requestAnimationFrame(check);
+    }
     for (const name of ['pointerdown','keydown','focusin','wheel','touchmove']) document.addEventListener(name, finish, {capture:true,passive:true});
     document.addEventListener('visibilitychange', changed);
     window.addEventListener('pagehide', finish);
-    for (const media of [phone, standalone, reduced]) media.addEventListener('change', changed);
-    timer = setTimeout(finish, ${PWA_OPENING.maxMs});
+    for (const media of [phone, reduced]) media.addEventListener('change', changed);
     document.head.append(style);
+    frame = requestAnimationFrame(check);
   } catch { document.getElementById('selpa-opening-prepaint')?.remove(); }
 })();`
