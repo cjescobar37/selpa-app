@@ -46,3 +46,32 @@
     right: calc(8px + var(--selpa-safe-right));
   }
 }
+
+/* Sprint 2A: progressive invitation in normal flow, never above an action.
+   No layout or styles change at desktop widths. */
+.pwa-install { display: none; }
+@media (max-width: 980px) and (display-mode: browser) {
+  .pwa-install {
+    display: block;
+    margin: 0 auto 12px;
+    padding: 0 var(--app-mobile-gutter, 8px);
+    max-width: var(--container);
+    width: 100%;
+  }
+  .pwa-install__row { display: flex; align-items: center; gap: 8px; }
+  .pwa-install .px-btn { min-height: 44px; }
+  .pwa-install__dismiss { min-width: 44px; margin-left: auto; }
+  .pwa-install__guide { max-width: 52ch; padding: 8px 0; }
+  .pwa-install__guide p { margin: 0 0 8px; }
+}
+
+/* CSS-only entry, initial document only. No content hidden until hydration,
+   no transform of sticky/fixed controls, no timer or overlay, no layout shift.
+   The first paint is already readable and interactive. */
+@media (max-width: 980px) and (display-mode: standalone) and (prefers-reduced-motion: no-preference) {
+  .app-shell > .px-main { animation: selpa-app-entry 160ms ease-out; }
+}
+@keyframes selpa-app-entry {
+  from { opacity: .96; }
+  to { opacity: 1; }
+}
