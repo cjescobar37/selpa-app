@@ -1,0 +1,54 @@
+/* Own layer only: original artwork and the existing SELPA hero palette. */
+.layer { display: none; }
+@media (max-width: 600px), (max-height: 600px) and (max-width: 980px) and (orientation: landscape) {
+  .layer:not([hidden]) {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+    background: radial-gradient(ellipse at 30% 38%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 55%), radial-gradient(ellipse at 75% 67%, color-mix(in srgb, var(--magenta) 7%, transparent), transparent 48%), linear-gradient(145deg, #020617, #061b3a 58%, #071426);
+    animation: surface-in 140ms ease-out both;
+  }
+  .brand { display: grid; justify-items: center; gap: 28px; }
+  .medallion {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 144px;
+    aspect-ratio: 1;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #061b3a, #071426) padding-box, linear-gradient(135deg, var(--cyan-border), transparent 48%, color-mix(in srgb, var(--magenta) 45%, transparent)) border-box;
+    box-shadow: 0 18px 44px #02061766;
+    animation: symbol-in 460ms cubic-bezier(.2,.7,.2,1) both;
+  }
+  .medallion::before {
+    content: '';
+    position: absolute;
+    inset: -18px;
+    border-radius: inherit;
+    background: radial-gradient(circle at 25% 30%, var(--cyan-soft), transparent 64%), radial-gradient(circle at 80% 85%, color-mix(in srgb, var(--magenta) 12%, transparent), transparent 64%);
+    animation: halo 700ms ease-in-out both;
+  }
+  .symbol { position: relative; width: 88px; height: 88px; background: url('/brand/selpa-isotipo.png') center / contain no-repeat; }
+  .wordmark { width: 200px; height: 28px; background: url('/brand/selpa-wordmark-clean.png') center / contain no-repeat; animation: wordmark-in 380ms 80ms ease-out both; }
+  .accent { width: 44px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--cyan), var(--magenta)); opacity: .6; animation: wordmark-in 380ms 120ms ease-out both; }
+  .layer[data-phase='fast'] { animation: fast-opening 420ms ease-out both; }
+  .layer[data-phase='fast'] .medallion { animation-duration: 180ms; }
+  .layer[data-phase='fast'] .wordmark { animation-duration: 160ms; animation-delay: 20ms; }
+  .layer[data-phase='fast'] .accent { animation-duration: 160ms; animation-delay: 40ms; }
+  .layer[data-phase='leaving'] { animation: surface-out 220ms ease-out both; }
+}
+@keyframes surface-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes surface-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes fast-opening { 0% { opacity: 0; } 25%, 42% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes symbol-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+@keyframes wordmark-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes halo { 0%, 100% { opacity: .45; transform: scale(.96); } 55% { opacity: 1; transform: scale(1.03); } }
+@media (prefers-reduced-motion: reduce) {
+  .layer:not([hidden]) { display: none; animation: none; }
+  .brand *, .medallion::before { animation: none; }
+}
