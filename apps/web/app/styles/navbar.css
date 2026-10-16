@@ -3662,4 +3662,33 @@
     padding-right:5px;
     width:52px;
   }
+
+  /* Match the guest controls' visual presence without increasing toolbar height. */
+  .px-mobileBar--authed .px-iconBtn{
+    min-width:44px;
+    width:44px;
+  }
+
+  .px-mobileBar--authed .px-iconBtn svg{
+    height:20px;
+    width:20px;
+  }
+
+  .px-mobileBar--authed .px-mobileClubBtn,
+  .px-mobileBar--authed .px-mobileUserBtn{
+    min-width:60px;
+    width:60px;
+  }
+
+  .px-mobileBar--authed .px-mobileClubBtn .px-clubLogo,
+  .px-mobileBar--authed .px-mobileUserBtn .px-avatar{
+    flex:0 0 30px;
+    height:30px;
+    width:30px;
+  }
+
+  .px-mobileBar--authed .px-mobileBadge{
+    height:40px;
+    min-height:40px;
+  }
 }
