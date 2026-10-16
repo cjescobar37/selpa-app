@@ -1,93 +1,53 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
+import { PWA_OPENING } from '@/lib/pwaOpening'
 import styles from './PwaOpening.module.css'
 
-const PHONE = '(max-width: 600px), (max-height: 600px) and (max-width: 980px) and (orientation: landscape)'
-const ART = ['/brand/selpa-isotipo.png', '/brand/selpa-wordmark-clean.png']
+type OpeningState = { active: boolean; started: number; finish: () => void; onFinish?: () => void }
 
-/** Decorative initial-document transition. Never gates rendering, focus or input. */
-export default function PwaOpening() {
+/** SSR first frame. The effect can only dismiss, never reveal a late overlay. */
+export default function PwaOpening({ artwork }: { artwork: { symbol: string; wordmark: string } }) {
   const layer = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     const element = layer.current
-    const phone = matchMedia(PHONE)
-    const standalone = matchMedia('(display-mode: standalone)')
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)')
-    const installed = () => standalone.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
-    const ua = navigator.userAgent
-    const mobile = /iPhone|iPod|Android.*Mobile/i.test(ua) && !/iPad|Tablet/i.test(ua)
-    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
-    if (!element || !mobile || !phone.matches || !installed() || reduced.matches
-      || !['/', '/player'].includes(location.pathname) || navigation?.type === 'back_forward'
-      || document.visibilityState !== 'visible') return
-
-    const started = performance.now()
-    let stopped = false
-    let leaving = false
-    let deadline: ReturnType<typeof setTimeout> | undefined
-    let removal: ReturnType<typeof setTimeout> | undefined
+    const boot = (window as Window & { __selpaOpening?: OpeningState }).__selpaOpening
+    if (!element || !boot?.active) return
     const content = document.querySelector('main')
+    let leaving = false
+    let removal: ReturnType<typeof setTimeout> | undefined
     const ready = () => Boolean(content?.querySelector('h1')) && !content?.matches('[aria-busy="true"]') && !content?.querySelector('[aria-busy="true"]')
     const observer = new MutationObserver(() => { if (ready()) leave() })
-
-    function stop() {
-      stopped = true
-      element!.hidden = true
-      clearTimeout(deadline)
-      clearTimeout(removal)
-      observer.disconnect()
-      for (const name of ['pointerdown', 'keydown', 'focusin', 'wheel', 'touchmove']) document.removeEventListener(name, stop, true)
-      document.removeEventListener('visibilitychange', changed)
-      window.removeEventListener('pagehide', stop)
-      phone.removeEventListener('change', changed)
-      standalone.removeEventListener('change', changed)
-      reduced.removeEventListener('change', changed)
-    }
-    function leave(fast = false) {
-      if (stopped || leaving) return
+    function clean() { clearTimeout(removal); observer.disconnect(); element!.hidden = true }
+    function leave() {
+      if (leaving || !boot!.active) return
       leaving = true
       observer.disconnect()
-      clearTimeout(deadline)
-      element!.dataset.phase = fast ? 'fast' : 'leaving'
-      removal = setTimeout(stop, fast ? 420 : 220)
+      // If the CSS safety exit has begun, continue it rather than resetting
+      // opacity to1 when hydration lands near the deadline.
+      if (Number(getComputedStyle(element!).opacity) >= .999) element!.dataset.phase = 'leaving'
+      removal = setTimeout(boot!.finish, Math.min(PWA_OPENING.exitMs, Math.max(0, PWA_OPENING.maxMs - (performance.now() - boot!.started))))
     }
-    function changed() { if (!phone.matches || !installed() || reduced.matches || document.visibilityState !== 'visible') stop() }
-    // No preventDefault: the original gesture continues to its intended control.
-    for (const name of ['pointerdown', 'keydown', 'focusin', 'wheel', 'touchmove']) document.addEventListener(name, stop, { capture: true, passive: true })
-    document.addEventListener('visibilitychange', changed)
-    window.addEventListener('pagehide', stop)
-    phone.addEventListener('change', changed)
-    standalone.addEventListener('change', changed)
-    reduced.addEventListener('change', changed)
-
-    // Never reveal half-loaded branding or a late splash over an already-used page.
-    // Slow/missing artwork simply skips the decoration; the home keeps loading.
-    deadline = setTimeout(stop, 200)
-    void Promise.all(ART.map(src => {
-      const image = new window.Image()
-      image.src = src
-      return image.decode()
-    })).then(() => {
-      if (stopped || document.activeElement?.closest('input, textarea, select, [contenteditable="true"], button, a')) return
-      clearTimeout(deadline)
-      element.hidden = false
-      element.dataset.phase = 'entering'
-      if (ready()) leave(true)
-      else {
-        if (content) observer.observe(content, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-busy'] })
-        deadline = setTimeout(() => leave(), Math.max(0, 780 - (performance.now() - started)))
-      }
-    }).catch(stop)
-
-    return stop
+    boot.onFinish = clean
+    if (ready()) leave()
+    else if (content) observer.observe(content, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-busy'] })
+    return () => { boot.finish(); clean(); boot.onFinish = undefined }
   }, [])
 
-  return <div ref={layer} className={styles.layer} hidden aria-hidden="true" data-pwa-opening>
+  const geometry = {
+    '--opening-background': PWA_OPENING.background,
+    '--opening-medallion': `${PWA_OPENING.medallion}px`, '--opening-symbol': `${PWA_OPENING.symbol}px`,
+    '--opening-wordmark-width': `${PWA_OPENING.wordmarkWidth}px`, '--opening-wordmark-height': `${PWA_OPENING.wordmarkHeight}px`,
+    '--opening-gap': `${PWA_OPENING.gap}px`, '--opening-accent-width': `${PWA_OPENING.accentWidth}px`, '--opening-accent-height': `${PWA_OPENING.accentHeight}px`,
+  } as CSSProperties
+  return <div ref={layer} className={styles.layer} style={geometry} aria-hidden="true" data-pwa-opening>
     <div className={styles.brand}>
-      <div className={styles.medallion}><span className={styles.symbol} /></div>
-      <span className={styles.wordmark} />
+      <div className={styles.medallion}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- original inline artwork, available in SSR before hydration */}
+        <img className={styles.symbol} src={artwork.symbol} width={PWA_OPENING.symbol} height={PWA_OPENING.symbol} alt="" decoding="sync" />
+      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element -- original inline wordmark, no network/decode wait */}
+      <img className={styles.wordmark} src={artwork.wordmark} width={PWA_OPENING.wordmarkWidth} height={PWA_OPENING.wordmarkHeight} alt="" decoding="sync" />
       <span className={styles.accent} />
     </div>
   </div>

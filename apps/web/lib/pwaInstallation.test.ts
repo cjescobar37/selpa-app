@@ -43,8 +43,8 @@ test('opening is short, reduced-motion aware, standalone/mobile only and uses or
   assert.match(css, /max-width: 980px\) and \(display-mode: standalone\) and \(prefers-reduced-motion: no-preference\)/)
   assert.match(css, /animation: selpa-app-entry 160ms ease-out/)
   assert.doesNotMatch(css, /animation-delay|visibility: hidden|opacity: 0[;}]/)
-  assert.match(startup, /public\/brand\/selpa-wordmark-clean-dark.png/)
-  assert.match(startup, /app\/icon.png/)
+  assert.match(startup, /getPwaOpeningArtwork/)
+  assert.match(source('lib/pwaOpeningArtwork.server.ts'), /public\/brand\/selpa-wordmark-clean.png/)
 })
 
 test('automatic invitation distinguishes phones and embedded browsers without changing tablet/desktop', () => {

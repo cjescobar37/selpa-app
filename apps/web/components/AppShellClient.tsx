@@ -10,7 +10,6 @@ import { ToastViewport } from '@/components/ui/ToastViewport'
 import { HomeInstallHost, HomeInstallProvider } from '@/components/pwa/HomeInstallPlacement'
 import { isHomeMobilePilotRoute } from '@/lib/homeMobilePilot'
 import homePilot from '@/components/home/HomeMobilePilot.module.css'
-import PwaOpening from '@/components/pwa/PwaOpening'
 
 /**
  * AppShellClient
@@ -42,7 +41,6 @@ export default function AppShellClient({ children }: { children: ReactNode }) {
             <Footer compact={isAuthRoute} />
           </div>
           <ToastViewport />
-          <PwaOpening />
         </HomeInstallProvider>
       </ActiveClubThemeProvider>
     </SessionProvider>
