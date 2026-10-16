@@ -18,7 +18,7 @@ function screenBusy() {
   const active = document.activeElement
   if (active?.closest('input, textarea, select, [contenteditable="true"], form')) return true
   return Array.from(document.querySelectorAll(
-    'dialog[open], [role="dialog"], [aria-modal="true"], [aria-busy="true"], [data-pwa-install-blocked], .px-nav [aria-expanded="true"], .px-mobileMenu, .px-mobileClubMenu, .px-playerUserMenu, .px-notifPreview, .px-messagePreview, .px-searchPanel, .pwa-install__guide'
+    'dialog[open], [role="dialog"], [aria-modal="true"], [aria-busy="true"], [data-pwa-install-blocked], [data-pwa-opening], .px-nav [aria-expanded="true"], .px-mobileMenu, .px-mobileClubMenu, .px-playerUserMenu, .px-notifPreview, .px-messagePreview, .px-searchPanel, .pwa-install__guide'
   )).some(visible)
 }
 
@@ -42,35 +42,44 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
   useEffect(() => {
     if (!eligible || seen.current) return
     const element = dialog.current
-    if (!element || typeof element.showModal !== 'function') return // Inline instructions remain usable.
+    if (!element) return
+    // Read-only DOM diagnostics, no user data, storage reset or network log.
+    const status = (reason: string) => { element.dataset.pwaInstallState = reason }
+    if (typeof element.showModal !== 'function') { status('dialog-unavailable'); return } // Inline instructions remain usable.
     const phone = window.matchMedia(INSTALL_POPUP_PHONE_QUERY)
     const standalone = window.matchMedia('(display-mode: standalone)')
     const fullscreen = window.matchMedia('(display-mode: fullscreen)')
     let timer: ReturnType<typeof setTimeout> | undefined
     let dirty = false
+    const earliest = performance.now() + 1200
     const installed = () => standalone.matches || fullscreen.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
     function stored(kind: 'localStorage' | 'sessionStorage', key: string) {
       try { return window[kind].getItem(key) } catch { return null }
     }
-    function blockedByStorage() {
-      if (stored('sessionStorage', INSTALL_POPUP_SESSION_KEY)) return true
+    function storageReason() {
+      if (stored('sessionStorage', INSTALL_POPUP_SESSION_KEY)) return 'session-seen'
       // Respect the existing row's close, without coupling popup decline to it.
-      return [INSTALL_POPUP_DISMISS_KEY, INSTALL_DISMISS_KEY].some(key => isInstallDismissed(stored('localStorage', key), Date.now()))
+      return [INSTALL_POPUP_DISMISS_KEY, INSTALL_DISMISS_KEY].some(key => isInstallDismissed(stored('localStorage', key), Date.now())) ? 'dismissed-7days' : null
     }
     function attempt() {
-      if (seen.current || dirty || !phone.matches || installed() || blockedByStorage()
-        || document.visibilityState !== 'visible' || document.readyState !== 'complete'
-        || !document.querySelector('main h1, .px-main h1') || screenBusy()) return
-      try { element!.showModal() } catch { return }
+      timer = undefined
+      const blocked = seen.current ? 'session-seen' : dirty ? 'form-edited' : !phone.matches ? 'non-phone' : installed() ? 'installed' : storageReason() ?? (document.visibilityState !== 'visible' ? 'background' : null)
+      if (blocked) { status(blocked); return }
+      if (document.readyState === 'loading' || !document.querySelector('main h1, .px-main h1')) { status('waiting-home'); schedule(); return }
+      if (screenBusy()) { status('blocked-operation'); schedule(); return }
+      try { element!.showModal() } catch { status('dialog-failed'); schedule(); return }
+      if (!visible(element!)) { element!.close(); status('display-failed'); schedule(); return }
+      status('shown')
       seen.current = true
       try { sessionStorage.setItem(INSTALL_POPUP_SESSION_KEY, '1') } catch { /* In-memory fallback. */ }
       stopWatching()
       primary.current?.focus({ preventScroll: true })
     }
     function schedule() {
-      clearTimeout(timer)
-      if (!seen.current) timer = setTimeout(attempt, 1800) // After load and a quiet, non-editing screen.
       if (element!.open && (!phone.matches || installed())) element!.close()
+      // Coalesce mutations instead of restarting the clock: a live carousel
+      // or class update must not starve the automatic invitation forever.
+      if (!seen.current && !dirty && timer === undefined) timer = setTimeout(attempt, Math.max(400, earliest - performance.now()))
     }
     function editing(event: Event) {
       if (event.target instanceof Element && event.target.closest('form, input, textarea, select, [contenteditable="true"]')) dirty = true
@@ -78,6 +87,7 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
     const observer = new MutationObserver(schedule)
     function stopWatching() {
       clearTimeout(timer)
+      timer = undefined
       observer.disconnect()
       window.removeEventListener('load', schedule)
       document.removeEventListener('focusout', schedule)
@@ -106,7 +116,7 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
 
   function close(snooze = false) {
     if (snooze) try { localStorage.setItem(INSTALL_POPUP_DISMISS_KEY, String(Date.now())) } catch { /* Session dismissal remains. */ }
-    dialog.current?.close()
+    if (dialog.current) { dialog.current.dataset.pwaInstallState = snooze ? 'dismissed-7days' : 'closed'; dialog.current.close() }
   }
 
   async function install() {
@@ -122,13 +132,15 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
   const ios = method.startsWith('ios-') || method === 'embedded-ios'
   const embedded = method.startsWith('embedded-')
   return createPortal(
-    <dialog ref={dialog} className={styles.dialog} aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => {
+    <dialog ref={dialog} className={styles.dialog} aria-labelledby={titleId} aria-describedby={descriptionId} onClose={event => {
+      if (event.currentTarget.dataset.pwaInstallState === 'shown') event.currentTarget.dataset.pwaInstallState = 'closed'
+    }} onClick={event => {
       if (event.target !== dialog.current) return
       const rect = event.currentTarget.getBoundingClientRect()
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close()
     }}>
       <div className={styles.header}>
-        <Image className={styles.logo} src="/icon.png" alt="" width={56} height={56} unoptimized />
+        <Image className={styles.logo} src="/icon.png" alt="" width={56} height={56} loading="eager" unoptimized />
         <div className={styles.heading}><p>Tu comunidad deportiva</p><h2 id={titleId}>SELPA a mano</h2></div>
         <button type="button" className={`px-btn px-btn--ghost ${styles.close}`} onClick={() => close()} aria-label="Cerrar invitación de instalación"><X size={20} aria-hidden="true" /></button>
       </div>

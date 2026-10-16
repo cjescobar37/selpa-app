@@ -38,7 +38,7 @@ test('progressive UI preserves SSR and only customizes native promotion on pilot
   assert.match(component, /removeEventListener\('beforeinstallprompt'/)
 })
 
-test('opening is short, reduced-motion aware, standalone/mobile only and uses original assets', () => {
+test('existing native shell entry respects reduced motion and startup uses original artwork', () => {
   const css = source('app/pwa.css'), startup = source('app/pwa/startup/[screen]/route.tsx')
   assert.match(css, /max-width: 980px\) and \(display-mode: standalone\) and \(prefers-reduced-motion: no-preference\)/)
   assert.match(css, /animation: selpa-app-entry 160ms ease-out/)
@@ -70,7 +70,11 @@ test('popup decline is separate from row dismissal, bounded and session-limited'
   assert.doesNotMatch(popup, /localStorage.setItem\(INSTALL_DISMISS_KEY/)
   assert.match(popup, /dialog\[open\].*\[aria-busy="true"\]/)
   assert.match(popup, /document.addEventListener\('input', editing, true\)/)
-  assert.match(popup, /document.readyState !== 'complete'/)
+  assert.match(popup, /document.readyState === 'loading'/)
+  assert.match(popup, /timer === undefined/)
+  assert.match(popup, /earliest - performance.now\(\)/)
+  assert.match(popup, /\[data-pwa-opening\]/)
+  assert.match(popup, /if \(!visible\(element!\)\)/)
   assert.match(popup, /element!\.showModal\(\)/)
   assert.match(popup, /aria-labelledby=\{titleId\} aria-describedby=\{descriptionId\}/)
   assert.doesNotMatch(popup, /fetch\(|serviceWorker|access_token|refresh_token/)
