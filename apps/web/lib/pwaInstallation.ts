@@ -5,6 +5,7 @@ export const INSTALL_DISMISS_MS = 7 * 24 * 60 * 60 * 1000
 // Independent from the inline row: declining the popup must leave it available.
 export const INSTALL_POPUP_SESSION_KEY = 'selpa:pwa-popup-seen:v1'
 export const INSTALL_POPUP_DISMISS_KEY = 'selpa:pwa-popup-dismissed:v1'
+export const INSTALL_POPUP_NEVER_KEY = 'selpa:pwa-popup-never:v1'
 export const INSTALL_POPUP_PHONE_QUERY = '(max-width: 600px), (max-height: 600px) and (max-width: 980px) and (orientation: landscape)'
 export type PopupInstallMethod = Exclude<InstallMethod, null> | 'embedded-ios' | 'embedded-android' | 'android-browser'
 
@@ -42,7 +43,8 @@ export function isInstallDismissed(value: string | null, now: number): boolean {
 }
 
 // The inline invitation's dismissal is deliberately not an input here.
-export function getInstallPopupStorageReason(session: string | null, dismissal: string | null, now: number) {
+export function getInstallPopupStorageReason(session: string | null, dismissal: string | null, now: number, never: string | null = null) {
+  if (never === '1') return 'dismissed-permanently'
   if (session === '1') return 'session-seen'
   return isInstallDismissed(dismissal, now) ? 'dismissed-7days' : null
 }

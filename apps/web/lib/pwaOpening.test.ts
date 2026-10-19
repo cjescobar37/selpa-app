@@ -4,8 +4,8 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 
 const { PWA_OPENING, PWA_OPENING_BOOTSTRAP } = await import(new URL('./pwaOpening.ts', import.meta.url).href) as typeof import('./pwaOpening')
-function boot({ width = 390, reduced = false, painted = false, body = false, path = '/', ua = 'iPhone Mobile Safari', navigation = 'navigate', ready = true } = {}) {
-  let now = 50, id = 0, homeReady = ready
+function boot({ width = 390, reduced = false, painted = false, body = false, path = '/', ua = 'iPhone Mobile Safari', navigation = 'navigate', ready = true, layer = true } = {}) {
+  let now = 50, id = 0, homeReady = ready, layerPresent = layer
   const styles: { textContent: string; id: string; remove: () => void }[] = []
   const frames = new Map<number, (at: number) => void>(), timers = new Map<number, { callback: () => void; at: number }>()
   const listeners = new Map<string, () => void>()
@@ -17,7 +17,7 @@ function boot({ width = 390, reduced = false, painted = false, body = false, pat
     head: { append: (s: typeof styles[number]) => styles.push(s) },
     addEventListener: (name: string, callback: () => void) => listeners.set(name, callback), removeEventListener: (name: string) => listeners.delete(name),
     getElementById: () => styles[0], querySelectorAll: () => [],
-    querySelector: (selector: string) => selector === '[data-pwa-opening]' ? { getClientRects: () => styles.length ? [{}] : [] }
+    querySelector: (selector: string) => selector === '[data-pwa-opening]' ? { getClientRects: () => styles.length && layerPresent ? [{}] : [] }
       : selector === '.px-nav' ? { getBoundingClientRect: () => ({ height: 56 }) }
       : { matches: () => false, querySelector: (query: string) => query === 'h1' && homeReady ? { getBoundingClientRect: () => ({ x: 8, y: 70, width: 374, height: 40 }) } : null },
   }
@@ -37,7 +37,7 @@ function boot({ width = 390, reduced = false, painted = false, body = false, pat
       for (const [key, timer] of timers) if (timer.at <= now) { timers.delete(key); timer.callback() }
     }
   }
-  return { window, document, styles, advance, listeners, setReady: (value: boolean) => { homeReady = value } }
+  return { window, document, styles, advance, listeners, setReady: (value: boolean) => { homeReady = value }, setLayer: () => { layerPresent = true } }
 }
 test('prepaint is phone/home only; late, desktop, tablet, reduced motion and history restore are omitted', () => {
   for (const options of [{ painted: true }, { body: true }, { width: 1280 }, { reduced: true }, { path: '/player/pagos' }, { ua: 'iPad Tablet' }, { navigation: 'back_forward' }]) {
@@ -46,13 +46,26 @@ test('prepaint is phone/home only; late, desktop, tablet, reduced motion and his
 })
 test('a ready home crossfades after stable frames, without an artificial brand hold; exit is one-way', () => {
   const result = boot(); assert.equal(result.styles.length, 1); assert.equal(result.window.__selpaOpening?.active, true)
-  assert.match(result.styles[0].textContent, /opacity:1;transition:opacity 240ms/)
+  assert.match(result.styles[0].textContent, /opacity:1;transition:opacity 260ms/)
+  assert.match(result.styles[0].textContent, /\.app-shell\{opacity:0;transition:opacity 260ms/)
   result.advance(60); assert.ok(result.window.__selpaOpening!.leavingAt > 0)
   assert.match(result.styles[0].textContent, /\[data-pwa-opening\]\{opacity:0\}/)
+  assert.match(result.styles[0].textContent, /\.app-shell\{opacity:1\}/)
   result.advance(260); assert.equal(result.window.__selpaOpening?.active, false); assert.equal(result.styles.length, 0)
   result.window.__selpaOpening?.finish(); result.advance(2000); assert.equal(result.styles.length, 0)
-  assert.equal(PWA_OPENING.exitMs, 240)
+  assert.equal(PWA_OPENING.exitMs, 260)
   assert.doesNotMatch(PWA_OPENING_BOOTSTRAP, /now - state.shownAt >=/)
+})
+
+test('navy canvas precedes the streamed body; original home background returns under the opaque layer', () => {
+  const result = boot({ ready: false, layer: false })
+  assert.match(result.styles[0].textContent, /html\{background:#061b3a/)
+  assert.match(result.styles[0].textContent, /body\{background:#061b3a/)
+  result.advance(300); assert.match(result.styles[0].textContent, /body\{background:/)
+  result.setLayer(); result.advance(20)
+  assert.doesNotMatch(result.styles[0].textContent, /body\{background:/)
+  assert.match(result.styles[0].textContent, /\[data-pwa-opening\].*opacity:1/)
+  result.listeners.get('pointerdown')!(); assert.equal(result.styles.length, 0)
 })
 test('slow home/fonts stay opaque instead of a timer revealing the loader, then fade only when ready', () => {
   const result = boot({ ready: false }); result.advance(3000)

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import { Download, Ellipsis, ExternalLink, PlusSquare, Share, X } from 'lucide-react'
-import { INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_SESSION_KEY, INSTALL_POPUP_PHONE_QUERY, getInstallPopupStorageReason, showInstallOnRoute, type PopupInstallMethod } from '@/lib/pwaInstallation'
+import { INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_NEVER_KEY, INSTALL_POPUP_SESSION_KEY, INSTALL_POPUP_PHONE_QUERY, getInstallPopupStorageReason, showInstallOnRoute, type PopupInstallMethod } from '@/lib/pwaInstallation'
 import styles from './PwaInstallPopup.module.css'
 
 export type NativeInstallResult = 'accepted' | 'dismissed' | 'unavailable'
@@ -36,6 +36,7 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
   const seen = useRef(false)
   const [guide, setGuide] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [preferenceError, setPreferenceError] = useState(false)
   const titleId = useId(), descriptionId = useId(), guideId = useId()
   const eligible = Boolean(method) && ready && showInstallOnRoute(pathname)
 
@@ -57,7 +58,7 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
       try { return window[kind].getItem(key) } catch { return null }
     }
     function storageReason() {
-      return getInstallPopupStorageReason(stored('sessionStorage', INSTALL_POPUP_SESSION_KEY), stored('localStorage', INSTALL_POPUP_DISMISS_KEY), Date.now())
+      return getInstallPopupStorageReason(stored('sessionStorage', INSTALL_POPUP_SESSION_KEY), stored('localStorage', INSTALL_POPUP_DISMISS_KEY), Date.now(), stored('localStorage', INSTALL_POPUP_NEVER_KEY))
     }
     function attempt() {
       timer = undefined
@@ -82,6 +83,12 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
     function editing(event: Event) {
       if (event.target instanceof Element && event.target.closest('form, input, textarea, select, [contenteditable="true"]')) dirty = true
     }
+    function preferenceChanged(event: StorageEvent) {
+      if (event.key !== INSTALL_POPUP_DISMISS_KEY && event.key !== INSTALL_POPUP_NEVER_KEY) return
+      const reason = getInstallPopupStorageReason(null, stored('localStorage', INSTALL_POPUP_DISMISS_KEY), Date.now(), stored('localStorage', INSTALL_POPUP_NEVER_KEY))
+      if (reason) { status(reason); if (element!.open) element!.close() }
+      else schedule()
+    }
     const observer = new MutationObserver(schedule)
     function stopWatching() {
       clearTimeout(timer)
@@ -100,21 +107,30 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
     phone.addEventListener('change', schedule)
     standalone.addEventListener('change', schedule)
     fullscreen.addEventListener('change', schedule)
+    window.addEventListener('storage', preferenceChanged)
     schedule()
     return () => {
       stopWatching()
       phone.removeEventListener('change', schedule)
       standalone.removeEventListener('change', schedule)
       fullscreen.removeEventListener('change', schedule)
+      window.removeEventListener('storage', preferenceChanged)
       if (element.open) element.close()
     }
   }, [eligible, pathname])
 
   useEffect(() => { if (guide) guideHeading.current?.focus({ preventScroll: true }) }, [guide])
 
-  function close(snooze = false) {
-    if (snooze) try { localStorage.setItem(INSTALL_POPUP_DISMISS_KEY, String(Date.now())) } catch { /* Session dismissal remains. */ }
-    if (dialog.current) { dialog.current.dataset.pwaInstallState = snooze ? 'dismissed-7days' : 'closed'; dialog.current.close() }
+  function close(choice: 'session' | 'week' | 'never' = 'session') {
+    if (choice !== 'session') try {
+      localStorage.setItem(choice === 'never' ? INSTALL_POPUP_NEVER_KEY : INSTALL_POPUP_DISMISS_KEY, choice === 'never' ? '1' : String(Date.now()))
+    } catch {
+      // Do not promise persistence when the browser refuses storage. The user
+      // can still close; the in-memory/session guard prevents another popup.
+      setPreferenceError(true)
+      return
+    }
+    if (dialog.current) { dialog.current.dataset.pwaInstallState = choice === 'never' ? 'dismissed-permanently' : choice === 'week' ? 'dismissed-7days' : 'closed'; dialog.current.close() }
   }
 
   async function install() {
@@ -129,6 +145,7 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
   if (!eligible || !method) return null
   const ios = method.startsWith('ios-') || method === 'embedded-ios'
   const embedded = method.startsWith('embedded-')
+  const chromeIphone = method === 'ios-chrome'
   return createPortal(
     <dialog ref={dialog} className={styles.dialog} data-pwa-install-method={method} aria-labelledby={titleId} aria-describedby={descriptionId} onClose={event => {
       if (event.currentTarget.dataset.pwaInstallState === 'shown') event.currentTarget.dataset.pwaInstallState = 'closed'
@@ -139,12 +156,12 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
     }}>
       <div className={styles.header}>
         <Image className={styles.logo} src="/icon.png" alt="" width={56} height={56} loading="eager" unoptimized />
-        <div className={styles.heading}><p>Tu comunidad deportiva</p><h2 id={titleId}>SELPA a mano</h2></div>
+        <div className={styles.heading}>{!chromeIphone ? <p>Tu comunidad deportiva</p> : null}<h2 id={titleId}>{chromeIphone ? 'Instalá SELPA en tu iPhone' : 'SELPA a mano'}</h2></div>
         <button type="button" className={`px-btn px-btn--ghost ${styles.close}`} onClick={() => close()} aria-label="Cerrar invitación de instalación"><X size={20} aria-hidden="true" /></button>
       </div>
-      <p id={descriptionId} className={styles.copy}>Agregá SELPA a tu pantalla de inicio y entrá directo a tus clubes y torneos.</p>
+      <p id={descriptionId} className={styles.copy}>{chromeIphone ? 'Accedé más rápido desde tu pantalla de inicio y abrí SELPA como app.' : 'Agregá SELPA a tu pantalla de inicio y entrá directo a tus clubes y torneos.'}</p>
       {guide ? <div id={guideId} className={styles.guide}>
-        <h3 ref={guideHeading} tabIndex={-1}>{embedded ? 'Abrí SELPA en tu navegador' : ios ? 'Añadir SELPA en iPhone' : 'Instalar desde tu navegador'}</h3>
+        <h3 ref={guideHeading} tabIndex={-1}>{embedded ? 'Abrí SELPA en tu navegador' : chromeIphone ? 'En Chrome' : ios ? 'Añadir SELPA en iPhone' : 'Instalar desde tu navegador'}</h3>
         {failed ? <p role="status" className={styles.hint}>No se pudo abrir el diálogo. Seguí estos pasos desde el navegador.</p> : null}
         <ol className={styles.steps} role="list">
           {embedded ? <>
@@ -152,21 +169,23 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
             <li><span>Si no aparece, copiá la dirección y pegala en {ios ? 'Safari' : 'Chrome'}. <ExternalLink size={18} aria-hidden="true" /></span></li>
             <li><span>Allí, usá {ios ? 'Compartir → Añadir a pantalla de inicio' : 'el menú → Instalar aplicación o Añadir a pantalla de inicio'} y confirmá.</span></li>
           </> : ios ? <>
-            <li><span>Abrí <strong>Compartir</strong> <Share size={18} aria-hidden="true" /> {method === 'ios-chrome' ? 'a la derecha de la barra de direcciones de Chrome.' : 'en el navegador (puede estar dentro de su menú).'}</span></li>
+            <li><span>{chromeIphone ? 'Tocá' : 'Abrí'} <strong>Compartir</strong> <Share size={18} aria-hidden="true" />{chromeIphone ? '.' : ' en el navegador (puede estar dentro de su menú).'}</span></li>
             <li><span>Elegí <strong>Añadir a pantalla de inicio</strong> <PlusSquare size={18} aria-hidden="true" />.</span></li>
-            <li><span>Si aparece «Abrir como app web», dejalo activado. Tocá <strong>Añadir</strong>.</span></li>
+            <li><span>{chromeIphone ? <>Dejá activado <strong>Abrir como app web</strong> y tocá <strong>Agregar</strong>.</> : <>Si aparece «Abrir como app web», dejalo activado. Tocá <strong>Añadir</strong>.</>}</span></li>
           </> : <>
             <li><span>Abrí el <strong>menú</strong> <Ellipsis size={18} aria-hidden="true" /> de {method === 'android-samsung' ? 'Samsung Internet' : method === 'android-chrome' ? 'Chrome' : 'tu navegador'}.</span></li>
             <li><span>Buscá <strong>{method === 'android-samsung' ? 'Añadir página a → Pantalla de inicio' : 'Instalar aplicación o Añadir a pantalla de inicio'}</strong>.</span></li>
             <li><span>Confirmá la opción que ofrezca tu navegador.</span></li>
           </>}
         </ol>
-        {ios && !embedded ? <p className={styles.hint}>Si tu navegador no ofrece esta opción, abrí la misma dirección en Safari.</p> : null}
+        {ios && !embedded && !chromeIphone ? <p className={styles.hint}>Si tu navegador no ofrece esta opción, abrí la misma dirección en Safari.</p> : null}
       </div> : null}
       <div className={styles.actions}>
         {guide ? <button type="button" className="px-btn" onClick={() => close()}>Entendido</button> : <button ref={primary} type="button" className="px-btn" disabled={busy} onClick={() => void install()} aria-expanded={method === 'native' ? undefined : guide} aria-controls={method === 'native' ? undefined : guideId}><Download size={18} aria-hidden="true" />{busy ? 'Abriendo instalación…' : 'Instalar SELPA'}</button>}
-        <button type="button" className={`px-btn px-btn--ghost ${styles.secondary}`} onClick={() => close(true)}>Ahora no</button>
+        <button type="button" className={`px-btn px-btn--ghost ${styles.secondary}`} onClick={() => close('week')}>Ahora no</button>
+        <button type="button" className={`px-btn px-btn--ghost ${styles.secondary}`} onClick={() => close('never')}>No mostrar nunca más</button>
       </div>
+      {preferenceError ? <p role="status" className={styles.hint}>El navegador no permitió guardar esta preferencia. Podés cerrar la invitación por esta sesión; la fila para instalar seguirá disponible.</p> : null}
       {!guide ? <p className={styles.hint}>{embedded ? 'Primero te mostramos cómo abrir tu navegador.' : method === 'native' ? 'Tu navegador te pedirá confirmar la instalación.' : 'Te mostramos los pasos; la confirmación se hace en tu navegador.'}</p> : null}
     </dialog>, document.body
   )

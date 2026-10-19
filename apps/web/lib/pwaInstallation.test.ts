@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const { getInstallMethod, getPopupInstallMethod, getInstallPopupStorageReason, isInstallDismissed, INSTALL_DISMISS_MS, INSTALL_DISMISS_KEY, INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_SESSION_KEY, showInstallOnRoute } = await import(new URL('./pwaInstallation.ts', import.meta.url).href) as typeof import('./pwaInstallation')
+const { getInstallMethod, getPopupInstallMethod, getInstallPopupStorageReason, isInstallDismissed, INSTALL_DISMISS_MS, INSTALL_DISMISS_KEY, INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_NEVER_KEY, INSTALL_POPUP_SESSION_KEY, showInstallOnRoute } = await import(new URL('./pwaInstallation.ts', import.meta.url).href) as typeof import('./pwaInstallation')
 const source = (p: string) => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 
 test('native capability wins; manual instructions distinguish iOS and Android browsers', () => {
@@ -63,10 +63,10 @@ test('automatic invitation distinguishes phones and embedded browsers without ch
 })
 
 test('popup decline is separate from row dismissal, bounded and session-limited', () => {
-  assert.equal(new Set([INSTALL_DISMISS_KEY, INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_SESSION_KEY]).size, 3)
+  assert.equal(new Set([INSTALL_DISMISS_KEY, INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_NEVER_KEY, INSTALL_POPUP_SESSION_KEY]).size, 4)
   const popup = source('components/pwa/PwaInstallPopup.tsx')
   assert.match(popup, /sessionStorage.setItem\(INSTALL_POPUP_SESSION_KEY, '1'\)/)
-  assert.match(popup, /localStorage.setItem\(INSTALL_POPUP_DISMISS_KEY, String\(Date.now\(\)\)\)/)
+  assert.match(popup, /localStorage.setItem\(choice === 'never' \? INSTALL_POPUP_NEVER_KEY : INSTALL_POPUP_DISMISS_KEY, choice === 'never' \? '1' : String\(Date.now\(\)\)\)/)
   assert.doesNotMatch(popup, /localStorage.setItem\(INSTALL_DISMISS_KEY/)
   assert.doesNotMatch(popup, /\bINSTALL_DISMISS_KEY\b/)
   assert.match(popup, /data-pwa-install-method=\{method\}/)
@@ -89,6 +89,28 @@ test('popup decline is separate from row dismissal, bounded and session-limited'
   assert.match(css, /max-width: 600px/)
   assert.match(css, /safe-area-inset-bottom/)
   assert.doesNotMatch(css, /:root|:global|font-family|#[\da-f]{3,8}/i)
+})
+
+test('permanent popup preference is explicit, independent, and never expires accidentally', () => {
+  const now = 1_800_000_000_000
+  assert.equal(getInstallPopupStorageReason(null, null, now, '1'), 'dismissed-permanently')
+  assert.equal(getInstallPopupStorageReason('1', String(now), now + 365 * 24 * 60 * 60 * 1000, '1'), 'dismissed-permanently')
+  for (const value of [null, '', '0', 'true', 'broken']) assert.equal(getInstallPopupStorageReason(null, null, now, value), null)
+  const popup = source('components/pwa/PwaInstallPopup.tsx'), row = source('components/pwa/PwaInstallInvitation.tsx')
+  for (const choice of ['week', 'never']) assert.match(popup, new RegExp("close\\('" + choice + "'\\)"))
+  assert.match(popup, /No mostrar nunca más/)
+  assert.match(popup, /El navegador no permitió guardar esta preferencia/)
+  assert.match(popup, /removeEventListener\('storage', preferenceChanged\)/)
+  assert.doesNotMatch(row, /INSTALL_POPUP_NEVER_KEY|INSTALL_POPUP_DISMISS_KEY/)
+  assert.match(row, /if \(!window.matchMedia\(INSTALL_POPUP_PHONE_QUERY\).matches/)
+})
+
+test('Chrome iPhone instructions match the observed web-app installation flow', () => {
+  const popup = source('components/pwa/PwaInstallPopup.tsx')
+  for (const text of ['Instalá SELPA en tu iPhone', 'Accedé más rápido desde tu pantalla de inicio y abrí SELPA como app.', 'Añadir a pantalla de inicio', 'Abrir como app web', 'Agregar']) assert.ok(popup.includes(text))
+  assert.match(popup, /chromeIphone \? 'Tocá' : 'Abrí'/)
+  assert.doesNotMatch(popup, /a la derecha de la barra de direcciones/)
+  assert.match(source('components/pwa/PwaInstallInvitation.tsx'), /'ios-chrome': 'En Chrome, tocá Compartir → Añadir a pantalla de inicio\. Dejá activado Abrir como app web y tocá Agregar\.'/)
 })
 
 test('popup storage ignores row dismissal and invalid session markers, but preserves valid declines', () => {

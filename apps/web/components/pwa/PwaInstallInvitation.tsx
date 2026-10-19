@@ -15,7 +15,7 @@ interface InstallPrompt extends Event {
 
 const instructions: Record<Exclude<InstallMethod, 'native' | null>, string> = {
   'ios-safari': 'En Safari, abrí Compartir (cuadrado con flecha hacia arriba) y elegí Añadir a pantalla de inicio. Si aparece Abrir como app web, dejalo activado y tocá Añadir.',
-  'ios-chrome': 'En Chrome, tocá Compartir a la derecha de la barra de direcciones → Añadir a pantalla de inicio → Añadir. Si no aparece esta opción, abrí la misma dirección en Safari.',
+  'ios-chrome': 'En Chrome, tocá Compartir → Añadir a pantalla de inicio. Dejá activado Abrir como app web y tocá Agregar.',
   'ios-browser': 'Abrí esta dirección en Safari. Luego usá Compartir → Añadir a pantalla de inicio. Si aparece Abrir como app web, dejalo activado.',
   'android-chrome': 'En Chrome, abrí el menú ⋮ y buscá Instalar aplicación o Añadir a pantalla de inicio. Confirmá la opción que ofrezca tu navegador.',
   'android-samsung': 'En Samsung Internet, abrí el menú ☰ y buscá Añadir página a → Pantalla de inicio. La opción puede variar según la versión.',
@@ -117,8 +117,11 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
       // Do not follow a native decline with an automatic popup in this session.
       nativeDeclined.current = true
       setPopupMethod(null)
-      try { sessionStorage.setItem(INSTALL_POPUP_SESSION_KEY, '1') } catch { /* Row remains dismissed in memory. */ }
-      dismiss()
+      try { sessionStorage.setItem(INSTALL_POPUP_SESSION_KEY, '1') } catch { /* Popup remains suppressed in memory. */ }
+      // A phone's manual row stays available after declining the native prompt.
+      // Preserve the existing non-phone behavior outside the mobile pilot.
+      if (!window.matchMedia(INSTALL_POPUP_PHONE_QUERY).matches
+        || !getPopupInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, false)) dismiss()
     }
     if (outcome === 'unavailable') {
       setGuide(true)
@@ -133,7 +136,7 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
           aria-expanded={method === 'native' ? undefined : guide} aria-controls={method === 'native' ? undefined : guideId}>
           <Download size={18} aria-hidden="true" />{busy ? 'Abriendo instalación…' : compact ? 'Instalar SELPA' : 'Usar SELPA como app'}
         </button>
-        <button type="button" className={`px-btn px-btn--ghost pwa-install__dismiss${compact ? ` ${homePilot.dismiss}` : ''}`} aria-label="No mostrar la invitación durante 7 días" onClick={dismiss}><X size={18} aria-hidden="true" /></button>
+        <button type="button" className={`px-btn px-btn--ghost pwa-install__dismiss${compact ? ` ${homePilot.dismiss}` : ''}`} aria-label="Ocultar sólo la fila de instalación durante 7 días" onClick={dismiss}><X size={18} aria-hidden="true" /></button>
       </div>
       {guide && method !== 'native' ? <div id={guideId} className="pwa-install__guide" onKeyDown={event => {
         if (event.key === 'Escape') { setGuide(false); trigger.current?.focus() }
