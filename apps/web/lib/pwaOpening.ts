@@ -7,7 +7,7 @@ export const PWA_OPENING = {
   backgroundImage,
   background: `#061b3a ${backgroundImage} center / 100% 100% no-repeat`,
   medallion: 144, symbol: 88, wordmarkWidth: 200, wordmarkHeight: 28, gap: 28,
-  accentWidth: 44, accentHeight: 2, revealMs: 680, exitMs: 240,
+  accentWidth: 44, accentHeight: 2, exitMs: 240,
 } as const
 
 // Parser-time, before the body can paint. Hydration may only retire this layer,
@@ -25,11 +25,13 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
     style.id = 'selpa-opening-prepaint';
     const surface = '[data-pwa-opening]{display:grid!important;position:fixed;inset:0;z-index:10000;pointer-events:none;background:${PWA_OPENING.background};opacity:1;transition:opacity ${PWA_OPENING.exitMs}ms ease-out}';
     style.textContent = surface;
-    const state = window.__selpaOpening = {active:true, started:performance.now(), shownAt:0, leavingAt:0, finish};
+    // Local technical timing only. No identity, storage, URL or network logging.
+    const state = window.__selpaOpening = {active:true, started:performance.now(), shownAt:0, readyAt:0, leavingAt:0, finishedAt:0, finish};
     let timer, frame, previous = '', stable = 0;
     function finish() {
       if (!state.active) return;
       state.active = false;
+      state.finishedAt = performance.now();
       style.remove();
       clearTimeout(timer);
       cancelAnimationFrame(frame);
@@ -43,7 +45,7 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
       if (!state.active) return;
       if (!['/', '/player'].includes(location.pathname)) { finish(); return; }
       const layer = document.querySelector('[data-pwa-opening]');
-      if (layer?.getClientRects().length && !state.shownAt) state.shownAt = now;
+      if (layer?.getClientRects().length && !state.shownAt) state.shownAt = performance.now();
       const main = document.querySelector('main'), title = main?.querySelector('h1'), nav = document.querySelector('.px-nav');
       const box = title?.getBoundingClientRect(), header = nav?.getBoundingClientRect();
       const busy = main?.matches('[aria-busy="true"]') || main?.querySelector('[aria-busy="true"]');
@@ -53,8 +55,8 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
       const geometry = ready ? [box.x,box.y,box.width,box.height,header.height].join(',') : '';
       stable = geometry && geometry === previous ? stable + 1 : 0;
       previous = geometry;
-      if (state.shownAt && stable >= 2 && now - state.shownAt >= ${PWA_OPENING.revealMs}) {
-        state.leavingAt = now;
+      if (state.shownAt && stable >= 2) {
+        state.readyAt = state.leavingAt = performance.now();
         // Only the bootstrap-owned stylesheet changes: no SSR attributes or
         // React-owned state are mutated before hydration. Home stays underneath.
         style.textContent = surface + '[data-pwa-opening]{opacity:0}';

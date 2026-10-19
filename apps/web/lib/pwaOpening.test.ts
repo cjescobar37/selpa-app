@@ -44,15 +44,15 @@ test('prepaint is phone/home only; late, desktop, tablet, reduced motion and his
     const result = boot(options); assert.equal(result.styles.length, 0); assert.equal(result.window.__selpaOpening, undefined)
   }
 })
-test('a real visible brand interval precedes the 240ms crossfade; finish is one-way and hydration-independent', () => {
+test('a ready home crossfades after stable frames, without an artificial brand hold; exit is one-way', () => {
   const result = boot(); assert.equal(result.styles.length, 1); assert.equal(result.window.__selpaOpening?.active, true)
   assert.match(result.styles[0].textContent, /opacity:1;transition:opacity 240ms/)
-  result.advance(660); assert.equal(result.window.__selpaOpening?.leavingAt, 0)
   result.advance(60); assert.ok(result.window.__selpaOpening!.leavingAt > 0)
   assert.match(result.styles[0].textContent, /\[data-pwa-opening\]\{opacity:0\}/)
   result.advance(260); assert.equal(result.window.__selpaOpening?.active, false); assert.equal(result.styles.length, 0)
   result.window.__selpaOpening?.finish(); result.advance(2000); assert.equal(result.styles.length, 0)
-  assert.ok(PWA_OPENING.revealMs + PWA_OPENING.exitMs >= 700 && PWA_OPENING.revealMs + PWA_OPENING.exitMs <= 1200)
+  assert.equal(PWA_OPENING.exitMs, 240)
+  assert.doesNotMatch(PWA_OPENING_BOOTSTRAP, /now - state.shownAt >=/)
 })
 test('slow home/fonts stay opaque instead of a timer revealing the loader, then fade only when ready', () => {
   const result = boot({ ready: false }); result.advance(3000)
@@ -76,6 +76,10 @@ test('native/web use original artwork; SSR markup is never mutated and motion ha
   assert.doesNotMatch(component, /useEffect|useState|hidden =|\.decode\(|new window.Image/)
   assert.doesNotMatch(PWA_OPENING_BOOTSTRAP, /dataset|\.hidden|preventDefault|setTimeout\(finish, 1000/)
   for (const effect of ['breathing', 'halo', 'orbit', 'sweep', 'wordmark-in']) assert.match(css, new RegExp('@keyframes ' + effect))
-  assert.doesNotMatch(css, /opening-limit|surface-out|infinite/)
+  assert.doesNotMatch(css, /opening-limit|surface-out/)
+  for (const effect of ['breathing', 'halo', 'orbit', 'sweep']) assert.match(css, new RegExp('animation: ' + effect + '[^;]+infinite'))
+  assert.match(source('app/page.tsx'), /<Suspense fallback=.*<PublicHomeContent/)
+  assert.match(source('app/page.tsx'), /: <PublicHomeContent \/>/)
+  assert.match(source('app/page.tsx'), /!\/iPad\|Tablet\/i.test\(ua\)/)
   assert.deepEqual(readFileSync('app/icon.png'), readFileSync('app/apple-icon.png'))
 })
