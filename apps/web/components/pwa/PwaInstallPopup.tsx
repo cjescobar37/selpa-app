@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import { Download, Ellipsis, ExternalLink, PlusSquare, Share, X } from 'lucide-react'
-import { INSTALL_DISMISS_KEY, INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_SESSION_KEY, INSTALL_POPUP_PHONE_QUERY, isInstallDismissed, showInstallOnRoute, type PopupInstallMethod } from '@/lib/pwaInstallation'
+import { INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_SESSION_KEY, INSTALL_POPUP_PHONE_QUERY, getInstallPopupStorageReason, showInstallOnRoute, type PopupInstallMethod } from '@/lib/pwaInstallation'
 import styles from './PwaInstallPopup.module.css'
 
 export type NativeInstallResult = 'accepted' | 'dismissed' | 'unavailable'
@@ -57,9 +57,7 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
       try { return window[kind].getItem(key) } catch { return null }
     }
     function storageReason() {
-      if (stored('sessionStorage', INSTALL_POPUP_SESSION_KEY)) return 'session-seen'
-      // Respect the existing row's close, without coupling popup decline to it.
-      return [INSTALL_POPUP_DISMISS_KEY, INSTALL_DISMISS_KEY].some(key => isInstallDismissed(stored('localStorage', key), Date.now())) ? 'dismissed-7days' : null
+      return getInstallPopupStorageReason(stored('sessionStorage', INSTALL_POPUP_SESSION_KEY), stored('localStorage', INSTALL_POPUP_DISMISS_KEY), Date.now())
     }
     function attempt() {
       timer = undefined
@@ -132,7 +130,7 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
   const ios = method.startsWith('ios-') || method === 'embedded-ios'
   const embedded = method.startsWith('embedded-')
   return createPortal(
-    <dialog ref={dialog} className={styles.dialog} aria-labelledby={titleId} aria-describedby={descriptionId} onClose={event => {
+    <dialog ref={dialog} className={styles.dialog} data-pwa-install-method={method} aria-labelledby={titleId} aria-describedby={descriptionId} onClose={event => {
       if (event.currentTarget.dataset.pwaInstallState === 'shown') event.currentTarget.dataset.pwaInstallState = 'closed'
     }} onClick={event => {
       if (event.target !== dialog.current) return
@@ -154,7 +152,7 @@ export default function PwaInstallPopup({ method, ready, busy, onInstall }: {
             <li><span>Si no aparece, copiá la dirección y pegala en {ios ? 'Safari' : 'Chrome'}. <ExternalLink size={18} aria-hidden="true" /></span></li>
             <li><span>Allí, usá {ios ? 'Compartir → Añadir a pantalla de inicio' : 'el menú → Instalar aplicación o Añadir a pantalla de inicio'} y confirmá.</span></li>
           </> : ios ? <>
-            <li><span>Abrí <strong>Compartir</strong> <Share size={18} aria-hidden="true" /> en el navegador (puede estar dentro de su menú).</span></li>
+            <li><span>Abrí <strong>Compartir</strong> <Share size={18} aria-hidden="true" /> {method === 'ios-chrome' ? 'a la derecha de la barra de direcciones de Chrome.' : 'en el navegador (puede estar dentro de su menú).'}</span></li>
             <li><span>Elegí <strong>Añadir a pantalla de inicio</strong> <PlusSquare size={18} aria-hidden="true" />.</span></li>
             <li><span>Si aparece «Abrir como app web», dejalo activado. Tocá <strong>Añadir</strong>.</span></li>
           </> : <>

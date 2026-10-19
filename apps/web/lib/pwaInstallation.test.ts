@@ -2,13 +2,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const { getInstallMethod, getPopupInstallMethod, isInstallDismissed, INSTALL_DISMISS_MS, INSTALL_DISMISS_KEY, INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_SESSION_KEY, showInstallOnRoute } = await import(new URL('./pwaInstallation.ts', import.meta.url).href) as typeof import('./pwaInstallation')
+const { getInstallMethod, getPopupInstallMethod, getInstallPopupStorageReason, isInstallDismissed, INSTALL_DISMISS_MS, INSTALL_DISMISS_KEY, INSTALL_POPUP_DISMISS_KEY, INSTALL_POPUP_SESSION_KEY, showInstallOnRoute } = await import(new URL('./pwaInstallation.ts', import.meta.url).href) as typeof import('./pwaInstallation')
 const source = (p: string) => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 
 test('native capability wins; manual instructions distinguish iOS and Android browsers', () => {
   assert.equal(getInstallMethod('unknown', '', 0, true), 'native')
   assert.equal(getInstallMethod('iPhone Version/26.0 Mobile Safari/605.1', 'iPhone', 5, false), 'ios-safari')
-  assert.equal(getInstallMethod('iPhone CriOS/140 Safari/604', 'iPhone', 5, false), 'ios-browser')
+  assert.equal(getInstallMethod('iPhone CriOS/140 Safari/604', 'iPhone', 5, false), 'ios-chrome')
   assert.equal(getInstallMethod('Macintosh Version/26 Safari/605', 'MacIntel', 5, false), 'ios-safari')
   assert.equal(getInstallMethod('Android Chrome/140 Mobile Safari/537', 'Linux', 5, false), 'android-chrome')
   assert.equal(getInstallMethod('Android Chrome/140 SamsungBrowser/28', 'Linux', 5, false), 'android-samsung')
@@ -50,7 +50,7 @@ test('existing native shell entry respects reduced motion and startup uses origi
 test('automatic invitation distinguishes phones and embedded browsers without changing tablet/desktop', () => {
   const iphone = 'iPhone Version/26 Mobile Safari/605'
   assert.equal(getPopupInstallMethod(iphone, 'iPhone', 5, false), 'ios-safari')
-  assert.equal(getPopupInstallMethod('iPhone CriOS/140 Mobile Safari/605', 'iPhone', 5, false), 'ios-browser')
+  assert.equal(getPopupInstallMethod('iPhone CriOS/140 Mobile Safari/605', 'iPhone', 5, false), 'ios-chrome')
   for (const app of ['WhatsApp', 'Instagram', 'FBAN', 'Line/']) {
     assert.equal(getPopupInstallMethod(iphone + ' ' + app, '', 5, true), 'embedded-ios')
   }
@@ -68,6 +68,13 @@ test('popup decline is separate from row dismissal, bounded and session-limited'
   assert.match(popup, /sessionStorage.setItem\(INSTALL_POPUP_SESSION_KEY, '1'\)/)
   assert.match(popup, /localStorage.setItem\(INSTALL_POPUP_DISMISS_KEY, String\(Date.now\(\)\)\)/)
   assert.doesNotMatch(popup, /localStorage.setItem\(INSTALL_DISMISS_KEY/)
+  assert.doesNotMatch(popup, /\bINSTALL_DISMISS_KEY\b/)
+  assert.match(popup, /data-pwa-install-method=\{method\}/)
+  const invitation = source('components/pwa/PwaInstallInvitation.tsx')
+  const dismiss = invitation.slice(invitation.indexOf('function dismiss()'), invitation.indexOf('async function installNative'))
+  assert.doesNotMatch(dismiss, /setPopupMethod/)
+  assert.match(invitation, /setPopupMethod\(!installed && !nativeDeclined.current\s*\? getPopupInstallMethod/)
+  assert.match(invitation, /setMethod\(rowIsDismissed\(dismissed.current\) \? null : fallback\)/)
   assert.match(popup, /dialog\[open\].*\[aria-busy="true"\]/)
   assert.match(popup, /document.addEventListener\('input', editing, true\)/)
   assert.match(popup, /document.readyState === 'loading'/)
@@ -82,4 +89,14 @@ test('popup decline is separate from row dismissal, bounded and session-limited'
   assert.match(css, /max-width: 600px/)
   assert.match(css, /safe-area-inset-bottom/)
   assert.doesNotMatch(css, /:root|:global|font-family|#[\da-f]{3,8}/i)
+})
+
+test('popup storage ignores row dismissal and invalid session markers, but preserves valid declines', () => {
+  const now = 1_800_000_000_000
+  assert.equal(getInstallPopupStorageReason(null, null, now), null)
+  assert.equal(getInstallPopupStorageReason('1', null, now), 'session-seen')
+  assert.equal(getInstallPopupStorageReason(null, String(now - 1), now), 'dismissed-7days')
+  for (const value of [null, '', 'broken', String(now + 1), String(now - INSTALL_DISMISS_MS)]) {
+    assert.equal(getInstallPopupStorageReason('corrupt', value, now), null)
+  }
 })

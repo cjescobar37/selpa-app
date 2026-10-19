@@ -1,5 +1,5 @@
 // Capability first. UA checks only select truthful manual instructions.
-export type InstallMethod = 'native' | 'ios-safari' | 'ios-browser' | 'android-chrome' | 'android-samsung' | null
+export type InstallMethod = 'native' | 'ios-safari' | 'ios-chrome' | 'ios-browser' | 'android-chrome' | 'android-samsung' | null
 export const INSTALL_DISMISS_KEY = 'selpa:pwa-install-dismissed:v1'
 export const INSTALL_DISMISS_MS = 7 * 24 * 60 * 60 * 1000
 // Independent from the inline row: declining the popup must leave it available.
@@ -26,6 +26,7 @@ export function getInstallMethod(ua: string, platform: string, touchPoints: numb
   if (ios) {
     // Do not promise an install command inside embedded app browsers.
     if (/FBAN|FBAV|Instagram|Line\/|; wv/.test(ua)) return null
+    if (/CriOS\//.test(ua)) return 'ios-chrome'
     return /Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua) ? 'ios-safari' : 'ios-browser'
   }
   if (!/Android/.test(ua) || /; wv\)|; wv;/.test(ua)) return null
@@ -38,6 +39,12 @@ export function isInstallDismissed(value: string | null, now: number): boolean {
   if (!value) return false
   const at = Number(value)
   return Number.isFinite(at) && at > 0 && at <= now && now - at < INSTALL_DISMISS_MS
+}
+
+// The inline invitation's dismissal is deliberately not an input here.
+export function getInstallPopupStorageReason(session: string | null, dismissal: string | null, now: number) {
+  if (session === '1') return 'session-seen'
+  return isInstallDismissed(dismissal, now) ? 'dismissed-7days' : null
 }
 
 export function showInstallOnRoute(pathname: string): boolean {

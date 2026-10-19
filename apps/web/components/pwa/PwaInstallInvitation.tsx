@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname } from 'next/navigation'
 import { Download, X } from 'lucide-react'
-import { getInstallMethod, getPopupInstallMethod, INSTALL_DISMISS_KEY, INSTALL_POPUP_PHONE_QUERY, isInstallDismissed, showInstallOnRoute, type InstallMethod, type PopupInstallMethod } from '@/lib/pwaInstallation'
+import { getInstallMethod, getPopupInstallMethod, INSTALL_DISMISS_KEY, INSTALL_POPUP_SESSION_KEY, INSTALL_POPUP_PHONE_QUERY, isInstallDismissed, showInstallOnRoute, type InstallMethod, type PopupInstallMethod } from '@/lib/pwaInstallation'
 import homePilot from '@/components/home/HomeMobilePilot.module.css'
 import PwaInstallPopup, { type NativeInstallResult } from './PwaInstallPopup'
 
@@ -15,9 +15,16 @@ interface InstallPrompt extends Event {
 
 const instructions: Record<Exclude<InstallMethod, 'native' | null>, string> = {
   'ios-safari': 'En Safari, abrí Compartir (cuadrado con flecha hacia arriba) y elegí Añadir a pantalla de inicio. Si aparece Abrir como app web, dejalo activado y tocá Añadir.',
+  'ios-chrome': 'En Chrome, tocá Compartir a la derecha de la barra de direcciones → Añadir a pantalla de inicio → Añadir. Si no aparece esta opción, abrí la misma dirección en Safari.',
   'ios-browser': 'Abrí esta dirección en Safari. Luego usá Compartir → Añadir a pantalla de inicio. Si aparece Abrir como app web, dejalo activado.',
   'android-chrome': 'En Chrome, abrí el menú ⋮ y buscá Instalar aplicación o Añadir a pantalla de inicio. Confirmá la opción que ofrezca tu navegador.',
   'android-samsung': 'En Samsung Internet, abrí el menú ☰ y buscá Añadir página a → Pantalla de inicio. La opción puede variar según la versión.',
+}
+
+function rowIsDismissed(inMemory: boolean) {
+  let stored: string | null = null
+  try { stored = localStorage.getItem(INSTALL_DISMISS_KEY) } catch { /* Private browsing may deny storage. */ }
+  return inMemory || isInstallDismissed(stored, Date.now())
 }
 
 export default function PwaInstallInvitation({ compact = false, target }: { compact?: boolean; target?: HTMLElement | null }) {
@@ -26,6 +33,8 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
   const deferred = useRef<InstallPrompt | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const dismissed = useRef(false)
+  const appInstalled = useRef(false)
+  const nativeDeclined = useRef(false)
   const [method, setMethod] = useState<InstallMethod>(null)
   const [popupMethod, setPopupMethod] = useState<PopupInstallMethod | null>(null)
   const [guide, setGuide] = useState(false)
@@ -37,12 +46,10 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
     const fullscreen = window.matchMedia('(display-mode: fullscreen)')
     const mobile = window.matchMedia('(max-width: 980px)')
     function sync() {
-      let stored: string | null = null
-      try { stored = localStorage.getItem(INSTALL_DISMISS_KEY) } catch { /* Private browsing may deny storage. */ }
-      const installed = standalone.matches || fullscreen.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
-      setMethod(!installed && mobile.matches && !dismissed.current && !isInstallDismissed(stored, Date.now())
+      const installed = appInstalled.current || standalone.matches || fullscreen.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
+      setMethod(!installed && mobile.matches && !rowIsDismissed(dismissed.current)
         ? getInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, Boolean(deferred.current)) : null)
-      setPopupMethod(!installed && !dismissed.current
+      setPopupMethod(!installed && !nativeDeclined.current
         ? getPopupInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, Boolean(deferred.current)) : null)
     }
     function available(event: Event) {
@@ -53,7 +60,7 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
       deferred.current = event as InstallPrompt
       sync()
     }
-    function installed() { deferred.current = null; dismissed.current = true; sync() }
+    function installed() { deferred.current = null; appInstalled.current = true; sync() }
     sync()
     window.addEventListener('beforeinstallprompt', available)
     window.addEventListener('appinstalled', installed)
@@ -78,7 +85,6 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
     try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())) } catch { /* In-memory dismissal still works. */ }
     setGuide(false)
     setMethod(null)
-    setPopupMethod(null)
   }
 
   async function installNative(): Promise<NativeInstallResult> {
@@ -89,15 +95,15 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
     try {
       await event.prompt()
       const { outcome } = await event.userChoice
-      if (outcome === 'accepted') { dismissed.current = true; setMethod(null); setPopupMethod(null) }
+      if (outcome === 'accepted') { appInstalled.current = true; setMethod(null); setPopupMethod(null) }
       else {
-        setMethod(getInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, false))
+        setMethod(rowIsDismissed(dismissed.current) ? null : getInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, false))
         setPopupMethod(getPopupInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, false))
       }
       return outcome
     } catch {
       const fallback = getInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, false)
-      setMethod(fallback)
+      setMethod(rowIsDismissed(dismissed.current) ? null : fallback)
       setPopupMethod(getPopupInstallMethod(navigator.userAgent, navigator.platform, navigator.maxTouchPoints, false))
       return 'unavailable'
     } finally { setBusy(false) }
@@ -107,7 +113,13 @@ export default function PwaInstallInvitation({ compact = false, target }: { comp
     setMessage('')
     if (method !== 'native' || !deferred.current) { setGuide(value => !value); return }
     const outcome = await installNative()
-    if (outcome === 'dismissed') dismiss()
+    if (outcome === 'dismissed') {
+      // Do not follow a native decline with an automatic popup in this session.
+      nativeDeclined.current = true
+      setPopupMethod(null)
+      try { sessionStorage.setItem(INSTALL_POPUP_SESSION_KEY, '1') } catch { /* Row remains dismissed in memory. */ }
+      dismiss()
+    }
     if (outcome === 'unavailable') {
       setGuide(true)
       setMessage('No se pudo abrir la instalación. Podés usar el menú del navegador.')
