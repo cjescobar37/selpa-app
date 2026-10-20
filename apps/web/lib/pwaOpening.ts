@@ -7,8 +7,13 @@ export const PWA_OPENING = {
   backgroundImage,
   background: `#061b3a ${backgroundImage} center / 100% 100% no-repeat`,
   medallion: 144, symbol: 88, wordmarkWidth: 200, wordmarkHeight: 28, gap: 28,
-  accentWidth: 44, accentHeight: 2, exitMs: 260,
+  accentWidth: 44, accentHeight: 2, exitMs: 420,
 } as const
+
+// CSS can paint while a preceding stylesheet delays the parser-time script.
+// Only the empty phone/PWA canvas is affected, including the first empty body.
+// The app-shell HTML disables the rule, even without JS. No home is restyled.
+export const PWA_OPENING_CANVAS_CSS = `@media (display-mode: standalone) and (max-width: 600px), (display-mode: standalone) and (max-height: 600px) and (max-width: 980px) and (orientation: landscape){html:not(:has(.app-shell)),body:not(:has(.app-shell)){background:${PWA_OPENING.background}}}`
 
 // Parser-time, before the body can paint. Hydration may only retire this layer,
 // never activate it. If this script is late/blocked, the default is the home.
@@ -23,15 +28,17 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
       || document.visibilityState !== 'visible' || performance.getEntriesByName('first-contentful-paint').length) return;
     const style = document.createElement('style');
     style.id = 'selpa-opening-prepaint';
-    const surface = '[data-pwa-opening]{display:grid!important;position:fixed;inset:0;z-index:10000;pointer-events:none;background:${PWA_OPENING.background};opacity:1;transition:opacity ${PWA_OPENING.exitMs}ms ease-out}';
+    const surface = '[data-pwa-opening]{display:grid!important;position:fixed;inset:0;z-index:10000;pointer-events:none;background:${PWA_OPENING.background};opacity:1;transition:opacity ${PWA_OPENING.exitMs}ms ease-in-out}';
     const canvas = 'html{background:${PWA_OPENING.background}!important}';
-    const home = '.app-shell{opacity:0;transition:opacity ${PWA_OPENING.exitMs}ms ease-out}';
     // Protect the canvas even if the streamed body has not arrived. Restore the
     // original body background under the opaque layer, before the crossfade.
-    style.textContent = canvas + 'body{background:${PWA_OPENING.background}!important}' + surface + home;
+    style.textContent = canvas + 'body{background:${PWA_OPENING.background}!important}' + surface;
     // Local technical timing only. No identity, storage, URL or network logging.
     const state = window.__selpaOpening = {active:true, started:performance.now(), shownAt:0, readyAt:0, leavingAt:0, finishedAt:0, finish};
-    let timer, frame, previous = '', stable = 0;
+    let timer, frame, exitingLayer, previous = '', stable = 0;
+    function faded(event) {
+      if (event.target === exitingLayer && event.propertyName === 'opacity') finish();
+    }
     function finish() {
       if (!state.active) return;
       state.active = false;
@@ -39,6 +46,7 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
       style.remove();
       clearTimeout(timer);
       cancelAnimationFrame(frame);
+      exitingLayer?.removeEventListener('transitionend', faded);
       for (const name of ['pointerdown','keydown','focusin','wheel','touchmove']) document.removeEventListener(name, finish, true);
       document.removeEventListener('visibilitychange', changed);
       window.removeEventListener('pagehide', finish);
@@ -51,7 +59,7 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
       const layer = document.querySelector('[data-pwa-opening]');
       if (layer?.getClientRects().length && !state.shownAt) {
         state.shownAt = performance.now();
-        style.textContent = canvas + surface + home;
+        style.textContent = canvas + surface;
       }
       const main = document.querySelector('main'), title = main?.querySelector('h1'), nav = document.querySelector('.px-nav');
       const box = title?.getBoundingClientRect(), header = nav?.getBoundingClientRect();
@@ -65,9 +73,14 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
       if (state.shownAt && stable >= 2) {
         state.readyAt = state.leavingAt = performance.now();
         // Only the bootstrap-owned stylesheet changes: no SSR attributes or
-        // React-owned state are mutated before hydration. Home fades underneath.
-        style.textContent = canvas + surface + home + '[data-pwa-opening]{opacity:0}.app-shell{opacity:1}';
-        timer = setTimeout(finish, ${PWA_OPENING.exitMs});
+        // React-owned state are mutated before hydration. A single dissolve
+        // reveals the already-painted home, without a second opacity ramp.
+        exitingLayer = layer;
+        exitingLayer.addEventListener('transitionend', faded);
+        style.textContent = canvas + surface + '[data-pwa-opening]{opacity:0}';
+        // Cleanup fallback only: the visual transition ends at exitMs and never
+        // blocks input. Do not truncate its last frame with an exact-time timer.
+        timer = setTimeout(finish, ${PWA_OPENING.exitMs + 100});
         return;
       }
       frame = requestAnimationFrame(check);
