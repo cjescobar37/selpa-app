@@ -11,9 +11,10 @@ export const PWA_OPENING = {
 } as const
 
 // CSS can paint while a preceding stylesheet delays the parser-time script.
-// Only the empty phone/PWA canvas is affected, including the first empty body.
-// The app-shell HTML disables the rule, even without JS. No home is restyled.
-export const PWA_OPENING_CANVAS_CSS = `@media (display-mode: standalone) and (max-width: 600px), (display-mode: standalone) and (max-height: 600px) and (max-width: 980px) and (orientation: landscape){html:not(:has(.app-shell)),body:not(:has(.app-shell)){background:${PWA_OPENING.background}}}`
+// Keep the installed-phone root canvas navy across the native/web hand-off,
+// not only until app-shell HTML arrives. The body regains its own light Home
+// surface independently; desktop/tablet and ordinary browsers are unaffected.
+export const PWA_OPENING_CANVAS_CSS = `@media (display-mode: standalone) and (max-width: 600px), (display-mode: standalone) and (max-height: 600px) and (max-width: 980px) and (orientation: landscape){html{background:${PWA_OPENING.background}!important}body:not(:has(.app-shell)){background:${PWA_OPENING.background}}}`
 
 // Parser-time, before the body can paint. Hydration may only retire this layer,
 // never activate it. If this script is late/blocked, the default is the home.
@@ -35,7 +36,7 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
     style.textContent = canvas + 'body{background:${PWA_OPENING.background}!important}' + surface;
     // Local technical timing only. No identity, storage, URL or network logging.
     const state = window.__selpaOpening = {active:true, started:performance.now(), shownAt:0, readyAt:0, leavingAt:0, finishedAt:0, finish};
-    let timer, frame, exitingLayer, previous = '', stable = 0;
+    let timer, frame, exitingLayer, previous = '', stable = 0, prepared = false;
     function faded(event) {
       if (event.target === exitingLayer && event.propertyName === 'opacity') finish();
     }
@@ -59,7 +60,6 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
       const layer = document.querySelector('[data-pwa-opening]');
       if (layer?.getClientRects().length && !state.shownAt) {
         state.shownAt = performance.now();
-        style.textContent = canvas + surface;
       }
       const main = document.querySelector('main'), title = main?.querySelector('h1'), nav = document.querySelector('.px-nav');
       const box = title?.getBoundingClientRect(), header = nav?.getBoundingClientRect();
@@ -71,6 +71,15 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
       stable = geometry && geometry === previous ? stable + 1 : 0;
       previous = geometry;
       if (state.shownAt && stable >= 2) {
+        if (!prepared) {
+          // First restore the real body surface behind an opaque opening.
+          // Let that restoration paint before starting the opacity transition;
+          // HTML arrival alone is not proof that the next surface is ready.
+          style.textContent = canvas + surface;
+          prepared = true;
+          frame = requestAnimationFrame(check);
+          return;
+        }
         state.readyAt = state.leavingAt = performance.now();
         // Only the bootstrap-owned stylesheet changes: no SSR attributes or
         // React-owned state are mutated before hydration. A single dissolve

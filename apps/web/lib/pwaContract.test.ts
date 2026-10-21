@@ -6,7 +6,9 @@ const { PWA_COLORS, PWA_STARTUP_SCREENS } = await import(new URL('./pwa.ts', imp
 const source = (path: string) => readFileSync(path, 'utf8')
 
 test('installation reuses SELPA colors and exact original Apple artwork', () => {
-  assert.deepEqual(PWA_COLORS, { theme: '#313b4c', background: '#f4f7fb' })
+  assert.deepEqual(PWA_COLORS, { theme: '#313b4c', background: '#061b3a' })
+  assert.match(source('app/manifest.ts'), /background_color: PWA_COLORS.background/)
+  assert.match(source('app/styles/base.css'), /--bg: #f4f7fb/)
   const original = readFileSync('app/icon.png'), apple = readFileSync('app/apple-icon.png')
   assert.equal(original.readUInt32BE(16), 512)
   assert.equal(original.readUInt32BE(20), 512)

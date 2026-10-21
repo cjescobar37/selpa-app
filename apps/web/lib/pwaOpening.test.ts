@@ -63,14 +63,20 @@ test('a ready home crossfades after stable frames, without an artificial brand h
   assert.doesNotMatch(PWA_OPENING_BOOTSTRAP, /now - state.shownAt >=/)
 })
 
-test('navy canvas precedes the streamed body; original home background returns under the opaque layer', () => {
+test('navy body stays until home readiness, then restores behind an opaque layer before the fade', () => {
   const result = boot({ ready: false, layer: false })
   assert.match(result.styles[0].textContent, /html\{background:#061b3a/)
   assert.match(result.styles[0].textContent, /body\{background:#061b3a/)
   result.advance(300); assert.match(result.styles[0].textContent, /body\{background:/)
   result.setLayer(); result.advance(20)
+  assert.match(result.styles[0].textContent, /body\{background:/)
+  result.setReady(true); result.advance(48)
   assert.doesNotMatch(result.styles[0].textContent, /body\{background:/)
   assert.match(result.styles[0].textContent, /\[data-pwa-opening\].*opacity:1/)
+  assert.equal(result.window.__selpaOpening?.leavingAt, 0, 'restore the Home background while the opening is still opaque')
+  result.advance(16)
+  assert.ok(result.window.__selpaOpening!.leavingAt > 0)
+  assert.match(result.styles[0].textContent, /\[data-pwa-opening\]\{opacity:0\}/)
   result.listeners.get('pointerdown')!(); assert.equal(result.styles.length, 0)
 })
 test('slow home/fonts stay opaque instead of a timer revealing the loader, then fade only when ready', () => {
@@ -89,10 +95,11 @@ test('cleanup follows the layer opacity transition, not bubbling child effects; 
   const lostEvent = boot(); lostEvent.advance(600); assert.equal(lostEvent.window.__selpaOpening?.active, false)
 })
 
-test('static navy exists before JavaScript only on an empty phone/PWA canvas, without covering content', () => {
+test('installed-phone root stays navy even after shell HTML; only the empty body is overridden', () => {
   assert.match(PWA_OPENING_CANVAS_CSS, /display-mode: standalone/)
   assert.match(PWA_OPENING_CANVAS_CSS, /max-width: 600px/)
-  assert.match(PWA_OPENING_CANVAS_CSS, /html:not\(:has\(\.app-shell\)\),body:not\(:has\(\.app-shell\)\)\{background:#061b3a/)
+  assert.match(PWA_OPENING_CANVAS_CSS, /html\{background:#061b3a[^}]+!important\}body:not\(:has\(\.app-shell\)\)\{background:#061b3a/)
+  assert.doesNotMatch(PWA_OPENING_CANVAS_CSS, /html:not\(:has\(\.app-shell\)\)/)
   assert.doesNotMatch(PWA_OPENING_CANVAS_CSS, /(?:\{|;)\s*(?:opacity|animation|position|display)\s*:/)
   const layout = readFileSync('app/layout.tsx', 'utf8')
   assert.ok(layout.indexOf('id="selpa-opening-canvas"') < layout.indexOf('id="selpa-opening-bootstrap"'))

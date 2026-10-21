@@ -1,5 +1,6 @@
-// Existing SELPA header/body colors. Keep installation surfaces aligned with UI.
-export const PWA_COLORS = { theme: '#313b4c', background: '#f4f7fb' } as const
+// Launcher canvas matches the navy startup artwork. This is not the Home/body
+// surface: that remains the existing --bg token after the opening dissolves.
+export const PWA_COLORS = { theme: '#313b4c', background: '#061b3a' } as const
 
 // Exact iOS launch-image sizes; unmatched devices use the OS fallback. No JS
 // splash, delay, redirect, device fingerprint, or user-specific startup image.
