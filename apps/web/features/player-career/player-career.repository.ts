@@ -3,6 +3,7 @@ import { supabaseAdmin as db } from '@/lib/supabaseAdmin'
 import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { pageNumber, validId, winRate } from './player-career.rules'
 import { rankingReadIssue } from './public-ranking.presentation'
+import { PUBLIC_CAREER, CareerAccessError, assertCareerAccess, type CareerAccess } from './player-career.access'
 import type { CareerHistoryRow, CareerIdentity, CareerRecentRow, CareerStats, CareerSummary, RankingContext, RankingPage, SportsStanding } from './player-career.types'
 
 const STANDING = 'club_player_id,club_id,user_id,player_entry_id,full_name,avatar_url,category,category_name,gender,season_id,season_name,division_id,modality,ranking_points,position,is_tied,ordinal'
@@ -26,13 +27,15 @@ async function catalog<T>(read: (from: number, to: number) => PromiseLike<{ data
   }
 }
 
-export async function readCareerIdentity(id: string, clubId?: string | null): Promise<CareerIdentity | null> {
+export async function readCareerIdentity(id: string, clubId?: string | null, access:CareerAccess=PUBLIC_CAREER): Promise<CareerIdentity | null> {
   if (!validId(id) || (clubId && !validId(clubId))) return null
   // Legacy club_player URLs resolve deterministically. Global user URLs never
   // pick an arbitrary .limit(1) club; context is explicit or ordered by ID.
   const exact = await db.from('club_players').select('id,user_id,club_id').eq('id',id).maybeSingle()
   assertRead(exact.error)
   const userId=exact.data?.user_id ?? id
+  assertCareerAccess(access,userId,clubId)
+  if(access.kind==='admin'&&exact.data&&exact.data.club_id!==access.clubId)throw new CareerAccessError(403)
   if ((await nonPlayerAccountIds([userId])).has(userId)) return null
   const [players, memberships, profile] = await Promise.all([
     catalog<{id:string;club_id:string;category:number|null;gender:string|null;display_name:string|null}>((from,to)=>db.from('club_players')
@@ -43,11 +46,15 @@ export async function readCareerIdentity(id: string, clubId?: string | null): Pr
   ])
   assertRead(profile.error)
   const approved = new Set(memberships.map(m=>m.club_id))
-  const eligible=players.filter(p=>approved.has(p.club_id))
+  const eligible=players.filter(p=>approved.has(p.club_id)&&(access.kind!=='admin'||p.club_id===access.clubId))
   const clubs=eligible.length ? await catalog<{id:string;name:string}>((from,to)=>db.from('clubs').select('id,name')
     .in('id',eligible.map(p=>p.club_id)).eq('is_active',true).order('id').range(from,to)) : []
-  const names=new Map(clubs.map(c=>[c.id,c.name]))
-  const contexts=eligible.filter(p=>names.has(p.club_id)).map(p=>({clubPlayerId:p.id,clubId:p.club_id,clubName:names.get(p.club_id)!,category:p.category,gender:p.gender}))
+  const published=access.kind==='public'&&clubs.length ? await catalog<{club_id:string}>((from,to)=>db.from('public_competition_contexts_read')
+    .select('club_id').in('club_id',clubs.map(c=>c.id)).order('club_id').range(from,to)):null
+  const visible=new Set(published?.map(c=>c.club_id))
+  const names=new Map(clubs.filter(c=>published===null||visible.has(c.id)).map(c=>[c.id,c.name]))
+  // Current private category/branch must not leak through the identity DTO.
+  const contexts=eligible.filter(p=>names.has(p.club_id)).map(p=>({clubPlayerId:p.id,clubId:p.club_id,clubName:names.get(p.club_id)!,category:access.kind==='public'?null:p.category,gender:access.kind==='public'?null:p.gender}))
   const selected=contexts.find(c=>clubId ? c.clubId===clubId : c.clubPlayerId===exact.data?.id) ?? (!clubId ? contexts[0] : undefined)
   const p=profile.data
   if (!selected) {
@@ -62,24 +69,29 @@ export async function readCareerIdentity(id: string, clubId?: string | null): Pr
     publicPath:`/jugadores/${userId}?clubId=${selected.clubId}`}
 }
 
-async function activeSeason(clubId: string, requested?: string | null) {
-  const query=db.from('competition_seasons').select('id,name').eq('club_id',clubId).eq('status','ACTIVE')
+async function activeSeason(clubId: string, requested?: string | null, access:CareerAccess=PUBLIC_CAREER) {
+  const query=db.from('competition_seasons').select('id,name').eq('club_id',clubId)
+  if(access.kind==='public')query.eq('is_public',true)
+  if(requested && access.kind==='public')query.in('status',['ACTIVE','CLOSED'])
+  else query.eq('status','ACTIVE')
   if (requested) { if (!validId(requested)) return null; query.eq('id',requested) }
   const result=await query.order('id').limit(2); assertRead(result.error)
   if ((result.data?.length ?? 0)>1) throw new Error('AMBIGUOUS_SEASON')
   return result.data?.[0] ?? null
 }
 
-export async function readCareerSummary(identity: CareerIdentity): Promise<CareerSummary> {
+export async function readCareerSummary(identity: CareerIdentity,access:CareerAccess=PUBLIC_CAREER): Promise<CareerSummary> {
   const context=identity.contexts.find(c=>c.clubPlayerId===identity.selectedClubPlayerId)!
   if (!context) throw new Error('NO_SPORTS_CONTEXT')
-  const season=await activeSeason(context.clubId)
+  assertCareerAccess(access,identity.userId,context.clubId)
+  const isPublic=access.kind==='public'
+  const season=await activeSeason(context.clubId,undefined,access)
   const scope={clubId:context.clubId,clubPlayerId:context.clubPlayerId,seasonId:season?.id ?? null,seasonName:season?.name ?? null}
   const [standingResult,statsResult,partner]=await Promise.all([
-    season ? db.from('competition_player_standings_read').select(STANDING).eq('club_player_id',context.clubPlayerId).eq('club_id',context.clubId)
+    season ? db.from(isPublic?'public_player_standings_read':'competition_player_standings_read').select(STANDING).eq('club_player_id',context.clubPlayerId).eq('club_id',context.clubId)
       .eq('season_id',season.id).order('division_id').limit(2) : Promise.resolve({data:[],error:null}),
-    db.rpc('read_player_career_summary',{p_club_player_id:context.clubPlayerId,p_season_id:null}),
-    readCurrentPartner(context.clubPlayerId,context.clubId),
+    db.rpc(isPublic?'read_public_player_career_summary':'read_player_career_summary',{p_club_player_id:context.clubPlayerId,p_season_id:null}),
+    isPublic?Promise.resolve(null):readCurrentPartner(context.clubPlayerId,context.clubId),
   ])
   // Identity remains usable even when the forward-only projection is missing.
   const standings=(standingResult.data ?? []) as SportsStanding[]
@@ -89,7 +101,7 @@ export async function readCareerSummary(identity: CareerIdentity): Promise<Caree
   return {scope,standing:standingResult.error ? null : standings[0] ?? null,stats,
     statsAvailable:!standingResult.error && !statsResult.error,
     readIssue:standingResult.error || statsResult.error ? rankingReadIssue(standingResult.error ?? statsResult.error):null,
-    statsPeriod:'CLUB_CAREER_ALL_SEASONS',bestResult:raw?.best_result ? {role:raw.best_result,position:raw.best_position}:null,partner}
+    statsPeriod:isPublic?'PUBLIC_CLUB_CAREER':'CLUB_CAREER_ALL_SEASONS',bestResult:raw?.best_result ? {role:raw.best_result,position:raw.best_position}:null,partner}
 }
 
 async function readCurrentPartner(clubPlayerId: string, clubId: string) {
@@ -98,22 +110,24 @@ async function readCurrentPartner(clubPlayerId: string, clubId: string) {
   if (result.error || result.data?.length!==1) return null
   const pair=result.data[0]
   const other=pair.player1_club_player_id===clubPlayerId ? pair.player2_club_player_id : pair.player1_club_player_id
-  const identity=await readCareerIdentity(other,clubId)
+  const identity=await readCareerIdentity(other)
   return identity ? {name:identity.name,publicPath:identity.publicPath} : null
 }
 
-export async function readCareerHistory(identity: CareerIdentity, page=1, recent=false) {
+export async function readCareerHistory(identity: CareerIdentity, page=1, recent=false,access:CareerAccess=PUBLIC_CAREER) {
   const club=identity.contexts.find(c=>c.clubPlayerId===identity.selectedClubPlayerId)!
+  assertCareerAccess(access,identity.userId,club.clubId)
+  const isPublic=access.kind==='public'
   const start=(pageNumber(String(page))-1)*10
   if (recent) {
     // The predicate belongs in SQL, before the page; never filter a limited list.
-    const matches=await db.from('player_career_matches_read').select('id,tournament_id,tournament_name,sports_date,won')
+    const matches=await db.from(isPublic?'public_player_career_matches_read':'player_career_matches_read').select('id,tournament_id,tournament_name,sports_date,won')
       .eq('club_player_id',club.clubPlayerId).eq('club_id',club.clubId).eq('computable',true)
       .order('sports_date',{ascending:false,nullsFirst:false}).order('id').range(start,start+10)
     assertRead(matches.error)
     return {rows:((matches.data ?? []) as CareerRecentRow[]).slice(0,10),hasMore:(matches.data?.length ?? 0)>10,page}
   }
-  const result=await db.from('player_career_results_read').select(HISTORY)
+  const result=await db.from(isPublic?'public_player_career_results_read':'player_career_results_read').select(HISTORY)
     .eq('club_player_id',club.clubPlayerId).eq('club_id',club.clubId)
     .order('sports_date',{ascending:false,nullsFirst:false}).order('id').range(start,start+10)
   assertRead(result.error)
@@ -123,7 +137,7 @@ export async function readCareerHistory(identity: CareerIdentity, page=1, recent
 export async function readRankingContexts(clubId: string, seasonId?: string | null): Promise<RankingContext[]> {
   if (!validId(clubId)) return []
   const season=await activeSeason(clubId,seasonId); if (!season) return []
-  const divisions=await catalog<{id:string;category_id:string;branch_id:string;modality:string}>((from,to)=>db.from('competition_divisions')
+  const divisions=await catalog<{id:string;category_id:string;branch_id:string;modality:string}>((from,to)=>db.from('public_competition_contexts_read')
     .select('id,category_id,branch_id,modality').eq('club_id',clubId).eq('season_id',season.id).eq('is_active',true)
     .in('modality',['INDIVIDUAL','PAIRS']).is('segment_id',null).order('id').range(from,to))
   const [categories,branches]=await Promise.all([
@@ -139,7 +153,7 @@ export async function readRankingContexts(clubId: string, seasonId?: string | nu
 export async function readRankingPage(context: RankingContext | null, query='', page=1): Promise<RankingPage> {
   if (!context) return {rows:[],count:0,page:1,pageSize:PAGE_SIZE,context:null}
   const current=pageNumber(String(page));const start=(current-1)*PAGE_SIZE
-  const request=db.from('competition_player_standings_read').select(STANDING,{count:'exact'})
+  const request=db.from('public_player_standings_read').select(STANDING,{count:'exact'})
     .eq('club_id',context.clubId).eq('season_id',context.seasonId).eq('division_id',context.divisionId)
   const search=query.trim().slice(0,80).replace(/[%_,()]/g,' ')
   if (search) request.ilike('full_name',`%${search}%`)
@@ -155,7 +169,7 @@ export async function readPublishedRankingContexts(contexts: RankingContext[]): 
   const result: RankingContext[]=[]
   for (let offset=0;offset<contexts.length;offset+=4) {
     result.push(...await Promise.all(contexts.slice(offset,offset+4).map(async context=>{
-      const read=await db.from(context.modality==='PAIRS'?'competition_pair_standings_read':'competition_player_standings_read')
+      const read=await db.from(context.modality==='PAIRS'?'public_pair_standings_read':'public_player_standings_read')
         .select('division_id',{count:'exact'}).eq('club_id',context.clubId)
         .eq('season_id',context.seasonId).eq('division_id',context.divisionId).limit(1)
       assertRead(read.error)
@@ -166,11 +180,14 @@ export async function readPublishedRankingContexts(contexts: RankingContext[]): 
   return result
 }
 
-export async function readMyRanking(identity: CareerIdentity) {
-  const summary=await readCareerSummary(identity); const me=summary.standing
+export async function readMyRanking(identity: CareerIdentity,access:CareerAccess) {
+  if(access.kind!=='self')throw new CareerAccessError(403)
+  assertCareerAccess(access,identity.userId,identity.contexts.find(c=>c.clubPlayerId===identity.selectedClubPlayerId)?.clubId)
+  const summary=await readCareerSummary(identity,access); const me=summary.standing
   if (!summary.statsAvailable) throw Object.assign(new Error('SPORTS_READ_UNAVAILABLE'),{code:summary.readIssue ?? 'READ_UNAVAILABLE'})
   if (!me) return {individual:[],leader:null,next:null,summary,meta:{generatedAt:new Date().toISOString()}}
-  const base=()=>db.from('competition_player_standings_read').select(STANDING).eq('club_id',me.club_id).eq('season_id',me.season_id).eq('division_id',me.division_id)
+  // Owning a private career does not authorize reading private competitors.
+  const base=()=>db.from('public_player_standings_read').select(STANDING).eq('club_id',me.club_id).eq('season_id',me.season_id).eq('division_id',me.division_id)
   const [neighbors,leader,next]=await Promise.all([
     base().gte('ordinal',Math.max(1,me.ordinal-3)).lte('ordinal',me.ordinal+3).order('ordinal'),
     base().order('ordinal').limit(1),
@@ -178,7 +195,8 @@ export async function readMyRanking(identity: CareerIdentity) {
   ])
   for (const r of [neighbors,leader,next]) assertRead(r.error)
   const row=(s:SportsStanding)=>({...s,player_id:s.club_player_id,contextualPosition:s.position})
-  return {individual:((neighbors.data ?? []) as SportsStanding[]).map(row),leader:leader.data?.[0] ? row(leader.data[0] as SportsStanding):null,
+  const visible=(neighbors.data ?? []) as SportsStanding[]
+  return {individual:(visible.some(s=>s.club_player_id===me.club_player_id)?visible:[me,...visible].sort((a,b)=>a.ordinal-b.ordinal)).map(row),leader:leader.data?.[0] ? row(leader.data[0] as SportsStanding):null,
     next:next.data?.[0] ? row(next.data[0] as SportsStanding):null,summary,meta:{generatedAt:new Date().toISOString()}}
 }
 
@@ -195,9 +213,9 @@ export async function readRankingDirectory(page=1) {
   if (!clubs.length) return {...result,clubs}
   try {
     const seasons=await catalog<{id:string;club_id:string}>((from,to)=>db.from('competition_seasons').select('id,club_id')
-      .in('club_id',clubs.map(c=>c.id)).eq('status','ACTIVE').order('id').range(from,to))
+      .in('club_id',clubs.map(c=>c.id)).eq('status','ACTIVE').eq('is_public',true).order('id').range(from,to))
     const unambiguous=seasons.filter(s=>seasons.filter(other=>other.club_id===s.club_id).length===1)
-    const divisions=unambiguous.length ? await catalog<{club_id:string;category_id:string}>((from,to)=>db.from('competition_divisions')
+    const divisions=unambiguous.length ? await catalog<{club_id:string;category_id:string}>((from,to)=>db.from('public_competition_contexts_read')
       .select('club_id,category_id').in('season_id',unambiguous.map(s=>s.id)).in('club_id',clubs.map(c=>c.id))
       .eq('modality','INDIVIDUAL').eq('is_active',true).is('segment_id',null).order('id').range(from,to)) : []
     return {...result,clubs:clubs.map(club=>({...club,categoryCount:seasons.filter(s=>s.club_id===club.id).length>1 ? null :
@@ -209,7 +227,7 @@ export async function readRankingDirectory(page=1) {
 export async function readRankingPresentation(contexts:RankingContext[],context:RankingContext|null,modality:string) {
   const unavailable={counts:{M:null as number|null,F:null as number|null},leaderPoints:null as number|null}
   if (!context) return unavailable
-  const table=modality==='PAIRS'?'competition_pair_standings_read':'competition_player_standings_read'
+  const table=modality==='PAIRS'?'public_pair_standings_read':'public_player_standings_read'
   const field=modality==='PAIRS'?'combined_points':'ranking_points'
   try {
     const counts=await Promise.all(['M','F'].map(async gender=>{
@@ -230,7 +248,7 @@ export async function readRankingPresentation(contexts:RankingContext[],context:
 export async function readClubRankingPreview(clubId: string) {
   const season=await activeSeason(clubId);if (!season) return []
   // One query for a bounded preview. Empty divisions create no fake leader.
-  const result=await db.from('competition_player_standings_read')
+  const result=await db.from('public_player_standings_read')
     .select('division_id,category,category_name,gender,division_population,full_name,ranking_points,avatar_url')
     .eq('club_id',clubId).eq('season_id',season.id).eq('ordinal',1).order('category').order('gender').limit(12)
   assertRead(result.error)
@@ -246,7 +264,7 @@ export async function readPublicClub(clubId:string) {
 
 export async function readPairRankingPage(context:RankingContext|null,query='',page=1) {
   if (!context) return {rows:[],count:0}
-  const request=db.from('competition_pair_standings_read').select('partnership_id,player1_user_id,player2_user_id,player1_name,player2_name,player1_avatar_url,player2_avatar_url,combined_points,position',{count:'exact'})
+  const request=db.from('public_pair_standings_read').select('partnership_id,player1_user_id,player2_user_id,player1_name,player2_name,player1_avatar_url,player2_avatar_url,combined_points,position',{count:'exact'})
     .eq('club_id',context.clubId).eq('season_id',context.seasonId).eq('division_id',context.divisionId)
   const search=query.trim().slice(0,80).replace(/[%_,().]/g,' ')
   if (search) request.or(`player1_name.ilike.%${search}%,player2_name.ilike.%${search}%`)

@@ -17,7 +17,7 @@ export type CareerStats = {
 export type CareerSummary = {
   standing: SportsStanding | null; stats: CareerStats | null; statsAvailable: boolean;
   readIssue?: 'MODEL_UNAVAILABLE' | 'READ_UNAVAILABLE' | null;
-  statsPeriod: 'CLUB_CAREER_ALL_SEASONS';
+  statsPeriod: 'CLUB_CAREER_ALL_SEASONS' | 'PUBLIC_CLUB_CAREER';
   bestResult: { role: string; position: number | null } | null;
   scope: { clubId: string; clubPlayerId: string; seasonId: string | null; seasonName: string | null };
   partner: { name: string; publicPath: string } | null;

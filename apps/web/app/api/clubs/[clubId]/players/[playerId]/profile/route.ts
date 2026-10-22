@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { playerAccountDenial } from '@/lib/accountRoleServer'
 import { readCareerIdentity,readCareerSummary } from '@/features/player-career/player-career.repository'
 import { editorCareerDto } from '@/features/player-career/player-career.compat'
+import { CareerAccessError, verifySelfCareer } from '@/features/player-career/player-career.access'
 
 type PlayerRow = {
   id: string
@@ -120,16 +121,17 @@ export async function GET(req:NextRequest,context:{params:Promise<{clubId:string
     const user=await getTokenUser(req)
     if (!user) return NextResponse.json({error:'Sesión inválida.'},{status:401,headers})
     const {clubId,playerId}=await context.params
-    const identity=await readCareerIdentity(playerId,clubId)
+    const access=await verifySelfCareer(req)
+    const identity=await readCareerIdentity(playerId,clubId,access)
     if (!identity) return NextResponse.json({error:'Jugador no disponible.'},{status:404,headers})
     if (identity.userId!==user.id) return NextResponse.json({error:'Este endpoint contiene datos privados del propietario.'},{status:403,headers})
     const [summary,profile]=await Promise.all([
-      readCareerSummary(identity),
+      readCareerSummary(identity,access),
       supabaseAdmin.from('profiles').select('user_id,email,first_name,last_name,display_name,avatar_url,cover_url,city,birth_date,height_cm,dominant_hand,preferred_position').eq('user_id',user.id).maybeSingle(),
     ])
     if (profile.error) throw new Error('READ')
     return NextResponse.json({...editorCareerDto(identity,summary),visibility:'private',profile:profile.data},{headers})
-  } catch {return NextResponse.json({error:'No pudimos leer tu perfil.'},{status:503,headers})}
+  } catch(error) {return NextResponse.json({error:'No pudimos leer tu perfil.'},{status:error instanceof CareerAccessError?error.status:503,headers})}
 }
 
 export async function PATCH(

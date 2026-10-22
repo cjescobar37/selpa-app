@@ -82,6 +82,7 @@ test('actual personal handler preserves safe missing-model diagnostics, not priv
     const handler=compile('../app/api/player/my-ranking/route.ts',{'next/server':nextResponse,
       '@/lib/supabaseAdmin':{supabaseAdmin:{auth:{getUser:async()=>({data:{user:{id:'player'}}})}}},
       '@/lib/accountRoleServer':{playerAccountDenial:async()=>null},
+      '@/features/player-career/player-career.access':{verifySelfCareer:async()=>({kind:'self',userId:'player'}),CareerAccessError:class extends Error{}},
       '@/features/player-career/player-career.repository':{readCareerIdentity:async()=>({}),readMyRanking:async()=>{throw {code:sourceCode,message:'PRIVATE_SQL_JWT'}}}})
     const response=await handler.GET(new Request('http://localhost/api/player/my-ranking',{headers:{Authorization:'Bearer qa-only'}}))
     assert.equal(response.status,503);assert.equal(response.body.code,code);assert.equal(response.headers['Cache-Control'],'private, no-store')

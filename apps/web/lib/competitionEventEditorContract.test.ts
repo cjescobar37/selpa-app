@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
+import { getCompetitionConfigurationAction } from './competitionEventOperationPresentation'
+import { uniqueCompetitionEventIssues } from './competitionEventIssues'
 
 const editor = readFileSync(join(process.cwd(), 'app/(app)/club/competition/SeriesEventsAdmin.tsx'), 'utf8')
 const editorStyles = readFileSync(join(process.cwd(), 'app/(app)/club/competition/SeriesEventsAdmin.module.css'), 'utf8')
@@ -34,6 +36,15 @@ test('save is controlled, guarded and refreshes without a page skeleton', () => 
 
 test('operation warnings are globally deduplicated and the primary setup CTA is explicit', () => {
   assert.match(operations, /const issues = uniqueCompetitionEventIssues\(\[/)
-  assert.match(operations, /dateConfigurationCta\(blockerIssues\)/)
+  // The implementation now derives the CTA from actionable, deduplicated issues
+  // AND actual edit capabilities. Verify the semantics, not an obsolete name.
+  assert.match(operations, /getCompetitionConfigurationAction\(\{hasRequiredIssues:issues\.length>0,hasEventCapability:Boolean\(detail\.allowed_actions\.edit\),hasTournamentCapability,hasCompetitionCapability\}\)/)
+  assert.match(operations, /\{configurationAction\.label\}/)
+  assert.deepEqual(uniqueCompetitionEventIssues(['DATES_MISSING:a',{code:'DATES_MISSING:b'},'VENUE_MISSING','VENUE_MISSING']),['DATES_MISSING:a','VENUE_MISSING'])
+  for(const hasRequiredIssues of [false,true])for(let mask=0;mask<8;mask++){
+    const action=getCompetitionConfigurationAction({hasRequiredIssues,hasEventCapability:Boolean(mask&1),hasTournamentCapability:Boolean(mask&2),hasCompetitionCapability:Boolean(mask&4)})
+    assert.equal(action.editable,mask!==0)
+    assert.equal(action.label,mask===0?'Ver configuración':hasRequiredIssues?'Completar configuración':'Configurar fecha')
+  }
   assert.doesNotMatch(operations, /Revisá una advertencia antes de continuar/)
 })

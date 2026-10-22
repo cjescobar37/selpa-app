@@ -21,7 +21,7 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
   const gender=context?.gender ?? params.gender ?? 'M',modality=params.modality ?? 'INDIVIDUAL'
   const entries=modality==='PAIRS'?pairRankingEntries(pairs):individualRankingEntries(ranking.rows)
   const tiers=rankingTiers(entries),search=Boolean(params.q?.trim())
-  return <main className={styles.shell} data-public-ranking data-gender={gender}>
+  return <section className={styles.shell} aria-label="Ranking SELPA" data-public-ranking data-gender={gender}>
     {!clubId ? <>
       <header className={styles.indexHero}>
         <div><span className={styles.eyebrow}>El juego deja huella</span><h1>Ranking SELPA</h1><p>Los líderes de hoy. Tu próximo objetivo.</p></div>
@@ -59,14 +59,14 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
       {!error && context && (total>0 || ranking.page>1)?<nav className={styles.pager} aria-label="Páginas de ranking">{ranking.page>1?<Link href={href(ranking.page-1)}>Anterior</Link>:<span/>}<span>{total} resultados · Página {ranking.page}</span>{ranking.page*ranking.pageSize<total?<Link href={href(ranking.page+1)}>Siguiente</Link>:<span/>}</nav>:null}
       {!error && entries.length?<p className={styles.footnote}>Puestos oficiales, también al buscar. Los empates comparten posición.</p>:null}
     </>}
-  </main>
+  </section>
 }
 
 function EntryCard({entry,tier,leaderPoints,contextLabel}:{entry:RankingEntry;tier:'leader'|'challenger'|'row';leaderPoints:number|null;contextLabel?:string}) {
   const delta=leaderPoints===null?null:leaderPoints-entry.points
   const content=<>
     <span className={styles.position}>#{entry.position}</span>
-    <div className={styles.avatars}>{entry.avatars.map((avatar,index)=><RankingPlayerAvatar key={index} className={styles.avatar} name={avatar.name} src={avatar.url} sizes={tier==='leader'?'76px':'44px'}/>)}</div>
+    <div className={styles.avatars}>{entry.avatars.map((avatar,index)=><RankingPlayerAvatar key={index} className={styles.avatar} name={avatar.name} src={avatar.url} sizes={tier==='leader'?'(max-width: 350px) 96px, (max-width: 767px) 112px, 164px':'44px'}/>)}</div>
     <div className={styles.entryIdentity}>
       {tier==='leader'?<span className={styles.leaderLabel}><Crown size={15} aria-hidden="true"/>{entry.isTied?'N°1 · Liderazgo compartido':'N°1 actual'}</span>:null}
       <h3>{entry.name}</h3>
