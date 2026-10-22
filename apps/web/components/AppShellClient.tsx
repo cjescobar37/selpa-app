@@ -29,6 +29,7 @@ export default function AppShellClient({ children }: { children: ReactNode }) {
       <ActiveClubThemeProvider>
         <HomeInstallProvider>
           <div className={`app-shell${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}${isClubAdminRoute ? ' app-shell--club' : ''}${pilotClass}`}>
+            <span className="pwa-ios-status-sampler" aria-hidden="true" />
             <Suspense fallback={null}>
               <AppNavbarClient />
             </Suspense>

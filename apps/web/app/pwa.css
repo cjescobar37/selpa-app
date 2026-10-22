@@ -75,3 +75,28 @@
   from { opacity: .96; }
   to { opacity: 1; }
 }
+
+/* iOS 27 installed PWAs can add OS progressive glass over the status area.
+   A real fixed painted edge is sampled by WebKit; pseudo-elements aren't.
+   Keep the original browser + desktop navigation untouched. */
+.pwa-ios-status-sampler { display: none; }
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 980px) and (display-mode: standalone) {
+    .pwa-ios-status-sampler {
+      display: block;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 8px;
+      background-color: #313b4c;
+      pointer-events: none;
+      z-index: 1010;
+    }
+    .app-shell > .px-nav {
+      background: #313b4c;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+}

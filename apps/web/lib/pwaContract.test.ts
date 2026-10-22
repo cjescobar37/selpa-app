@@ -50,3 +50,14 @@ test('existing SDK persistence and server-derived active club/role remain the au
   assert.match(provider, /onAuthStateChange/)
   assert.match(provider, /event === 'SIGNED_OUT'[\s\S]*clearSessionContext\(\)/)
 })
+
+test('iOS installed header uses a solid sampled edge, not translucent status chrome', () => {
+  const layout = source('app/layout.tsx')
+  const shell = source('components/AppShellClient.tsx')
+  const css = source('app/pwa.css')
+  assert.doesNotMatch(layout, /statusBarStyle:\s*['"]black-translucent['"]/) 
+  assert.match(shell, /className="pwa-ios-status-sampler"/)
+  assert.match(css, /\.pwa-ios-status-sampler\s*\{[\s\S]*?position:\s*fixed/)
+  assert.match(css, /height:\s*8px/)
+  assert.match(css, /-webkit-backdrop-filter:\s*none/)
+})

@@ -48,7 +48,6 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: BRAND.name.toUpperCase(),
-    statusBarStyle: 'black-translucent',
     startupImage: PWA_STARTUP_SCREENS.map(screen => ({ url: `/pwa/startup/${screen.id}?v=${PWA_OPENING.version}`, media: screen.media })),
   },
 }
