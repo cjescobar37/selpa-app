@@ -11,10 +11,12 @@ export const PWA_OPENING = {
 } as const
 
 // CSS can paint while a preceding stylesheet delays the parser-time script.
-// Keep the installed-phone root canvas navy across the native/web hand-off,
-// not only until app-shell HTML arrives. The body regains its own light Home
-// surface independently; desktop/tablet and ordinary browsers are unaffected.
-export const PWA_OPENING_CANVAS_CSS = `@media (display-mode: standalone) and (max-width: 600px), (display-mode: standalone) and (max-height: 600px) and (max-width: 980px) and (orientation: landscape){html{background:${PWA_OPENING.background}!important}body:not(:has(.app-shell)){background:${PWA_OPENING.background}}}`
+// Keep BOTH document backgrounds navy for the lifetime of an installed phone
+// page. WebKit derives its under-page canvas from html AND body; restoring a
+// light body behind an opaque overlay still changes that native-facing canvas.
+// The app owns the original light surface instead. No theme/layout changes in
+// browser, tablet or desktop, and no JS or animation needed for this protection.
+export const PWA_OPENING_CANVAS_CSS = `@media (display-mode: standalone) and (max-width: 600px), (display-mode: standalone) and (max-height: 600px) and (max-width: 980px) and (orientation: landscape){html,body{background:${PWA_OPENING.background}!important}.app-shell{background:var(--bg, #f4f7fb);min-height:100%}}`
 
 // Parser-time, before the body can paint. Hydration may only retire this layer,
 // never activate it. If this script is late/blocked, the default is the home.
@@ -32,7 +34,8 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
     const surface = '[data-pwa-opening]{display:grid!important;position:fixed;inset:0;z-index:10000;pointer-events:none;background:${PWA_OPENING.background};opacity:1;transition:opacity ${PWA_OPENING.exitMs}ms ease-in-out}';
     const canvas = 'html{background:${PWA_OPENING.background}!important}';
     // Protect the canvas even if the streamed body has not arrived. Restore the
-    // original body background under the opaque layer, before the crossfade.
+    // original surface under the opaque layer, before the crossfade. In an
+    // installed phone the permanent CSS keeps body navy and paints app-shell.
     style.textContent = canvas + 'body{background:${PWA_OPENING.background}!important}' + surface;
     // Local technical timing only. No identity, storage, URL or network logging.
     const state = window.__selpaOpening = {active:true, started:performance.now(), shownAt:0, readyAt:0, leavingAt:0, finishedAt:0, finish};

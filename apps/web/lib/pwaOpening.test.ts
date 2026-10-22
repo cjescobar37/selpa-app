@@ -95,11 +95,12 @@ test('cleanup follows the layer opacity transition, not bubbling child effects; 
   const lostEvent = boot(); lostEvent.advance(600); assert.equal(lostEvent.window.__selpaOpening?.active, false)
 })
 
-test('installed-phone root stays navy even after shell HTML; only the empty body is overridden', () => {
+test('installed-phone html and body stay navy after exit; the app owns the unchanged light surface', () => {
   assert.match(PWA_OPENING_CANVAS_CSS, /display-mode: standalone/)
   assert.match(PWA_OPENING_CANVAS_CSS, /max-width: 600px/)
-  assert.match(PWA_OPENING_CANVAS_CSS, /html\{background:#061b3a[^}]+!important\}body:not\(:has\(\.app-shell\)\)\{background:#061b3a/)
-  assert.doesNotMatch(PWA_OPENING_CANVAS_CSS, /html:not\(:has\(\.app-shell\)\)/)
+  assert.match(PWA_OPENING_CANVAS_CSS, /html,body\{background:#061b3a[^}]+!important\}/)
+  assert.match(PWA_OPENING_CANVAS_CSS, /\.app-shell\{background:var\(--bg, #f4f7fb\);min-height:100%\}/)
+  assert.doesNotMatch(PWA_OPENING_CANVAS_CSS, /:has\(|:empty|prefers-reduced-motion/)
   assert.doesNotMatch(PWA_OPENING_CANVAS_CSS, /(?:\{|;)\s*(?:opacity|animation|position|display)\s*:/)
   const layout = readFileSync('app/layout.tsx', 'utf8')
   assert.ok(layout.indexOf('id="selpa-opening-canvas"') < layout.indexOf('id="selpa-opening-bootstrap"'))
