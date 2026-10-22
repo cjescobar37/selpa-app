@@ -9,18 +9,18 @@ import { resultLabel } from '@/features/player-career/player-career.rules'
 import type { CareerHistoryRow, CareerIdentity, CareerRecentRow, CareerSummary } from '@/features/player-career/player-career.types'
 import styles from './CareerExperience.module.css'
 
-function useSection<T>(identity:CareerIdentity,section:string,enabled=true,page=1,own=false) {
+function useSection<T>(identity:CareerIdentity,section:string,enabled=true,page=1,own=false,demo=false) {
   const [result,setResult]=useState<{key:string;data?:T;error?:boolean}>()
   const [retry,setRetry]=useState(0)
   const context=identity.contexts.find(c=>c.clubPlayerId===identity.selectedClubPlayerId)!
-  const key=`${own?'private':'public'}:${identity.userId}:${context.clubId}:${section}:${page}:${retry}`
+  const key=`${demo?'demo':own?'private':'public'}:${identity.userId}:${context.clubId}:${section}:${page}:${retry}`
   useEffect(()=>{
     if (!enabled) return
     const controller=new AbortController()
     const load=async()=>{
       const token=own?(await supabase.auth.getSession()).data.session?.access_token:null
       if(own&&!token)throw new Error('SESSION')
-      const endpoint=own?`/api/player/career/${identity.userId}`:`/api/players/${identity.userId}/career`
+      const endpoint=demo?`/api/preview/sports-demo/${identity.userId}`:own?`/api/player/career/${identity.userId}`:`/api/players/${identity.userId}/career`
       return fetch(`${endpoint}?${new URLSearchParams({clubId:context.clubId,section,page:String(page)})}`,
         {cache:'no-store',signal:controller.signal,headers:token?{Authorization:`Bearer ${token}`}:undefined})
     }
@@ -30,14 +30,14 @@ function useSection<T>(identity:CareerIdentity,section:string,enabled=true,page=
       if (!controller.signal.aborted) setResult({key,data})
     }).catch(()=>{if (!controller.signal.aborted) setResult({key,error:true})})
     return ()=>controller.abort()
-  },[context.clubId,enabled,identity.userId,key,page,section,own])
+  },[context.clubId,enabled,identity.userId,key,page,section,own,demo])
   return {data:result?.key===key ? result.data:undefined,error:result?.key===key && result.error,retry:()=>setRetry(r=>r+1)}
 }
 function date(value:string|null) { return value ? new Intl.DateTimeFormat('es-AR',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(`${value.slice(0,10)}T12:00:00Z`)):'Sin fecha deportiva' }
 type History={rows:CareerHistoryRow[];hasMore:boolean}
 type Recent={rows:CareerRecentRow[];hasMore:boolean}
 
-export default function CareerExperience(props:{identity:CareerIdentity;own?:boolean;editorHref?:string}) {
+export default function CareerExperience(props:{identity:CareerIdentity;own?:boolean;editorHref?:string;demo?:boolean}) {
   return props.identity.contexts.length ? <ClubCareerExperience {...props}/> : <GlobalCareerExperience {...props}/>
 }
 function GlobalCareerExperience({identity,own=false}:{identity:CareerIdentity;own?:boolean}) {
@@ -52,14 +52,14 @@ async function shareIdentity(identity:CareerIdentity,setMessage:(message:string)
     else {await navigator.clipboard.writeText(url);setMessage('Enlace público copiado')}
   } catch(error) {if (!(error instanceof DOMException && error.name==='AbortError')) setMessage(`No pudimos compartir. Enlace público: ${url}`)}
 }
-function ClubCareerExperience({identity,own=false,editorHref}:{identity:CareerIdentity;own?:boolean;editorHref?:string}) {
+function ClubCareerExperience({identity,own=false,editorHref,demo=false}:{identity:CareerIdentity;own?:boolean;editorHref?:string;demo?:boolean}) {
   const [tab,setTab]=useState<'summary'|'history'|'stats'>('summary')
   const [page,setPage]=useState(1)
   const [showRecent,setShowRecent]=useState(false)
   const [shareMessage,setShareMessage]=useState('')
-  const summary=useSection<{summary:CareerSummary}>(identity,'summary',true,1,own)
-  const history=useSection<History>(identity,'history',tab==='history',page,own)
-  const recent=useSection<Recent>(identity,'recent',showRecent,1,own)
+  const summary=useSection<{summary:CareerSummary}>(identity,'summary',true,1,own,demo)
+  const history=useSection<History>(identity,'history',tab==='history',page,own,demo)
+  const recent=useSection<Recent>(identity,'recent',showRecent,1,own,demo)
   const context=identity.contexts.find(c=>c.clubPlayerId===identity.selectedClubPlayerId)!
   const sports=summary.data?.summary
   const standing=sports?.standing
@@ -73,7 +73,7 @@ function ClubCareerExperience({identity,own=false,editorHref}:{identity:CareerId
   }
   const unavailable=summary.error || sports?.statsAvailable===false
   return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} aria-label="Carrera deportiva">
-    <CareerIdentityHero identity={identity} own={own} category={standing?.category_name} gender={standing?.gender} onShare={()=>void share()}/>
+    <CareerIdentityHero identity={identity} own={own} demo={demo} category={standing?.category_name} gender={standing?.gender} onShare={()=>void share()}/>
     {identity.contexts.length>1 ? <label className={styles.context}>Club deportivo<select value={context.clubPlayerId} onChange={event=>{
       const c=identity.contexts.find(c=>c.clubPlayerId===event.target.value)!
       window.location.assign(own?`/player/carrera/${c.clubPlayerId}`:`/jugadores/${identity.userId}?clubId=${c.clubId}`)
@@ -82,7 +82,7 @@ function ClubCareerExperience({identity,own=false,editorHref}:{identity:CareerId
     {!summary.data && !summary.error ? <div className={styles.metrics} aria-label="Cargando carrera" aria-busy="true">{['Posición','Puntos','Partidos'].map(label=><div key={label}><span>{label}</span><i className={styles.skeleton}/></div>)}</div>:
       unavailable ? <PlayerStatePanel kind="error" title="Carrera pendiente de lectura" message="La identidad está disponible. No mostramos puntos ni estadísticas sin confirmar su fuente." onRetry={summary.retry} compact/>:
       <div className={styles.metrics}><div><span>Posición en categoría</span><strong>{standing ? `#${standing.position}`:own?'Sin ranking':'No publicado'}</strong></div><div><span>{own?'Puntos de temporada':'Puntos publicados'}</span><strong>{standing ? standing.ranking_points.toLocaleString('es-AR'):'—'}</strong></div><div><span>Partidos de carrera</span><strong>{stats?.matches_played ?? '—'}</strong></div></div>}
-    {standing ? <Link className={styles.link} href={`/ranking?${new URLSearchParams({clubId:context.clubId,season:standing.season_id,division:standing.division_id,gender:standing.gender,category:String(standing.category ?? ''),modality:'INDIVIDUAL'})}`}>Ver este ranking</Link>:null}
+    {standing ? <Link className={styles.link} href={`${demo?'/preview/demo':'/ranking'}?${new URLSearchParams({clubId:context.clubId,season:standing.season_id,division:standing.division_id,gender:standing.gender,category:String(standing.category ?? ''),modality:'INDIVIDUAL'})}`}>Ver este ranking</Link>:null}
     {own ? <div className={styles.privateActions}><Link href={editorHref ?? '/perfil'}><Pencil size={16}/>Editar fotos, datos y pareja</Link><Link href="/preferencias">Preferencias</Link></div>:null}
     <p className={styles.shareMessage} role="status">{shareMessage}</p>
     {shareMessage.startsWith('No pudimos') ? <Link className={styles.link} href={identity.publicPath}>{identity.publicPath}</Link>:null}

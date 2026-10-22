@@ -119,12 +119,18 @@ async function route(reads,params={clubId:'00000000-0000-4000-8000-000000000001'
   const repo={readPublicClub:async()=>({clubs:[club],count:1}),readRankingDirectory:async()=>({clubs:[club],count:1}),
     readRankingContexts:async()=>[scope],readPublishedRankingContexts:async contexts=>contexts.map(c=>({...c,rankedCount:0})),readRankingPage:async()=>({rows:[],count:0,page:1,pageSize:25,context:scope}),
     readPairRankingPage:async()=>({rows:[],count:0}),readRankingPresentation:async()=>({counts:{M:0,F:0},leaderPoints:null}),...reads}
+  const rankingView=()=>null
   const page=compile('../app/ranking/page.tsx',{
-    '@/components/public/PublicRankingExperience':{default:()=>null},'@/features/player-career/player-career.repository':repo,
+    '@/components/public/PublicRankingExperience':{default:rankingView},'@/features/player-career/player-career.repository':repo,
+    '@/features/preview-sports-demo/demo-data':{sportsDemoEnabled:()=>false},
+    '@/components/public/PreviewSportsNotice':{default:()=>null},
     '@/features/player-career/player-career.rules':{pageNumber:s=>Number(s)||1,validId:s=>Boolean(s?.startsWith('00000000'))},
     '@/features/player-career/public-ranking.presentation':rules,'next/navigation':{redirect:href=>{throw new Error('REDIRECT '+href)}}
   })
-  return (await page.default({searchParams:Promise.resolve(params)})).props
+  const rendered=await page.default({searchParams:Promise.resolve(params)})
+  const ranking=rendered.props.children[1]
+  assert.equal(ranking.type,rankingView)
+  return ranking.props
 }
 test('actual page catches missing read model while retaining club/season/context',async()=>{
   const result=await route({readRankingPage:async()=>{throw Object.assign(new Error('private'),{code:'PGRST205'})}})

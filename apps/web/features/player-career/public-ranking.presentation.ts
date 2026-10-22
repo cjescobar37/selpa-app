@@ -1,7 +1,7 @@
 import type { PairRankingRow } from '@/components/ranking/PairRankingBoard'
 import type { RankingContext, SportsStanding } from './player-career.types'
 
-export type RankingSearch = {clubId?:string;club?:string;category?:string;gender?:string;season?:string;division?:string;modality?:string;q?:string;page?:string;clubsPage?:string}
+export type RankingSearch = {clubId?:string;club?:string;category?:string;gender?:string;season?:string;division?:string;modality?:string;q?:string;page?:string;clubsPage?:string;demo?:string}
 export type RankingReadIssue = 'MODEL_UNAVAILABLE' | 'READ_UNAVAILABLE'
 export type RankingEntry = {
   id:string; position:number; points:number; name:string; subtitle:string; isTied:boolean;
@@ -25,7 +25,7 @@ export function rankingTiers(rows:RankingEntry[]) {
 }
 export function rankingHref(params:RankingSearch,overrides:Partial<Record<keyof RankingSearch,string|undefined>>={}) {
   const merged={...params,...overrides}
-  return '/ranking?'+new URLSearchParams(Object.fromEntries(Object.entries(merged).filter(([,value])=>value!==undefined && value!=='')) as Record<string,string>)
+  return (params.demo==='1'?'/preview/demo?':'/ranking?')+new URLSearchParams(Object.fromEntries(Object.entries(merged).filter(([,value])=>value!==undefined && value!=='')) as Record<string,string>)
 }
 export function rankingContext(contexts:RankingContext[],params:RankingSearch,modality:string) {
   const requested=contexts.find(c=>c.divisionId===params.division)

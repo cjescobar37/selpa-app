@@ -4,6 +4,8 @@ import { readRankingDirectory, readPublicClub, readRankingContexts, readPublishe
 import { pageNumber, validId } from '@/features/player-career/player-career.rules'
 import { rankingContext, rankingHref, rankingReadIssue, type RankingSearch, type RankingReadIssue } from '@/features/player-career/public-ranking.presentation'
 import type { RankingContext, RankingPage } from '@/features/player-career/player-career.types'
+import {sportsDemoEnabled} from '@/features/preview-sports-demo/demo-data'
+import PreviewSportsNotice from '@/components/public/PreviewSportsNotice'
 export type { RankingSearch } from '@/features/player-career/public-ranking.presentation'
 export const dynamic='force-dynamic'
 export default async function RankingPublicPage({searchParams}:{searchParams?:Promise<RankingSearch>}) {
@@ -35,6 +37,6 @@ export default async function RankingPublicPage({searchParams}:{searchParams?:Pr
     } catch (failure) {error=rankingReadIssue(failure)}
   }
   if (error) console.warn('[selpa-public-ranking]',{clubId:validId(clubId)?clubId:null,issue:error})
-  return <PublicRankingExperience clubs={clubs.clubs} clubsCount={clubs.count} contexts={contexts} ranking={ranking} pairs={pairs.rows}
-    total={modality==='PAIRS'?pairs.count:ranking.count} params={canonical} error={error} presentation={presentation}/>
+  return <>{sportsDemoEnabled()&&(error==='MODEL_UNAVAILABLE'||clubs.clubs.some(c=>c.categoryCount===null))?<PreviewSportsNotice/>:null}<PublicRankingExperience clubs={clubs.clubs} clubsCount={clubs.count} contexts={contexts} ranking={ranking} pairs={pairs.rows}
+    total={modality==='PAIRS'?pairs.count:ranking.count} params={canonical} error={error} presentation={presentation}/></>
 }

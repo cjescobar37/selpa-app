@@ -21,7 +21,7 @@ export default function RankingDiscovery({contexts,current,params}:{contexts:Ran
       {modalities.length>1?<nav className={styles.modes} aria-label="Modalidad">{modalities.map(mode=><Link key={mode} aria-current={modality===mode?'page':undefined} href={rankingHref(params,{modality:mode,division:undefined,category:undefined,page:undefined})}>{mode==='PAIRS'?'Parejas':'Individual'}</Link>)}</nav>:null}
       <button type="button" className={styles.searchToggle} aria-label="Buscar jugador" aria-expanded={searchOpen} onClick={()=>{setSearchOpen(v=>!v);requestAnimationFrame(()=>searchRef.current?.focus())}}><Search size={19}/></button>
     </div>
-    {searchOpen?<form className={styles.search} action="/ranking" method="get">
+    {searchOpen?<form className={styles.search} action={params.demo==='1'?'/preview/demo':'/ranking'} method="get">
       {Object.entries(params).filter(([key,value])=>value && !['q','page','club'].includes(key)).map(([key,value])=><input key={key} type="hidden" name={key} value={value}/>)}
       <label><span>Buscar {modality==='PAIRS'?'pareja':'jugador'}</span><input ref={searchRef} name="q" defaultValue={params.q ?? ''} maxLength={80} placeholder="Nombre" type="search"/></label>
       <button type="submit" aria-label="Buscar"><Search size={18}/></button>

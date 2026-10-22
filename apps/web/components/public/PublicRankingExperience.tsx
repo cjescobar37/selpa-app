@@ -9,17 +9,17 @@ import RankingDiscovery from '@/components/ranking/RankingDiscovery'
 import type { RankingContext,RankingPage } from '@/features/player-career/player-career.types'
 import { individualRankingEntries, pairRankingEntries, rankingHref, rankingTiers, type RankingEntry, type RankingReadIssue, type RankingSearch } from '@/features/player-career/public-ranking.presentation'
 import styles from './PublicRankingExperience.module.css'
-export default function PublicRankingExperience({clubs,clubsCount,contexts,ranking,pairs,total,params,error,presentation}:{
+export default function PublicRankingExperience({clubs,clubsCount,contexts,ranking,pairs,total,params,error,presentation,demo=false}:{
   clubs:Array<{id:string;name:string;logo_url:string|null;theme_key:string|null;categoryCount?:number|null}>;clubsCount:number;contexts:RankingContext[];
   ranking:RankingPage;pairs:PairRankingRow[];total:number;params:RankingSearch;error:RankingReadIssue|null;
-  presentation:{counts:{M:number|null;F:number|null};leaderPoints:number|null}
+  presentation:{counts:{M:number|null;F:number|null};leaderPoints:number|null};demo?:boolean
 }) {
   const clubId=params.clubId ?? params.club
   const context=ranking.context
   const href=(page:number)=>rankingHref(params,{clubId:clubId ?? '',page:String(page)})
   const selectedClub=clubs.find(c=>c.id===clubId)
   const gender=context?.gender ?? params.gender ?? 'M',modality=params.modality ?? 'INDIVIDUAL'
-  const entries=modality==='PAIRS'?pairRankingEntries(pairs):individualRankingEntries(ranking.rows)
+  const entries=(modality==='PAIRS'?pairRankingEntries(pairs):individualRankingEntries(ranking.rows)).map(entry=>demo&&entry.href?{...entry,href:`/preview/demo?view=profile&playerId=${entry.id}`}:entry)
   const tiers=rankingTiers(entries),search=Boolean(params.q?.trim())
   return <section className={styles.shell} aria-label="Ranking SELPA" data-public-ranking data-gender={gender}>
     {!clubId ? <>
@@ -57,7 +57,7 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
             <div className={styles.rows}>{tiers.rest.map(entry=><EntryCard key={entry.id} entry={entry} tier="row" leaderPoints={null}/>)}</div></section>:null}
         </>}
       {!error && context && (total>0 || ranking.page>1)?<nav className={styles.pager} aria-label="Páginas de ranking">{ranking.page>1?<Link href={href(ranking.page-1)}>Anterior</Link>:<span/>}<span>{total} resultados · Página {ranking.page}</span>{ranking.page*ranking.pageSize<total?<Link href={href(ranking.page+1)}>Siguiente</Link>:<span/>}</nav>:null}
-      {!error && entries.length?<p className={styles.footnote}>Puestos oficiales, también al buscar. Los empates comparten posición.</p>:null}
+      {!error && entries.length?<p className={styles.footnote}>{demo?'Posiciones DEMO. No corresponden a jugadores ni resultados reales.':'Puestos oficiales, también al buscar. Los empates comparten posición.'}</p>:null}
     </>}
   </section>
 }

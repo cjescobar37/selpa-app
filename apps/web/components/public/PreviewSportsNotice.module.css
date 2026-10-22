@@ -1,0 +1,4 @@
+.notice{margin:12px 0;padding:12px;border:1px solid #d8e3eb;border-radius:12px;background:var(--surface,#fff);color:var(--text,#13263c);font-size:13px;display:grid;gap:6px}
+.notice strong{font-size:12px;letter-spacing:.02em}.notice p{margin:0;line-height:1.45}
+.notice nav{display:flex;flex-wrap:wrap;gap:4px 16px}.notice a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent,#087c96);text-decoration:underline}
+.notice a:focus-visible{outline:2px solid #087c96;outline-offset:3px;border-radius:4px}
