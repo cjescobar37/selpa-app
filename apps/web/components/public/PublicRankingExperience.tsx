@@ -3,8 +3,9 @@ import PageHeader from '@/components/navigation/PageHeader'
 import type { PairRankingRow } from '@/components/ranking/PairRankingBoard'
 import RankingPlayerAvatar from '@/components/ranking/RankingPlayerAvatar'
 import RankingRetryButton from '@/components/ranking/RankingRetryButton'
-import { ArrowRight, Crown, Trophy, Users, WifiOff, Search } from 'lucide-react'
-import { formatRankingGender } from '@/lib/ranking'
+import PublishedRankingClubCard, { RankingClubCards } from './PublishedRankingClubCard'
+import { Crown, Trophy, Users, WifiOff } from 'lucide-react'
+import RankingDiscovery from '@/components/ranking/RankingDiscovery'
 import type { RankingContext,RankingPage } from '@/features/player-career/player-career.types'
 import { individualRankingEntries, pairRankingEntries, rankingHref, rankingTiers, type RankingEntry, type RankingReadIssue, type RankingSearch } from '@/features/player-career/public-ranking.presentation'
 import styles from './PublicRankingExperience.module.css'
@@ -20,7 +21,6 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
   const gender=context?.gender ?? params.gender ?? 'M',modality=params.modality ?? 'INDIVIDUAL'
   const entries=modality==='PAIRS'?pairRankingEntries(pairs):individualRankingEntries(ranking.rows)
   const tiers=rankingTiers(entries),search=Boolean(params.q?.trim())
-  const filters=contexts.filter(c=>c.modality===modality && c.gender===gender)
   return <main className={styles.shell} data-public-ranking data-gender={gender}>
     {!clubId ? <>
       <header className={styles.indexHero}>
@@ -30,33 +30,16 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
       </header>
       <div className={styles.sectionHeading}><h2>Elegí tu club</h2>{!error?<span>{clubsCount} {clubsCount===1?'club':'clubes'}</span>:null}</div>
       {error?<ReadError issue={error} clubName="los clubes"/>:<>
-        <div className={styles.clubs}>{clubs.map(club=><Link className={styles.clubCard} key={club.id} href={rankingHref({clubId:club.id,gender:params.gender})}>
-          <RankingPlayerAvatar className={styles.clubLogo} name={club.name} src={club.logo_url} sizes="52px"/>
-          <div className={styles.clubIdentity}><span className={styles.official}>Ranking oficial</span><h3>{club.name}</h3>
-            {club.categoryCount!==null && club.categoryCount!==undefined?<span className={styles.clubDetail}>{club.categoryCount} {club.categoryCount===1?'categoría activa':'categorías activas'}</span>:<span className={styles.clubDetail}>Competencia del club</span>}
-          </div><span className={styles.clubCta}>Ver ranking <ArrowRight size={17} aria-hidden="true"/></span>
-        </Link>)}</div>
+        <RankingClubCards>{clubs.map(club=><PublishedRankingClubCard key={club.id} name={club.name} logoUrl={club.logo_url} themeKey={club.theme_key}
+          href={rankingHref({clubId:club.id,gender:params.gender})}
+          detail={club.categoryCount!==null && club.categoryCount!==undefined?`${club.categoryCount} ${club.categoryCount===1?'categoría activa':'categorías activas'}`:undefined}/>)}</RankingClubCards>
         {!clubs.length?<EmptyState title="La competencia empieza acá" detail="Los clubes aparecerán aquí cuando estén disponibles en SELPA."/>:null}
         {clubsCount>40?<nav className={styles.pager} aria-label="Páginas de clubes">{Number(params.clubsPage ?? 1)>1 ? <Link href={rankingHref({clubsPage:String(Number(params.clubsPage)-1),gender:params.gender})}>Anterior</Link>:<span/>}{Number(params.clubsPage ?? 1)*40<clubsCount ? <Link href={rankingHref({clubsPage:String(Number(params.clubsPage ?? 1)+1),gender:params.gender})}>Más clubes</Link>:null}</nav>:null}
       </>}
     </>:<>
-      <PageHeader title="Ranking" eyebrow="Resultados publicados" backHref="/ranking"
+      <PageHeader title="Ranking" eyebrow="Competencia del club" backHref="/ranking"
         description={[selectedClub?.name ?? 'Club seleccionado',context?.seasonName].filter(Boolean).join(' · ')}/>
-      <form className={styles.filters} action="/ranking" method="get">
-        <input type="hidden" name="clubId" value={clubId}/>
-        <input type="hidden" name="gender" value={gender}/>
-        {context?<input type="hidden" name="season" value={context.seasonId}/>:null}
-        <label>División y categoría<select name="division" defaultValue={context?.divisionId ?? ''} key={context?.divisionId}>
-          {!context?<option value="">Elegir categoría</option>:null}{filters.map(c=><option key={c.divisionId} value={c.divisionId}>{c.categoryName}</option>)}
-        </select></label>
-        <label>Modalidad<select name="modality" defaultValue={modality}><option value="INDIVIDUAL">Individual</option><option value="PAIRS">Parejas</option></select></label>
-        <label className={styles.search}>Buscar {modality==='PAIRS'?'pareja':'jugador'}<input name="q" defaultValue={params.q ?? ''} maxLength={80} placeholder="Nombre del jugador" type="search"/></label>
-        <button type="submit"><Search size={17} aria-hidden="true"/><span>Buscar</span></button>
-      </form>
-      <nav className={styles.genderTabs} aria-label="Ranking por rama">{(['M','F'] as const).map(branch=>
-        <Link key={branch} aria-current={gender===branch?'page':undefined} href={rankingHref(params,{gender:branch,division:undefined,page:undefined})}>
-          {formatRankingGender(branch)}<span aria-label={`${presentation.counts[branch] ?? 'No disponible'} ${modality==='PAIRS'?'parejas':'jugadores'} rankeados`}>{error?'—':presentation.counts[branch] ?? '—'}</span>
-        </Link>)}</nav>
+      <RankingDiscovery contexts={contexts} current={context} params={params}/>
       {context?<p className={styles.context}><span className={styles.scopeDot}/>{context.categoryName} · Ranking anual {modality==='PAIRS'?'de parejas':'individual'}</p>:null}
       {error?<ReadError issue={error} clubName={selectedClub?.name ?? 'este club'} clubId={selectedClub?.id}/>:!context?
         <EmptyState title="Esta categoría todavía no tiene ranking" detail="Probá otra categoría o rama para explorar la competencia del club."/>:
@@ -65,7 +48,7 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
           href={search?rankingHref(params,{q:undefined,page:undefined}):ranking.page>1?href(1):undefined} action={search?'Ver ranking completo':'Primera página'}/>:
         <>
           {search?<div className={styles.sectionHeading}><h2>Resultados de búsqueda</h2><Link href={rankingHref(params,{q:undefined,page:undefined})}>Quitar búsqueda</Link></div>:null}
-          {tiers.leaders.length?<section className={styles.leaders} aria-label="Liderazgo actual">{tiers.leaders.map(entry=><EntryCard key={entry.id} entry={entry} tier="leader" leaderPoints={presentation.leaderPoints}/>)}</section>:null}
+          {tiers.leaders.length?<section className={styles.leaders} aria-label="Liderazgo actual">{tiers.leaders.map(entry=><EntryCard key={entry.id} entry={entry} tier="leader" leaderPoints={presentation.leaderPoints} contextLabel={`${selectedClub?.name ?? ''} · ${context.categoryName}`}/>)}</section>:null}
           {tiers.challengers.length?<section aria-label="Perseguidores" className={styles.challengers}>
             {!search?<div className={styles.sectionHeading}><h2>Los perseguidores</h2><span>Puestos 2–5</span></div>:null}
             <div className={styles.challengerGrid}>{tiers.challengers.map(entry=><EntryCard key={entry.id} entry={entry} tier="challenger" leaderPoints={presentation.leaderPoints}/>)}</div>
@@ -79,7 +62,7 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
   </main>
 }
 
-function EntryCard({entry,tier,leaderPoints}:{entry:RankingEntry;tier:'leader'|'challenger'|'row';leaderPoints:number|null}) {
+function EntryCard({entry,tier,leaderPoints,contextLabel}:{entry:RankingEntry;tier:'leader'|'challenger'|'row';leaderPoints:number|null;contextLabel?:string}) {
   const delta=leaderPoints===null?null:leaderPoints-entry.points
   const content=<>
     <span className={styles.position}>#{entry.position}</span>
@@ -87,6 +70,7 @@ function EntryCard({entry,tier,leaderPoints}:{entry:RankingEntry;tier:'leader'|'
     <div className={styles.entryIdentity}>
       {tier==='leader'?<span className={styles.leaderLabel}><Crown size={15} aria-hidden="true"/>{entry.isTied?'N°1 · Liderazgo compartido':'N°1 actual'}</span>:null}
       <h3>{entry.name}</h3>
+      {contextLabel?<span className={styles.entryDetail}>{contextLabel}</span>:null}
       <span className={styles.entryDetail}>{tier==='leader'?'El rival a vencer':tier==='challenger' && delta!==null && delta>=0?`${delta.toLocaleString('es-AR')} pts del liderazgo`:entry.subtitle}{entry.isTied && tier!=='leader'?' · Empate':''}</span>
     </div>
     <div className={styles.points}><strong>{entry.points.toLocaleString('es-AR')}</strong><span>PTS</span></div>

@@ -34,9 +34,10 @@ export default function PlayerFinanceContent({ data, tab, filter, busy, error, o
       <button type="button" aria-pressed={tab === 'movements'} onClick={() => onTab('movements')}>Movimientos</button>
     </div>
     {tab === 'obligations' ? <div className={styles.filters} role="group" aria-label="Filtrar cargos">
-      {([['ALL', 'Todos'], ['PENDING', 'Pendientes'], ['PAID', 'Pagados']] as const).map(([value, label]) =>
+      {([['ALL', 'Todos'], ['PENDING', 'Pendientes'], ['PARTIAL', 'Parciales'], ['PAID', 'Pagados'], ['CANCELLED', 'Cancelados']] as const).map(([value, label]) =>
         <button key={value} type="button" aria-pressed={filter === value} onClick={() => onFilter(value)}>{label}</button>)}
     </div> : null}
+    {data.onlinePayments?.available === false && data.overview.open_obligations > 0 ? <p className={styles.note}>El pago online no está habilitado por el momento. Coordiná el pago con el club; tus cargos y movimientos siguen disponibles.</p> : null}
     <div aria-busy={busy} className={styles.list}>
       {error ? <section className={styles.empty} role="alert"><strong>No pudimos cargar esta lista</strong><p>{error}</p><button type="button" onClick={onRetry} disabled={busy}>Reintentar</button></section>
         : busy && currentPage.items.length === 0 ? <p className={styles.feedback} role="status">Cargando…</p>
@@ -66,8 +67,8 @@ export default function PlayerFinanceContent({ data, tab, filter, busy, error, o
           </article>)}
         </section>) : <section className={styles.empty}>
           <CheckCircle2 size={25} aria-hidden="true" />
-          <strong>{filter === 'PAID' ? 'Todavía no hay cargos pagados.' : data.overview.open_obligations === 0 ? 'No tenés pagos pendientes.' : 'No hay cargos en esta lista.'}</strong>
-          <p>{filter === 'PAID' ? 'Los pagos que registre el club aparecerán acá.' : 'Las inscripciones con cargo aparecerán acá cuando el club las confirme.'}</p>
+          <strong>{filter === 'PAID' ? 'Todavía no hay cargos pagados.' : filter === 'CANCELLED' ? 'No hay cargos cancelados.' : filter === 'PARTIAL' ? 'No hay cargos con pagos parciales.' : data.overview.open_obligations === 0 ? 'No tenés pagos pendientes.' : 'No hay cargos en esta lista.'}</strong>
+          <p>{filter === 'PAID' ? 'Los pagos que registre el club aparecerán acá.' : filter === 'CANCELLED' ? 'Los cargos cancelados se conservan en tu historial.' : 'Las inscripciones con cargo aparecerán acá cuando el club las confirme.'}</p>
         </section>
         : data.movements.items.length ? data.movements.items.map(row => <article className={styles.movement} key={row.id}>
           <div className={styles.movementIcon} aria-hidden="true">{row.status === 'REVERSED' ? <RotateCcw size={17} /> : <ReceiptText size={17} />}</div>

@@ -11,7 +11,7 @@ import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { normalizePlatformAdRenderConfig } from '@/lib/platformAdConfig'
 import ConfigurableAdBanner, { AD_BANNER_DIMENSIONS } from '@/components/ads/ConfigurableAdBanner'
 import PampraxHero from '@/components/ui/PampraxHero'
-import PublicRankingClubCard from '@/components/public/PublicRankingClubCard'
+import PublishedRankingClubCard, { RankingClubCards } from '@/components/public/PublishedRankingClubCard'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import { useSession } from '@/components/session/SessionProvider'
 import { isClubAdminRole } from '@/lib/clubMembershipRules'
@@ -496,20 +496,18 @@ export default function PublicHomeExperience({
           </div>
           <Link href="/ranking" className="px-homePillButton">Ver todos</Link>
         </div>
-        <div className="px-homeRankingClubGrid">
+        <RankingClubCards>
           {featuredClubs.length ? featuredClubs.map((club) => (
-            <PublicRankingClubCard
+            <PublishedRankingClubCard
               key={club.id}
-              clubName={club.name}
+              name={club.name}
+              logoUrl={club.logo_url}
               themeKey={club.clubThemeKey ?? club.theme_key}
               href={`/ranking?clubId=${club.id}`}
-              variant="home"
-              playersCount={club.players ?? 0}
-              categories={club.categories}
-              rankingType="Ranking anual"
+              detail={`${new Intl.NumberFormat('es-AR').format(club.players ?? 0)} ${club.players === 1 ? 'jugador' : 'jugadores'}`}
             />
           )) : <div className="px-homeEmpty">Los rankings por club van a aparecer acá.</div>}
-        </div>
+        </RankingClubCards>
       </section>
 
       <HomeAdBannerSlot ads={adsByHomeSlot.afterRanking} ariaLabel="Publicidad después de rankings" />

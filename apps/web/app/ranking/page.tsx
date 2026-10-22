@@ -1,6 +1,6 @@
 import PublicRankingExperience from '@/components/public/PublicRankingExperience'
 import { redirect } from 'next/navigation'
-import { readRankingDirectory, readPublicClub, readRankingContexts, readRankingPage, readPairRankingPage, readRankingPresentation } from '@/features/player-career/player-career.repository'
+import { readRankingDirectory, readPublicClub, readRankingContexts, readPublishedRankingContexts, readRankingPage, readPairRankingPage, readRankingPresentation } from '@/features/player-career/player-career.repository'
 import { pageNumber, validId } from '@/features/player-career/player-career.rules'
 import { rankingContext, rankingHref, rankingReadIssue, type RankingSearch, type RankingReadIssue } from '@/features/player-career/public-ranking.presentation'
 import type { RankingContext, RankingPage } from '@/features/player-career/player-career.types'
@@ -16,6 +16,10 @@ export default async function RankingPublicPage({searchParams}:{searchParams?:Pr
   if (!error && validId(clubId) && clubs.clubs.length) {
     try {contexts=await readRankingContexts(clubId,params.season)}
     catch (failure) {error=rankingReadIssue(failure)}
+    if (!error) {
+      try {contexts=await readPublishedRankingContexts(contexts)}
+      catch (failure) {error=rankingReadIssue(failure)}
+    }
   }
   const context=rankingContext(contexts,params,modality)
   const canonical=context ? {...params,club:undefined,clubId:context.clubId,division:context.divisionId,season:context.seasonId,gender:context.gender,category:context.category===null?undefined:String(context.category),modality}: {...params,modality}

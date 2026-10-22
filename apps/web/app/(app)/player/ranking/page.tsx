@@ -65,19 +65,19 @@ export default function PlayerMyRankingPage() {
       try {
         const { data: sessionData } = await supabase.auth.getSession()
         const token = sessionData.session?.access_token
-        if (!token) throw new Error('AUTH_REQUIRED')
+        if (!token) throw new Error('Volvé a ingresar para consultar tu ranking.')
 
         const res = await fetch(`/api/player/my-ranking?clubId=${session.activeClub.id}`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
         })
         const json = (await res.json().catch(() => ({}))) as RankingResponse
-        if (!res.ok) throw new Error(json.error ?? 'RANKING_LOAD_FAILED')
+        if (!res.ok) throw new Error(json.error ?? 'No pudimos leer tu ranking. Reintentá.')
 
         if (alive) setData(json)
-      } catch {
+      } catch(error) {
         if (!alive) return
-        setMessage('No pudimos cargar tu ranking. Revisá tu conexión e intentá nuevamente.')
+        setMessage(error instanceof Error && error.name!=='TypeError' ? error.message : 'No pudimos conectar con tu ranking. Revisá tu conexión e intentá nuevamente.')
         setData(null)
       } finally {
         if (alive) setLoading(false)

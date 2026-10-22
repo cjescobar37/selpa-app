@@ -10,6 +10,7 @@ import * as playerFinance from './playerFinanceF1D'
 import * as finance from './clubFinanceF1C'
 import * as billing from './platformBillingF2'
 import { humanizeUiError } from './productPresentation'
+import * as financeReadDiagnostics from './financeReadError'
 
 const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
 type Handler = (req: { headers: Headers; nextUrl: URL }) => Promise<Response>
@@ -44,6 +45,8 @@ function playerApi({ denied = false, fail = '', code = 'PGRST202' } = {}) {
     }) }
     if (name.endsWith('accountRoleServer')) return { playerAccountDenial: async () => denied ? Response.json({ error: accountPolicy.STAFF_PLAYER_MESSAGE }, { status: 403 }) : null }
     if (name.endsWith('playerFinanceF1D')) return playerFinance
+    if (name.endsWith('paymentProviderF1E')) return { paymentProviderReady: () => false }
+    if (name.endsWith('financeReadError')) return financeReadDiagnostics
     if (name.endsWith('clubFinanceF1C')) return finance
     if (name.endsWith('paymentProviderReadsF1E')) return { playerPaymentOptions: async (_client: unknown, rows: unknown[]) => rows, paymentMovementLabels: async (_client: unknown, _club: unknown, rows: unknown[]) => rows }
     throw new Error(name)
@@ -54,7 +57,7 @@ function playerApi({ denied = false, fail = '', code = 'PGRST202' } = {}) {
 test('Player: verified empty dashboard is $0, no open charges, no false error or log', async () => {
   const app = playerApi(), response = await app.get(request('/api/player/finance'))
   assert.equal(response.status, 200)
-  assert.deepEqual(await response.json(), { overview: { ...overview, total_paid: 0 }, obligations: page, movements: page })
+  assert.deepEqual(await response.json(), { onlinePayments: { available: false }, overview: { ...overview, total_paid: 0 }, obligations: page, movements: page })
   assert.equal(app.calls.length, 3)
   assert.deepEqual(app.logs, [])
   assert.equal(response.headers.get('cache-control'), 'private, no-store')
@@ -140,6 +143,7 @@ function billingApi(role: string, fail = false, code = 'PGRST202', throws = fals
   const loaded = execute('./platformBillingF2Server.ts', name => {
     if (name === 'next/server') return { NextResponse: { json: Response.json } }
     if (name.endsWith('platformBillingF2')) return billing
+    if (name.endsWith('financeReadError')) return financeReadDiagnostics
     const denied = (allowed: boolean) => ({ error: role === 'GUEST' ? Response.json({ error: 'Ingresá.' }, { status: 401 }) : allowed ? null : Response.json({ error: 'Sin acceso.' }, { status: 403 }) })
     if (name.endsWith('platformApiAuth')) return { assertPlatformAdmin: async () => denied(role === 'PLATFORM') }
     if (name.endsWith('clubMembershipServer')) return { requireClubCapability: async () => denied(permissions.hasClubCapability(role, 'club:update')) }

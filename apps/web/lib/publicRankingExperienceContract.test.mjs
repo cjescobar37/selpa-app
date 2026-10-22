@@ -8,7 +8,7 @@ const source=path=>readFileSync(new URL(path,import.meta.url),'utf8')
 function compile(path,imports={}) {
   const compiledModule={exports:{}}
   const js=ts.transpileModule(source(path),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText
-  vm.runInNewContext(js,{module:compiledModule,exports:compiledModule.exports,URLSearchParams,console:{warn(){}},require:name=>{
+  vm.runInNewContext(js,{module:compiledModule,exports:compiledModule.exports,URL,URLSearchParams,console:{warn(){}},require:name=>{
     if(name in imports)return imports[name]
     return require(name)
   }})
@@ -17,6 +17,7 @@ function compile(path,imports={}) {
 const rules=compile('../features/player-career/public-ranking.presentation.ts')
 const context=(gender='M',modality='INDIVIDUAL',category=6)=>({clubId:'club',seasonId:'season',seasonName:'2026',divisionId:gender+modality+category,category,categoryName:'6ª',gender,modality})
 const contexts=[context('F'),context('M'),context('M','PAIRS')]
+const nextResponse={NextResponse:{json:(body,options={})=>({body,status:options.status??200,headers:options.headers})}}
 const standing=(position,points,id=position)=>({position,ranking_points:points,club_player_id:String(id),full_name:'Jugador '+id,category_name:'6ª',avatar_url:null,is_tied:position===1,user_id:'user'+id,club_id:'club'})
 
 test('presentation preserves official positions, points, privacy and tied leaders',()=>{
@@ -45,6 +46,61 @@ test('gender and modality change match the same canonical category, not stale di
   assert.equal(rules.rankingContext(contexts,{},'INDIVIDUAL').gender,'M')
   assert.equal(rules.rankingContext([context('F')],{},'INDIVIDUAL').gender,'F')
 })
+test('published default uses greatest canonical population, not category number or M preference',()=>{
+  const all=[{...context('M','INDIVIDUAL',1),rankedCount:3},{...context('F','INDIVIDUAL',7),rankedCount:9},{...context('M','PAIRS',7),rankedCount:999}]
+  assert.equal(rules.rankingContext(all,{},'INDIVIDUAL').divisionId,'FINDIVIDUAL7')
+  assert.equal(rules.rankingContext(all,{gender:'M'},'INDIVIDUAL').divisionId,'MINDIVIDUAL1')
+  assert.equal(rules.rankingContext(all,{category:'1'},'INDIVIDUAL').divisionId,'MINDIVIDUAL1')
+  assert.equal(rules.rankingContext(all,{division:'MINDIVIDUAL1'},'INDIVIDUAL').divisionId,'MINDIVIDUAL1')
+})
+test('tied populations use UUID order; no published division is an honest empty',()=>{
+  const a={...context(),divisionId:'a',rankedCount:8},b={...context('F'),divisionId:'b',rankedCount:8}
+  assert.equal(rules.rankingContext([b,a],{},'INDIVIDUAL').divisionId,'a')
+  assert.equal(rules.rankingContext([{...a,rankedCount:0}],{},'INDIVIDUAL'),null)
+  assert.equal(rules.rankingContext([{...a,rankedCount:0}],{category:'6'},'INDIVIDUAL').divisionId,'a')
+})
+test('registration never promotes payment evidence or checkout return into a confirmed place',()=>{
+  const {registrationPresentation}=compile('./registrationPresentation.ts')
+  for(const registration of [null,'PENDING','REJECTED'])for(const payment of [null,'PENDING','APPROVED','PAID','REJECTED','CANCELLED']) {
+    const view=registrationPresentation(registration,payment)
+    assert.equal(view.confirmed,false);assert.equal(view.title,'SOLICITUD REGISTRADA')
+    assert.match(view.withdrawal,/cancelación de la solicitud/)
+  }
+  assert.equal(registrationPresentation('CONFIRMED','PENDING').confirmed,true)
+  assert.equal(registrationPresentation('CANCELLED','PAID').title,'INSCRIPCIÓN CANCELADA')
+})
+test('financial diagnostics differentiate permissions, missing models, network, config and database',()=>{
+  const {financeReadError}=compile('./financeReadError.ts')
+  for(const [input,code,status] of [['42501','FORBIDDEN',403],['PGRST202','READ_MODEL_MISSING',503],['NETWORK','NETWORK_UNAVAILABLE',503],['CONFIGURATION_MISSING','CONFIGURATION_MISSING',503],['XX000','DATABASE_UNAVAILABLE',503],['22023','INVALID_FILTER',400]]) {
+    const result=financeReadError({code:input});assert.equal(result.code,code);assert.equal(result.status,status)
+    assert.doesNotMatch(JSON.stringify(result),/SQL|JWT|service_role/)
+  }
+})
+
+test('actual personal handler preserves safe missing-model diagnostics, not private database messages',async()=>{
+  for(const [sourceCode,code] of [['PGRST205','MODEL_UNAVAILABLE'],['PGRST000','READ_UNAVAILABLE']]) {
+    const handler=compile('../app/api/player/my-ranking/route.ts',{'next/server':nextResponse,
+      '@/lib/supabaseAdmin':{supabaseAdmin:{auth:{getUser:async()=>({data:{user:{id:'player'}}})}}},
+      '@/lib/accountRoleServer':{playerAccountDenial:async()=>null},
+      '@/features/player-career/player-career.repository':{readCareerIdentity:async()=>({}),readMyRanking:async()=>{throw {code:sourceCode,message:'PRIVATE_SQL_JWT'}}}})
+    const response=await handler.GET(new Request('http://localhost/api/player/my-ranking',{headers:{Authorization:'Bearer qa-only'}}))
+    assert.equal(response.status,503);assert.equal(response.body.code,code);assert.equal(response.headers['Cache-Control'],'private, no-store')
+    assert.doesNotMatch(JSON.stringify(response.body),/PRIVATE|SQL|JWT|PGRST/)
+  }
+})
+
+test('global public identity does not call sporting models or fabricate metrics; invalid section remains 400',async()=>{
+  const identity={userId:'global',name:'Jugador sin club',contexts:[]}
+  const handler=compile('../app/api/players/[playerId]/career/route.ts',{'next/server':nextResponse,
+    '@/features/player-career/player-career.repository':{readCareerIdentity:async()=>identity,readCareerSummary:()=>{throw Error('SPORTS_CALLED')},readCareerHistory:()=>{throw Error('SPORTS_CALLED')}},
+    '@/features/player-career/player-career.rules':{pageNumber:()=>1}})
+  for(const section of ['summary','history','recent']) {
+    const response=await handler.GET(new Request('http://localhost/api/players/global/career?section='+section),{params:Promise.resolve({playerId:'global'})})
+    assert.equal(response.status,200);assert.equal(response.body.context,'GLOBAL_WITHOUT_CLUB');assert.equal(response.body.summary,null)
+    assert.equal(response.body.rows.length,0);assert.doesNotMatch(JSON.stringify(response.body),/ranking_points|ranking_position|email|phone/)
+  }
+  assert.equal((await handler.GET(new Request('http://localhost/api/players/global/career?section=invalid'),{params:Promise.resolve({playerId:'global'})})).status,400)
+})
 test('gender navigation resets page/division but keeps club, season, category and query',()=>{
   const url=new URL(rules.rankingHref({clubId:'club',season:'season',division:'MINDIVIDUAL6',category:'6',page:'9',q:'Ana'},{division:undefined,page:undefined,gender:'F'}),'http://localhost')
   assert.equal(url.searchParams.get('gender'),'F');assert.equal(url.searchParams.has('division'),false);assert.equal(url.searchParams.has('page'),false)
@@ -60,7 +116,7 @@ async function route(reads,params={clubId:'00000000-0000-4000-8000-000000000001'
   const club={id:params.clubId,name:'Club',logo_url:null,theme_key:null}
   const scope={...context(),clubId:club.id}
   const repo={readPublicClub:async()=>({clubs:[club],count:1}),readRankingDirectory:async()=>({clubs:[club],count:1}),
-    readRankingContexts:async()=>[scope],readRankingPage:async()=>({rows:[],count:0,page:1,pageSize:25,context:scope}),
+    readRankingContexts:async()=>[scope],readPublishedRankingContexts:async contexts=>contexts.map(c=>({...c,rankedCount:0})),readRankingPage:async()=>({rows:[],count:0,page:1,pageSize:25,context:scope}),
     readPairRankingPage:async()=>({rows:[],count:0}),readRankingPresentation:async()=>({counts:{M:0,F:0},leaderPoints:null}),...reads}
   const page=compile('../app/ranking/page.tsx',{
     '@/components/public/PublicRankingExperience':{default:()=>null},'@/features/player-career/player-career.repository':repo,

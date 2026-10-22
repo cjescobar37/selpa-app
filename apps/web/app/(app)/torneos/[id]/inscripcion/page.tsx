@@ -14,6 +14,7 @@ import { CreationSuccess } from '@/components/ui/CreationSuccess'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import { isTournamentRegistrationClosed } from '@/lib/tournamentDisplayStatus'
+import { registrationPresentation } from '@/lib/registrationPresentation'
 
 type PublicTournamentDetail = {
   tournament: {
@@ -88,21 +89,21 @@ const paymentMethods: Array<{
   {
     key: 'MERCADO_PAGO',
     title: 'Mercado Pago',
-    description: 'Tarjeta de crédito, débito o dinero en cuenta. La integración real se activará en la próxima fase.',
-    badge: 'Próximamente',
+    description: 'Cuando el club confirme tu inscripción, consultá en Mis pagos si el cargo permite pagar online.',
+    badge: 'Después de la confirmación',
     icon: 'card',
   },
   {
     key: 'BANK_TRANSFER',
     title: 'Transferencia bancaria',
     description: 'Disponible cuando el club configure alias o CBU para este torneo.',
-    badge: 'Futuro',
+    badge: 'No habilitada',
     icon: 'bank',
   },
   {
     key: 'CASH_ON_SITE_REQUEST',
     title: 'Solicitar pagar en el predio',
-    description: 'El club revisará tu solicitud. Tu inscripción quedará pendiente hasta que el pago sea aprobado.',
+    description: 'El club revisará tu solicitud y confirmará tu inscripción. Pedir este método no registra un pago.',
     badge: 'Disponible',
     icon: 'cash',
   },
@@ -168,16 +169,20 @@ function registrationStatusLabel(status?: string | null) {
   return status ?? 'Registrada'
 }
 
-function postPaymentView(status?: string | null, method?: string | null) {
+function postPaymentView(status?: string | null, method?: string | null, registration?: string | null) {
   const normalizedStatus = String(status ?? '').toUpperCase()
   const normalizedMethod = String(method ?? '').toUpperCase()
+  if (['APPROVED', 'PAID'].includes(normalizedStatus) && registration !== 'CONFIRMED') return {
+    tone: 'warning', title: 'Inscripción pendiente de confirmación', badge: 'Pago validado',
+    text: 'El pago fue validado. El club todavía debe confirmar tu lugar.', action: 'message' as const,
+  }
 
   if (normalizedMethod === 'CASH_ON_SITE_REQUEST' && normalizedStatus === 'PENDING') {
     return {
       tone: 'warning',
       title: 'Pago en predio pendiente',
       badge: 'PENDIENTE',
-      text: 'El club debe aprobar tu solicitud de pago. Puede demorar hasta 24 hs.',
+      text: 'El club debe revisar tu solicitud de pago.',
       action: 'message' as const,
     }
   }
@@ -736,7 +741,8 @@ export default function TorneoInscripcionPage() {
     myTeamPlayers.find((player) => player.userId !== detail.viewer.clubPlayer?.userId)?.name ??
     myTeamPlayers[1]?.name ??
     'A confirmar'
-  const postPayment = postPaymentView(detail.viewer.myTeam?.paymentStatus, detail.viewer.myTeam?.paymentMethod)
+  const postPayment = postPaymentView(detail.viewer.myTeam?.paymentStatus, detail.viewer.myTeam?.paymentMethod, detail.viewer.myTeam?.registrationStatus)
+  const registrationView = registrationPresentation(detail.viewer.myTeam?.registrationStatus, detail.viewer.myTeam?.paymentStatus)
   const showPaymentOnly = alreadyRegistered && forcePaymentStep && postPayment.action === 'pay'
   const theme = getClubTheme(detail.club?.themeKey)
   const themeStyle = {
@@ -749,7 +755,7 @@ export default function TorneoInscripcionPage() {
       <main className="tournamentSignupPage" style={themeStyle}>
         <CreationSuccess
           kicker="Inscripción enviada"
-          title="¡Te inscribiste correctamente!"
+          title="¡Solicitud enviada!"
           message="Tu solicitud fue enviada al club. Te avisaremos cuando quede confirmada."
           nextStep="El torneo conserva el estado de tu inscripción y pago."
           actionLabel="Ir al torneo"
@@ -914,8 +920,9 @@ export default function TorneoInscripcionPage() {
           <div className="tournamentSignupPage__insideColumns">
             <div className="tournamentSignupPage__insideIntro">
               <span>TU TORNEO</span>
-              <h2>YA ESTÁS DENTRO</h2>
-              <p>Tu inscripción fue registrada correctamente.</p>
+              <h2>{registrationView.title}</h2>
+              <p>{registrationView.description}</p>
+              {registrationView.confirmed ? <Link className="tournamentSignupPage__primary" href="/player/pagos">Consultar saldo y pagar</Link> : <p>El cargo aparecerá en Mis pagos cuando el club confirme la inscripción.</p>}
 
               <div className="tournamentSignupPage__insideChips">
                 <span>{enrolledPlayerName}</span>

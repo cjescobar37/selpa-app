@@ -50,11 +50,12 @@ export default function PlayerPaymentsPage() {
         const response = await fetch(`/api/player/finance/checkout?reference=${encodeURIComponent(paymentReturn!)}`, {
           headers: { Authorization: `Bearer ${auth.session?.access_token}` }, cache: 'no-store', signal: controller.signal })
         const json = await response.json()
-        if (!response.ok || controller.signal.aborted) return
+        if (controller.signal.aborted) return
+        if (!response.ok) { setReturnStatus('UNAVAILABLE'); return }
         setReturnStatus(json.status)
         if (json.status === 'APPROVED') setRetry(value => value + 1)
         else if (++attempts < 4 && ['PENDING', 'CHECKOUT_READY', 'CREATED'].includes(json.status)) timer = setTimeout(() => void verifyReturn(), 4000)
-      } catch { /* Manual refresh remains available. Never infer payment from URL parameters. */ }
+      } catch { if (!controller.signal.aborted) setReturnStatus('UNAVAILABLE') }
     }
     void verifyReturn()
     return () => { controller.abort(); if (timer) clearTimeout(timer) }
@@ -73,7 +74,7 @@ export default function PlayerPaymentsPage() {
         headers: { Authorization: `Bearer ${auth.session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ obligationId, idempotencyKey }) })
       const json = await response.json()
-      if (!response.ok) { checkoutKeys.current.delete(obligationId); throw new Error(json.error || 'No pudimos preparar el pago.') }
+      if (!response.ok) throw new Error(json.error || 'No pudimos preparar el pago.')
       const checkout = new URL(json.checkoutUrl)
       if (checkout.protocol !== 'https:' || !['www.mercadopago.com.ar', 'mercadopago.com.ar', 'sandbox.mercadopago.com.ar'].includes(checkout.hostname)) throw new Error('El enlace de pago no es válido.')
       window.location.assign(checkout.toString())
@@ -161,8 +162,8 @@ export default function PlayerPaymentsPage() {
   return <PlayerSpaceLayout><main className={styles.page}>
     <PageHeader backHref="/player" title="Mis pagos" eyebrow="TU ACTIVIDAD" description="Tus cargos en todos los clubes"
       actions={<WalletCards size={25} aria-hidden="true" />} />
-    {paymentReturn ? <section className={styles.returnNotice} role="status"><strong>{returnStatus === 'APPROVED' ? 'Pago confirmado' : returnStatus === 'VERIFYING' ? 'Estamos verificando tu pago' : ['RECONCILIATION_REQUIRED', 'REVERSED'].includes(returnStatus) ? 'El club está revisando tu pago' : ['REJECTED', 'CANCELLED', 'EXPIRED'].includes(returnStatus) ? 'El pago no se completó' : 'Pago en proceso'}</strong>
-      <p>{returnStatus === 'APPROVED' ? 'El cobro ya está registrado en SELPA.' : 'El estado se actualiza cuando Mercado Pago confirma el cobro.'}</p>
+    {paymentReturn ? <section className={styles.returnNotice} role="status"><strong>{returnStatus === 'UNAVAILABLE' ? 'No pudimos verificar el pago' : returnStatus === 'APPROVED' ? 'Pago confirmado' : returnStatus === 'VERIFYING' ? 'Estamos verificando tu pago' : ['RECONCILIATION_REQUIRED', 'REVERSED'].includes(returnStatus) ? 'El club está revisando tu pago' : ['REJECTED', 'CANCELLED', 'EXPIRED'].includes(returnStatus) ? 'El pago no se completó' : 'Pago en proceso'}</strong>
+      <p>{returnStatus === 'UNAVAILABLE' ? 'Actualizá el estado antes de volver a pagar o consultá con el club.' : returnStatus === 'APPROVED' ? 'El cobro ya está registrado en SELPA.' : 'El estado se actualiza cuando Mercado Pago confirma el cobro.'}</p>
       <button type="button" onClick={() => { setRetry(value => value + 1); setReturnRefresh(value => value + 1) }}>Actualizar estado</button></section> : null}
     {session.status === 'loading' || (!data && !initialError) ? <PlayerStatePanel kind="loading" title="Cargando tus pagos" message="Preparando tu resumen" compact />
       : initialError ? <PlayerStatePanel kind="error" title="No pudimos cargar tus pagos" message={initialError} onRetry={() => setRetry(value => value + 1)} compact />

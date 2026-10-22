@@ -1,0 +1,126 @@
+/* Shared decorative surfaces. Deliberately excludes brand assets, heroes,
+   navigation, flyers, status colours and the PWA opening/install experience. */
+:root {
+  --ds-card-surface: #fff;
+  --ds-card-border: #d8e2ea;
+  --ds-card-shadow: 0 3px 12px rgba(6,27,58,.035);
+  --ds-card-shadow-hover: 0 7px 20px rgba(6,27,58,.075);
+  --ds-card-accent: #0e7490;
+}
+
+/* All instances: public Home, embedded Community and club directory. */
+.publicClubCard,
+.px-homeClubCards a.publicClubCard {
+  background: var(--ds-card-surface);
+  border-color: var(--ds-card-border);
+  border-top-color: color-mix(in srgb, var(--club-card-accent, #0e7490) 60%, #d8e2ea);
+  box-shadow: var(--ds-card-shadow);
+}
+
+.publicClubCard::before {
+  background: var(--ds-card-accent);
+}
+
+.publicClubCard:hover,
+.px-homeClubCards a.publicClubCard:hover {
+  border-color: #91bac8;
+  border-top-color: color-mix(in srgb, var(--club-card-accent, #0e7490) 60%, #d8e2ea);
+  box-shadow: var(--ds-card-shadow-hover);
+}
+
+.publicClubLogo,
+.publicClubLogo.has-image,
+.publicClubCard:hover .publicClubLogo {
+  background: #fff;
+  border-color: var(--ds-card-border);
+  box-shadow: var(--ds-card-shadow);
+  color: #164564;
+  text-shadow: none;
+}
+
+.publicClubLogo img {
+  object-fit: contain;
+}
+
+.publicClubBody h2 + .px-homeClubNameAccent {
+  background: var(--ds-card-accent) !important;
+}
+
+.publicClubStats span,
+.px-homeClubCards .publicClubStats span {
+  background: #f4f7fb;
+  border-color: var(--ds-card-border);
+  color: #475569;
+}
+
+.publicClubStats b {
+  color: #334155;
+}
+
+.publicClubAction,
+.publicClubAction:hover,
+.publicClubAction:focus-visible {
+  background: #061b3a;
+  box-shadow: var(--ds-card-shadow);
+}
+
+/* Shared section headings retain their dimensions and existing typography. */
+.px-homeSectionHead > span,
+.px-homeSectionHead > div > span {
+  background: none !important;
+  color: var(--ds-card-accent) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.px-homeSectionHead > div::before,
+.px-homeSectionHead::before,
+.publicTournamentSection > header::before,
+.PampraxAccentBar {
+  background: var(--ds-card-accent) !important;
+  box-shadow: none !important;
+}
+
+/* Same treatment in the reusable club membership/discovery cards. */
+.px-playerClubCard,
+.px-clubDiscoverCard,
+.playerClubCard.playerClubCard,
+.playerClubCard.playerClubCard.is-active {
+  background: var(--ds-card-surface);
+  border-color: var(--ds-card-border);
+  box-shadow: var(--ds-card-shadow);
+}
+
+.px-playerClubCard::before,
+.playerClubCard.playerClubCard::before {
+  background: var(--ds-card-accent);
+}
+
+.px-playerClubCard.is-active {
+  border-color: #91bac8;
+  box-shadow: var(--ds-card-shadow);
+}
+
+.playerClubCard.playerClubCard:hover {
+  border-color: #91bac8;
+  box-shadow: var(--ds-card-shadow-hover);
+}
+
+.playerClubCard.playerClubCard .playerClubLogo {
+  background: #061b3a;
+  box-shadow: var(--ds-card-shadow);
+}
+
+.playerClubCard.playerClubCard .playerClubLogo img {
+  object-fit: contain;
+}
+
+.playerClubCard.playerClubCard em,
+.playerClubCard.playerClubCard .playerClubActions a {
+  background: #0e7490;
+}
+
+.px-playerClubCard:focus-visible,
+.publicClubCard:focus-visible {
+  outline: 3px solid #0891b2;
+  outline-offset: 3px;
+}

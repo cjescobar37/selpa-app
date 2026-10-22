@@ -1,6 +1,6 @@
 import type { FinanceCursor, FinanceMethod, FinancePage, FinanceStatus } from './clubFinanceF1C'
 
-export type PlayerFinanceFilter = 'ALL' | 'PENDING' | 'PAID'
+export type PlayerFinanceFilter = 'ALL' | 'PENDING' | 'PARTIAL' | 'PAID' | 'CANCELLED'
 export type PlayerFinanceTab = 'obligations' | 'movements'
 export type PlayerFinanceOverview = {
   currency_code: 'ARS'
@@ -41,6 +41,7 @@ export type PlayerFinanceMovement = {
   status: 'POSTED' | 'REVERSED'
 }
 export type PlayerFinanceData = {
+  onlinePayments?: { available: boolean }
   overview: PlayerFinanceOverview
   obligations: FinancePage<PlayerFinanceObligation>
   movements: FinancePage<PlayerFinanceMovement>
@@ -61,7 +62,7 @@ export function parsePlayerFinanceQuery(params: URLSearchParams) {
   const id = params.get('beforeId')
   if ((clubId && !uuidPattern.test(clubId))
       || !['dashboard', 'obligations', 'movements'].includes(view)
-      || !['ALL', 'PENDING', 'PAID'].includes(filter)
+      || !['ALL', 'PENDING', 'PARTIAL', 'PAID', 'CANCELLED'].includes(filter)
       || (at === null) !== (id === null)
       || (at !== null && (!/^\d{4}-\d{2}-\d{2}T/.test(at) || Number.isNaN(Date.parse(at))))
       || (id !== null && !uuidPattern.test(id))

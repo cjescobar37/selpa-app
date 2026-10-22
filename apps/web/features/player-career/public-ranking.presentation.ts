@@ -33,9 +33,17 @@ export function rankingContext(contexts:RankingContext[],params:RankingSearch,mo
   const gender=params.gender ?? requested?.gender
   const category=requested ? requested.category : params.category ? Number(params.category) : undefined
   const available=contexts.filter(c=>c.modality===modality && (!gender || c.gender===gender) && (category===undefined || c.category===category))
+  if (contexts.some(c=>c.rankedCount!==undefined)) {
+    // Explicit URLs retain even an empty category. Automatic discovery chooses
+    // greatest canonical population; tied populations use division UUID ascending.
+    const explicit=Boolean(params.division || params.category)
+    if (requested && requested.modality===modality && (!gender || requested.gender===gender)) return requested
+    return available.filter(c=>explicit || (c.rankedCount ?? 0)>0)
+      .sort((a,b)=>(b.rankedCount ?? 0)-(a.rankedCount ?? 0)||a.divisionId.localeCompare(b.divisionId))[0] ?? null
+  }
   return (gender ? available[0] : available.find(c=>c.gender==='M') ?? available[0]) ?? null
 }
 export function rankingReadIssue(error:unknown):RankingReadIssue {
   const code=error && typeof error==='object' && 'code' in error ? String(error.code) : ''
-  return ['PGRST205','PGRST202','42P01','42883'].includes(code)?'MODEL_UNAVAILABLE':'READ_UNAVAILABLE'
+  return ['PGRST205','PGRST202','42P01','42883','HTTP404'].includes(code)?'MODEL_UNAVAILABLE':'READ_UNAVAILABLE'
 }

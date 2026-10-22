@@ -1,2 +1,9 @@
-import PageHeader from '@/components/navigation/PageHeader'
-export default function LoadingCareer() {return <main aria-busy="true" aria-label="Cargando identidad deportiva"><PageHeader title="Carrera deportiva" backHref="/ranking"/><div style={{minHeight:112,background:'var(--surface,#f1f5f9)',borderRadius:14,marginTop:12}}/><div style={{minHeight:86,background:'var(--surface,#f1f5f9)',borderRadius:10,marginTop:12}}/></main>}
+import styles from '@/components/player/CareerExperience.module.css'
+export default function LoadingCareer() {
+  return <main className={styles.shell} aria-busy="true" aria-label="Cargando identidad deportiva">
+    <section className={styles.hero} aria-hidden="true"><div className={styles.cover}/><div className={styles.heroIntro}>
+      <div className={styles.heroAvatar}/><div className={styles.heroName} style={{minHeight:106,width:'60%'}}><i className={styles.skeleton}/></div>
+    </div></section>
+    <div className={styles.metrics} aria-hidden="true">{['Posición','Puntos','Partidos'].map(label=><div key={label}><span>{label}</span><i className={styles.skeleton}/></div>)}</div>
+  </main>
+}

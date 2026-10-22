@@ -7,6 +7,7 @@ import test from 'node:test'
 import ts from 'typescript'
 import { billingDate, billingValidMoney } from './platformBillingF2'
 import { billingCsv, billingExportTable, billingXlsx } from './platformBillingF2Export'
+import { financeReadError } from './financeReadError'
 
 const read=(path:string)=>readFileSync(fileURLToPath(new URL(path,import.meta.url)),'utf8')
 const sql=read('../supabase/migrations/20261007131222_20261007100803_platform_billing_f2_core.sql')
@@ -152,6 +153,7 @@ function serverFixture(options:{deny?:boolean;rpcError?:{code:string;message:str
         return {rpc:async(name:string,params:Record<string,unknown>)=>{calls.push({name,params});return {error:options.rpcError??null,data:{items:[],nextCursor:null}}}}
       }}
       if(name==='./platformBillingF2')return {billingLists:['invoices','plans'],billingOperations:['SAVE_PLAN'],billingValidMoney}
+      if(name==='./financeReadError')return {financeReadError}
       throw new Error(name)
     }})
   return {calls,req,api:exports as {billingPost:(r:unknown)=>Promise<{status:number;data:unknown}>;billingGet:(r:unknown,p:boolean)=>Promise<{status:number}>}}

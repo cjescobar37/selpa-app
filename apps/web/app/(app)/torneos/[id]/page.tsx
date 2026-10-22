@@ -11,6 +11,7 @@ import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import { BRAND } from '@/lib/branding'
 import { isTournamentRegistrationClosed } from '@/lib/tournamentDisplayStatus'
+import { registrationPresentation } from '@/lib/registrationPresentation'
 
 type PublicTournamentDetail = {
   tournament: {
@@ -166,16 +167,21 @@ function formatSystem(value?: string | null) {
   return labels[normalized] ?? value ?? 'A definir por la organización'
 }
 
-function getPostRegistrationPaymentView(status?: string | null, method?: string | null) {
+function getPostRegistrationPaymentView(status?: string | null, method?: string | null, registration?: string | null) {
   const normalizedStatus = String(status ?? '').toUpperCase()
   const normalizedMethod = String(method ?? '').toUpperCase()
+  if (['APPROVED', 'PAID'].includes(normalizedStatus) && registration !== 'CONFIRMED') return {
+    tone: 'warning', badge: 'PAGO VALIDADO', title: 'Inscripción pendiente de confirmación',
+    text: 'El pago fue validado. El club todavía debe confirmar tu lugar.', secondaryText: null,
+    registrationLabel: 'Pendiente de aprobación', paymentLabel: 'Validado', action: 'message' as const,
+  }
 
   if (normalizedMethod === 'CASH_ON_SITE_REQUEST' && normalizedStatus === 'PENDING') {
     return {
       tone: 'warning',
       badge: 'SOLICITUD PENDIENTE',
       title: 'Pago en club pendiente',
-      text: 'El club debe aprobar tu solicitud para confirmar tu lugar. Puede demorar hasta 24 hs.',
+      text: 'El club debe revisar tu solicitud para confirmar tu lugar.',
       secondaryText: 'Podés enviar un mensaje si necesitás consultar el estado.',
       registrationLabel: 'Pendiente',
       paymentLabel: 'Pendiente',
@@ -448,7 +454,8 @@ export default function TorneoDetallePage() {
     ['--pamprax-hero-accent' as string]: theme.vars.accent,
     ['--pamprax-hero-accent-2' as string]: theme.vars.accent2,
   } as CSSProperties
-  const paymentView = getPostRegistrationPaymentView(detail.viewer.myTeam?.paymentStatus, detail.viewer.myTeam?.paymentMethod)
+  const paymentView = getPostRegistrationPaymentView(detail.viewer.myTeam?.paymentStatus, detail.viewer.myTeam?.paymentMethod, detail.viewer.myTeam?.registrationStatus)
+  const registrationView = registrationPresentation(detail.viewer.myTeam?.registrationStatus, detail.viewer.myTeam?.paymentStatus)
   const refundEstimate = getRefundEstimate(detail.dates.startDate, Number(detail.price.pricePerPlayer ?? 0) * 2)
   const withdrawalPending = withdrawalSubmitted || detail.viewer.myTeam?.registrationChangeRequest?.status === 'PENDING'
 
@@ -561,8 +568,9 @@ export default function TorneoDetallePage() {
           <div className="tournamentPublicDetail__registeredBlock">
             <div className="tournamentPublicDetail__registeredIntro">
               <span className="tournamentPublicDetail__eyebrow">Tu torneo</span>
-              <h2>YA ESTÁS DENTRO</h2>
-              <p>Tu inscripción fue registrada correctamente.</p>
+              <h2>{registrationView.title}</h2>
+              <p>{registrationView.description}</p>
+              {registrationView.confirmed ? <Link href="/player/pagos">Consultar saldo y pagar</Link> : null}
               <small>Zona pendiente: aparecerá cuando la organización publique el cuadro.</small>
             </div>
             <div className={`tournamentPublicDetail__registeredStatus is-${paymentView.tone}`}>

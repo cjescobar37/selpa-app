@@ -12,7 +12,7 @@ export async function generateMetadata({params,searchParams}:Props):Promise<Meta
   if (!identity) return {title:'Jugador no disponible · SELPA',robots:{index:false,follow:false}}
   const club=identity.contexts.find(c=>c.clubPlayerId===identity.selectedClubPlayerId)!
   const title=`${identity.name} · Carrera de pádel · SELPA`
-  const description=`Carrera deportiva de ${identity.name} en ${club.clubName}. Ranking, resultados oficiales y palmarés de pádel.`
+  const description=club?`Carrera deportiva de ${identity.name} en ${club.clubName}. Ranking, resultados oficiales y palmarés de pádel.`:`Perfil público de ${identity.name} en SELPA. Identidad global de pádel, sin club deportivo activo.`
   return {title,description,alternates:{canonical:identity.publicPath},openGraph:{title,description,type:'profile',url:identity.publicPath}}
 }
 export default async function PublicPlayerCareer({params,searchParams}:Props) {

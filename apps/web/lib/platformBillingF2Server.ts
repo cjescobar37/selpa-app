@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { assertPlatformAdmin } from '@/lib/platformApiAuth'
 import { requireClubCapability } from '@/lib/clubMembershipServer'
 import { billingLists, billingOperations, billingValidMoney } from './platformBillingF2'
+import { financeReadError } from './financeReadError'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export async function billingAccess(req:NextRequest,platform:boolean) {
@@ -35,8 +36,8 @@ export function billingFailure(error:{code?:string;message?:string},operation='b
 }
 function billingReadFailure(error:{code?:string},operation:string) {
   console.error('[selpa-billing]',{operation,code:/^[A-Z0-9_]{1,32}$/.test(error.code??'')?error.code:'UNKNOWN'})
-  const status=error.code==='42501'?403:['22023','22P02'].includes(error.code??'')?400:503
-  return NextResponse.json({error:status===403?'No tenés acceso a esta facturación.':status===400?'Filtros inválidos.':'No pudimos cargar Facturación. Reintentá.'},
+  const {status,...payload}=financeReadError(error)
+  return NextResponse.json(payload,
     {status,headers:{'Cache-Control':'private, no-store'}})
 }
 export async function billingGet(req:NextRequest,platform:boolean) {

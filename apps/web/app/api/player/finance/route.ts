@@ -4,6 +4,8 @@ import { financePage } from '@/lib/clubFinanceF1C'
 import { parsePlayerFinanceQuery, type PlayerFinanceObligation, type PlayerFinanceMovement } from '@/lib/playerFinanceF1D'
 import { paymentMovementLabels, playerPaymentOptions } from '@/lib/paymentProviderReadsF1E'
 import { playerAccountDenial } from '@/lib/accountRoleServer'
+import { financeReadError } from '@/lib/financeReadError'
+import { paymentProviderReady } from '@/lib/paymentProviderF1E'
 
 export const dynamic = 'force-dynamic'
 const pageSize = 20
@@ -18,7 +20,8 @@ export async function GET(req: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) {
-    return NextResponse.json({ error: 'Tus pagos todavía no están disponibles.' }, { status: 503, headers })
+    const {status,...payload}=financeReadError({code:'CONFIGURATION_MISSING'})
+    return NextResponse.json(payload, { status, headers })
   }
   // Use the player's verified JWT for every RPC. DB derives identity through auth.uid().
   const client = createClient(url, anonKey, {
@@ -28,6 +31,10 @@ export async function GET(req: NextRequest) {
   try {
     const { data: user, error: authError } = await client.auth.getUser(token)
     if (authError || !user.user) {
+      if (authError && (authError.status===undefined || authError.status>=500 || authError.name==='AuthRetryableFetchError')) {
+        const {status,...payload}=financeReadError({code:'NETWORK'})
+        return NextResponse.json(payload,{status,headers})
+      }
       return NextResponse.json({ error: 'Tu sesión venció. Volvé a ingresar.' }, { status: 401, headers })
     }
     const roleDenied = await playerAccountDenial(user.user.id)
@@ -45,9 +52,8 @@ export async function GET(req: NextRequest) {
     const failure = (error: { code?: string }, operation: string) => {
       // Never log identity, JWTs, RPC arguments, or database diagnostic text.
       console.error('[player-finance]', { operation, code: /^[A-Z0-9_]{1,32}$/.test(error.code ?? '') ? error.code : 'UNKNOWN' })
-      return NextResponse.json({
-        error: error.code === '42501' ? 'No tenés acceso a esos pagos.' : 'No pudimos cargar tus pagos. Probá nuevamente.',
-      }, { status: error.code === '42501' ? 403 : 503, headers })
+      const {status,...payload}=financeReadError(error)
+      return NextResponse.json(payload, { status, headers })
     }
     if (query.view === 'obligations') {
       const result = await client.rpc('list_player_finance_obligations_f1d', obligationParams)
@@ -70,6 +76,7 @@ export async function GET(req: NextRequest) {
     if (obligations.error) return failure(obligations.error, 'list_player_finance_obligations_f1d')
     if (movements.error) return failure(movements.error, 'list_player_finance_movements_f1d')
     return NextResponse.json({
+      onlinePayments: { available: paymentProviderReady() },
       overview: overview.data,
       obligations: financePage(await playerPaymentOptions(client, ((obligations.data ?? []) as Array<{ item: PlayerFinanceObligation }>).map(row => row.item)), pageSize, 'created_at'),
       movements: financePage(await paymentMovementLabels(client, null, ((movements.data ?? []) as Array<{ item: PlayerFinanceMovement }>).map(row => row.item)), pageSize, 'paid_at'),

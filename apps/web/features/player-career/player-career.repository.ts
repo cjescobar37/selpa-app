@@ -2,6 +2,7 @@ import 'server-only'
 import { supabaseAdmin as db } from '@/lib/supabaseAdmin'
 import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { pageNumber, validId, winRate } from './player-career.rules'
+import { rankingReadIssue } from './public-ranking.presentation'
 import type { CareerHistoryRow, CareerIdentity, CareerRecentRow, CareerStats, CareerSummary, RankingContext, RankingPage, SportsStanding } from './player-career.types'
 
 const STANDING = 'club_player_id,club_id,user_id,player_entry_id,full_name,avatar_url,category,category_name,gender,season_id,season_name,division_id,modality,ranking_points,position,is_tied,ordinal'
@@ -43,14 +44,19 @@ export async function readCareerIdentity(id: string, clubId?: string | null): Pr
   assertRead(profile.error)
   const approved = new Set(memberships.map(m=>m.club_id))
   const eligible=players.filter(p=>approved.has(p.club_id))
-  if (!eligible.length) return null
-  const clubs=await catalog<{id:string;name:string}>((from,to)=>db.from('clubs').select('id,name')
-    .in('id',eligible.map(p=>p.club_id)).eq('is_active',true).order('id').range(from,to))
+  const clubs=eligible.length ? await catalog<{id:string;name:string}>((from,to)=>db.from('clubs').select('id,name')
+    .in('id',eligible.map(p=>p.club_id)).eq('is_active',true).order('id').range(from,to)) : []
   const names=new Map(clubs.map(c=>[c.id,c.name]))
   const contexts=eligible.filter(p=>names.has(p.club_id)).map(p=>({clubPlayerId:p.id,clubId:p.club_id,clubName:names.get(p.club_id)!,category:p.category,gender:p.gender}))
   const selected=contexts.find(c=>clubId ? c.clubId===clubId : c.clubPlayerId===exact.data?.id) ?? (!clubId ? contexts[0] : undefined)
-  if (!selected) return null
   const p=profile.data
+  if (!selected) {
+    // No club is not a lost global identity. Explicit inaccessible club URLs
+    // remain unavailable; STAFF was excluded above using authoritative tables.
+    if (clubId || contexts.length || !p) return null
+    return {userId,name:p.display_name || [p.first_name,p.last_name].filter(Boolean).join(' ') || 'Jugador',
+      avatarUrl:p.avatar_url ?? null,coverUrl:p.cover_url ?? null,contexts:[],selectedClubPlayerId:'',publicPath:`/jugadores/${userId}`}
+  }
   const name=p?.display_name || [p?.first_name,p?.last_name].filter(Boolean).join(' ') || eligible.find(p=>p.id===selected.clubPlayerId)?.display_name || 'Jugador'
   return {userId,name,avatarUrl:p?.avatar_url ?? null,coverUrl:p?.cover_url ?? null,contexts,selectedClubPlayerId:selected.clubPlayerId,
     publicPath:`/jugadores/${userId}?clubId=${selected.clubId}`}
@@ -66,6 +72,7 @@ async function activeSeason(clubId: string, requested?: string | null) {
 
 export async function readCareerSummary(identity: CareerIdentity): Promise<CareerSummary> {
   const context=identity.contexts.find(c=>c.clubPlayerId===identity.selectedClubPlayerId)!
+  if (!context) throw new Error('NO_SPORTS_CONTEXT')
   const season=await activeSeason(context.clubId)
   const scope={clubId:context.clubId,clubPlayerId:context.clubPlayerId,seasonId:season?.id ?? null,seasonName:season?.name ?? null}
   const [standingResult,statsResult,partner]=await Promise.all([
@@ -80,7 +87,9 @@ export async function readCareerSummary(identity: CareerIdentity): Promise<Caree
   const raw=statsResult.data?.[0] as (Omit<CareerStats,'effectiveness'> & {best_result:string|null;best_position:number|null}) | undefined
   const stats=raw ? {tournaments_played:Number(raw.tournaments_played),matches_played:Number(raw.matches_played),wins:Number(raw.wins),losses:Number(raw.losses),titles:Number(raw.titles),finals:Number(raw.finals),semifinals:Number(raw.semifinals),effectiveness:winRate(Number(raw.wins),Number(raw.losses))} : null
   return {scope,standing:standingResult.error ? null : standings[0] ?? null,stats,
-    statsAvailable:!standingResult.error && !statsResult.error,statsPeriod:'CLUB_CAREER_ALL_SEASONS',bestResult:raw?.best_result ? {role:raw.best_result,position:raw.best_position}:null,partner}
+    statsAvailable:!standingResult.error && !statsResult.error,
+    readIssue:standingResult.error || statsResult.error ? rankingReadIssue(standingResult.error ?? statsResult.error):null,
+    statsPeriod:'CLUB_CAREER_ALL_SEASONS',bestResult:raw?.best_result ? {role:raw.best_result,position:raw.best_position}:null,partner}
 }
 
 async function readCurrentPartner(clubPlayerId: string, clubId: string) {
@@ -138,9 +147,28 @@ export async function readRankingPage(context: RankingContext | null, query='', 
   return {rows:(result.data ?? []) as SportsStanding[],count:result.count ?? 0,page:current,pageSize:PAGE_SIZE,context}
 }
 
+/** Count the canonical universe, not configured categories or search results.
+ * Bounded count reads in batches, at most one division UUID per query; no player
+ * names, roster or ledger downloaded. GET preserves missing-object diagnostics
+ * (the installed SDK maps an empty HEAD 404 to 204). */
+export async function readPublishedRankingContexts(contexts: RankingContext[]): Promise<RankingContext[]> {
+  const result: RankingContext[]=[]
+  for (let offset=0;offset<contexts.length;offset+=4) {
+    result.push(...await Promise.all(contexts.slice(offset,offset+4).map(async context=>{
+      const read=await db.from(context.modality==='PAIRS'?'competition_pair_standings_read':'competition_player_standings_read')
+        .select('division_id',{count:'exact'}).eq('club_id',context.clubId)
+        .eq('season_id',context.seasonId).eq('division_id',context.divisionId).limit(1)
+      assertRead(read.error)
+      if (read.count===null) throw new Error('RANKING_COUNT_UNAVAILABLE')
+      return {...context,rankedCount:read.count}
+    })))
+  }
+  return result
+}
+
 export async function readMyRanking(identity: CareerIdentity) {
   const summary=await readCareerSummary(identity); const me=summary.standing
-  if (!summary.statsAvailable) throw new Error('SPORTS_READ_UNAVAILABLE')
+  if (!summary.statsAvailable) throw Object.assign(new Error('SPORTS_READ_UNAVAILABLE'),{code:summary.readIssue ?? 'READ_UNAVAILABLE'})
   if (!me) return {individual:[],leader:null,next:null,summary,meta:{generatedAt:new Date().toISOString()}}
   const base=()=>db.from('competition_player_standings_read').select(STANDING).eq('club_id',me.club_id).eq('season_id',me.season_id).eq('division_id',me.division_id)
   const [neighbors,leader,next]=await Promise.all([

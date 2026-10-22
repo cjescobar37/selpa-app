@@ -1,9 +1,8 @@
 'use client'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { Share2, Pencil, Trophy } from 'lucide-react'
-import RankingPlayerAvatar from '@/components/ranking/RankingPlayerAvatar'
-import PageHeader from '@/components/navigation/PageHeader'
+import { Pencil, Trophy } from 'lucide-react'
+import CareerIdentityHero from './CareerIdentityHero'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { resultLabel } from '@/features/player-career/player-career.rules'
 import type { CareerHistoryRow, CareerIdentity, CareerRecentRow, CareerSummary } from '@/features/player-career/player-career.types'
@@ -31,7 +30,22 @@ function date(value:string|null) { return value ? new Intl.DateTimeFormat('es-AR
 type History={rows:CareerHistoryRow[];hasMore:boolean}
 type Recent={rows:CareerRecentRow[];hasMore:boolean}
 
-export default function CareerExperience({identity,own=false,editorHref}:{identity:CareerIdentity;own?:boolean;editorHref?:string}) {
+export default function CareerExperience(props:{identity:CareerIdentity;own?:boolean;editorHref?:string}) {
+  return props.identity.contexts.length ? <ClubCareerExperience {...props}/> : <GlobalCareerExperience {...props}/>
+}
+function GlobalCareerExperience({identity,own=false}:{identity:CareerIdentity;own?:boolean}) {
+  const [message,setMessage]=useState('')
+  return <main className={styles.shell}><CareerIdentityHero identity={identity} own={own} onShare={()=>void shareIdentity(identity,setMessage)}/>
+    <p role="status" className={styles.shareMessage}>{message}</p><section className={styles.panel}><h2>Tu identidad sigue acá</h2><p>No hay un club deportivo activo para mostrar categoría, ranking ni puntos. No se suman carreras de clubes distintos.</p><Link className={styles.link} href="/clubes">Explorar clubes</Link></section></main>
+}
+async function shareIdentity(identity:CareerIdentity,setMessage:(message:string)=>void) {
+  const url=`${window.location.origin}${identity.publicPath}`
+  try {
+    if (navigator.share) await navigator.share({title:`${identity.name} · SELPA`,text:'Mi carrera en pádel',url})
+    else {await navigator.clipboard.writeText(url);setMessage('Enlace público copiado')}
+  } catch(error) {if (!(error instanceof DOMException && error.name==='AbortError')) setMessage(`No pudimos compartir. Enlace público: ${url}`)}
+}
+function ClubCareerExperience({identity,own=false,editorHref}:{identity:CareerIdentity;own?:boolean;editorHref?:string}) {
   const [tab,setTab]=useState<'summary'|'history'|'stats'>('summary')
   const [page,setPage]=useState(1)
   const [showRecent,setShowRecent]=useState(false)
@@ -52,14 +66,7 @@ export default function CareerExperience({identity,own=false,editorHref}:{identi
   }
   const unavailable=summary.error || sports?.statsAvailable===false
   return <main className={styles.shell}>
-    <PageHeader title={own?'Mi carrera':'Carrera deportiva'} backHref={own?'/player':'/ranking'}
-      actions={<button className={styles.action} type="button" onClick={()=>void share()} aria-label="Compartir perfil público"><Share2 size={18}/><span>Compartir</span></button>}/>
-    <section className={styles.identity}>
-      <RankingPlayerAvatar name={identity.name} src={identity.avatarUrl} sizes="64px" className={styles.avatar}/>
-      <div className={styles.name}><h2>{identity.name}</h2><Link href={`/clubs/${context.clubId}`}>{context.clubName}</Link>
-        <p>{standing?.category_name ?? (context.category ? `${context.category}ª categoría`:'Sin categoría asignada')} · {standing?.gender==='F' || context.gender==='F'?'Damas':standing?.gender==='M' || context.gender==='M'?'Caballeros':'Rama por definir'}</p></div>
-      <span className={styles.status}>Perfil público</span>
-    </section>
+    <CareerIdentityHero identity={identity} own={own} category={standing?.category_name} onShare={()=>void share()}/>
     {identity.contexts.length>1 ? <label className={styles.context}>Club deportivo<select value={context.clubPlayerId} onChange={event=>{
       const c=identity.contexts.find(c=>c.clubPlayerId===event.target.value)!
       window.location.assign(own?`/player/carrera/${c.clubPlayerId}`:`/jugadores/${identity.userId}?clubId=${c.clubId}`)
