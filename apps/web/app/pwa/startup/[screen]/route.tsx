@@ -22,8 +22,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ scr
       width: '100%',
       height: '100%',
       backgroundColor: '#061b3a',
-      backgroundImage: PWA_OPENING.backgroundImage,
-      backgroundSize: '100% 100%',
     }} />,
     { width: screen.pixelWidth, height: screen.pixelHeight },
   )

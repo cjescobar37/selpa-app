@@ -1,11 +1,8 @@
-// One vector backdrop avoids different gradient rasterizers for native PNGs
-// and the browser. Original brand artwork and installed icon stay unchanged.
-const backdrop = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="n" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#020617"/><stop offset=".58" stop-color="#061b3a"/><stop offset="1" stop-color="#071426"/></linearGradient><radialGradient id="c" cx=".3" cy=".38" r=".72"><stop stop-color="#53c7d9" stop-opacity=".12"/><stop offset=".75" stop-color="#53c7d9" stop-opacity="0"/></radialGradient><radialGradient id="m" cx=".75" cy=".67" r=".6"><stop stop-color="#ff4e72" stop-opacity=".07"/><stop offset=".8" stop-color="#ff4e72" stop-opacity="0"/></radialGradient></defs><path fill="url(#n)" d="M0 0h100v100H0z"/><path fill="url(#c)" d="M0 0h100v100H0z"/><path fill="url(#m)" d="M0 0h100v100H0z"/></svg>'
-const backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(backdrop)}")`
+// A solid native/web first frame prevents mismatched SVG-to-PNG rasterization
+// on the iOS launch handoff. Brand animation is still drawn solely by WebKit.
 export const PWA_OPENING = {
-  version: 'navy-animation-only-v3',
-  backgroundImage,
-  background: `#061b3a ${backgroundImage} center / 100% 100% no-repeat`,
+  version: 'navy-flat-handoff-v4',
+  background: '#061b3a',
   medallion: 144, symbol: 88, wordmarkWidth: 200, wordmarkHeight: 28, gap: 28,
   accentWidth: 44, accentHeight: 2, exitMs: 420,
 } as const
