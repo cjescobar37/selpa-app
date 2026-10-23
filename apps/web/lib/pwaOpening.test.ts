@@ -50,17 +50,18 @@ test('prepaint is phone/home only; late, desktop, tablet, reduced motion and his
     const result = boot(options); assert.equal(result.styles.length, 0); assert.equal(result.window.__selpaOpening, undefined)
   }
 })
-test('a ready home crossfades after stable frames, without an artificial brand hold; exit is one-way', () => {
+test('a ready home shows the full animated logo entrance before a single crossfade', () => {
   const result = boot(); assert.equal(result.styles.length, 1); assert.equal(result.window.__selpaOpening?.active, true)
   assert.match(result.styles[0].textContent, /opacity:1;transition:opacity 420ms ease-in-out/)
   assert.doesNotMatch(result.styles[0].textContent, /\.app-shell/)
-  result.advance(60); assert.ok(result.window.__selpaOpening!.leavingAt > 0)
+  result.advance(500); assert.equal(result.window.__selpaOpening!.leavingAt, 0, 'the animated logo must not be clipped')
+  result.advance(340); assert.ok(result.window.__selpaOpening!.leavingAt > 0)
   assert.match(result.styles[0].textContent, /\[data-pwa-opening\]\{opacity:0\}/)
   result.advance(420); assert.equal(result.window.__selpaOpening?.active, true, 'do not cut the transition with an exact-time timer')
   result.endTransition(); assert.equal(result.window.__selpaOpening?.active, false); assert.equal(result.styles.length, 0)
   result.window.__selpaOpening?.finish(); result.advance(2000); assert.equal(result.styles.length, 0)
   assert.equal(PWA_OPENING.exitMs, 420)
-  assert.doesNotMatch(PWA_OPENING_BOOTSTRAP, /now - state.shownAt >=/)
+  assert.match(PWA_OPENING_BOOTSTRAP, /performance\.now\(\) - state\.shownAt >= 800/)
 })
 
 test('navy body stays until home readiness, then restores behind an opaque layer before the fade', () => {
@@ -74,7 +75,7 @@ test('navy body stays until home readiness, then restores behind an opaque layer
   assert.doesNotMatch(result.styles[0].textContent, /body\{background:/)
   assert.match(result.styles[0].textContent, /\[data-pwa-opening\].*opacity:1/)
   assert.equal(result.window.__selpaOpening?.leavingAt, 0, 'restore the Home background while the opening is still opaque')
-  result.advance(16)
+  result.advance(816)
   assert.ok(result.window.__selpaOpening!.leavingAt > 0)
   assert.match(result.styles[0].textContent, /\[data-pwa-opening\]\{opacity:0\}/)
   result.listeners.get('pointerdown')!(); assert.equal(result.styles.length, 0)
@@ -88,11 +89,11 @@ test('slow home/fonts stay opaque instead of a timer revealing the loader, then 
 })
 
 test('cleanup follows the layer opacity transition, not bubbling child effects; lost-event fallback remains bounded', () => {
-  const result = boot(); result.advance(60)
+  const result = boot(); result.advance(840)
   result.endTransition('transform'); result.endTransition('opacity', {})
   assert.equal(result.window.__selpaOpening?.active, true)
   result.endTransition(); assert.equal(result.styles.length, 0); assert.equal(result.layerListeners.size, 0)
-  const lostEvent = boot(); lostEvent.advance(600); assert.equal(lostEvent.window.__selpaOpening?.active, false)
+  const lostEvent = boot(); lostEvent.advance(1500); assert.equal(lostEvent.window.__selpaOpening?.active, false)
 })
 
 test('installed-phone html and body stay navy after exit; the app owns the unchanged light surface', () => {

@@ -73,7 +73,9 @@ export const PWA_OPENING_BOOTSTRAP = String.raw`(() => {
       const geometry = ready ? [box.x,box.y,box.width,box.height,header.height].join(',') : '';
       stable = geometry && geometry === previous ? stable + 1 : 0;
       previous = geometry;
-      if (state.shownAt && stable >= 2) {
+      // The wordmark's 660ms entrance must finish visibly before dissolving.
+      // This is active motion time, never a frozen second splash.
+      if (state.shownAt && stable >= 2 && performance.now() - state.shownAt >= 800) {
         if (!prepared) {
           // First restore the real body surface behind an opaque opening.
           // Let that restoration paint before starting the opacity transition;
