@@ -63,3 +63,16 @@ test('installed iOS navbar uses solid paint and keeps its accent visible below t
   assert.match(css, /-webkit-backdrop-filter:\s*none/)
   assert.match(css, /height:\s*3px/)
 })
+
+test('iOS launch PNGs contain no static SELPA logo: animation owns first branded frame', () => {
+  const startup = source('app/pwa/startup/[screen]/route.tsx')
+  const layout = source('app/layout.tsx')
+  const opening = source('lib/pwaOpening.ts')
+  const openingCss = source('components/pwa/PwaOpening.module.css')
+  assert.match(startup, /backgroundImage: PWA_OPENING\.backgroundImage/)
+  assert.doesNotMatch(startup, /getPwaOpeningArtwork|artwork\.(symbol|wordmark)|<img|PWA_OPENING\.medallion/)
+  assert.match(layout, /startupImage: PWA_STARTUP_SCREENS/)
+  assert.match(opening, /version: 'navy-animation-only-v3'/)
+  assert.match(openingCss, /@keyframes medallion-in \{ from \{ opacity: 0;/)
+  assert.match(openingCss, /@keyframes wordmark-in \{ from \{ opacity: 0;/)
+})

@@ -39,9 +39,9 @@
   .accent { position: relative; overflow: hidden; width: var(--opening-accent-width); height: var(--opening-accent-height); border-radius: 2px; background: linear-gradient(90deg, var(--cyan), var(--magenta)); opacity: .6; }
   .accent::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, #fff, transparent); animation: sweep 1100ms ease-in-out infinite; }
 }
-@keyframes medallion-in { from { opacity: .8; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes medallion-in { from { opacity: 0; transform: scale(.90); } to { opacity: 1; transform: scale(1); } }
 @keyframes breathing { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 3px color-mix(in srgb, var(--cyan) 25%, transparent)); } 50% { transform: scale(1.025); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--magenta) 35%, transparent)); } }
-@keyframes wordmark-in { from { opacity: .45; transform: translateY(5px) scaleX(1.035); filter: drop-shadow(0 0 6px var(--cyan)); } to { opacity: 1; transform: translateY(0) scaleX(1); filter: drop-shadow(0 0 0 transparent); } }
+@keyframes wordmark-in { from { opacity: 0; transform: translateY(8px) scaleX(1.035); filter: drop-shadow(0 0 6px var(--cyan)); } to { opacity: 1; transform: translateY(0) scaleX(1); filter: drop-shadow(0 0 0 transparent); } }
 @keyframes halo { 0%, 100% { opacity: .12; transform: scale(.98); } 50% { opacity: .72; transform: scale(1.035); } }
 @keyframes sweep { from { transform: translateX(-110%); opacity: 0; } 35%, 65% { opacity: .85; } to { transform: translateX(110%); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {

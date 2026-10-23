@@ -111,11 +111,11 @@ test('interaction immediately retires the layer without cancelling the original 
     assert.equal(result.window.__selpaOpening?.active, false); assert.equal(result.styles.length, 0)
   }
 })
-test('native/web use original artwork; SSR markup is never mutated and motion has no independent hard cut', () => {
+test('native startup is blank navy; web animation uses original artwork without mutating SSR', () => {
   const source = (p: string) => readFileSync(p, 'utf8'), layout = source('app/layout.tsx'), component = source('components/pwa/PwaOpening.tsx'), css = source('components/pwa/PwaOpening.module.css')
   assert.ok(layout.indexOf('selpa-opening-bootstrap') < layout.indexOf('<body>'))
   assert.ok(layout.indexOf('<PwaOpening') < layout.indexOf('<AppShellClient'))
-  assert.match(source('app/pwa/startup/[screen]/route.tsx'), /getPwaOpeningArtwork/)
+  assert.doesNotMatch(source('app/pwa/startup/[screen]/route.tsx'), /getPwaOpeningArtwork|<img/)
   assert.match(component, /PWA_OPENING\.medallion/)
   assert.doesNotMatch(component, /useEffect|useState|hidden =|\.decode\(|new window.Image/)
   assert.doesNotMatch(PWA_OPENING_BOOTSTRAP, /dataset|\.hidden|preventDefault|setTimeout\(finish, 1000/)
