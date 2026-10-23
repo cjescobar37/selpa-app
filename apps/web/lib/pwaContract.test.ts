@@ -51,21 +51,12 @@ test('existing SDK persistence and server-derived active club/role remain the au
   assert.match(provider, /event === 'SIGNED_OUT'[\s\S]*clearSessionContext\(\)/)
 })
 
-test('iOS installed header uses a solid sampled edge, not translucent status chrome', () => {
+test('isolated iOS install uses default native launch and a direct web first paint', () => {
   const layout = source('app/layout.tsx')
-  const shell = source('components/AppShellClient.tsx')
   const css = source('app/pwa.css')
-  assert.doesNotMatch(layout, /statusBarStyle:\s*['"]black-translucent['"]/) 
-  assert.match(shell, /className="pwa-ios-status-sampler"/)
-  assert.match(css, /\.pwa-ios-status-sampler\s*\{[\s\S]*?position:\s*fixed/)
-  assert.match(css, /height:\s*8px/)
-  assert.match(css, /-webkit-backdrop-filter:\s*none/)
-})
-
-test('installed iOS header shows the original cyan/magenta stripe immediately below the status area', () => {
-  const css = source('app/pwa.css')
-  assert.match(css, /\.app-shell > \.px-nav::before\s*\{\s*top:\s*var\(--selpa-safe-top\)/)
-  assert.match(css, /radial-gradient\(circle at 18% 0/)
-  assert.match(css, /#313b4c;/)
+  assert.doesNotMatch(layout, /startupImage:|selpa-opening-bootstrap|<PwaOpening/)
+  assert.match(layout, /id="selpa-opening-canvas"/)
+  assert.doesNotMatch(css, /selpa-app-entry|pwa-ios-status-sampler/)
+  assert.match(css, /\.app-shell > \.px-nav::before\s*\{\s*top:\s*auto;\s*bottom:\s*0/)
   assert.match(css, /-webkit-backdrop-filter:\s*none/)
 })

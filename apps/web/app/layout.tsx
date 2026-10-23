@@ -5,10 +5,8 @@ import type { Metadata, Viewport } from 'next'
 import { Bebas_Neue, Inter, Outfit, Rajdhani } from 'next/font/google'
 import AppShellClient from '@/components/AppShellClient'
 import { BRAND } from '@/lib/branding'
-import { PWA_COLORS, PWA_STARTUP_SCREENS } from '@/lib/pwa'
-import PwaOpening from '@/components/pwa/PwaOpening'
-import { PWA_OPENING, PWA_OPENING_BOOTSTRAP, PWA_OPENING_CANVAS_CSS } from '@/lib/pwaOpening'
-import { getPwaOpeningArtwork } from '@/lib/pwaOpeningArtwork.server'
+import { PWA_COLORS } from '@/lib/pwa'
+import { PWA_OPENING_CANVAS_CSS } from '@/lib/pwaOpening'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -48,7 +46,6 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: BRAND.name.toUpperCase(),
-    startupImage: PWA_STARTUP_SCREENS.map(screen => ({ url: `/pwa/startup/${screen.id}?v=${PWA_OPENING.version}`, media: screen.media })),
   },
 }
 
@@ -66,10 +63,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es" className={`${inter.variable} ${outfit.variable} ${bebasNeue.variable} ${rajdhani.variable}`}>
       <head>
         <style id="selpa-opening-canvas">{PWA_OPENING_CANVAS_CSS}</style>
-        <script id="selpa-opening-bootstrap" dangerouslySetInnerHTML={{ __html: PWA_OPENING_BOOTSTRAP }} />
       </head>
       <body>
-        <PwaOpening artwork={getPwaOpeningArtwork()} />
         {/* Único layout visual para TODA la app (Navbar + Footer consistentes). */}
         <AppShellClient>{children}</AppShellClient>
       </body>

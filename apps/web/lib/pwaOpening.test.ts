@@ -103,7 +103,8 @@ test('installed-phone html and body stay navy after exit; the app owns the uncha
   assert.doesNotMatch(PWA_OPENING_CANVAS_CSS, /:has\(|:empty|prefers-reduced-motion/)
   assert.doesNotMatch(PWA_OPENING_CANVAS_CSS, /(?:\{|;)\s*(?:opacity|animation|position|display)\s*:/)
   const layout = readFileSync('app/layout.tsx', 'utf8')
-  assert.ok(layout.indexOf('id="selpa-opening-canvas"') < layout.indexOf('id="selpa-opening-bootstrap"'))
+  assert.match(layout, /id="selpa-opening-canvas"/)
+  assert.doesNotMatch(layout, /selpa-opening-bootstrap/)
 })
 test('interaction immediately retires the layer without cancelling the original gesture', () => {
   for (const name of ['pointerdown', 'keydown', 'focusin', 'wheel', 'touchmove']) {
@@ -113,8 +114,8 @@ test('interaction immediately retires the layer without cancelling the original 
 })
 test('native/web use original artwork; SSR markup is never mutated and motion has no independent hard cut', () => {
   const source = (p: string) => readFileSync(p, 'utf8'), layout = source('app/layout.tsx'), component = source('components/pwa/PwaOpening.tsx'), css = source('components/pwa/PwaOpening.module.css')
-  assert.ok(layout.indexOf('selpa-opening-bootstrap') < layout.indexOf('<body>'))
-  assert.ok(layout.indexOf('<PwaOpening') < layout.indexOf('<AppShellClient'))
+  assert.doesNotMatch(layout, /selpa-opening-bootstrap|<PwaOpening|startupImage:/)
+  assert.ok(layout.indexOf('<AppShellClient') > layout.indexOf('<body>'))
   assert.match(source('app/pwa/startup/[screen]/route.tsx'), /getPwaOpeningArtwork/)
   assert.match(component, /PWA_OPENING\.medallion/)
   assert.doesNotMatch(component, /useEffect|useState|hidden =|\.decode\(|new window.Image/)
