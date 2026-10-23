@@ -61,3 +61,11 @@ test('iOS installed header uses a solid sampled edge, not translucent status chr
   assert.match(css, /height:\s*8px/)
   assert.match(css, /-webkit-backdrop-filter:\s*none/)
 })
+
+test('installed iOS header shows the original cyan/magenta stripe immediately below the status area', () => {
+  const css = source('app/pwa.css')
+  assert.match(css, /\.app-shell > \.px-nav::before\s*\{\s*top:\s*var\(--selpa-safe-top\)/)
+  assert.match(css, /radial-gradient\(circle at 18% 0/)
+  assert.match(css, /#313b4c;/)
+  assert.match(css, /-webkit-backdrop-filter:\s*none/)
+})

@@ -94,9 +94,18 @@
       z-index: 1010;
     }
     .app-shell > .px-nav {
-      background: #313b4c;
+      /* Restore the approved subtle header glow without any transparency. */
+      background:
+        radial-gradient(circle at 18% 0, color-mix(in srgb, var(--px-club-accent, #22d3ee) 8%, transparent), transparent 36%),
+        #313b4c;
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
+    }
+    /* The navigation stripe belongs ABOVE controls but BELOW the iOS clock.
+       top: 0 hid it behind the installed app's safe area. */
+    .app-shell > .px-nav::before {
+      top: var(--selpa-safe-top);
+      z-index: 1;
     }
   }
 }
