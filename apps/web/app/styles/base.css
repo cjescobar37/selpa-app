@@ -7,6 +7,9 @@
   --selpa-mobile-gutter: 8px;
   --selpa-mobile-gutter-compact: 6px;
   --app-mobile-gutter: var(--selpa-mobile-gutter);
+  /* SELPA public hero: one visual language for Rankings, Tournaments and future sections. */
+  --selpa-public-hero-bg: radial-gradient(circle at 14% 6%, rgba(34,211,238,.22), transparent 36%), radial-gradient(circle at 86% 12%, rgba(236,72,153,.13), transparent 32%), linear-gradient(135deg,#020617 0%,#061b3a 58%,#071426 100%);
+  --selpa-public-hero-rule: linear-gradient(90deg,#22d3ee 0%,#67e8f9 40%,#8bd3ed 50%,#ec4899 100%);
   --navy: #2e5493;
   --navy-2: #273965;
   --cyan: #53c7d9;
