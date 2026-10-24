@@ -6,6 +6,7 @@ import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import CommunityTournamentCalendar from '@/components/public/CommunityTournamentCalendar'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
+import PageHeader from '@/components/navigation/PageHeader'
 
 export type PublicTournamentItem = {
   id: string
@@ -96,10 +97,7 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
 
   return (
     <main className="publicTournamentShell">
-      <section className="publicTournamentHero px-fullBleedMobile">
-        <span>Calendario público</span>
-        <h1>Torneos {BRAND.name}</h1>
-      </section>
+      <PageHeader title={`Torneos ${BRAND.name}`} eyebrow="Calendario público" tone="dark" fullBleedMobile />
 
       <section className="publicTournamentFilters">
         <label><span>Categoría</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : `${item}ta`}</option>)}</select></label>
