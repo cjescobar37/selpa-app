@@ -236,6 +236,17 @@ a{ color: inherit; }
   }
 }
 
+/* Canonical mobile hero: content respects the 8px gutter; only nominated headers bleed edge-to-edge. */
+@media(max-width:430px){
+  .px-main .px-fullBleedMobile{
+    box-sizing:border-box;
+    width:calc(100% + var(--selpa-mobile-gutter, 8px) + var(--selpa-mobile-gutter, 8px)) !important;
+    max-width:none !important;
+    margin-left:calc(0px - var(--selpa-mobile-gutter, 8px)) !important;
+    margin-right:calc(0px - var(--selpa-mobile-gutter, 8px)) !important;
+  }
+}
+
 .px-card{
   background: var(--glass);
   border: 1px solid var(--border);
