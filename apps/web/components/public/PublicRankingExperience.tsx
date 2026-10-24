@@ -23,7 +23,7 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
   const tiers=rankingTiers(entries),search=Boolean(params.q?.trim())
   return <section className={styles.shell} aria-label="Ranking SELPA" data-public-ranking data-gender={gender}>
     {!clubId ? <>
-      <header className={styles.indexHero}>
+      <header className={`${styles.indexHero} px-fullBleedMobile`}>
         <div><span className={styles.eyebrow}>El juego deja huella</span><h1>Ranking SELPA</h1><p>Los líderes de hoy. Tu próximo objetivo.</p></div>
         <Trophy className={styles.heroTrophy} size={44} aria-hidden="true"/>
         <span className={styles.heroFoot}>Cada club. Su competencia. Su historia.</span>
@@ -37,7 +37,7 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
         {clubsCount>40?<nav className={styles.pager} aria-label="Páginas de clubes">{Number(params.clubsPage ?? 1)>1 ? <Link href={rankingHref({clubsPage:String(Number(params.clubsPage)-1),gender:params.gender})}>Anterior</Link>:<span/>}{Number(params.clubsPage ?? 1)*40<clubsCount ? <Link href={rankingHref({clubsPage:String(Number(params.clubsPage ?? 1)+1),gender:params.gender})}>Más clubes</Link>:null}</nav>:null}
       </>}
     </>:<>
-      <PageHeader title="Ranking" eyebrow="Competencia del club" backHref="/ranking"
+      <PageHeader title="Ranking" eyebrow="Competencia del club" backHref="/ranking" tone="dark" fullBleedMobile
         description={[selectedClub?.name ?? 'Club seleccionado',context?.seasonName].filter(Boolean).join(' · ')}/>
       <RankingDiscovery contexts={contexts} current={context} params={params}/>
       {context?<p className={styles.context}><span className={styles.scopeDot}/>{context.categoryName} · Ranking anual {modality==='PAIRS'?'de parejas':'individual'}</p>:null}
