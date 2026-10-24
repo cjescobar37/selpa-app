@@ -1137,7 +1137,8 @@ export default function AppNavbarClient() {
           <button
             className={`px-burger px-burger--menu ${mobileMenuOpen ? 'is-active' : ''}`}
             type="button"
-            aria-label="Abrir menú"
+            aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+            aria-controls="selpa-guest-mobile-menu"
             aria-expanded={mobileMenuOpen}
             onClick={() => {
               setMobileMenuOpen((value) => !value)
@@ -1283,7 +1284,7 @@ export default function AppNavbarClient() {
     if (role !== 'guest' || !mobileMenuOpen) return null
 
     return (
-      <nav className="px-mobileMenu" aria-label="Menú principal">
+      <nav id="selpa-guest-mobile-menu" className="px-mobileMenu" aria-label="Menú principal">
         <div className="px-mobileMenuHead">
           <span>Menú</span>
           <strong>{BRAND.name.toUpperCase()}</strong>
