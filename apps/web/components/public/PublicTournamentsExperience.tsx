@@ -96,7 +96,7 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
 
   return (
     <main className="publicTournamentShell">
-      <section className="publicTournamentHero">
+      <section className="publicTournamentHero px-fullBleedMobile">
         <span>Calendario público</span>
         <h1>Torneos {BRAND.name}</h1>
       </section>
@@ -183,7 +183,7 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
         }
         @media (max-width: 560px) {
           .publicTournamentShell { gap: 8px; }
-          .publicTournamentHero { border-radius: 18px; min-height: 118px; max-width: min(100%, calc(100vw - 47px)); padding: 12px 16px; }
+          .publicTournamentHero { border-radius: 18px; min-height: 118px; max-width: 100%; padding: 12px 16px; }
           .publicTournamentHero::after { height: 4px; left: 0; right: 0; }
           .publicTournamentHero span { font-size: 10px; font-weight: 850; letter-spacing: .06em; }
           .publicTournamentHero h1 { font-size: clamp(28px, 8vw, 32px); font-weight: 950; letter-spacing: -.06em; line-height: .9; margin: 5px 0; }
