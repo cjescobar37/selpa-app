@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import type { CSSProperties } from 'react'
 import { BRAND } from '@/lib/branding'
+import PageHeader from '@/components/navigation/PageHeader'
 
 type NewsItem = {
   id: string
@@ -98,10 +99,7 @@ export default function PublicNewsExperience({
 
   return (
     <div className="px-publicNewsSurface">
-      <section className="px-publicNewsHero">
-        <span>Comunidad {BRAND.name.toUpperCase()}</span>
-        <h1>{title}</h1>
-      </section>
+      <PageHeader title={title} eyebrow={`Comunidad ${BRAND.name.toUpperCase()}`} legacyClassName="px-publicNewsHero" />
 
       <div className="px-publicNewsStack">
         {hero ? (
@@ -262,7 +260,7 @@ export default function PublicNewsExperience({
           .px-publicLatestGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 720px) {
-          .px-publicNewsHero { border-radius: 18px; min-height: 118px; max-width: min(100%, calc(100vw - 47px)); padding: 12px 16px; }
+          .px-publicNewsHero { max-width: none; }
           .px-publicNewsHero::after { left: 0; right: 0; }
           .px-publicNewsHero span { font-size: 10px; font-weight: 850; letter-spacing: .06em; }
           .px-publicNewsHero h1 { font-size: clamp(28px, 8vw, 32px); letter-spacing: -.06em; line-height: .9; margin: 5px 0; }

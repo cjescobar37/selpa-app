@@ -1791,8 +1791,8 @@
   .px-clubSub,
   .club-sub,
   .px-platformSub,
-  .publicTournamentHero p,
-  .publicClubsHero p,
+  .publicTournamentHero:not([data-selpa-page-header]) p,
+  .publicClubsHero:not([data-selpa-page-header]) p,
   .clubPublicHeroText p,
   .pampraxHero__text p{
     font-size: 12.5px;
@@ -1933,10 +1933,10 @@
   }
 
   .pampraxHero,
-  .publicTournamentHero,
+  .publicTournamentHero:not([data-selpa-page-header]),
   .publicRankingHero,
-  .publicClubsHero,
-  .px-publicNewsHero,
+  .publicClubsHero:not([data-selpa-page-header]),
+  .px-publicNewsHero:not([data-selpa-page-header]),
   .clubPublicHero{
     border-radius: 18px;
     min-height: 118px;
@@ -1972,10 +1972,10 @@
   }
 
   .pampraxHero__text > span,
-  .publicTournamentHero span,
+  .publicTournamentHero:not([data-selpa-page-header]) span,
   .publicRankingHero span,
-  .publicClubsHero span,
-  .px-publicNewsHero span,
+  .publicClubsHero:not([data-selpa-page-header]) span,
+  .px-publicNewsHero:not([data-selpa-page-header]) span,
   .clubPublicSponsorsIntro span{
     font-size: 10px;
     font-weight: 850;
@@ -1983,10 +1983,10 @@
   }
 
   .pampraxHero__text h1,
-  .publicTournamentHero h1,
+  .publicTournamentHero:not([data-selpa-page-header]) h1,
   .publicRankingHero h1,
-  .publicClubsHero h1,
-  .px-publicNewsHero h1,
+  .publicClubsHero:not([data-selpa-page-header]) h1,
+  .px-publicNewsHero:not([data-selpa-page-header]) h1,
   .clubPublicHeroText h1{
     font-size: clamp(28px, 8vw, 32px);
     font-weight: 850;
@@ -1995,10 +1995,10 @@
   }
 
   .pampraxHero__text p,
-  .publicTournamentHero p,
+  .publicTournamentHero:not([data-selpa-page-header]) p,
   .publicRankingHero p,
-  .publicClubsHero p,
-  .px-publicNewsHero p{
+  .publicClubsHero:not([data-selpa-page-header]) p,
+  .px-publicNewsHero:not([data-selpa-page-header]) p{
     font-size: 12px;
     line-height: 1.25;
   }
@@ -2452,10 +2452,10 @@
 
 /* Public page hero normalization: keep tab-to-tab transitions visually stable. */
 .px-publicHome .pampraxHero,
-.publicTournamentShell .publicTournamentHero,
+.publicTournamentShell .publicTournamentHero:not([data-selpa-page-header]),
 .publicRankingShell .publicRankingHero,
-.publicClubsPage .publicClubsHero,
-.px-publicNewsSurface .px-publicNewsHero{
+.publicClubsPage .publicClubsHero:not([data-selpa-page-header]),
+.px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header]){
   align-content: center !important;
   background:
     radial-gradient(circle at 18% 6%, rgba(34,211,238,.3), transparent 34%),
@@ -2476,10 +2476,10 @@
 }
 
 .px-publicHome .pampraxHero::after,
-.publicTournamentShell .publicTournamentHero::after,
+.publicTournamentShell .publicTournamentHero:not([data-selpa-page-header])::after,
 .publicRankingShell .publicRankingHero::after,
-.publicClubsPage .publicClubsHero::after,
-.px-publicNewsSurface .px-publicNewsHero::after{
+.publicClubsPage .publicClubsHero:not([data-selpa-page-header])::after,
+.px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header])::after{
   background: linear-gradient(90deg,#22d3ee 0%,#67e8f9 40%,#8bd3ed 50%,#ec4899 100%) !important;
   bottom: 0 !important;
   content: "" !important;
@@ -2490,10 +2490,10 @@
 }
 
 .px-publicHome .pampraxHero__text > span,
-.publicTournamentShell .publicTournamentHero span,
+.publicTournamentShell .publicTournamentHero:not([data-selpa-page-header]) span,
 .publicRankingShell .publicRankingHero span,
-.publicClubsPage .publicClubsHero span,
-.px-publicNewsSurface .px-publicNewsHero span{
+.publicClubsPage .publicClubsHero:not([data-selpa-page-header]) span,
+.px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header]) span{
   color: #67e8f9 !important;
   font-size: 12px !important;
   font-weight: 950 !important;
@@ -2502,10 +2502,10 @@
 }
 
 .px-publicHome .pampraxHero__text h1,
-.publicTournamentShell .publicTournamentHero h1,
+.publicTournamentShell .publicTournamentHero:not([data-selpa-page-header]) h1,
 .publicRankingShell .publicRankingHero h1,
-.publicClubsPage .publicClubsHero h1,
-.px-publicNewsSurface .px-publicNewsHero h1{
+.publicClubsPage .publicClubsHero:not([data-selpa-page-header]) h1,
+.px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header]) h1{
   color: #fff !important;
   font-size: clamp(30px,4vw,48px) !important;
   font-weight: 850 !important;
@@ -2515,10 +2515,10 @@
 }
 
 .px-publicHome .pampraxHero__text p,
-.publicTournamentShell .publicTournamentHero p,
+.publicTournamentShell .publicTournamentHero:not([data-selpa-page-header]) p,
 .publicRankingShell .publicRankingHero p,
-.publicClubsPage .publicClubsHero p,
-.px-publicNewsSurface .px-publicNewsHero p{
+.publicClubsPage .publicClubsHero:not([data-selpa-page-header]) p,
+.px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header]) p{
   color: rgba(255,255,255,.78) !important;
   font-size: clamp(14px,1.45vw,17px) !important;
   font-weight: 720 !important;
@@ -2529,10 +2529,10 @@
 
 @media (max-width: 720px){
   .px-publicHome .pampraxHero,
-  .publicTournamentShell .publicTournamentHero,
+  .publicTournamentShell .publicTournamentHero:not([data-selpa-page-header]),
   .publicRankingShell .publicRankingHero,
-  .publicClubsPage .publicClubsHero,
-  .px-publicNewsSurface .px-publicNewsHero{
+  .publicClubsPage .publicClubsHero:not([data-selpa-page-header]),
+  .px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header]){
     border-radius: 18px !important;
     max-width: min(100%, calc(100vw - 47px)) !important;
     min-height: 118px !important;
@@ -2540,20 +2540,20 @@
   }
 
   .px-publicHome .pampraxHero__text > span,
-  .publicTournamentShell .publicTournamentHero span,
+  .publicTournamentShell .publicTournamentHero:not([data-selpa-page-header]) span,
   .publicRankingShell .publicRankingHero span,
-  .publicClubsPage .publicClubsHero span,
-  .px-publicNewsSurface .px-publicNewsHero span{
+  .publicClubsPage .publicClubsHero:not([data-selpa-page-header]) span,
+  .px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header]) span{
     font-size: 10px !important;
     font-weight: 850 !important;
     letter-spacing: .06em !important;
   }
 
   .px-publicHome .pampraxHero__text h1,
-  .publicTournamentShell .publicTournamentHero h1,
+  .publicTournamentShell .publicTournamentHero:not([data-selpa-page-header]) h1,
   .publicRankingShell .publicRankingHero h1,
-  .publicClubsPage .publicClubsHero h1,
-  .px-publicNewsSurface .px-publicNewsHero h1{
+  .publicClubsPage .publicClubsHero:not([data-selpa-page-header]) h1,
+  .px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header]) h1{
     font-size: 30px !important;
     font-weight: 850 !important;
     letter-spacing: -.03em !important;
@@ -2562,10 +2562,10 @@
   }
 
   .px-publicHome .pampraxHero__text p,
-  .publicTournamentShell .publicTournamentHero p,
+  .publicTournamentShell .publicTournamentHero:not([data-selpa-page-header]) p,
   .publicRankingShell .publicRankingHero p,
-  .publicClubsPage .publicClubsHero p,
-  .px-publicNewsSurface .px-publicNewsHero p{
+  .publicClubsPage .publicClubsHero:not([data-selpa-page-header]) p,
+  .px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header]) p{
     font-size: 12px !important;
     line-height: 1.25 !important;
   }
@@ -2582,10 +2582,10 @@
   }
 
   .px-publicHome .pampraxHero,
-  .publicTournamentShell .publicTournamentHero,
+  .publicTournamentShell .publicTournamentHero:not([data-selpa-page-header]),
   .publicRankingShell .publicRankingHero,
-  .publicClubsPage .publicClubsHero,
-  .px-publicNewsSurface .px-publicNewsHero,
+  .publicClubsPage .publicClubsHero:not([data-selpa-page-header]),
+  .px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header]),
   .clubPublicHome .clubPublicHero{
     box-sizing: border-box !important;
     box-shadow: 0 24px 58px rgba(2,6,23,.20), 0 0 0 1px rgba(103,232,249,.08) !important;
@@ -2637,10 +2637,10 @@
 
 @media (min-width: 421px) and (max-width: 720px){
   .px-publicHome .pampraxHero,
-  .publicTournamentShell .publicTournamentHero,
+  .publicTournamentShell .publicTournamentHero:not([data-selpa-page-header]),
   .publicRankingShell .publicRankingHero,
-  .publicClubsPage .publicClubsHero,
-  .px-publicNewsSurface .px-publicNewsHero,
+  .publicClubsPage .publicClubsHero:not([data-selpa-page-header]),
+  .px-publicNewsSurface .px-publicNewsHero:not([data-selpa-page-header]),
   .clubPublicHome .clubPublicHero{
     max-width: 96vw !important;
     margin-left: calc(50% - 48vw) !important;

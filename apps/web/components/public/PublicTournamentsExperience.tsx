@@ -6,6 +6,7 @@ import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import CommunityTournamentCalendar from '@/components/public/CommunityTournamentCalendar'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
+import PageHeader from '@/components/navigation/PageHeader'
 
 export type PublicTournamentItem = {
   id: string
@@ -96,10 +97,7 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
 
   return (
     <main className="publicTournamentShell">
-      <section className="publicTournamentHero">
-        <span>Calendario público</span>
-        <h1>Torneos {BRAND.name}</h1>
-      </section>
+      <PageHeader title={`Torneos ${BRAND.name}`} eyebrow="Calendario público" legacyClassName="publicTournamentHero" />
 
       <section className="publicTournamentFilters">
         <label><span>Categoría</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : `${item}ta`}</option>)}</select></label>
@@ -183,7 +181,7 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
         }
         @media (max-width: 560px) {
           .publicTournamentShell { gap: 8px; }
-          .publicTournamentHero { border-radius: 18px; min-height: 118px; max-width: min(100%, calc(100vw - 47px)); padding: 12px 16px; }
+          .publicTournamentHero { max-width: none; }
           .publicTournamentHero::after { height: 4px; left: 0; right: 0; }
           .publicTournamentHero span { font-size: 10px; font-weight: 850; letter-spacing: .06em; }
           .publicTournamentHero h1 { font-size: clamp(28px, 8vw, 32px); font-weight: 950; letter-spacing: -.06em; line-height: .9; margin: 5px 0; }

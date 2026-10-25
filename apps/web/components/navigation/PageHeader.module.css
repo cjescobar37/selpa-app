@@ -16,3 +16,28 @@
 .backDark{background:#ffffff14;border-color:#ffffff40;color:#fff}
 .backDark:hover{background:#ffffff26}
 @media(min-width:768px){.header{padding:14px 16px}.identity{flex-basis:300px}}
+
+/* Keep established desktop compositions; card/subsection titles never opt in. */
+.legacy .identity,.legacy .copy{display:contents}
+/* Exact legacy desktop normalization, now owned by the reusable header rather
+   than navbar.css/public.css. Mobile no longer inherits the 96vw override. */
+.legacy[data-selpa-page-header]{align-content:center;background:radial-gradient(circle at 18% 6%,rgba(34,211,238,.3),transparent 34%),radial-gradient(circle at 84% 18%,rgba(236,72,153,.1),transparent 28%),linear-gradient(135deg,#020617 0%,#061b3a 58%,#071426 100%);border:1px solid rgba(103,232,249,.14);border-radius:22px;box-shadow:0 16px 38px rgba(2,6,23,.14);color:#fff;display:grid;margin:0 auto;max-width:1056px;min-height:128px;overflow:hidden;padding:18px;position:relative;width:100%}
+.legacy[data-selpa-page-header]::after{content:"";position:absolute;inset:auto 0 0;height:4px;background:linear-gradient(90deg,#22d3ee 0%,#67e8f9 40%,#8bd3ed 50%,#ec4899 100%)}
+.legacy[data-selpa-page-header] .eyebrow{color:#67e8f9;font-size:12px;font-weight:950;letter-spacing:.08em;text-transform:uppercase}
+.legacy[data-selpa-page-header] h1{color:#fff;font-size:clamp(30px,4vw,48px);font-weight:850;letter-spacing:-.035em;line-height:.94;margin:5px 0}
+.legacy[data-selpa-page-header] p{color:#ffffffc7;font-size:clamp(14px,1.45vw,17px);font-weight:720;line-height:1.35;margin:0;max-width:600px}
+.mobileOnly{display:none}
+@media(max-width:600px),(max-width:980px) and (max-height:600px) and (orientation:landscape){
+  .mobileCanonical[data-selpa-page-header]{box-sizing:border-box;position:relative;isolation:isolate;display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;min-width:0;min-height:108px;padding:var(--selpa-page-header-padding);background:var(--selpa-page-header-bg);border:1px solid #ffffff18;border-radius:0 0 16px 16px;box-shadow:none;color:#fff}
+  .mobileCanonical[data-selpa-page-header]::after{content:"";position:absolute;inset:auto 0 0;height:3px;background:var(--selpa-page-header-rule);pointer-events:none}
+  .mobileCanonical .identity{display:flex;align-items:center;flex:1 1 180px;min-width:0;gap:10px}
+  .mobileCanonical .copy{display:block;min-width:0}
+  .mobileCanonical .mobileOnly{display:block}
+  .mobileCanonical[data-selpa-page-header] h1{font-size:var(--selpa-page-header-title);font-weight:750;letter-spacing:-.035em;line-height:1.12;color:#fff;margin:3px 0;overflow-wrap:anywhere}
+  .mobileCanonical[data-selpa-page-header] .eyebrow{color:#67e8f9;font-size:10px;font-weight:700;letter-spacing:.08em;line-height:1.4}
+  .mobileCanonical[data-selpa-page-header] p,.mobileCanonical .meta{font-size:13px;color:#cfdee9;line-height:1.4;margin:4px 0 0}
+  .mobileCanonical .back{color:#fff;background:#ffffff14;border-color:#ffffff40}
+  .mobileCanonical .actions{color:#fff}
+  .mobileCanonical .actions>:is(a,button){min-height:44px}
+}
+@media(max-width:430px){.mobileCanonical.fullBleed{margin-inline:calc(-1 * var(--selpa-mobile-gutter));width:calc(100% + 2 * var(--selpa-mobile-gutter));max-width:none}}

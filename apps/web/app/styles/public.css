@@ -114,10 +114,10 @@
 }
 
 .px-publicFrame .pampraxHero,
-.px-publicFrame .publicTournamentHero,
+.px-publicFrame .publicTournamentHero:not([data-selpa-page-header]),
 .px-publicFrame .publicRankingHero,
-.px-publicFrame .publicClubsHero,
-.px-publicFrame .px-publicNewsHero{
+.px-publicFrame .publicClubsHero:not([data-selpa-page-header]),
+.px-publicFrame .px-publicNewsHero:not([data-selpa-page-header]){
   max-width:100% !important;
   width:100% !important;
 }
@@ -583,7 +583,7 @@
   max-width:1180px;
   width:100%;
 }
-.publicTournamentHero{
+.publicTournamentHero:not([data-selpa-page-header]){
   background:radial-gradient(circle at 12% 0%, rgba(34,211,238,.24), transparent 36%), radial-gradient(circle at 86% 10%, rgba(236,72,153,.18), transparent 34%), linear-gradient(135deg, #071a36, #0f274a 58%, #431039);
   border-radius:22px;
   color:#fff;
@@ -592,7 +592,7 @@
   padding:clamp(12px,1.7vw,18px);
   position:relative;
 }
-.publicTournamentHero::after{
+.publicTournamentHero:not([data-selpa-page-header])::after{
   background:linear-gradient(90deg, #22d3ee, #ec4899);
   bottom:0;
   content:"";
@@ -601,14 +601,14 @@
   position:absolute;
   right:28px;
 }
-.publicTournamentHero span{
+.publicTournamentHero:not([data-selpa-page-header]) span{
   color:#67e8f9;
   font-size:12px;
   font-weight:950;
   letter-spacing:.08em;
   text-transform:uppercase;
 }
-.publicTournamentHero h1{
+.publicTournamentHero:not([data-selpa-page-header]) h1{
   font-size:clamp(38px,6vw,68px);
   font-weight:950;
   letter-spacing:-.06em;
@@ -900,7 +900,7 @@
 }
 @media (max-width:560px){
   .publicTournamentShell{ gap:14px; }
-  .publicTournamentHero{ border-radius:20px; min-height:118px; padding:12px 16px; }
+  .publicTournamentHero:not([data-selpa-page-header]){ border-radius:20px; min-height:118px; padding:12px 16px; }
   .publicTournamentSection > header{ align-items:start; flex-direction:column; }
   .publicTournamentCard{ grid-template-columns:1fr; padding:12px; }
   .publicTournamentDate{ align-items:center; display:flex; gap:8px; justify-content:flex-start; min-height:0; }
@@ -1760,10 +1760,10 @@
 }
 
 .px-homeHeroCompact,
-.publicTournamentHero,
+.publicTournamentHero:not([data-selpa-page-header]),
 .publicRankingHero,
-.publicClubsHero,
-.px-publicNewsHero{
+.publicClubsHero:not([data-selpa-page-header]),
+.px-publicNewsHero:not([data-selpa-page-header]){
   background:
     radial-gradient(circle at 12% 0%, rgba(34,211,238,.26), transparent 36%),
     radial-gradient(circle at 88% 10%, rgba(236,72,153,.1), transparent 30%),
@@ -1966,10 +1966,10 @@
 }
 
 .px-homeHeroCompact::after,
-.publicTournamentHero::after,
+.publicTournamentHero:not([data-selpa-page-header])::after,
 .publicRankingHero::after,
-.publicClubsHero::after,
-.px-publicNewsHero::after{
+.publicClubsHero:not([data-selpa-page-header])::after,
+.px-publicNewsHero:not([data-selpa-page-header])::after{
   background:linear-gradient(90deg,#22d3ee 0%,#67e8f9 40%,#8bd3ed 50%,#ec4899 100%) !important;
   bottom:0 !important;
   content:"" !important;
@@ -1980,10 +1980,10 @@
 }
 
 .px-homeHeroCompact span,
-.publicTournamentHero span,
+.publicTournamentHero:not([data-selpa-page-header]) span,
 .publicRankingHero span,
-.publicClubsHero span,
-.px-publicNewsHero span{
+.publicClubsHero:not([data-selpa-page-header]) span,
+.px-publicNewsHero:not([data-selpa-page-header]) span{
   color:#67e8f9 !important;
   font-size:11px !important;
   font-weight:950 !important;
@@ -1992,10 +1992,10 @@
 }
 
 .px-homeHeroCompact h1,
-.publicTournamentHero h1,
+.publicTournamentHero:not([data-selpa-page-header]) h1,
 .publicRankingHero h1,
-.publicClubsHero h1,
-.px-publicNewsHero h1{
+.publicClubsHero:not([data-selpa-page-header]) h1,
+.px-publicNewsHero:not([data-selpa-page-header]) h1{
   color:#fff !important;
   font-size:clamp(30px,4.6vw,48px) !important;
   font-weight:950 !important;
@@ -3065,10 +3065,10 @@
 
 @media (max-width:720px){
   .px-homeHeroCompact,
-  .publicTournamentHero,
+  .publicTournamentHero:not([data-selpa-page-header]),
   .publicRankingHero,
-  .publicClubsHero,
-  .px-publicNewsHero{
+  .publicClubsHero:not([data-selpa-page-header]),
+  .px-publicNewsHero:not([data-selpa-page-header]){
     min-height:128px !important;
     padding:16px 14px 18px !important;
   }
@@ -7008,7 +7008,7 @@ a.clubPublicRankingFooter span{
   width:100%;
 }
 
-.publicClubsHero{
+.publicClubsHero:not([data-selpa-page-header]){
   background:radial-gradient(circle at 18% 6%, rgba(34,211,238,.3), transparent 34%), radial-gradient(circle at 84% 18%, rgba(236,72,153,.1), transparent 28%), linear-gradient(135deg, #020617 0%, #061b3a 58%, #071426 100%);
   border:1px solid rgba(103,232,249,.14);
   border-radius:22px;
@@ -7025,7 +7025,7 @@ a.clubPublicRankingFooter span{
   width:100%;
 }
 
-.publicClubsHero::after{
+.publicClubsHero:not([data-selpa-page-header])::after{
   background:linear-gradient(90deg, #22d3ee 0%, #67e8f9 40%, #8bd3ed 50%, #ec4899 100%);
   bottom:0;
   content:"";
@@ -7035,7 +7035,7 @@ a.clubPublicRankingFooter span{
   right:0;
 }
 
-.publicClubsHero span{
+.publicClubsHero:not([data-selpa-page-header]) span{
   color:#67e8f9;
   font-size:12px;
   font-weight:950;
@@ -7043,7 +7043,7 @@ a.clubPublicRankingFooter span{
   text-transform:uppercase;
 }
 
-.publicClubsHero h1{
+.publicClubsHero:not([data-selpa-page-header]) h1{
   font-size:clamp(30px, 4vw, 46px);
   font-weight:950;
   letter-spacing:-.075em;
@@ -7283,20 +7283,20 @@ a.clubPublicRankingFooter span{
 }
 
 @media (max-width: 560px){
-  .publicClubsHero{
+  .publicClubsHero:not([data-selpa-page-header]){
     border-radius:18px;
     min-height:118px;
     max-width:min(100%, calc(100vw - 47px));
     padding:12px 16px;
   }
 
-  .publicClubsHero span{
+  .publicClubsHero:not([data-selpa-page-header]) span{
     font-size:10px;
     font-weight:850;
     letter-spacing:.06em;
   }
 
-  .publicClubsHero h1{
+  .publicClubsHero:not([data-selpa-page-header]) h1{
     font-size:clamp(28px, 8vw, 32px);
     letter-spacing:-.06em;
     line-height:.9;

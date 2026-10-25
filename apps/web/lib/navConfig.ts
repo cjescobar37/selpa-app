@@ -32,6 +32,12 @@ export type NavConfig = {
   right: NavRight
 }
 
+// Shared by the top menu and mobile primary navigation. Not an authorization
+// shortcut: the destination keeps its existing server/session permission checks.
+export const MESSAGE_HREF_BY_ROLE: Record<AppRole, string> = {
+  guest: '/mensajes', player: '/player/mensajes', club: '/club/mensajes', platform: '/platform/mensajes',
+}
+
 export const NAV_CONFIG: Record<AppRole, NavConfig> = {
   guest: {
     leftMode: 'brand',

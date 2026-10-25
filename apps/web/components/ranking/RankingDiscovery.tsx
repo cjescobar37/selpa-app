@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { useRef, useState } from 'react'
 import { ChevronDown, Search, X } from 'lucide-react'
 import type { RankingContext } from '@/features/player-career/player-career.types'
-import { rankingHref, type RankingSearch } from '@/features/player-career/public-ranking.presentation'
+import { rankingBranchHref, rankingHref, type RankingSearch } from '@/features/player-career/public-ranking.presentation'
 import styles from './RankingDiscovery.module.css'
 
 export default function RankingDiscovery({contexts,current,params}:{contexts:RankingContext[];current:RankingContext|null;params:RankingSearch}) {
@@ -15,7 +15,7 @@ export default function RankingDiscovery({contexts,current,params}:{contexts:Ran
   const searchRef=useRef<HTMLInputElement>(null)
   return <div className={styles.discovery}>
     <nav className={styles.branches} aria-label="Ranking por rama">{(['M','F'] as const).map(branch=><Link key={branch} data-branch={branch} aria-current={gender===branch?'page':undefined}
-      href={rankingHref(params,{gender:branch,division:undefined,category:undefined,page:undefined})}>{branch==='M'?'Caballeros':'Damas'}</Link>)}</nav>
+      href={rankingBranchHref(params,branch,current?.category)}>{branch==='M'?'Caballeros':'Damas'}</Link>)}</nav>
     <div className={styles.tools}>
       <button type="button" aria-haspopup="dialog" onClick={()=>dialog.current?.showModal()}>{current?.categoryName ?? 'Elegir categoría'}<ChevronDown size={17}/></button>
       {modalities.length>1?<nav className={styles.modes} aria-label="Modalidad">{modalities.map(mode=><Link key={mode} aria-current={modality===mode?'page':undefined} href={rankingHref(params,{modality:mode,division:undefined,category:undefined,page:undefined})}>{mode==='PAIRS'?'Parejas':'Individual'}</Link>)}</nav>:null}

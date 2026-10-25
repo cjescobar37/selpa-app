@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import headerStyles from '@/components/navigation/PageHeader.module.css'
 
 export default function PlayerSectionHero({ badge, title, description, icon, action }: {
   badge: string
@@ -7,9 +8,9 @@ export default function PlayerSectionHero({ badge, title, description, icon, act
   icon?: ReactNode
   action?: ReactNode
 }) {
-  return <section className="playerSectionHero">
+  return <section data-selpa-page-header className={`playerSectionHero ${headerStyles.mobileCanonical} ${headerStyles.fullBleed}`}>
     <div className="playerSectionHero__copy">
-      <span>{badge}</span>
+      <span className={headerStyles.eyebrow}>{badge}</span>
       <h1>{title}</h1>
       <p>{description}</p>
     </div>

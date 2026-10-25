@@ -1,4 +1,5 @@
 .page{display:grid;gap:12px;max-width:1056px;margin:0 auto;padding:12px 14px;color:#071c3b;min-width:0;box-sizing:border-box}
+@media(max-width:430px){.page{padding:0 0 12px}}
 .panel{background:#fff;border:1px solid #dce6ec;border-radius:14px;padding:14px;display:grid;gap:10px;min-width:0}
 .panel h2{font-size:18px;font-weight:700;margin:0;line-height:1.25}
 .panel p,.note{color:#60748a;font-size:13px;line-height:1.45;margin:0;overflow-wrap:anywhere}

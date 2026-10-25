@@ -26,7 +26,7 @@ import {
   X,
 } from 'lucide-react'
 
-import { NAV_CONFIG, type NavChild, type NavItem } from '@/lib/navConfig'
+import { MESSAGE_HREF_BY_ROLE, NAV_CONFIG, type NavChild, type NavItem } from '@/lib/navConfig'
 import { useSession } from '@/components/session/SessionProvider'
 import { getClubInitials } from '@/lib/clubAssets'
 import { hasAnyClubPermission } from '@/lib/clubPermissions'
@@ -197,10 +197,7 @@ function isMissingColumnError(error: { code?: string; message?: string } | null 
 }
 
 function messageHrefForRole(role: string | null | undefined) {
-  if (role === 'club') return '/club/mensajes'
-  if (role === 'platform') return '/platform/mensajes'
-  if (role === 'player') return '/player/mensajes'
-  return '/mensajes'
+  return MESSAGE_HREF_BY_ROLE[role === 'club' || role === 'platform' || role === 'player' ? role : 'guest']
 }
 
 type NavSearchResult = {
@@ -392,20 +389,22 @@ export default function AppNavbarClient() {
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        const guestTrigger = rootRef.current?.querySelector<HTMLButtonElement>('[aria-controls="selpa-guest-mobile-menu"][aria-expanded="true"]')
         setNavOpenIndex(null)
         setMobileMenuOpen(false)
         closeNavbarOverlay(true)
         setSearchOpen(false)
         setPreviewModal(null)
+        guestTrigger?.focus()
       }
     }
 
-    document.addEventListener('mousedown', onDown)
+    document.addEventListener('pointerdown', onDown)
     window.addEventListener('keydown', onKey)
 
     return () => {
       clearNavCloseTimeout()
-      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('pointerdown', onDown)
       window.removeEventListener('keydown', onKey)
     }
   }, [navbarOverlay])
@@ -1137,7 +1136,8 @@ export default function AppNavbarClient() {
           <button
             className={`px-burger px-burger--menu ${mobileMenuOpen ? 'is-active' : ''}`}
             type="button"
-            aria-label="Abrir menú"
+            aria-label={mobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-controls="selpa-guest-mobile-menu"
             aria-expanded={mobileMenuOpen}
             onClick={() => {
               setMobileMenuOpen((value) => !value)
@@ -1283,7 +1283,7 @@ export default function AppNavbarClient() {
     if (role !== 'guest' || !mobileMenuOpen) return null
 
     return (
-      <nav className="px-mobileMenu" aria-label="Menú principal">
+      <nav id="selpa-guest-mobile-menu" className="px-mobileMenu" aria-label="Menú principal">
         <div className="px-mobileMenuHead">
           <span>Menú</span>
           <strong>{BRAND.name.toUpperCase()}</strong>
@@ -1301,7 +1301,7 @@ export default function AppNavbarClient() {
 
   return (
     <>
-      <header className={`px-nav${isGlobalPublicNav ? ' px-nav--global' : ''}${role === 'guest' ? ' px-nav--guest' : ' px-nav--authed'}`} ref={rootRef}>
+      <header data-navbar-open={mobileMenuOpen || Boolean(navbarOverlay) || searchOpen ? 'true' : 'false'} className={`px-nav${isGlobalPublicNav ? ' px-nav--global' : ''}${role === 'guest' ? ' px-nav--guest' : ' px-nav--authed'}`} ref={rootRef}>
         <div className="px-navgrid px-desktopBar">
           {renderDesktopLeft()}
           {renderDesktopCenter()}

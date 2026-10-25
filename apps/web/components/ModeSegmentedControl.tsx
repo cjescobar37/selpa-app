@@ -87,7 +87,7 @@ export default function ModeSegmentedControl({
           }
           .homeModeSwitch button {
             font-size: 12px;
-            min-height: 34px;
+            min-height: 44px;
             padding: 7px 8px;
           }
         }
@@ -96,6 +96,8 @@ export default function ModeSegmentedControl({
             font-size: 11px;
           }
         }
+        .homeModeSwitch button:focus-visible { outline: 2px solid #0896ad; outline-offset: -2px; }
+        @media (prefers-reduced-motion: reduce) { .homeModeSwitch button { transition: none; } }
       `}</style>
     </>
   )

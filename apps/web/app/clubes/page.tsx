@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { BRAND } from '@/lib/branding'
 import { getClubTheme } from '@/lib/clubThemes'
+import PageHeader from '@/components/navigation/PageHeader'
 
 type ClubCard = {
   id: string
@@ -47,24 +48,24 @@ export default async function ClubesPublicPage() {
   const statsByClub = new Map<string, { players: number; tournaments: number; categories: Set<number> }>()
 
   for (const row of playerRows ?? []) {
-    const clubId = String((row as any).club_id ?? '')
+    const clubId = String((row as { club_id: string }).club_id ?? '')
     if (!clubId) continue
     const stats = statsByClub.get(clubId) ?? { players: 0, tournaments: 0, categories: new Set<number>() }
     stats.players += 1
-    const category = Number((row as any).category)
+    const category = Number((row as { category: number | null }).category)
     if (Number.isFinite(category)) stats.categories.add(category)
     statsByClub.set(clubId, stats)
   }
 
   for (const row of tournamentRows ?? []) {
-    const clubId = String((row as any).club_id ?? '')
+    const clubId = String((row as { club_id: string }).club_id ?? '')
     if (!clubId) continue
     const stats = statsByClub.get(clubId) ?? { players: 0, tournaments: 0, categories: new Set<number>() }
     stats.tournaments += 1
     statsByClub.set(clubId, stats)
   }
 
-  const clubs: ClubCard[] = (clubRows ?? []).map((club: any) => {
+  const clubs: ClubCard[] = (clubRows ?? []).map((club: Pick<ClubCard, 'id' | 'name' | 'city' | 'province' | 'logo_url' | 'theme_key'>) => {
     const stats = statsByClub.get(String(club.id))
     return {
       id: String(club.id),
@@ -82,10 +83,7 @@ export default async function ClubesPublicPage() {
   return (
     <div className="px-wrap px-publicFrame">
       <main className="publicClubsPage">
-        <section className="publicClubsHero">
-          <span>Comunidad {BRAND.name}</span>
-          <h1>Clubes {BRAND.name}</h1>
-        </section>
+        <PageHeader title={`Clubes ${BRAND.name}`} eyebrow={`Comunidad ${BRAND.name}`} legacyClassName="publicClubsHero" />
 
         <section className="publicClubsGrid">
           {clubs.length ? clubs.map((club) => {

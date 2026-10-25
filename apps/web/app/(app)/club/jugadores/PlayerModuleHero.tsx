@@ -5,7 +5,7 @@ type PlayerModuleKpi = {
 
 export default function PlayerModuleHero({ kpis }: { kpis: [PlayerModuleKpi, PlayerModuleKpi, PlayerModuleKpi] }) {
   return (
-    <header className="clubPlayerModuleHero">
+    <header className="clubPlayerModuleHero" data-selpa-page-header>
       <div className="clubPlayerModuleHero__title">
         <span>Comunidad del club</span>
         <h1>Jugadores</h1>
@@ -95,6 +95,12 @@ export default function PlayerModuleHero({ kpis }: { kpis: [PlayerModuleKpi, Pla
           .clubPlayerModuleHero__kpis div { min-height: 58px; }
           .clubPlayerModuleHero__kpis strong { font-size: 18px; }
           .clubPlayerModuleHero__kpis span { font-size: 11px; }
+        }
+        @media (max-width:600px) {
+          .clubPlayerModuleHero { position:relative;background:var(--selpa-page-header-bg);color:#fff;border-color:#ffffff18;border-radius:0 0 16px 16px;padding:var(--selpa-page-header-padding); }
+          .clubPlayerModuleHero::after { content:"";position:absolute;inset:auto 0 0;height:3px;background:var(--selpa-page-header-rule); }
+          .clubPlayerModuleHero__title span { color:#67e8f9; }
+          .clubPlayerModuleHero__title h1 { color:#fff;font-size:var(--selpa-page-header-title);line-height:1.12; }
         }
       `}</style>
     </header>

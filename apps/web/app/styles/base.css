@@ -7,6 +7,10 @@
   --selpa-mobile-gutter: 8px;
   --selpa-mobile-gutter-compact: 6px;
   --app-mobile-gutter: var(--selpa-mobile-gutter);
+  --selpa-page-header-bg: linear-gradient(120deg,#061b3a,#0b2942);
+  --selpa-page-header-rule: linear-gradient(90deg,#22d3ee,#ec4899);
+  --selpa-page-header-padding: 16px;
+  --selpa-page-header-title: clamp(26px,7.4vw,32px);
   --navy: #2e5493;
   --navy-2: #273965;
   --cyan: #53c7d9;
