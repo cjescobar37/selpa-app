@@ -38,12 +38,16 @@ test('progressive UI preserves SSR and only customizes native promotion on pilot
   assert.match(component, /removeEventListener\('beforeinstallprompt'/)
 })
 
-test('existing native shell entry respects reduced motion and startup uses original artwork', () => {
+test('native startup stays solid navy; reduced-motion entry and original web artwork are preserved', () => {
   const css = source('app/pwa.css'), startup = source('app/pwa/startup/[screen]/route.tsx')
   assert.match(css, /max-width: 980px\) and \(display-mode: standalone\) and \(prefers-reduced-motion: no-preference\)/)
   assert.match(css, /animation: selpa-app-entry 160ms ease-out/)
   assert.doesNotMatch(css, /animation-delay|visibility: hidden|opacity: 0[;}]/)
-  assert.match(startup, /getPwaOpeningArtwork/)
+  assert.match(startup, /backgroundColor:\s*'#061b3a'/)
+  assert.doesNotMatch(startup, /getPwaOpeningArtwork|<img|backgroundImage:/)
+  assert.match(source('app/layout.tsx'), /<PwaOpening artwork=\{getPwaOpeningArtwork\(\)\}/)
+  assert.match(source('components/pwa/PwaOpening.tsx'), /src=\{artwork\.symbol\}/)
+  assert.match(source('components/pwa/PwaOpening.tsx'), /src=\{artwork\.wordmark\}/)
   assert.match(source('lib/pwaOpeningArtwork.server.ts'), /public\/brand\/selpa-wordmark-clean.png/)
 })
 

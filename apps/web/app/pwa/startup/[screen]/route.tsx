@@ -1,6 +1,5 @@
 import { ImageResponse } from 'next/og'
 import { PWA_STARTUP_SCREENS } from '@/lib/pwa'
-import { PWA_OPENING } from '@/lib/pwaOpening'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-static'
