@@ -5,7 +5,7 @@ import type { PairRankingRow } from '@/components/ranking/PairRankingBoard'
 import RankingPlayerAvatar from '@/components/ranking/RankingPlayerAvatar'
 import RankingRetryButton from '@/components/ranking/RankingRetryButton'
 import PublishedRankingClubCard, { RankingClubCards } from './PublishedRankingClubCard'
-import { Crown, Trophy, Users, WifiOff } from 'lucide-react'
+import { Crown, Users, WifiOff } from 'lucide-react'
 import RankingDiscovery from '@/components/ranking/RankingDiscovery'
 import type { RankingContext,RankingPage } from '@/features/player-career/player-career.types'
 import { individualRankingEntries, pairRankingEntries, rankingHref, rankingTiers, type RankingEntry, type RankingReadIssue, type RankingSearch } from '@/features/player-career/public-ranking.presentation'
@@ -24,11 +24,7 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
   const tiers=rankingTiers(entries),search=Boolean(params.q?.trim())
   return <section className={styles.shell} aria-label="Ranking SELPA" data-public-ranking data-gender={gender} data-mobile-club-theme={selectedClub ? getClubTheme(selectedClub.theme_key).key : undefined}>
     {!clubId ? <>
-      <header className={styles.indexHero}>
-        <div><span className={styles.eyebrow}>El juego deja huella</span><h1>Ranking SELPA</h1><p>Los líderes de hoy. Tu próximo objetivo.</p></div>
-        <Trophy className={styles.heroTrophy} size={44} aria-hidden="true"/>
-        <span className={styles.heroFoot}>Cada club. Su competencia. Su historia.</span>
-      </header>
+      <PageHeader title="Ranking SELPA" eyebrow="Competencia pública" legacyClassName="publicRankingIndexHeader" />
       <div className={styles.sectionHeading}><h2>Elegí tu club</h2>{!error?<span>{clubsCount} {clubsCount===1?'club':'clubes'}</span>:null}</div>
       {error?<ReadError issue={error} clubName="los clubes"/>:<>
         <RankingClubCards>{clubs.map(club=><PublishedRankingClubCard key={club.id} name={club.name} logoUrl={club.logo_url} themeKey={club.theme_key}

@@ -67,7 +67,7 @@ test('compact header actions are opt-in and preserve semantic reading order',()=
 test('player profile exposes real own editing entries while public actions remain read-only',()=>{
   const hero=readFileSync('components/player/CareerIdentityHero.tsx','utf8')
   assert.match(hero,/own \? <Link className=\{styles\.coverEdit\}/)
-  assert.match(hero,/focus=cover/);assert.match(hero,/focus=avatar/);assert.match(hero,/focus=details/)
+  assert.match(hero,/profileEditorHref\(editorHref,'cover'\)/);assert.match(hero,/profileEditorHref\(editorHref,'avatar'\)/);assert.match(hero,/completar-perfil\?edit=sports/)
   assert.match(hero,/Editar perfil/);assert.match(hero,/Datos deportivos/)
   assert.match(hero,/Ver carrera/);assert.match(hero,/Ver club/);assert.match(hero,/Compartir perfil/)
   assert.doesNotMatch(hero,/Facebook/)

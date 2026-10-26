@@ -1,8 +1,10 @@
 'use client'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { Pencil, Trophy, Medal, Target } from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
+import { readPlayerProfile } from '@/lib/playerProfileRead'
+import { getClubTheme } from '@/lib/clubThemes'
+import CareerClubCard from './CareerClubCard'
 import CareerIdentityHero from './CareerIdentityHero'
 import CareerPerformance from './CareerPerformance'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
@@ -19,15 +21,14 @@ function useSection<T>(identity:CareerIdentity,section:string,enabled=true,page=
     if (!enabled) return
     const controller=new AbortController()
     const load=async()=>{
-      const token=own?(await supabase.auth.getSession()).data.session?.access_token:null
-      if(own&&!token)throw new Error('SESSION')
       const endpoint=demo?`/api/preview/sports-demo/${identity.userId}`:own?`/api/player/career/${identity.userId}`:`/api/players/${identity.userId}/career`
-      return fetch(`${endpoint}?${new URLSearchParams({clubId:context.clubId,section,page:String(page)})}`,
-        {cache:'no-store',signal:controller.signal,headers:token?{Authorization:`Bearer ${token}`}:undefined})
+      const url=`${endpoint}?${new URLSearchParams({clubId:context.clubId,section,page:String(page)})}`
+      if(own && !demo) return readPlayerProfile<T>(url,identity.userId,controller.signal)
+      const response=await fetch(url,{cache:'no-store',signal:controller.signal})
+      if(!response.ok)throw new Error('READ')
+      return response.json() as Promise<T>
     }
-    void load().then(async response=>{
-      if (!response.ok) throw new Error('READ')
-      const data=await response.json() as T
+    void load().then(data=>{
       if (!controller.signal.aborted) setResult({key,data})
     }).catch(()=>{if (!controller.signal.aborted) setResult({key,error:true})})
     return ()=>controller.abort()
@@ -43,8 +44,8 @@ export default function CareerExperience(props:{identity:CareerIdentity;own?:boo
 }
 function GlobalCareerExperience({identity,own=false}:{identity:CareerIdentity;own?:boolean}) {
   const [message,setMessage]=useState('')
-  return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} aria-label="Carrera deportiva"><CareerIdentityHero identity={identity} own={own} editorHref="/mis-datos" onShare={()=>void shareIdentity(identity,setMessage)}/>
-    <p role="status" className={styles.shareMessage}>{message}</p><CareerPerformance available={false}/><section className={styles.panel}><h2>Tu próximo capítulo</h2><p>Tu identidad ya está lista. Cuando participes en un club con resultados publicados, vas a encontrar acá tu rendimiento y trayectoria.</p><Link className={styles.link} href="/clubes">Explorar clubes</Link></section></section>
+  return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} aria-label="Carrera deportiva"><CareerIdentityHero identity={identity} own={own} editorHref="/completar-perfil?edit=sports" onShare={()=>void shareIdentity(identity,setMessage)}/>
+    <p role="status" className={styles.shareMessage}>{message}</p><CareerPerformance available={false}/><section className={styles.panel} id="perfil-carrera"><h2>Tu próximo capítulo</h2><p>Tu identidad ya está lista. Cuando participes en un club con resultados publicados, vas a encontrar acá tu rendimiento y trayectoria.</p><Link className={styles.link} href="/clubes">Explorar clubes</Link></section></section>
 }
 async function shareIdentity(identity:CareerIdentity,setMessage:(message:string)=>void) {
   const url=`${window.location.origin}${identity.publicPath}`
@@ -73,19 +74,16 @@ function ClubCareerExperience({identity,own=false,editorHref,demo=false}:{identi
     } catch(error) {if (!(error instanceof DOMException && error.name==='AbortError')) setShareMessage('No pudimos compartir. Copiá el enlace público que aparece abajo.')}
   }
   const unavailable=summary.error || sports?.statsAvailable===false
-  return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} aria-label="Carrera deportiva">
+  const clubTheme=getClubTheme(context.clubThemeKey)
+  return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} style={{'--club-accent':clubTheme.vars.accent} as CSSProperties} data-mobile-club-theme={clubTheme.key} aria-label="Carrera deportiva">
     <CareerIdentityHero identity={identity} own={own} demo={demo} category={standing?.category_name} gender={standing?.gender} editorHref={editorHref} onShare={()=>void share()}/>
-    {identity.contexts.length>1 ? <label className={styles.context}>Club deportivo<select value={context.clubPlayerId} onChange={event=>{
-      const c=identity.contexts.find(c=>c.clubPlayerId===event.target.value)!
-      window.location.assign(own?`/player/carrera/${c.clubPlayerId}`:`/jugadores/${identity.userId}?clubId=${c.clubId}`)
-    }}>{identity.contexts.map(c=><option key={c.clubPlayerId} value={c.clubPlayerId}>{c.clubName}</option>)}</select></label>:null}
+    <CareerClubCard identity={identity} own={own} demo={demo} category={standing?.category_name} gender={standing?.gender}/>
     <p className={styles.scope}>{sports?.scope.seasonName ?? (own?'Temporada activa':'Trayectoria publicada')} · Individual{standing ? ` · ${standing.category_name}`:''}</p>
     {!summary.data && !summary.error ? <div className={styles.metrics} aria-label="Cargando carrera" aria-busy="true">{['Posición','Puntos','Partidos'].map(label=><div key={label}><span>{label}</span><i className={styles.skeleton}/></div>)}</div>:
       unavailable ? <div className={styles.readingState} role="status"><div><strong>Resultados por confirmar</strong><p>Tu identidad está disponible. La lectura deportiva todavía no está habilitada.</p></div><button className={styles.action} type="button" onClick={summary.retry}>Reintentar</button></div>:
       <div className={styles.metrics}><div><span>Posición en categoría</span><strong data-value={standing?'number':'status'}>{standing ? `#${standing.position}`:own?'Sin ranking':'No publicado'}</strong></div><div><span>{own?'Puntos de temporada':'Puntos publicados'}</span><strong>{standing ? standing.ranking_points.toLocaleString('es-AR'):'—'}</strong></div><div><span>Torneos de carrera</span><strong>{stats?.tournaments_played ?? '—'}</strong></div></div>}
     <CareerPerformance stats={stats} available={!unavailable} loading={!summary.data && !summary.error}/>
     {standing ? <Link className={styles.link} href={`${demo?'/preview/demo':'/ranking'}?${new URLSearchParams({clubId:context.clubId,season:standing.season_id,division:standing.division_id,gender:standing.gender,category:String(standing.category ?? ''),modality:'INDIVIDUAL'})}`}>Ver este ranking</Link>:null}
-    {own ? <div className={styles.privateActions}><Link href={editorHref ?? '/perfil'}><Pencil size={16}/>Administrar perfil y pareja</Link><Link href="/preferencias">Preferencias y privacidad</Link></div>:null}
     <p className={styles.shareMessage} role="status">{shareMessage}</p>
     {shareMessage.startsWith('No pudimos') ? <Link className={styles.link} href={identity.publicPath}>{identity.publicPath}</Link>:null}
     <div className={styles.tabs} id="perfil-carrera" role="tablist" aria-label="Carrera deportiva">
@@ -116,6 +114,7 @@ function ClubCareerExperience({identity,own=false,editorHref,demo=false}:{identi
         <p className={styles.muted}>La fecha mostrada es la fecha deportiva disponible (programación del partido o inicio del torneo), no la fecha de creación del registro. No existe un histórico certificado de la mejor posición; no lo inventamos.</p>
       </>}
     </section>
+    {own ? <div className={styles.privateActions} aria-label="Administrar mi perfil"><Link href={editorHref ?? '/mis-datos'}><Pencil size={16}/><span>Perfil y pareja</span></Link><Link href="/preferencias">Preferencias y privacidad</Link></div>:null}
   </section>
 }
 function RowsSkeleton() {return <div aria-busy="true" aria-label="Cargando resultados" className={styles.rowsSkeleton}>{[1,2,3].map(n=><i key={n} className={styles.skeleton}/>)}</div>}

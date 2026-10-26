@@ -47,14 +47,14 @@ export async function readCareerIdentity(id: string, clubId?: string | null, acc
   assertRead(profile.error)
   const approved = new Set(memberships.map(m=>m.club_id))
   const eligible=players.filter(p=>approved.has(p.club_id)&&(access.kind!=='admin'||p.club_id===access.clubId))
-  const clubs=eligible.length ? await catalog<{id:string;name:string}>((from,to)=>db.from('clubs').select('id,name')
+  const clubs=eligible.length ? await catalog<{id:string;name:string;logo_url:string|null;theme_key:string|null}>((from,to)=>db.from('clubs').select('id,name,logo_url,theme_key')
     .in('id',eligible.map(p=>p.club_id)).eq('is_active',true).order('id').range(from,to)) : []
   const published=access.kind==='public'&&clubs.length ? await catalog<{club_id:string}>((from,to)=>db.from('public_competition_contexts_read')
     .select('club_id').in('club_id',clubs.map(c=>c.id)).order('club_id').range(from,to)):null
   const visible=new Set(published?.map(c=>c.club_id))
   const names=new Map(clubs.filter(c=>published===null||visible.has(c.id)).map(c=>[c.id,c.name]))
   // Current private category/branch must not leak through the identity DTO.
-  const contexts=eligible.filter(p=>names.has(p.club_id)).map(p=>({clubPlayerId:p.id,clubId:p.club_id,clubName:names.get(p.club_id)!,category:access.kind==='public'?null:p.category,gender:access.kind==='public'?null:p.gender}))
+  const contexts=eligible.filter(p=>names.has(p.club_id)).map(p=>({clubPlayerId:p.id,clubId:p.club_id,clubName:names.get(p.club_id)!,clubLogoUrl:clubs.find(c=>c.id===p.club_id)?.logo_url ?? null,clubThemeKey:clubs.find(c=>c.id===p.club_id)?.theme_key ?? null,category:access.kind==='public'?null:p.category,gender:access.kind==='public'?null:p.gender}))
   const selected=contexts.find(c=>clubId ? c.clubId===clubId : c.clubPlayerId===exact.data?.id) ?? (!clubId ? contexts[0] : undefined)
   const p=profile.data
   if (!selected) {

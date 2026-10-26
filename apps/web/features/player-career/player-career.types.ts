@@ -2,7 +2,7 @@
 export type CareerIdentity = {
   userId: string; name: string; avatarUrl: string | null; coverUrl: string | null;
   selectedClubPlayerId: string; publicPath: string;
-  contexts: Array<{ clubPlayerId: string; clubId: string; clubName: string; category: number | null; gender: string | null }>;
+  contexts: Array<{ clubPlayerId: string; clubId: string; clubName: string; clubLogoUrl?: string | null; clubThemeKey?: string | null; category: number | null; gender: string | null }>;
 }
 export type SportsStanding = {
   club_player_id: string; club_id: string; user_id: string; player_entry_id: string;

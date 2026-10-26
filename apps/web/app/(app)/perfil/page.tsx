@@ -8,7 +8,7 @@ import { Activity, Clock3, MapPin, Pencil, ShieldCheck } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
-import { supabase } from '@/lib/supabaseClient'
+import { readPlayerProfile } from '@/lib/playerProfileRead'
 import PageBackAction from '@/components/navigation/PageBackAction'
 
 type Membership = {
@@ -31,28 +31,24 @@ export default function PerfilPage() {
   const [loadingMemberships, setLoadingMemberships] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [retry, setRetry] = useState(0)
+  const userId = session.user?.id
 
   useEffect(() => {
-    if (session.status !== 'ready' || !session.user) return
-    let alive = true
+    if (session.status !== 'ready' || !userId) return
+    const controller = new AbortController()
     async function loadMemberships() {
       setLoadingMemberships(true)
       setLoadError(false)
       try {
-        const { data } = await supabase.auth.getSession()
-        const token = data.session?.access_token
-        if (!token) throw new Error('SESSION')
-        const response = await fetch('/api/clubs/my-memberships', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
-        if (!response.ok) throw new Error('READ')
-        const result = await response.json().catch(() => null) as { memberships?: Membership[] } | null
-        if (!result) throw new Error('READ')
-        if (alive) setMemberships(result.memberships ?? [])
-      } catch { if (alive) setLoadError(true) }
-      finally { if (alive) setLoadingMemberships(false) }
+        const result = await readPlayerProfile<{ memberships: Membership[] }>('/api/clubs/my-memberships', userId!, controller.signal)
+        if (!Array.isArray(result.memberships)) throw new Error('READ')
+        if (!controller.signal.aborted) setMemberships(result.memberships)
+      } catch { if (!controller.signal.aborted) setLoadError(true) }
+      finally { if (!controller.signal.aborted) setLoadingMemberships(false) }
     }
     const timer = window.setTimeout(() => { void loadMemberships() }, 0)
-    return () => { alive = false; window.clearTimeout(timer) }
-  }, [session.status, session.user, retry])
+    return () => { controller.abort(); window.clearTimeout(timer) }
+  }, [session.status, userId, retry])
 
   const approved = memberships.filter((item) => item.status === 'APPROVED' && item.approved_at && item.club)
   const preferredPlayer = approved.find((item) => item.club_id === session.activeClubId && item.player_id) ?? approved.find((item) => item.player_id)

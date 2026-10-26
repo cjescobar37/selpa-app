@@ -424,6 +424,13 @@ export default function ClubJugadorDetailPage() {
   const rankingPositionLabel = player?.ranking_position ? '#'+player.ranking_position : data?.statsAvailable===false ? 'Sin lectura' : 'Sin ranking'
   const rankingPointsLabel = formatRankingPoints(player?.ranking_points ?? null)
   const isOwnProfile = Boolean(player?.user_id && user?.id && player.user_id === user.id)
+  const photoFocus = searchParams.get('focus')
+  useEffect(() => {
+    if (loading || !isOwnProfile || (photoFocus !== 'cover' && photoFocus !== 'avatar')) return
+    const control = document.querySelector<HTMLElement>(`label[for="player-profile-${photoFocus}-file"]`)
+    control?.scrollIntoView({ block: 'center' })
+    control?.focus({ preventScroll: true })
+  }, [loading, isOwnProfile, photoFocus])
   const activePartnership = player
     ? activePartnerships.find((partnership) =>
         partnership.status === 'ACTIVE' &&

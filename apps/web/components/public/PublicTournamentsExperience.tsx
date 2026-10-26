@@ -1,7 +1,8 @@
 'use client'
 
 import { Fragment, useMemo, useState } from 'react'
-import { Search, Trophy } from 'lucide-react'
+import { Trophy } from 'lucide-react'
+import TournamentSearch from './TournamentSearch'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
 import CommunityTournamentCalendar from '@/components/public/CommunityTournamentCalendar'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
@@ -29,14 +30,6 @@ export type PublicTournamentItem = {
   rules?: Record<string, unknown> | null
   flyerUrl?: string | null
 }
-
-const categories = ['all', '1', '2', '3', '4', '5', '6', '7']
-const genders = [
-  { value: 'all', label: 'Todos' },
-  { value: 'M', label: 'Caballeros' },
-  { value: 'F', label: 'Damas' },
-  { value: 'MIXED', label: 'Mixto' },
-]
 
 function normalizeGender(value?: string | null) {
   const normalized = String(value ?? '').toUpperCase()
@@ -99,12 +92,7 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
     <main className="publicTournamentShell">
       <PageHeader title={`Torneos ${BRAND.name}`} eyebrow="Calendario público" legacyClassName="publicTournamentHero" />
 
-      <section className="publicTournamentFilters">
-        <label><span>Categoría</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : `${item}ta`}</option>)}</select></label>
-        <label><span>Género</span><select value={gender} onChange={(event) => setGender(event.target.value)}>{genders.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-        <label><span>Club</span><select value={club} onChange={(event) => setClub(event.target.value)}><option value="all">Todos</option>{clubs.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-        <label className="publicTournamentSearch"><span>Buscar</span><div><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Torneo o club" /></div></label>
-      </section>
+      <TournamentSearch query={query} onQuery={setQuery} category={category} onCategory={setCategory} gender={gender} onGender={setGender} club={club} onClub={setClub} clubs={clubs} count={visible.length} />
 
       <section className="publicTournamentSections">
         {sections.map((section, index) => (
