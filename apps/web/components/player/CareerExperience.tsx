@@ -43,7 +43,7 @@ export default function CareerExperience(props:{identity:CareerIdentity;own?:boo
 }
 function GlobalCareerExperience({identity,own=false}:{identity:CareerIdentity;own?:boolean}) {
   const [message,setMessage]=useState('')
-  return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} aria-label="Carrera deportiva"><CareerIdentityHero identity={identity} own={own} onShare={()=>void shareIdentity(identity,setMessage)}/>
+  return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} aria-label="Carrera deportiva"><CareerIdentityHero identity={identity} own={own} editorHref="/mis-datos" onShare={()=>void shareIdentity(identity,setMessage)}/>
     <p role="status" className={styles.shareMessage}>{message}</p><CareerPerformance available={false}/><section className={styles.panel}><h2>Tu próximo capítulo</h2><p>Tu identidad ya está lista. Cuando participes en un club con resultados publicados, vas a encontrar acá tu rendimiento y trayectoria.</p><Link className={styles.link} href="/clubes">Explorar clubes</Link></section></section>
 }
 async function shareIdentity(identity:CareerIdentity,setMessage:(message:string)=>void) {
@@ -74,7 +74,7 @@ function ClubCareerExperience({identity,own=false,editorHref,demo=false}:{identi
   }
   const unavailable=summary.error || sports?.statsAvailable===false
   return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} aria-label="Carrera deportiva">
-    <CareerIdentityHero identity={identity} own={own} demo={demo} category={standing?.category_name} gender={standing?.gender} onShare={()=>void share()}/>
+    <CareerIdentityHero identity={identity} own={own} demo={demo} category={standing?.category_name} gender={standing?.gender} editorHref={editorHref} onShare={()=>void share()}/>
     {identity.contexts.length>1 ? <label className={styles.context}>Club deportivo<select value={context.clubPlayerId} onChange={event=>{
       const c=identity.contexts.find(c=>c.clubPlayerId===event.target.value)!
       window.location.assign(own?`/player/carrera/${c.clubPlayerId}`:`/jugadores/${identity.userId}?clubId=${c.clubId}`)
@@ -85,10 +85,10 @@ function ClubCareerExperience({identity,own=false,editorHref,demo=false}:{identi
       <div className={styles.metrics}><div><span>Posición en categoría</span><strong data-value={standing?'number':'status'}>{standing ? `#${standing.position}`:own?'Sin ranking':'No publicado'}</strong></div><div><span>{own?'Puntos de temporada':'Puntos publicados'}</span><strong>{standing ? standing.ranking_points.toLocaleString('es-AR'):'—'}</strong></div><div><span>Torneos de carrera</span><strong>{stats?.tournaments_played ?? '—'}</strong></div></div>}
     <CareerPerformance stats={stats} available={!unavailable} loading={!summary.data && !summary.error}/>
     {standing ? <Link className={styles.link} href={`${demo?'/preview/demo':'/ranking'}?${new URLSearchParams({clubId:context.clubId,season:standing.season_id,division:standing.division_id,gender:standing.gender,category:String(standing.category ?? ''),modality:'INDIVIDUAL'})}`}>Ver este ranking</Link>:null}
-    {own ? <div className={styles.privateActions}><Link href={editorHref ?? '/perfil'}><Pencil size={16}/>Editar fotos, datos y pareja</Link><Link href="/preferencias">Preferencias</Link></div>:null}
+    {own ? <div className={styles.privateActions}><Link href={editorHref ?? '/perfil'}><Pencil size={16}/>Administrar perfil y pareja</Link><Link href="/preferencias">Preferencias y privacidad</Link></div>:null}
     <p className={styles.shareMessage} role="status">{shareMessage}</p>
     {shareMessage.startsWith('No pudimos') ? <Link className={styles.link} href={identity.publicPath}>{identity.publicPath}</Link>:null}
-    <div className={styles.tabs} role="tablist" aria-label="Carrera deportiva">
+    <div className={styles.tabs} id="perfil-carrera" role="tablist" aria-label="Carrera deportiva">
       {([['summary','Resumen'],['history','Torneos'],['stats','Estadísticas']] as const).map(([id,label])=><button id={`tab-${id}`} aria-controls={`panel-${id}`} key={id} type="button" role="tab" tabIndex={tab===id?0:-1} aria-selected={tab===id} onClick={()=>setTab(id)} onKeyDown={event=>{
         const tabs=['summary','history','stats'] as const
         const index=tabs.indexOf(id)

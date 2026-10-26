@@ -7,7 +7,7 @@ import { rankingBranchHref } from '../features/player-career/public-ranking.pres
 test('four destinations per full role are existing canonical routes, never placeholders', () => {
   const expected = {
     guest: ['/', '/torneos', '/ranking', '/clubes'],
-    player: ['/player', '/player/torneos', '/player/ranking', '/player/mensajes'],
+    player: ['/player', '/player/torneos', '/player/ranking', '/perfil'],
     club: ['/club', '/club/competition', '/club/jugadores', '/club/admin'],
     platform: ['/platform/solicitudes', '/platform/facturacion', '/platform/noticias', '/platform/analytics'],
   }
@@ -31,8 +31,8 @@ test('club navigation filters every destination by existing capabilities and app
 test('active destination includes child routes, sporting details and canonical public aliases', () => {
   for (const [role,path,href] of [
     ['guest','/torneos/abc','/torneos'],['guest','/jugadores/abc','/ranking'],['guest','/clubs/abc','/clubes'],
-    ['player','/player/torneos/calendario','/player/torneos'],['player','/ranking?clubId=abc','/player/ranking'],['player','/player/mensajes/abc','/player/mensajes'],
-    ['player','/ajustes','/player'],['club','/club/torneos/abc','/club/competition'],['club','/club/jugadores/abc','/club/jugadores'],['club','/club/finanzas','/club/admin'],
+    ['player','/player/torneos/calendario','/player/torneos'],['player','/ranking?clubId=abc','/player/ranking'],['player','/player/carrera/abc','/perfil'],
+    ['player','/ajustes','/perfil'],['club','/club/torneos/abc','/club/competition'],['club','/club/jugadores/abc','/club/jugadores'],['club','/club/finanzas','/club/admin'],
     ['platform','/platform/usuarios','/platform/solicitudes'],['platform','/platform/publicidad','/platform/noticias'],['platform','/platform','/platform/solicitudes'],
   ] as const) assert.equal(mobileActiveHref(getMobileNavigation(role,'OWNER'),path),href,path)
   assert.equal(mobileActiveHref(getMobileNavigation('guest'),'/noticias'),undefined)

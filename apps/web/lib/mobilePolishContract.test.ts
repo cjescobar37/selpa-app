@@ -63,3 +63,21 @@ test('compact header actions are opt-in and preserve semantic reading order',()=
   assert.doesNotMatch(established,/hasActions/);assert.match(compact,/hasActions/)
   assert.ok(compact.indexOf('Descripción completa')<compact.indexOf('Nuevo mensaje'))
 })
+
+test('player profile exposes real own editing entries while public actions remain read-only',()=>{
+  const hero=readFileSync('components/player/CareerIdentityHero.tsx','utf8')
+  assert.match(hero,/own \? <Link className=\{styles\.coverEdit\}/)
+  assert.match(hero,/focus=cover/);assert.match(hero,/focus=avatar/);assert.match(hero,/focus=details/)
+  assert.match(hero,/Editar perfil/);assert.match(hero,/Datos deportivos/)
+  assert.match(hero,/Ver carrera/);assert.match(hero,/Ver club/);assert.match(hero,/Compartir perfil/)
+  assert.doesNotMatch(hero,/Facebook/)
+})
+
+test('PLAYER bottom navigation replaces messages with a personal avatar profile entry',()=>{
+  const nav=readFileSync('components/navigation/MobileBottomNav.tsx','utf8')
+  const model=readFileSync('lib/mobileNavigation.ts','utf8')
+  assert.match(nav,/profileAvatarUrl/);assert.match(nav,/styles\.profileIcon/)
+  assert.match(model,/label: 'Perfil', href: '\/perfil', icon: 'profile'/)
+  const playerBlock=model.slice(model.indexOf("if (role === 'player')"),model.indexOf("const icons:"))
+  assert.doesNotMatch(playerBlock,/label: 'Mensajes'/)
+})

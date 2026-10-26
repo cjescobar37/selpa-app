@@ -1,35 +1,37 @@
-.hero{box-sizing:border-box;border:1px solid #d8e3eb;border-radius:18px;background:#fff;min-width:0;overflow:clip;color:#061b3a;box-shadow:0 8px 24px #102f4a0b}
-.cover{position:relative;height:226px;background:radial-gradient(ellipse at 14% 0,#06b6d42b,transparent 64%),#061b3a}
+.hero{box-sizing:border-box;border:1px solid #d8e3eb;border-radius:20px;background:#fff;min-width:0;overflow:clip;color:#061b3a;box-shadow:0 10px 30px #102f4a12}
+.cover{position:relative;height:260px;background:radial-gradient(ellipse at 14% 0,#06b6d43b,transparent 64%),linear-gradient(135deg,#061b3a,#0b3552)}
 .cover img{object-fit:cover;object-position:center 45%}
 .cover::after{content:"";position:absolute;inset:0;background:linear-gradient(#061b3a30,transparent 70%);pointer-events:none}
 .coverSignature{position:absolute;right:24px;bottom:26px;display:grid;gap:8px;text-align:right;color:#ffffff66}
 .coverSignature span{font-family:var(--font-brand),sans-serif;font-size:32px;letter-spacing:.22em}
 .coverSignature small{font-size:9px;letter-spacing:.17em}
 .heroBack{position:absolute;top:10px;left:10px;z-index:1}
-.heroShare{position:absolute;right:10px;top:10px;z-index:1;display:flex;align-items:center;gap:7px;min-height:44px;border:1px solid #ffffff55;background:#061b3ade;color:#fff;border-radius:10px;padding:8px 12px;font:inherit;font-size:13px;cursor:pointer}
-.heroShare:focus-visible{outline:2px solid #22d3ee;outline-offset:3px}
-.heroIntro{position:relative;display:flex;align-items:start;gap:24px;padding:0 26px 24px}
-.heroAvatar{position:relative;width:156px;height:156px;flex:0 0 156px;margin-top:-54px;border:4px solid #fff;border-radius:50%;background:#123d56;display:grid;place-items:center;color:#fff;overflow:clip;font-size:48px;font-weight:600;box-shadow:0 0 0 1px #123d561a,0 8px 20px #061b3a20;z-index:1}
-.heroName{min-width:0;padding-top:12px}
+.coverEdit{position:absolute;right:12px;bottom:12px;z-index:2;display:flex;align-items:center;gap:7px;min-height:44px;border:1px solid #ffffff5c;background:#061b3ae8;color:#fff;border-radius:11px;padding:8px 12px;font-size:13px;font-weight:650;text-decoration:none;backdrop-filter:blur(8px)}
+.coverEdit:focus-visible,.avatarEdit:focus-visible,.profileActions a:focus-visible,.profileActions button:focus-visible{outline:2px solid #22d3ee;outline-offset:3px}
+.heroIntro{position:relative;display:grid;grid-template-columns:180px minmax(0,1fr);align-items:start;gap:24px;padding:0 28px 26px}
+.avatarStage{position:relative;width:168px;height:120px}
+.heroAvatar{position:relative;width:168px;height:168px;display:grid;place-items:center;margin-top:-62px;border:5px solid #fff;border-radius:50%;background:#123d56;color:#fff;overflow:clip;font-size:50px;font-weight:700;box-shadow:0 0 0 2px color-mix(in srgb,var(--club-accent,#06b6d4) 60%,#fff),0 12px 28px #061b3a26;z-index:1}
+.avatarEdit{position:absolute;right:3px;bottom:6px;z-index:2;width:44px;height:44px;display:grid;place-items:center;border:3px solid #fff;border-radius:50%;background:#061b3a;color:#fff;box-shadow:0 5px 16px #061b3a38}
+.heroName{min-width:0;padding-top:15px}
 .heroName>span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#597181}
 .heroName h1{font-size:36px;font-weight:650;letter-spacing:-.035em;line-height:1.12;margin:4px 0 8px;overflow-wrap:anywhere;text-wrap:balance}
-.heroName a{color:#087c96;font-size:14px;font-weight:600;text-decoration:none}
-.heroName a:hover{text-decoration:underline}
-.heroName a:focus-visible{outline:2px solid #087c96;outline-offset:3px}
+.identityMeta{display:flex;align-items:center;flex-wrap:wrap;gap:5px 12px}.identityMeta a{display:inline-flex;align-items:center;color:#087c96;font-size:14px;font-weight:650;text-decoration:none}.identityMeta a:hover{text-decoration:underline}
 .heroName p{color:#526b7d;font-size:14px;margin:6px 0 0;line-height:1.45}
-.hero[data-profile-owner] .cover{height:170px}
-.hero[data-profile-owner] .heroAvatar{width:112px;height:112px;flex-basis:112px;margin-top:-36px;font-size:32px}
-.hero[data-profile-owner] .heroName h1{font-size:30px}
+.profileActions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:16px}.profileActions a,.profileActions button{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 13px;border:1px solid #d5e0e8;border-radius:10px;background:#f3f7fa;color:#17334b;font:inherit;font-size:13px;font-weight:650;text-decoration:none;cursor:pointer}.profileActions .primaryAction{background:#061b3a;border-color:#061b3a;color:#fff}.profileActions button span{display:inline}
 @media(max-width:600px){
-  .cover,.hero[data-profile-owner] .cover{height:clamp(176px,50vw,210px)}
-  .heroIntro{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:0 16px 20px}
-  .heroAvatar,.hero[data-profile-owner] .heroAvatar{width:140px;height:140px;flex-basis:140px;margin-top:-72px;font-size:44px;border-width:5px}
-  .heroName{padding:0}
-  .heroName h1,.hero[data-profile-owner] .heroName h1{font-size:clamp(28px,7.2vw,32px);font-weight:750;letter-spacing:-.04em;margin:5px 0 8px}
+  .cover{height:clamp(190px,54vw,232px)}
+  .heroIntro{display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;gap:13px;padding:0 14px 20px;text-align:center}
+  .avatarStage{width:152px;height:86px}
+  .heroAvatar{width:152px;height:152px;margin-top:-72px;font-size:46px;border-width:5px}
+  .avatarEdit{right:-2px;bottom:0}
+  .heroName{padding:0;width:100%}
+  .heroName h1{font-size:clamp(28px,7.7vw,34px);font-weight:780;letter-spacing:-.04em;margin:5px 0 8px}
   .heroName>span{font-size:10px}
-  .heroName a{font-size:15px}
   .heroName p{font-size:13px}
+  .identityMeta{justify-content:center;gap:2px 10px}.identityMeta a{font-size:14px}
+  .profileActions{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr) 44px;gap:7px;margin-top:15px;width:100%}.profileActions a,.profileActions button{padding-inline:9px}.profileActions button:last-child{padding:0}.profileActions button:last-child span{display:none}
   .coverSignature{right:18px;bottom:24px}
   .coverSignature span{font-size:27px}
 }
 @media(max-width:430px){.hero{margin-inline:calc(-1 * var(--selpa-mobile-gutter,8px));width:calc(100% + 2 * var(--selpa-mobile-gutter,8px));border:0;border-radius:0;box-shadow:none}}
+@media(max-width:340px){.profileActions{grid-template-columns:minmax(0,1fr) 44px}.profileActions>a:nth-child(2){grid-column:1/-1;grid-row:2}.profileActions button:last-child{grid-column:2;grid-row:1}.coverEdit{padding-inline:10px}.heroName h1{font-size:27px}}

@@ -50,7 +50,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
 
             <HomeInstallHost />
             <Footer compact={isAuthRoute} />
-            {mobileVisible && session.status === 'ready' ? <MobileBottomNav items={mobileItems} pathname={pathname} /> : null}
+            {mobileVisible && session.status === 'ready' ? <MobileBottomNav items={mobileItems} pathname={pathname} profileAvatarUrl={session.role === 'player' ? session.user?.avatarUrl : null} /> : null}
           </div>
           <ToastViewport />
     </>

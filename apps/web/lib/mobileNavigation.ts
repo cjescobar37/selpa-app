@@ -1,8 +1,8 @@
 import type { AppRole } from '@/components/session/SessionProvider'
 import { hasAnyClubPermission } from './clubPermissions'
-import { MESSAGE_HREF_BY_ROLE, NAV_CONFIG, type NavItem } from './navConfig'
+import { NAV_CONFIG, type NavItem } from './navConfig'
 
-export type MobileNavIcon = 'home' | 'trophy' | 'ranking' | 'clubs' | 'messages' | 'players' | 'settings' | 'management' | 'billing' | 'content' | 'analytics'
+export type MobileNavIcon = 'home' | 'trophy' | 'ranking' | 'clubs' | 'messages' | 'profile' | 'players' | 'settings' | 'management' | 'billing' | 'content' | 'analytics'
 export type MobileNavItem = { label: string; href: string; icon: MobileNavIcon; activePrefixes: readonly string[] }
 
 /** Select canonical routes rather than maintaining another permission model. */
@@ -14,10 +14,10 @@ export function getMobileNavigation(role: AppRole, clubRole?: string | null, app
     const tournaments = config.main.find(item => item.href === '/player/torneos')!
     const ranking = config.main.flatMap(item => item.children ?? []).find(item => item.href === '/player/ranking')!
     return [
-      { ...home, icon: 'home', activePrefixes: ['/perfil', '/mis-datos', '/ajustes', '/actividad', '/seleccionar-club', '/unir-mi-club', '/player/pagos'] },
+      { ...home, icon: 'home', activePrefixes: ['/actividad', '/seleccionar-club', '/unir-mi-club', '/player/pagos'] },
       { ...tournaments, icon: 'trophy', activePrefixes: ['/player/torneos', '/torneos'] },
-      { ...ranking, icon: 'ranking', activePrefixes: ['/player/ranking', '/player/carrera', '/ranking', '/jugadores', '/preview/demo'] },
-      { label: 'Mensajes', href: MESSAGE_HREF_BY_ROLE.player, icon: 'messages', activePrefixes: ['/player/mensajes', '/mensajes'] },
+      { ...ranking, icon: 'ranking', activePrefixes: ['/player/ranking', '/ranking', '/jugadores', '/preview/demo'] },
+      { label: 'Perfil', href: '/perfil', icon: 'profile', activePrefixes: ['/perfil', '/mis-datos', '/ajustes', '/player/carrera'] },
     ]
   }
   const icons: Record<Exclude<AppRole, 'player'>, MobileNavIcon[]> = {
