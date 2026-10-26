@@ -1,0 +1,35 @@
+.hero{box-sizing:border-box;border:1px solid #d8e3eb;border-radius:18px;background:#fff;min-width:0;overflow:clip;color:#061b3a;box-shadow:0 8px 24px #102f4a0b}
+.cover{position:relative;height:226px;background:radial-gradient(ellipse at 14% 0,#06b6d42b,transparent 64%),#061b3a}
+.cover img{object-fit:cover;object-position:center 45%}
+.cover::after{content:"";position:absolute;inset:0;background:linear-gradient(#061b3a30,transparent 70%);pointer-events:none}
+.coverSignature{position:absolute;right:24px;bottom:26px;display:grid;gap:8px;text-align:right;color:#ffffff66}
+.coverSignature span{font-family:var(--font-brand),sans-serif;font-size:32px;letter-spacing:.22em}
+.coverSignature small{font-size:9px;letter-spacing:.17em}
+.heroBack{position:absolute;top:10px;left:10px;z-index:1}
+.heroShare{position:absolute;right:10px;top:10px;z-index:1;display:flex;align-items:center;gap:7px;min-height:44px;border:1px solid #ffffff55;background:#061b3ade;color:#fff;border-radius:10px;padding:8px 12px;font:inherit;font-size:13px;cursor:pointer}
+.heroShare:focus-visible{outline:2px solid #22d3ee;outline-offset:3px}
+.heroIntro{position:relative;display:flex;align-items:start;gap:24px;padding:0 26px 24px}
+.heroAvatar{position:relative;width:156px;height:156px;flex:0 0 156px;margin-top:-54px;border:4px solid #fff;border-radius:50%;background:#123d56;display:grid;place-items:center;color:#fff;overflow:clip;font-size:48px;font-weight:600;box-shadow:0 0 0 1px #123d561a,0 8px 20px #061b3a20;z-index:1}
+.heroName{min-width:0;padding-top:12px}
+.heroName>span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#597181}
+.heroName h1{font-size:36px;font-weight:650;letter-spacing:-.035em;line-height:1.12;margin:4px 0 8px;overflow-wrap:anywhere;text-wrap:balance}
+.heroName a{color:#087c96;font-size:14px;font-weight:600;text-decoration:none}
+.heroName a:hover{text-decoration:underline}
+.heroName a:focus-visible{outline:2px solid #087c96;outline-offset:3px}
+.heroName p{color:#526b7d;font-size:14px;margin:6px 0 0;line-height:1.45}
+.hero[data-profile-owner] .cover{height:170px}
+.hero[data-profile-owner] .heroAvatar{width:112px;height:112px;flex-basis:112px;margin-top:-36px;font-size:32px}
+.hero[data-profile-owner] .heroName h1{font-size:30px}
+@media(max-width:600px){
+  .cover,.hero[data-profile-owner] .cover{height:clamp(176px,50vw,210px)}
+  .heroIntro{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:0 16px 20px}
+  .heroAvatar,.hero[data-profile-owner] .heroAvatar{width:140px;height:140px;flex-basis:140px;margin-top:-72px;font-size:44px;border-width:5px}
+  .heroName{padding:0}
+  .heroName h1,.hero[data-profile-owner] .heroName h1{font-size:clamp(28px,7.2vw,32px);font-weight:750;letter-spacing:-.04em;margin:5px 0 8px}
+  .heroName>span{font-size:10px}
+  .heroName a{font-size:15px}
+  .heroName p{font-size:13px}
+  .coverSignature{right:18px;bottom:24px}
+  .coverSignature span{font-size:27px}
+}
+@media(max-width:430px){.hero{margin-inline:calc(-1 * var(--selpa-mobile-gutter,8px));width:calc(100% + 2 * var(--selpa-mobile-gutter,8px));border:0;border-radius:0;box-shadow:none}}

@@ -30,6 +30,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
   const keyboard = useMobileKeyboard()
   const mobileItems = getMobileNavigation(session.role, session.clubRole, Boolean(session.activeClubId && session.isApprovedMember))
   const mobileVisible = showMobileNavigation(pathname) && !keyboard && mobileItems.length > 0
+  const clubNavigation = Boolean(session.activeClubId) && (session.role === 'club' || (session.role === 'player' && pathname.startsWith('/player')))
   const isAuthRoute = ['/login', '/register', '/reset-password', '/update-password', '/completar-perfil'].includes(pathname)
   const isClubAdminRoute = pathname === '/club' || pathname.startsWith('/club/')
   const pilotClass = isHomeMobilePilotRoute(pathname)
@@ -38,7 +39,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
 
   return (
     <>
-          <div data-mobile-nav={mobileVisible ? 'visible' : 'hidden'} className={`app-shell ${mobile.shell}${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}${isClubAdminRoute ? ' app-shell--club' : ''}${pilotClass}`}>
+          <div data-mobile-nav={mobileVisible ? 'visible' : 'hidden'} data-mobile-context={clubNavigation ? 'club' : 'selpa'} className={`app-shell ${mobile.shell}${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}${isClubAdminRoute ? ' app-shell--club' : ''}${pilotClass}`}>
             <Suspense fallback={null}>
               <AppNavbarClient />
             </Suspense>

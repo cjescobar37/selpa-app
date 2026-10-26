@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useRef, useState } from 'react'
-import { ChevronDown, Search, X } from 'lucide-react'
+import { Check, ChevronDown, Layers3, Search, X } from 'lucide-react'
 import type { RankingContext } from '@/features/player-career/player-career.types'
 import { rankingBranchHref, rankingHref, type RankingSearch } from '@/features/player-career/public-ranking.presentation'
 import styles from './RankingDiscovery.module.css'
@@ -27,12 +27,18 @@ export default function RankingDiscovery({contexts,current,params}:{contexts:Ran
       <button type="submit" aria-label="Buscar"><Search size={18}/></button>
       {params.q?<Link href={rankingHref(params,{q:undefined,page:undefined})} aria-label="Limpiar búsqueda"><X size={18}/></Link>:null}
     </form>:null}
-    <dialog ref={dialog} className={styles.sheet} aria-labelledby="ranking-category-title" onClick={event=>{if(event.target===dialog.current)dialog.current?.close()}}>
+    <dialog ref={dialog} className={styles.sheet} aria-labelledby="ranking-category-title" onClick={event=>{
+      const sheet=dialog.current
+      if(event.target!==sheet || !sheet)return
+      const box=sheet.getBoundingClientRect()
+      if(event.clientX<box.left || event.clientX>box.right || event.clientY<box.top || event.clientY>box.bottom)sheet.close()
+    }}>
+      <div className={styles.sheetHandle} aria-hidden="true"/>
       <header><h2 id="ranking-category-title">Elegí categoría</h2><button type="button" autoFocus aria-label="Cerrar categorías" onClick={()=>dialog.current?.close()}><X size={20}/></button></header>
       <p>{gender==='F'?'Damas':'Caballeros'} · {modality==='PAIRS'?'Parejas':'Individual'}</p>
       <nav aria-label="Categorías">{categories.map(c=><Link key={c.divisionId} aria-current={current?.divisionId===c.divisionId?'page':undefined} onClick={()=>dialog.current?.close()}
-        href={rankingHref(params,{division:c.divisionId,category:c.category===null?undefined:String(c.category),page:undefined})}><strong>{c.categoryName}</strong><span>{c.rankedCount===undefined?'Lectura no disponible':c.rankedCount>0?`${c.rankedCount} ${modality==='PAIRS'?'parejas':'jugadores'} rankeados`:'Sin ranking publicado'}</span></Link>)}</nav>
-      {!categories.length?<p>No hay categorías disponibles en este contexto.</p>:null}
+        href={rankingHref(params,{division:c.divisionId,category:c.category===null?undefined:String(c.category),page:undefined})}><strong>{c.categoryName}</strong><span>{c.rankedCount===undefined?'Lectura no disponible':c.rankedCount>0?`${c.rankedCount} ${modality==='PAIRS'?'parejas':'jugadores'} rankeados`:'Sin ranking publicado'}</span>{current?.divisionId===c.divisionId?<Check size={18} aria-hidden="true"/>:null}</Link>)}</nav>
+      {!categories.length?<div className={styles.sheetEmpty}><Layers3 size={24} aria-hidden="true"/><strong>Sin categorías disponibles</strong><p>No hay una categoría disponible para esta rama. Podés explorar los rankings de otros clubes.</p><Link href="/ranking" onClick={()=>dialog.current?.close()}>Ver clubes</Link></div>:null}
     </dialog>
   </div>
 }

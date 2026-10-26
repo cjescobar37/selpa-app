@@ -512,15 +512,16 @@ export default function PampraxInbox({
 
   return (
     <main className={`px-inboxShell${composerOnly ? ' is-composerOnly' : ''}`} style={themeStyle}>
-      <PageHeader backHref={backHref} title={title} eyebrow="Mensajes" description={subtitle} actions={<button
+      <PageHeader compactActions backHref={backHref} title={title} eyebrow="Mensajes" description={subtitle} actions={<button
           type="button"
           className="px-newMessageBtn"
+          aria-label="Nuevo mensaje"
           onClick={openComposer}
           disabled={!canCreateMessage}
           title={canCreateMessage ? 'Crear mensaje' : 'No tenés permisos para crear mensajes'}
         >
           <Plus size={17} />
-          Nuevo mensaje
+          <span>Nuevo<span className="px-newMessageBtn__detail"> mensaje</span></span>
         </button>} />
 
       {error ? <PlayerStatePanel kind="error" title="No pudimos cargar los mensajes" message={error} onRetry={() => void loadThreads(selectedThreadId)} compact /> : null}
@@ -743,6 +744,10 @@ export default function PampraxInbox({
         .px-newMessageBtn { align-items: center; background: #061b3a; border: 1px solid color-mix(in srgb, var(--px-inbox-accent) 54%, transparent); border-radius: 999px; box-shadow: 0 12px 26px var(--px-inbox-glow); color: #fff; cursor: pointer; display: inline-flex; flex: 0 0 auto; font-size: 12px; font-weight: 950; gap: 8px; min-height: 40px; padding: 0 15px; position: relative; transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease; }
         .px-newMessageBtn:hover:not(:disabled) { box-shadow: 0 20px 42px var(--px-inbox-glow); transform: translateY(-1px); }
         .px-newMessageBtn:disabled { cursor: not-allowed; opacity: .52; }
+        @media(max-width:600px){
+          .px-newMessageBtn { min-height:44px;padding-inline:12px;font-size:13px;font-weight:650;box-shadow:none; }
+          .px-newMessageBtn__detail { display:none; }
+        }
         .px-inboxAlert { background: #fff7df; border: 1px solid rgba(217,119,6,.22); border-radius: 14px; color: #854d0e; font-size: 13px; font-weight: 850; padding: 12px 14px; }
         .px-inboxNotice { background: color-mix(in srgb, var(--px-inbox-accent) 10%, white); border: 1px solid color-mix(in srgb, var(--px-inbox-accent) 28%, transparent); border-radius: 14px; color: #075985; font-size: 13px; font-weight: 900; padding: 12px 14px; }
         .px-inboxGrid { display: grid; gap: 14px; grid-template-columns: minmax(300px, .78fr) minmax(0, 1.55fr); min-width: 0; }

@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import PageHeader from '@/components/navigation/PageHeader'
+import { getClubTheme } from '@/lib/clubThemes'
 import type { PairRankingRow } from '@/components/ranking/PairRankingBoard'
 import RankingPlayerAvatar from '@/components/ranking/RankingPlayerAvatar'
 import RankingRetryButton from '@/components/ranking/RankingRetryButton'
@@ -21,7 +22,7 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
   const gender=context?.gender ?? params.gender ?? 'M',modality=params.modality ?? 'INDIVIDUAL'
   const entries=(modality==='PAIRS'?pairRankingEntries(pairs):individualRankingEntries(ranking.rows)).map(entry=>demo&&entry.href?{...entry,href:`/preview/demo?view=profile&playerId=${entry.id}`}:entry)
   const tiers=rankingTiers(entries),search=Boolean(params.q?.trim())
-  return <section className={styles.shell} aria-label="Ranking SELPA" data-public-ranking data-gender={gender}>
+  return <section className={styles.shell} aria-label="Ranking SELPA" data-public-ranking data-gender={gender} data-mobile-club-theme={selectedClub ? getClubTheme(selectedClub.theme_key).key : undefined}>
     {!clubId ? <>
       <header className={styles.indexHero}>
         <div><span className={styles.eyebrow}>El juego deja huella</span><h1>Ranking SELPA</h1><p>Los líderes de hoy. Tu próximo objetivo.</p></div>

@@ -29,7 +29,8 @@
 .mobileOnly{display:none}
 @media(max-width:600px),(max-width:980px) and (max-height:600px) and (orientation:landscape){
   .mobileCanonical[data-selpa-page-header]{box-sizing:border-box;position:relative;isolation:isolate;display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;min-width:0;min-height:108px;padding:var(--selpa-page-header-padding);background:var(--selpa-page-header-bg);border:1px solid #ffffff18;border-radius:0 0 16px 16px;box-shadow:none;color:#fff}
-  .mobileCanonical[data-selpa-page-header]::after{content:"";position:absolute;inset:auto 0 0;height:3px;background:var(--selpa-page-header-rule);pointer-events:none}
+  .mobileCanonical[data-selpa-page-header]{overflow:clip}
+  .mobileCanonical[data-selpa-page-header]::after{content:"";position:absolute;inset:auto 0 0;height:2px;background:var(--selpa-page-header-rule);pointer-events:none;border-radius:inherit}
   .mobileCanonical .identity{display:flex;align-items:center;flex:1 1 180px;min-width:0;gap:10px}
   .mobileCanonical .copy{display:block;min-width:0}
   .mobileCanonical .mobileOnly{display:block}
@@ -39,5 +40,19 @@
   .mobileCanonical .back{color:#fff;background:#ffffff14;border-color:#ffffff40}
   .mobileCanonical .actions{color:#fff}
   .mobileCanonical .actions>:is(a,button){min-height:44px}
+  .mobileCanonical.hasActions{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:4px}
+  .mobileCanonical.hasActions .identity,.mobileCanonical.hasActions .copy{display:contents}
+  .mobileCanonical.hasActions .eyebrow{grid-column:1;grid-row:1}
+  .mobileCanonical.hasActions h1{grid-column:1;grid-row:2}
+  .mobileCanonical.hasActions p{grid-column:1/-1;grid-row:3}
+  .mobileCanonical.hasActions .actions{grid-column:2;grid-row:1/3;justify-self:end;max-width:150px}
+  .mobileCanonical.hasActions .meta{grid-column:1/-1}
+  .mobileCanonical.hasActions.hasBack{grid-template-columns:44px minmax(0,1fr) auto}
+  .mobileCanonical.hasActions.hasBack .identity>a{grid-column:1;grid-row:1/3}
+  .mobileCanonical.hasActions.hasBack .eyebrow,.mobileCanonical.hasActions.hasBack h1{grid-column:2}
+  .mobileCanonical.hasActions.hasBack .actions{grid-column:3}
+  .mobileCanonical.hasActions.hasBack p{grid-column:2/-1}
+  .mobileCanonical :global(.playerSectionHero__copy){flex:1 1 0;min-width:0}
+  .mobileCanonical :global(.playerSectionHero__icon){flex:0 0 44px;width:44px;height:44px;margin:0}
 }
 @media(max-width:430px){.mobileCanonical.fullBleed{margin-inline:calc(-1 * var(--selpa-mobile-gutter));width:calc(100% + 2 * var(--selpa-mobile-gutter));max-width:none}}

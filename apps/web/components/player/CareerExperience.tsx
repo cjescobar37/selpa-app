@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Pencil, Trophy, Medal, Target } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import CareerIdentityHero from './CareerIdentityHero'
+import CareerPerformance from './CareerPerformance'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { resultLabel } from '@/features/player-career/player-career.rules'
 import type { CareerHistoryRow, CareerIdentity, CareerRecentRow, CareerSummary } from '@/features/player-career/player-career.types'
@@ -43,7 +44,7 @@ export default function CareerExperience(props:{identity:CareerIdentity;own?:boo
 function GlobalCareerExperience({identity,own=false}:{identity:CareerIdentity;own?:boolean}) {
   const [message,setMessage]=useState('')
   return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} aria-label="Carrera deportiva"><CareerIdentityHero identity={identity} own={own} onShare={()=>void shareIdentity(identity,setMessage)}/>
-    <p role="status" className={styles.shareMessage}>{message}</p><section className={styles.panel}><h2>Identidad deportiva</h2><p>No hay un contexto deportivo publicado para mostrar categoría, ranking ni puntos. No se suman carreras de clubes distintos.</p><Link className={styles.link} href="/clubes">Explorar clubes</Link></section></section>
+    <p role="status" className={styles.shareMessage}>{message}</p><CareerPerformance available={false}/><section className={styles.panel}><h2>Tu próximo capítulo</h2><p>Tu identidad ya está lista. Cuando participes en un club con resultados publicados, vas a encontrar acá tu rendimiento y trayectoria.</p><Link className={styles.link} href="/clubes">Explorar clubes</Link></section></section>
 }
 async function shareIdentity(identity:CareerIdentity,setMessage:(message:string)=>void) {
   const url=`${window.location.origin}${identity.publicPath}`
@@ -80,8 +81,9 @@ function ClubCareerExperience({identity,own=false,editorHref,demo=false}:{identi
     }}>{identity.contexts.map(c=><option key={c.clubPlayerId} value={c.clubPlayerId}>{c.clubName}</option>)}</select></label>:null}
     <p className={styles.scope}>{sports?.scope.seasonName ?? (own?'Temporada activa':'Trayectoria publicada')} · Individual{standing ? ` · ${standing.category_name}`:''}</p>
     {!summary.data && !summary.error ? <div className={styles.metrics} aria-label="Cargando carrera" aria-busy="true">{['Posición','Puntos','Partidos'].map(label=><div key={label}><span>{label}</span><i className={styles.skeleton}/></div>)}</div>:
-      unavailable ? <PlayerStatePanel kind="error" title="Carrera pendiente de lectura" message="La identidad está disponible. No mostramos puntos ni estadísticas sin confirmar su fuente." onRetry={summary.retry} compact/>:
-      <div className={styles.metrics}><div><span>Posición en categoría</span><strong>{standing ? `#${standing.position}`:own?'Sin ranking':'No publicado'}</strong></div><div><span>{own?'Puntos de temporada':'Puntos publicados'}</span><strong>{standing ? standing.ranking_points.toLocaleString('es-AR'):'—'}</strong></div><div><span>Partidos de carrera</span><strong>{stats?.matches_played ?? '—'}</strong></div></div>}
+      unavailable ? <div className={styles.readingState} role="status"><div><strong>Resultados por confirmar</strong><p>Tu identidad está disponible. La lectura deportiva todavía no está habilitada.</p></div><button className={styles.action} type="button" onClick={summary.retry}>Reintentar</button></div>:
+      <div className={styles.metrics}><div><span>Posición en categoría</span><strong data-value={standing?'number':'status'}>{standing ? `#${standing.position}`:own?'Sin ranking':'No publicado'}</strong></div><div><span>{own?'Puntos de temporada':'Puntos publicados'}</span><strong>{standing ? standing.ranking_points.toLocaleString('es-AR'):'—'}</strong></div><div><span>Torneos de carrera</span><strong>{stats?.tournaments_played ?? '—'}</strong></div></div>}
+    <CareerPerformance stats={stats} available={!unavailable} loading={!summary.data && !summary.error}/>
     {standing ? <Link className={styles.link} href={`${demo?'/preview/demo':'/ranking'}?${new URLSearchParams({clubId:context.clubId,season:standing.season_id,division:standing.division_id,gender:standing.gender,category:String(standing.category ?? ''),modality:'INDIVIDUAL'})}`}>Ver este ranking</Link>:null}
     {own ? <div className={styles.privateActions}><Link href={editorHref ?? '/perfil'}><Pencil size={16}/>Editar fotos, datos y pareja</Link><Link href="/preferencias">Preferencias</Link></div>:null}
     <p className={styles.shareMessage} role="status">{shareMessage}</p>

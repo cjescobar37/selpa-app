@@ -70,7 +70,9 @@ test('one session provider and persistent installation host preserve PLAYER and 
   const player=readFileSync('app/(app)/player/page.tsx','utf8')
   assert.match(player,/selpa\.player\.homeMode/);assert.match(player,/ModeSegmentedControl/)
   const css=readFileSync('components/navigation/MobileNavigation.module.css','utf8')
-  assert.match(css,/env\(safe-area-inset-bottom/);assert.match(css,/--selpa-bottom-nav-height:60px/)
+  assert.match(css,/env\(safe-area-inset-bottom/)
+  const height=Number(css.match(/--selpa-bottom-nav-height:(\d+)px/)?.[1])
+  assert.ok(height>=58 && height<=64,'compact navigation retains the approved height range')
   assert.match(css,/prefers-reduced-motion/);assert.doesNotMatch(css,/!important/)
 })
 

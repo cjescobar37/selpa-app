@@ -407,7 +407,7 @@ export default function PublicClubHomeExperience({
   } as CSSProperties
 
   return (
-    <main className="clubPublicHome" style={style}>
+    <main className="clubPublicHome" style={style} data-mobile-club-theme={theme.key}>
       <PampraxHero
         kicker="Home pública del club"
         title={club.name}
