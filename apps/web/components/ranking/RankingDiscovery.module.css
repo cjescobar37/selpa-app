@@ -23,3 +23,4 @@
   .sheet header{gap:8px}.sheet h2{font-size:20px;letter-spacing:-.025em}.sheet header button{background:#f3f6f9;border-color:transparent;border-radius:50%;padding:10px}
   .sheet nav{gap:7px}.sheet nav a{min-height:56px}.sheet>p{margin:8px 0 14px}
 }
+.season{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#60748a;font-size:12px;min-width:0}.season select{font:inherit;font-size:16px;min-height:44px;min-width:0;max-width:75%;background:#fff;color:#061b3a;border:1px solid #dce6ec;border-radius:9px;padding:7px 10px}.season select:focus-visible{outline:2px solid #0891b2;outline-offset:2px}

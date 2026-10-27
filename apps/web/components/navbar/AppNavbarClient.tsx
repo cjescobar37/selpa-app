@@ -1,4 +1,5 @@
 'use client'
+import playerMenuStyles from './PlayerUserMenu.module.css'
 
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
@@ -9,19 +10,16 @@ import {
   BookOpen,
   CalendarDays,
   ChevronDown,
-  CircleUserRound,
   Compass,
   Home,
   LogOut,
   Mail,
-  Medal,
   Menu,
   Newspaper,
   Radio,
   Search,
   Settings,
   Trophy,
-  UserRoundPen,
   WalletCards,
   X,
 } from 'lucide-react'
@@ -718,29 +716,24 @@ export default function AppNavbarClient() {
     return <span>{getClubInitials(label)}</span>
   }
 
-  function renderUserMenu(mobile = false) {
+  function renderUserMenu() {
     if (!userOpen) return null
 
-    if (role === 'player' && mobile) {
+    if (role === 'player') {
       return (
-        <div id="player-navbar-player-popover" className="px-navDropdown px-navDropdown--right px-playerUserMenu" role="menu" aria-label="Mi espacio">
-          <div className="px-playerUserMenu__identity">
+        <div id="player-navbar-player-popover" className={`px-navDropdown px-navDropdown--right px-playerUserMenu ${playerMenuStyles.menu}`} role="menu" aria-label="Mi espacio">
+          <Link href="/perfil" role="menuitem" onClick={closeAllMenus} className="px-playerUserMenu__identity" style={{ color: '#fff', textDecoration: 'none', minHeight: 52 }}>
             <span className="px-avatar" aria-hidden="true"><UserAvatar /></span>
             <div>
               <strong>{formattedVisibleUserName}</strong>
-              {user?.email ? <small>{user.email}</small> : null}
               {playerIdentityMeta ? <em>{playerIdentityMeta}</em> : null}
             </div>
-          </div>
-          <Link className="px-ddItem" href="/perfil" onClick={closeAllMenus}><CircleUserRound size={18} />Mi perfil</Link>
-          <Link className="px-ddItem" href="/mis-datos" onClick={closeAllMenus}><UserRoundPen size={18} />Mis datos</Link>
-          <Link className="px-ddItem" href="/player/torneos" onClick={closeAllMenus}><Trophy size={18} />Mis torneos</Link>
-          <Link className="px-ddItem" href="/player/ranking" onClick={closeAllMenus}><Medal size={18} />Mi ranking</Link>
-          <Link className="px-ddItem" href="/player/pagos" onClick={closeAllMenus}><WalletCards size={18} />Mis pagos</Link>
-          <Link className="px-ddItem" href="/actividad" onClick={closeAllMenus}><Activity size={18} />Mi actividad</Link>
-          <Link className="px-ddItem" href="/ajustes" onClick={closeAllMenus}><Settings size={18} />Preferencias</Link>
+          </Link>
+          <Link className="px-ddItem" role="menuitem" href="/actividad" onClick={closeAllMenus}><Activity size={18} />Mi actividad</Link>
+          <Link className="px-ddItem" role="menuitem" href="/player/pagos" onClick={closeAllMenus}><WalletCards size={18} />Mis pagos</Link>
+          <Link className="px-ddItem" role="menuitem" href="/mi-cuenta" onClick={closeAllMenus}><Settings size={18} />Mi cuenta</Link>
           <div className="px-ddSep" />
-          <button className="px-ddItem px-ddItem--danger" disabled={loggingOut} onClick={() => void logout()}><LogOut size={18} />{loggingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
+          <button className="px-ddItem px-ddItem--danger" role="menuitem" disabled={loggingOut} onClick={() => void logout()}><LogOut size={18} />{loggingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
         </div>
       )
     }
@@ -783,7 +776,6 @@ export default function AppNavbarClient() {
         <Link className="px-ddItem" href="/perfil">Mi perfil</Link>
         <Link className="px-ddItem" href="/mis-datos">Mis datos</Link>
         <Link className="px-ddItem" href="/actividad">Mi actividad</Link>
-        {role === 'player' ? <Link className="px-ddItem" href="/player/pagos" onClick={closeAllMenus}><WalletCards size={18} />Mis pagos</Link> : null}
         <Link className="px-ddItem" href="/ajustes">Preferencias</Link>
         <button className="px-ddItem px-ddItem--danger" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
       </div>
@@ -1205,7 +1197,7 @@ export default function AppNavbarClient() {
             <span className="px-mobileUserName">{navbarUserName}</span>
             <ChevronDown size={14} className="px-caret" />
           </button>
-          {renderUserMenu(true)}
+          {renderUserMenu()}
         </div>
       </div>
     )

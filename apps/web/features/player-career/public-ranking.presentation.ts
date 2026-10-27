@@ -28,8 +28,10 @@ export function rankingHref(params:RankingSearch,overrides:Partial<Record<keyof 
   return (params.demo==='1'?'/preview/demo?':'/ranking?')+new URLSearchParams(Object.fromEntries(Object.entries(merged).filter(([,value])=>value!==undefined && value!=='')) as Record<string,string>)
 }
 /** Keep the same category number, never reuse a division from another branch. */
-export function rankingBranchHref(params:RankingSearch,gender:'M'|'F',currentCategory?:number|null) {
-  return rankingHref(params,{gender,division:undefined,category:params.category ?? (currentCategory == null ? undefined : String(currentCategory)),page:undefined})
+export function rankingBranchHref(params:RankingSearch,gender:'M'|'F'|'MIXED',currentCategory?:number|null,contexts?:RankingContext[]) {
+  const requested=params.category ?? (currentCategory == null ? undefined : String(currentCategory))
+  const compatible=!contexts || contexts.some(c=>c.gender===gender && c.modality===(params.modality ?? 'INDIVIDUAL') && String(c.category)===requested)
+  return rankingHref(params,{gender,division:undefined,category:compatible?requested:undefined,page:undefined})
 }
 export function rankingContext(contexts:RankingContext[],params:RankingSearch,modality:string) {
   const requested=contexts.find(c=>c.divisionId===params.division)

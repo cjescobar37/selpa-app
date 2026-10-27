@@ -8,6 +8,7 @@ import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
 import PlayerSectionHero from '@/components/player/PlayerSectionHero'
 import { administrativeHome, isPlayerSession } from '@/lib/accountRolePolicy'
 import PageHeader from '@/components/navigation/PageHeader'
+import PlayerAccountCenter from '@/components/player/PlayerAccountCenter'
 
 export default function MisDatosPage() {
   const session = useSession()
@@ -15,6 +16,7 @@ export default function MisDatosPage() {
 
   if (session.status === 'loading') return <PlayerStatePanel kind="loading" title="Cargando tus datos" message="Preparando tu cuenta" viewport />
   if (!session.user) return <PlayerStatePanel kind="empty" title="Ingresá para editar tus datos" message="Esta información es privada." action={{ label: 'Ingresar', href: '/login' }} viewport />
+  if (player) return <PlayerAccountCenter />
 
   return <PlayerSpaceLayout><main className="playerDataHub">
     {player ? <PlayerSectionHero badge="Área privada" title="Mis datos" description="Administrá tu identidad, tu perfil deportivo y la seguridad de tu cuenta." icon={<UserRoundPen />} />

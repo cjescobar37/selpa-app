@@ -80,10 +80,11 @@ test('financial diagnostics differentiate permissions, missing models, network, 
 test('actual personal handler preserves safe missing-model diagnostics, not private database messages',async()=>{
   for(const [sourceCode,code] of [['PGRST205','MODEL_UNAVAILABLE'],['PGRST000','READ_UNAVAILABLE']]) {
     const handler=compile('../app/api/player/my-ranking/route.ts',{'next/server':nextResponse,
+      '@/features/player-career/my-ranking.state':compile('../features/player-career/my-ranking.state.ts'),
       '@/lib/supabaseAdmin':{supabaseAdmin:{auth:{getUser:async()=>({data:{user:{id:'player'}}})}}},
       '@/lib/accountRoleServer':{playerAccountDenial:async()=>null},
       '@/features/player-career/player-career.access':{verifySelfCareer:async()=>({kind:'self',userId:'player'}),CareerAccessError:class extends Error{}},
-      '@/features/player-career/player-career.repository':{readCareerIdentity:async()=>({}),readMyRanking:async()=>{throw {code:sourceCode,message:'PRIVATE_SQL_JWT'}}}})
+      '@/features/player-career/player-career.repository':{readCareerIdentity:async()=>({selectedClubPlayerId:'approved-player'}),readMyRanking:async()=>{throw {code:sourceCode,message:'PRIVATE_SQL_JWT'}}}})
     const response=await handler.GET(new Request('http://localhost/api/player/my-ranking',{headers:{Authorization:'Bearer qa-only'}}))
     assert.equal(response.status,503);assert.equal(response.body.code,code);assert.equal(response.headers['Cache-Control'],'private, no-store')
     assert.doesNotMatch(JSON.stringify(response.body),/PRIVATE|SQL|JWT|PGRST/)
@@ -117,7 +118,7 @@ async function route(reads,params={clubId:'00000000-0000-4000-8000-000000000001'
   const club={id:params.clubId,name:'Club',logo_url:null,theme_key:null}
   const scope={...context(),clubId:club.id}
   const repo={readPublicClub:async()=>({clubs:[club],count:1}),readRankingDirectory:async()=>({clubs:[club],count:1}),
-    readRankingContexts:async()=>[scope],readPublishedRankingContexts:async contexts=>contexts.map(c=>({...c,rankedCount:0})),readRankingPage:async()=>({rows:[],count:0,page:1,pageSize:25,context:scope}),
+    readRankingContexts:async()=>[scope],readPublicRankingSeasons:async()=>[],readPublishedRankingContexts:async contexts=>contexts.map(c=>({...c,rankedCount:0})),readRankingPage:async()=>({rows:[],count:0,page:1,pageSize:25,context:scope}),
     readPairRankingPage:async()=>({rows:[],count:0}),readRankingPresentation:async()=>({counts:{M:0,F:0},leaderPoints:null}),...reads}
   const rankingView=()=>null
   const page=compile('../app/ranking/page.tsx',{

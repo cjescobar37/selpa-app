@@ -9,7 +9,6 @@ import {
   Newspaper,
   ShieldCheck,
   Trophy,
-  UserRound,
   UsersRound,
 } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
@@ -26,6 +25,7 @@ import CareerRecentResults from '@/components/player/CareerRecentResults'
 import { HomeInstallSlot } from '@/components/pwa/HomeInstallPlacement'
 import { useHomeMobileLayout } from '@/lib/useHomeMobileLayout'
 import PlayerHomeName from '@/components/home/PlayerHomeName'
+import productControls from '@/components/product/ProductFlow.module.css'
 
 type ClubPlayerRow = {
   ranking_position?: number | null
@@ -108,14 +108,6 @@ type PartnerInvite = {
   receiver?: PartnerPlayer | null
 }
 
-type ClubContentNotice = {
-  id: string
-  clubId: string
-  clubName: string
-  title: string
-  body: string
-}
-
 function normalizeGender(gender: string | null) {
   const value = String(gender ?? '').toUpperCase()
   if (value === 'M' || value === 'MALE') return 'Caballeros'
@@ -126,7 +118,7 @@ function normalizeGender(gender: string | null) {
 
 function formatDate(value: string | null) {
   if (!value) return 'Fecha a definir'
-  const date = new Date(value)
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value)
   if (Number.isNaN(date.getTime())) return 'Fecha a definir'
   return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }).format(date)
 }
@@ -176,6 +168,7 @@ export default function PlayerHomePage() {
   const [message, setMessage] = useState('')
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [homeMode, setHomeMode] = useState<HomeMode>('space')
+  const [modeReady, setModeReady] = useState(false)
   const integratedMobile = useHomeMobileLayout()
   const controlsNode = useRef<HTMLDivElement | null>(null)
   const restoreModeFocus = useRef(false)
@@ -190,16 +183,19 @@ export default function PlayerHomePage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const stored = window.localStorage.getItem('selpa.player.homeMode')
-    if (stored !== 'space' && stored !== 'community') return
-    const frame = window.requestAnimationFrame(() => setHomeMode(stored))
+    let stored: string | null = null
+    try { stored = window.localStorage.getItem('selpa.player.homeMode') } catch { /* Storage can be unavailable in private browsing. */ }
+    const frame = window.requestAnimationFrame(() => {
+      if (stored === 'space' || stored === 'community') setHomeMode(stored)
+      setModeReady(true)
+    })
     return () => window.cancelAnimationFrame(frame)
   }, [])
 
   function changeHomeMode(mode: HomeMode) {
     setHomeMode(mode)
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('selpa.player.homeMode', mode)
+      try { window.localStorage.setItem('selpa.player.homeMode', mode) } catch { /* The current mode remains usable without persistence. */ }
     }
   }
 
@@ -285,16 +281,6 @@ export default function PlayerHomePage() {
       })
       .slice(0, 6)
   }, [clubsById, registrations, tournamentById])
-
-  const clubNewsFallbacks: ClubContentNotice[] = useMemo(() => (
-    session.clubs.slice(0, 3).map((club) => ({
-      id: `fallback-${club.id}`,
-      clubId: club.id,
-      clubName: club.name,
-      title: 'Sin noticias publicadas',
-      body: 'Cuando el club active su contenido propio, vas a verlo acá.',
-    }))
-  ), [session.clubs])
 
   useEffect(() => {
     let alive = true
@@ -397,7 +383,7 @@ export default function PlayerHomePage() {
               clubId,
               partnerships: activeRes.ok ? (activeJson.partnerships ?? []) as ActivePartnership[] : [],
               invites: invitesRes.ok ? (invitesJson.invites ?? []) as PartnerInvite[] : [],
-              standings: rankingRes.ok ? (rankingJson.individual ?? []) as Array<{user_id:string;ranking_points:number;category:number|null;gender:string|null;position:number}> : [],
+              standings: rankingRes.ok ? (rankingJson.summary?.standing ? [rankingJson.summary.standing] : rankingJson.individual ?? []) as Array<{user_id:string;ranking_points:number;category:number|null;gender:string|null;position:number}> : [],
             }
           }))
 
@@ -466,7 +452,7 @@ export default function PlayerHomePage() {
     }
   }
 
-  if ((session.status === 'loading' || loadingData) && !hasLoadedData) {
+  if (!modeReady || ((session.status === 'loading' || loadingData) && !hasLoadedData)) {
     return <PlayerHomeLoader />
   }
 
@@ -484,15 +470,14 @@ export default function PlayerHomePage() {
 
   const homeControls = <>
     <ModeSegmentedControl value={homeMode} onChange={changeHomeMode} rootRef={attachControls} asButtons={integratedMobile} />
-    <HomeInstallSlot />
   </>
 
   return (
     <div className="playerHomeShell">
-      {!integratedMobile ? homeControls : null}
+      <div className="playerHomeTopControls">{homeControls}</div>
       <div className={`homeModePane${homeMode === 'community' ? ' is-community' : ''}`}>
       {homeMode === 'community' ? (
-        <PublicHomeEmbed userName={canonicalPlayerName} afterHero={integratedMobile ? homeControls : undefined} />
+        <PublicHomeEmbed userName={canonicalPlayerName} afterHero={<HomeInstallSlot />} />
       ) : (
       <>
       <section className="playerHomeHero">
@@ -534,7 +519,7 @@ export default function PlayerHomePage() {
         </div>
       </section>
 
-      {integratedMobile ? homeControls : null}
+      <HomeInstallSlot />
 
       <section className="playerPriorityPanel" aria-label="Acción principal del jugador">
         {priorityInvite ? (
@@ -550,13 +535,6 @@ export default function PlayerHomePage() {
             <strong>{nextTournament.name}</strong>
             <small>{nextTournamentClub?.name ?? 'Club'} · {formatDate(nextTournament.starts_on ?? nextTournament.start_date)}</small>
             <b>Ver torneo <ChevronRight size={16} /></b>
-          </Link>
-        ) : activeClub ? (
-          <Link href={`/player/${activeClub.id}`} className="playerPriorityCard">
-            <span>Club activo</span>
-            <strong>{activeClub.name}</strong>
-            <small>{activePlayer ? `${activePlayer.category ?? 'Sin cat.'} · ${normalizeGender(activePlayer.gender)}` : 'Tu espacio deportivo del club'}</small>
-            <b>Entrar al club <ChevronRight size={16} /></b>
           </Link>
         ) : (
           <Link href="/torneos" className="playerPriorityCard">
@@ -579,86 +557,6 @@ export default function PlayerHomePage() {
             <strong>{pendingInvites.length || activePartnerName}</strong>
           </a>
         </div>
-      </section>
-
-      <section className="playerQuickGrid playerQuickGrid--secondary">
-        <Link href={activeClub ? `/player/${activeClub.id}` : '#clubes-activos'}>
-          <ShieldCheck size={18} />
-          <span>Club activo</span>
-          <strong>{activeClub?.name ?? 'Elegir'}</strong>
-        </Link>
-        <a href="#clubes-activos">
-          <ShieldCheck size={18} />
-          <span>Clubes</span>
-          <strong>{session.clubs.length}</strong>
-        </a>
-        <Link href="/torneos">
-          <CalendarDays size={18} />
-          <span>Calendario</span>
-          <strong>{upcomingTournaments.length}</strong>
-        </Link>
-        <Link href="/perfil">
-          <UserRound size={18} />
-          <span>Perfil</span>
-          <strong>Ver</strong>
-        </Link>
-      </section>
-
-      <section className="playerSection playerClubSection" id="clubes-activos">
-        <header className="playerSectionHeader">
-          <div>
-            <span className="playerHomeKicker">Club deportivo</span>
-            <h2>{activeClub ? 'Tu club activo' : 'Elegí dónde operar'}</h2>
-          </div>
-          {activeClub && session.clubs.length > 1 ? <span className="playerClubSwitchHint">Cambiar club</span> : null}
-        </header>
-        {session.clubs.length ? (
-          <div className="playerClubGrid">
-            {sortedPlayerClubs.map((club) => {
-              const player = playerByClubId.get(club.id)
-              const isActive = session.activeClubId === club.id
-              const theme = getClubTheme(club.themeKey)
-              return (
-                <article
-                  key={club.id}
-                  className={`playerClubCard${isActive ? ' is-active' : ''}`}
-                  style={{
-                    ['--club-accent' as string]: theme.vars.accent,
-                    ['--club-accent-2' as string]: theme.vars.accent2,
-                    ['--club-soft' as string]: theme.vars.soft,
-                  }}
-                >
-                  <div className="playerClubLogo">
-                    {club.logoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={club.logoUrl} alt="" />
-                    ) : initials(club.name)}
-                  </div>
-                  <div>
-                    <strong>{club.name}</strong>
-                    <span>{player ? `${player.category ?? 'Sin cat.'} · ${normalizeGender(player.gender)}` : 'Jugador vinculado'}</span>
-                    {isActive ? <em>Activo</em> : null}
-                  </div>
-                  <div className="playerClubActions">
-                    <Link href={`/player/${club.id}`}>Entrar al club <ChevronRight size={14} aria-hidden="true" /></Link>
-                    {!isActive ? (
-                      <button type="button" onClick={() => activateClub(club.id)}>
-                        Activar
-                      </button>
-                    ) : null}
-                  </div>
-                </article>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="playerEmptyState">
-            <ShieldCheck size={20} />
-            <strong>Todavía no tenés clubes activos</strong>
-            <span>Pedí el alta en un club para empezar a competir.</span>
-            <Link href="/clubs">Ver clubes</Link>
-          </div>
-        )}
       </section>
 
       <section className="playerDashboardGrid">
@@ -829,28 +727,64 @@ export default function PlayerHomePage() {
         </article>
       </section>
 
-      <section className="playerSection playerNewsSection">
-        <header>
-          <span className="playerHomeKicker">Noticias</span>
-          <h2>Contenido de tus clubes</h2>
+      <section className="playerSection playerClubSection" id="clubes-activos">
+        <header className="playerSectionHeader">
+          <div>
+            <span className="playerHomeKicker">Tus clubes</span>
+            <h2>Clubes vinculados</h2>
+          </div>
+          {activeClub && session.clubs.length > 1 ? <span className="playerClubSwitchHint">Cambiar club</span> : null}
         </header>
-        <div className="playerNewsGrid">
-          {clubNewsFallbacks.length ? clubNewsFallbacks.map((notice) => (
-            <article key={notice.id}>
-              <Newspaper size={18} />
-              <span>{notice.clubName}</span>
-              <strong>{notice.title}</strong>
-              <p>{notice.body}</p>
-            </article>
-          )) : (
-            <div className="playerEmptyState playerEmptyState--compact">
-              <Newspaper size={18} />
-              <strong>Sin noticias por ahora</strong>
-              <span>Cuando te sumes a un club, su contenido aparecerá acá.</span>
-            </div>
-          )}
-        </div>
+        {session.clubs.length ? (
+          <div className="playerClubGrid">
+            {sortedPlayerClubs.map((club) => {
+              const player = playerByClubId.get(club.id)
+              const isActive = session.activeClubId === club.id
+              const theme = getClubTheme(club.themeKey)
+              return (
+                <article
+                  key={club.id}
+                  className={`playerClubCard${isActive ? ' is-active' : ''}`}
+                  style={{
+                    ['--club-accent' as string]: theme.vars.accent,
+                    ['--club-accent-2' as string]: theme.vars.accent2,
+                    ['--club-soft' as string]: theme.vars.soft,
+                  }}
+                >
+                  <div className="playerClubLogo">
+                    {club.logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={club.logoUrl} alt="" />
+                    ) : initials(club.name)}
+                  </div>
+                  <div>
+                    <strong>{club.name}</strong>
+                    <span>{player ? `${player.category ?? 'Sin cat.'} · ${normalizeGender(player.gender)}` : 'Jugador vinculado'}</span>
+                    {isActive ? <em>Activo</em> : null}
+                  </div>
+                  <div className="playerClubActions">
+                    <Link href={`/player/${club.id}`}>Entrar al club <ChevronRight size={14} aria-hidden="true" /></Link>
+                    {!isActive ? (
+                      <button type="button" onClick={() => activateClub(club.id)}>
+                        Activar
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="playerEmptyState">
+            <ShieldCheck size={20} />
+            <strong>Todavía no tenés clubes activos</strong>
+            <span>Pedí el alta en un club para empezar a competir.</span>
+            <Link href="/clubs">Ver clubes</Link>
+          </div>
+        )}
       </section>
+
+      <Link href="/noticias" className={productControls.link}><Newspaper size={17} aria-hidden="true" /> Ver noticias de la comunidad</Link>
       </>
       )}
       </div>

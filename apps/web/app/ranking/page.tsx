@@ -1,6 +1,6 @@
 import PublicRankingExperience from '@/components/public/PublicRankingExperience'
 import { redirect } from 'next/navigation'
-import { readRankingDirectory, readPublicClub, readRankingContexts, readPublishedRankingContexts, readRankingPage, readPairRankingPage, readRankingPresentation } from '@/features/player-career/player-career.repository'
+import { readRankingDirectory, readPublicClub, readRankingContexts, readPublicRankingSeasons, readPublishedRankingContexts, readRankingPage, readPairRankingPage, readRankingPresentation } from '@/features/player-career/player-career.repository'
 import { pageNumber, validId } from '@/features/player-career/player-career.rules'
 import { rankingContext, rankingHref, rankingReadIssue, type RankingSearch, type RankingReadIssue } from '@/features/player-career/public-ranking.presentation'
 import type { RankingContext, RankingPage } from '@/features/player-career/player-career.types'
@@ -13,10 +13,11 @@ export default async function RankingPublicPage({searchParams}:{searchParams?:Pr
   const modality=params.modality==='PAIRS' || params.modality==='PAIR' ? 'PAIRS':'INDIVIDUAL'
   let clubs:{clubs:Array<{id:string;name:string;logo_url:string|null;theme_key:string|null;categoryCount?:number|null}>;count:number}={clubs:[],count:0}
   let contexts:RankingContext[]=[],error:RankingReadIssue|null=null
+  let seasons:Awaited<ReturnType<typeof readPublicRankingSeasons>>=[]
   try {clubs=clubId ? await readPublicClub(clubId) : await readRankingDirectory(pageNumber(params.clubsPage))}
   catch (failure) {error=rankingReadIssue(failure)}
   if (!error && validId(clubId) && clubs.clubs.length) {
-    try {contexts=await readRankingContexts(clubId,params.season)}
+    try {[contexts,seasons]=await Promise.all([readRankingContexts(clubId,params.season),readPublicRankingSeasons(clubId)])}
     catch (failure) {error=rankingReadIssue(failure)}
     if (!error) {
       try {contexts=await readPublishedRankingContexts(contexts)}
@@ -38,5 +39,5 @@ export default async function RankingPublicPage({searchParams}:{searchParams?:Pr
   }
   if (error) console.warn('[selpa-public-ranking]',{clubId:validId(clubId)?clubId:null,issue:error})
   return <>{sportsDemoEnabled()&&(error==='MODEL_UNAVAILABLE'||clubs.clubs.some(c=>c.categoryCount===null))?<PreviewSportsNotice/>:null}<PublicRankingExperience clubs={clubs.clubs} clubsCount={clubs.count} contexts={contexts} ranking={ranking} pairs={pairs.rows}
-    total={modality==='PAIRS'?pairs.count:ranking.count} params={canonical} error={error} presentation={presentation}/></>
+    total={modality==='PAIRS'?pairs.count:ranking.count} params={canonical} error={error} presentation={presentation} seasons={seasons}/></>
 }

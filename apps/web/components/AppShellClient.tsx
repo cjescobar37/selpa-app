@@ -33,6 +33,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
   const clubNavigation = Boolean(session.activeClubId) && (session.role === 'club' || (session.role === 'player' && pathname.startsWith('/player')))
   const isAuthRoute = ['/login', '/register', '/reset-password', '/update-password', '/completar-perfil'].includes(pathname)
   const isClubAdminRoute = pathname === '/club' || pathname.startsWith('/club/')
+  const privatePlayer = session.role === 'player' && (pathname.startsWith('/player') || ['/perfil', '/mi-cuenta', '/mis-datos', '/actividad', '/ajustes', '/mensajes', '/notificaciones', '/seleccionar-club', '/completar-perfil'].some(route => pathname === route || pathname.startsWith(route + '/')))
   const pilotClass = isHomeMobilePilotRoute(pathname)
     ? ` ${homePilot.shell} ${pathname === '/' ? homePilot.publicHome : homePilot.playerHome}`
     : ''
@@ -49,7 +50,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
             </main>
 
             <HomeInstallHost />
-            <Footer compact={isAuthRoute} />
+            {!privatePlayer ? <Footer compact={isAuthRoute} /> : null}
             {mobileVisible && session.status === 'ready' ? <MobileBottomNav items={mobileItems} pathname={pathname} profileAvatarUrl={session.role === 'player' ? session.user?.avatarUrl : null} /> : null}
           </div>
           <ToastViewport />

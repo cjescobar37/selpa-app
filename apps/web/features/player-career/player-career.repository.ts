@@ -3,6 +3,7 @@ import { supabaseAdmin as db } from '@/lib/supabaseAdmin'
 import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { pageNumber, validId, winRate } from './player-career.rules'
 import { rankingReadIssue } from './public-ranking.presentation'
+import { myRankingState } from './my-ranking.state'
 import { PUBLIC_CAREER, CareerAccessError, assertCareerAccess, type CareerAccess } from './player-career.access'
 import type { CareerHistoryRow, CareerIdentity, CareerRecentRow, CareerStats, CareerSummary, RankingContext, RankingPage, SportsStanding } from './player-career.types'
 
@@ -150,6 +151,12 @@ export async function readRankingContexts(clubId: string, seasonId?: string | nu
     .sort((a,b)=>(a.category ?? 99)-(b.category ?? 99)||a.gender.localeCompare(b.gender)||a.divisionId.localeCompare(b.divisionId))
 }
 
+export async function readPublicRankingSeasons(clubId:string) {
+  if (!validId(clubId)) return []
+  return catalog<{id:string;name:string;status:string}>((from,to)=>db.from('competition_seasons').select('id,name,status')
+    .eq('club_id',clubId).eq('is_public',true).in('status',['ACTIVE','CLOSED']).order('id',{ascending:false}).range(from,to))
+}
+
 export async function readRankingPage(context: RankingContext | null, query='', page=1): Promise<RankingPage> {
   if (!context) return {rows:[],count:0,page:1,pageSize:PAGE_SIZE,context:null}
   const current=pageNumber(String(page));const start=(current-1)*PAGE_SIZE
@@ -180,24 +187,39 @@ export async function readPublishedRankingContexts(contexts: RankingContext[]): 
   return result
 }
 
-export async function readMyRanking(identity: CareerIdentity,access:CareerAccess) {
+export async function readMyRanking(identity: CareerIdentity,access:CareerAccess,page=1) {
   if(access.kind!=='self')throw new CareerAccessError(403)
   assertCareerAccess(access,identity.userId,identity.contexts.find(c=>c.clubPlayerId===identity.selectedClubPlayerId)?.clubId)
   const summary=await readCareerSummary(identity,access); const me=summary.standing
   if (!summary.statsAvailable) throw Object.assign(new Error('SPORTS_READ_UNAVAILABLE'),{code:summary.readIssue ?? 'READ_UNAVAILABLE'})
-  if (!me) return {individual:[],leader:null,next:null,summary,meta:{generatedAt:new Date().toISOString()}}
+  const current=pageNumber(String(page))
+  const clubId=summary.scope.clubId
+  const seasonId=summary.scope.seasonId
+  const [season,entry]=await Promise.all([
+    seasonId ? db.from('competition_seasons').select('is_public').eq('id',seasonId).eq('club_id',clubId).maybeSingle() : Promise.resolve({data:null,error:null}),
+    seasonId && !me ? db.from('competition_player_entries').select('id,competition_divisions!inner(season_id)')
+      .eq('club_id',clubId).eq('club_player_id',summary.scope.clubPlayerId).eq('status','ACTIVE').is('valid_until',null)
+      .eq('competition_divisions.season_id',seasonId).limit(1) : Promise.resolve({data:me?[{id:me.player_entry_id}]:[],error:null}),
+  ])
+  assertRead(season.error);assertRead(entry.error)
+  const state=myRankingState({hasSeason:Boolean(seasonId),hasEntry:Boolean(entry.data?.length),hasStanding:Boolean(me),isPublic:season.data?.is_public===true})
+  const empty={individual:[],leader:null,next:null,summary,state,participants:{page:current,pageSize:PAGE_SIZE,count:0,visible:false},meta:{generatedAt:new Date().toISOString()}}
+  if (!me || state==='PRIVATE_SEASON') return empty
+  const context=await db.from('public_competition_contexts_read').select('id').eq('id',me.division_id).eq('season_id',me.season_id).eq('club_id',me.club_id).maybeSingle()
+  assertRead(context.error)
+  if (!context.data) return empty
   // Owning a private career does not authorize reading private competitors.
   const base=()=>db.from('public_player_standings_read').select(STANDING).eq('club_id',me.club_id).eq('season_id',me.season_id).eq('division_id',me.division_id)
   const [neighbors,leader,next]=await Promise.all([
-    base().gte('ordinal',Math.max(1,me.ordinal-3)).lte('ordinal',me.ordinal+3).order('ordinal'),
+    db.from('public_player_standings_read').select(STANDING,{count:'exact'}).eq('club_id',me.club_id).eq('season_id',me.season_id).eq('division_id',me.division_id).order('ordinal').range((current-1)*PAGE_SIZE,current*PAGE_SIZE-1),
     base().order('ordinal').limit(1),
     base().lt('position',me.position).order('ordinal',{ascending:false}).limit(1),
   ])
   for (const r of [neighbors,leader,next]) assertRead(r.error)
   const row=(s:SportsStanding)=>({...s,player_id:s.club_player_id,contextualPosition:s.position})
   const visible=(neighbors.data ?? []) as SportsStanding[]
-  return {individual:(visible.some(s=>s.club_player_id===me.club_player_id)?visible:[me,...visible].sort((a,b)=>a.ordinal-b.ordinal)).map(row),leader:leader.data?.[0] ? row(leader.data[0] as SportsStanding):null,
-    next:next.data?.[0] ? row(next.data[0] as SportsStanding):null,summary,meta:{generatedAt:new Date().toISOString()}}
+  return {individual:visible.map(row),leader:leader.data?.[0] ? row(leader.data[0] as SportsStanding):null,
+    next:next.data?.[0] ? row(next.data[0] as SportsStanding):null,summary,state,participants:{page:current,pageSize:PAGE_SIZE,count:neighbors.count ?? 0,visible:true},meta:{generatedAt:new Date().toISOString()}}
 }
 
 export async function readPublicClubs(page=1) {

@@ -48,6 +48,21 @@
     animation: none;
   }
 
+  .playerHome :global(.playerHomeTopControls) {
+    display:grid;
+    gap:0;
+    margin:0 -8px -10px;
+    width:calc(100% + 16px);
+    box-sizing:border-box;
+    background:#0a1f3b;
+    padding:6px 8px 0;
+  }
+
+  .playerHome :global(.playerHomeTopControls .homeModeSwitch) {
+    box-shadow:none;
+    border:1px solid rgba(255,255,255,.18);
+  }
+
   .playerHome :global(.playerHomeHero),
   .playerHome :global(.modeCommunityHero) {
     margin: 0 -8px;

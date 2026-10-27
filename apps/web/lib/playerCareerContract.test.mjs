@@ -105,7 +105,7 @@ test('ranking/home do not download admin engine; history/recent requested lazily
   const page=src('../app/ranking/page.tsx');assert.doesNotMatch(page,/limit\(240\)|club_players|ranking_points/)
   const personal=src('../app/(app)/player/ranking/page.tsx');assert.doesNotMatch(personal,/withRankingPositions|sortRankingRows|api\/clubs\/.*\/ranking/)
   const repo=src('../features/player-career/player-career.repository.ts');assert.doesNotMatch(repo,/select\(['"]\*['"]\)|listEvents|getRankingPipeline/)
-  assert.match(repo,/gte\('ordinal'/);assert.match(repo,/range\(start,start\+PAGE_SIZE-1\)/)
+  assert.match(repo,/range\(\(current-1\)\*PAGE_SIZE,current\*PAGE_SIZE-1\)/);assert.match(repo,/range\(start,start\+PAGE_SIZE-1\)/)
 })
 test('universe exceeds legacy 240 and ledger exceeds provider page size without lost points',async()=>{
   await db.exec('begin')

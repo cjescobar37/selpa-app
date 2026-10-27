@@ -7,8 +7,19 @@ import { supabase } from '@/lib/supabaseClient'
 import PageHeader from '@/components/navigation/PageHeader'
 import AuthAlert from '@/components/AuthAlert'
 import styles from '@/components/product/ProductFlow.module.css'
+import PlayerAccountCenter from '@/components/player/PlayerAccountCenter'
+import PlayerStatePanel from '@/components/player/PlayerStatePanel'
+import { isPlayerSession } from '@/lib/accountRolePolicy'
 
 export default function AccountPage() {
+  const session = useSession()
+  if (session.status === 'loading') return <PlayerStatePanel kind="loading" title="Preparando tu cuenta" compact />
+  if (!session.user) return <PlayerStatePanel kind="empty" title="Ingresá para ver tu cuenta" message="Tus datos y preferencias son privados." action={{label:'Ingresar',href:'/login'}} compact />
+  if (isPlayerSession(session)) return <PlayerAccountCenter />
+  return <AccountDataForm />
+}
+
+function AccountDataForm() {
   const session = useSession()
   const router = useRouter()
   const [busy, setBusy] = useState(false)

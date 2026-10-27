@@ -13,6 +13,9 @@ import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import { BRAND } from '@/lib/branding'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
+import { groupPlayerAgenda, latestAgendaRegistrations } from '@/lib/playerAgenda'
+import PlayerAgendaCard from '@/components/player/PlayerAgendaCard'
+import agendaStyles from '@/components/player/PlayerAgenda.module.css'
 
 type ViewMode = 'mine' | 'calendar' | 'explore' | 'rules'
 
@@ -175,6 +178,25 @@ function pageCopy(mode: ViewMode) {
   }
 }
 
+function PlayerTournamentAgenda({ tournaments, registrations, clubs }: { tournaments:TournamentRow[]; registrations:RegistrationRow[]; clubs:Record<string,ClubRow> }) {
+  const groups = groupPlayerAgenda(tournaments, registrations, new Date())
+  const latest = latestAgendaRegistrations(registrations)
+  const sections = [
+    { key:'upcoming' as const, title:'Próximos', empty:'Sin torneos próximos con cupo confirmado.' },
+    { key:'pending' as const, title:'Pendientes', empty:'No tenés confirmaciones pendientes.' },
+    { key:'history' as const, title:'Historial', empty:'Tus torneos anteriores aparecerán acá.' },
+  ]
+  return <div className={agendaStyles.sections}>
+    {tournaments.length ? <div className={agendaStyles.summary} aria-label="Resumen de tu agenda">
+      <span><strong>{groups.upcoming.length}</strong> próximos</span><span><strong>{groups.pending.length}</strong> pendientes de confirmación</span>
+    </div> : null}
+    {!tournaments.length ? <PlayerStatePanel kind="empty" title="Tu agenda empieza en la cancha" message="Tus inscripciones aparecerán acá, ordenadas por fecha y confirmación." action={{label:'Explorar torneos',href:'/player/torneos/explorar'}} compact /> : sections.map(section => <section key={section.key} className={agendaStyles.section} aria-label={section.title}>
+      <header className={agendaStyles.head}><h2>{section.title}</h2><span>{groups[section.key].length} torneos</span></header>
+      {groups[section.key].length ? <div className={agendaStyles.cards}>{groups[section.key].map(tournament => <PlayerAgendaCard key={tournament.id} tournament={tournament} club={clubs[tournament.club_id]} registrationStatus={latest.get(tournament.id)?.status} />)}</div> : <p className={agendaStyles.empty}>{section.empty}</p>}
+    </section>)}
+  </div>
+}
+
 export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
   const session = useSession()
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
@@ -183,6 +205,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
   const [activeClubDetails, setActiveClubDetails] = useState<ClubRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [gender, setGender] = useState('all')
@@ -206,7 +229,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
       setMessage('')
 
       try {
-        const activeClubId = session.activeClub?.id ?? null
+        const activeClubId = session.activeClubId ?? null
         const activeClubQuery = activeClubId
           ? supabase.from('clubs').select('id,name,logo_url,rules_pdf_url').eq('id', activeClubId).maybeSingle()
           : Promise.resolve({ data: null, error: null })
@@ -217,48 +240,53 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         if (mode === 'mine') {
           const clubIds = session.clubs.map((club) => club.id)
           if (clubIds.length) {
-            const { data: teamData } = await supabase
+            const { data: teamData, error: teamsError } = await supabase
               .from('tournament_teams')
               .select('id,club_id,tournament_id')
               .in('club_id', clubIds)
               .or(`player1_user_id.eq.${session.user.id},player2_user_id.eq.${session.user.id}`)
 
+            if (teamsError) throw teamsError
             const teams = (teamData ?? []) as TeamRow[]
             const teamIds = teams.map((team) => team.id)
             if (teamIds.length) {
-              const { data: registrationData } = await supabase
+              const { data: registrationData, error: registrationError } = await supabase
                 .from('tournament_registrations')
                 .select('id,club_id,tournament_id,team_id,status,created_at')
                 .in('team_id', teamIds)
                 .order('created_at', { ascending: false })
 
+              if (registrationError) throw registrationError
               registrationRows = (registrationData ?? []) as RegistrationRow[]
               const tournamentIds = Array.from(new Set(registrationRows.map((row) => row.tournament_id)))
               if (tournamentIds.length) {
-                const { data: tournamentData } = await supabase
+                const { data: tournamentData, error: tournamentError } = await supabase
                   .from('tournaments')
                   .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs,type,tournament_type,segment,rules,rules_json')
                   .in('id', tournamentIds)
+                if (tournamentError) throw tournamentError
                 tournamentRows = (tournamentData ?? []) as TournamentRow[]
               }
             }
           }
         } else if (mode === 'calendar') {
           if (activeClubId) {
-            const { data: tournamentData } = await supabase
+            const { data: tournamentData, error: tournamentError } = await supabase
               .from('tournaments')
               .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs,type,tournament_type,segment,rules,rules_json')
               .eq('club_id', activeClubId)
               .order('starts_on', { ascending: true, nullsFirst: false })
+            if (tournamentError) throw tournamentError
             tournamentRows = (tournamentData ?? []) as TournamentRow[]
           }
         } else if (mode === 'explore') {
-          const { data: tournamentData } = await supabase
+          const { data: tournamentData, error: tournamentError } = await supabase
             .from('tournaments')
             .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs,type,tournament_type,segment,rules,rules_json')
             .not('status', 'in', '("DRAFT","CANCELLED","ARCHIVED")')
             .order('starts_on', { ascending: true, nullsFirst: false })
             .limit(72)
+          if (tournamentError) throw tournamentError
           tournamentRows = (tournamentData ?? []) as TournamentRow[]
         }
 
@@ -273,6 +301,8 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
             : Promise.resolve({ data: [], error: null }),
         ])
 
+        if (activeClubResult.error) throw activeClubResult.error
+        if (clubRowsResult.error) throw clubRowsResult.error
         if (!alive) return
         setActiveClubDetails((activeClubResult.data ?? null) as ClubRow | null)
         setClubs(Object.fromEntries(((clubRowsResult.data ?? []) as ClubRow[]).map((club) => [club.id, club])))
@@ -289,10 +319,10 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
     return () => {
       alive = false
     }
-  }, [mode, session.activeClub?.id, session.clubs, session.status, session.user?.id])
+  }, [loadAttempt, mode, session.activeClubId, session.clubs, session.status, session.user?.id])
 
   const registrationByTournament = useMemo(
-    () => new Map(registrations.map((registration) => [registration.tournament_id, registration])),
+    () => latestAgendaRegistrations(registrations),
     [registrations],
   )
 
@@ -485,7 +515,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
           ) : null}
 
           {loading ? <PlayerStatePanel kind="loading" title="Cargando torneos" message="Buscando la actividad de tu club" compact /> : null}
-          {message ? <PlayerStatePanel kind="error" title="No pudimos cargar los torneos" message="Revisá tu conexión e intentá nuevamente." action={{ label: 'Volver a Mi espacio', href: '/player' }} compact /> : null}
+          {message ? <PlayerStatePanel kind="error" title="No pudimos cargar los torneos" message="Revisá tu conexión e intentá nuevamente." onRetry={() => setLoadAttempt(value => value + 1)} compact /> : null}
 
           {!loading && !message ? (
             mode === 'explore' ? (
@@ -511,6 +541,8 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
                   </div>
                 ))}
               </section>
+            ) : mode === 'mine' ? (
+              <PlayerTournamentAgenda tournaments={visibleTournaments} registrations={registrations} clubs={clubs} />
             ) : mode === 'calendar' ? (
               <section className="playerClubCalendar" aria-label="Calendario del club">
                 <header className="playerClubCalendar__head">

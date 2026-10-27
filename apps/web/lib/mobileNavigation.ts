@@ -17,7 +17,7 @@ export function getMobileNavigation(role: AppRole, clubRole?: string | null, app
       { ...home, icon: 'home', activePrefixes: ['/actividad', '/seleccionar-club', '/unir-mi-club', '/player/pagos'] },
       { ...tournaments, icon: 'trophy', activePrefixes: ['/player/torneos', '/torneos'] },
       { ...ranking, icon: 'ranking', activePrefixes: ['/player/ranking', '/ranking', '/jugadores', '/preview/demo'] },
-      { label: 'Perfil', href: '/perfil', icon: 'profile', activePrefixes: ['/perfil', '/mis-datos', '/ajustes', '/player/carrera'] },
+      { label: 'Perfil', href: '/perfil', icon: 'profile', activePrefixes: ['/perfil', '/mi-cuenta', '/mis-datos', '/ajustes', '/player/carrera'] },
     ]
   }
   const icons: Record<Exclude<AppRole, 'player'>, MobileNavIcon[]> = {

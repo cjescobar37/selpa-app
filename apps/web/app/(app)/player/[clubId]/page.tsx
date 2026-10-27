@@ -177,7 +177,7 @@ export default function PlayerClubHomePage() {
           const rankingJson = await rankingRes.json().catch(() => ({ individual: [] }))
           sports=rankingRes.ok ? rankingJson.summary?.stats ?? null:null
           const rows = activeRes.ok ? (activeJson.partnerships ?? []) as ActivePartnership[] : []
-          const standing = rankingRes.ok ? (rankingJson.individual ?? []).find((row: { user_id?: string }) => row.user_id === session.user?.id) as { ranking_points:number;category:number|null;gender:string|null;position:number }|undefined : undefined
+          const standing = rankingRes.ok ? (rankingJson.summary?.standing ?? (rankingJson.individual ?? []).find((row: { user_id?: string }) => row.user_id === session.user?.id)) as { ranking_points:number;category:number|null;gender:string|null;position:number }|undefined : undefined
           if(currentPlayer&&!standing) currentPlayer={...currentPlayer,ranking_points:null}
           if(currentPlayer&&standing){currentPlayer={...currentPlayer,ranking_points:standing.ranking_points,category:standing.category,gender:standing.gender};rank=standing.position}
           const currentPlayerId = currentPlayer?.id

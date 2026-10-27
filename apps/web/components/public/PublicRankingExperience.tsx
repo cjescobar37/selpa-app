@@ -10,10 +10,10 @@ import RankingDiscovery from '@/components/ranking/RankingDiscovery'
 import type { RankingContext,RankingPage } from '@/features/player-career/player-career.types'
 import { individualRankingEntries, pairRankingEntries, rankingHref, rankingTiers, type RankingEntry, type RankingReadIssue, type RankingSearch } from '@/features/player-career/public-ranking.presentation'
 import styles from './PublicRankingExperience.module.css'
-export default function PublicRankingExperience({clubs,clubsCount,contexts,ranking,pairs,total,params,error,presentation,demo=false}:{
+export default function PublicRankingExperience({clubs,clubsCount,contexts,ranking,pairs,total,params,error,presentation,demo=false,seasons=[]}:{
   clubs:Array<{id:string;name:string;logo_url:string|null;theme_key:string|null;categoryCount?:number|null}>;clubsCount:number;contexts:RankingContext[];
   ranking:RankingPage;pairs:PairRankingRow[];total:number;params:RankingSearch;error:RankingReadIssue|null;
-  presentation:{counts:{M:number|null;F:number|null};leaderPoints:number|null};demo?:boolean
+  presentation:{counts:{M:number|null;F:number|null};leaderPoints:number|null};demo?:boolean;seasons?:Array<{id:string;name:string}>
 }) {
   const clubId=params.clubId ?? params.club
   const context=ranking.context
@@ -36,7 +36,7 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
     </>:<>
       <PageHeader title="Ranking" eyebrow="Competencia del club" backHref="/ranking"
         description={[selectedClub?.name ?? 'Club seleccionado',context?.seasonName].filter(Boolean).join(' · ')}/>
-      <RankingDiscovery contexts={contexts} current={context} params={params}/>
+      <RankingDiscovery contexts={contexts} current={context} params={params} seasons={seasons}/>
       {context?<p className={styles.context}><span className={styles.scopeDot}/>{context.categoryName} · Ranking anual {modality==='PAIRS'?'de parejas':'individual'}</p>:null}
       {error?<ReadError issue={error} clubName={selectedClub?.name ?? 'este club'} clubId={selectedClub?.id}/>:!context?
         <EmptyState title="Esta categoría todavía no tiene ranking" detail="Probá otra categoría o rama para explorar la competencia del club."/>:
