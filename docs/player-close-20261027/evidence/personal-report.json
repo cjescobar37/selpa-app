@@ -1,0 +1,17 @@
+{
+  "checks": [
+    "personal-save-failure-and-real-response-success-without-real-write",
+    "native-back-confirmed-returns-once-to-origin"
+  ],
+  "errors": [],
+  "interceptedWrites": [
+    "/rest/v1/messages",
+    "/rest/v1/notifications",
+    "/api/auth/complete-profile",
+    "/api/auth/complete-profile"
+  ],
+  "captures": [
+    "after-personal-saved-390"
+  ],
+  "memberships": 0
+}

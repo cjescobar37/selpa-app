@@ -19,6 +19,7 @@ import PlayerSectionHero from '@/components/player/PlayerSectionHero'
 import PageHeader from '@/components/navigation/PageHeader'
 import { supabase } from '@/lib/supabaseClient'
 import { administrativeHome, isPlayerSession } from '@/lib/accountRolePolicy'
+import { sportsDateParts } from '@/lib/sportsDate'
 
 type HubView = 'activity' | 'preferences'
 
@@ -47,10 +48,8 @@ type NotificationRow = {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return 'Fecha a definir'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Fecha a definir'
-  return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short' }).format(date)
+  const parts = sportsDateParts(value)
+  return parts ? parts.day + ' ' + parts.month : 'Fecha a definir'
 }
 
 function registrationLabel(status: string | null) {
@@ -181,7 +180,7 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
   if (view === 'preferences') {
     return (
       <main className="playerAccountHub">
-        {player ? <PlayerSectionHero badge="Mi cuenta" title="Preferencias" description="Todo lo importante de tu perfil y tu experiencia de juego." icon={<ShieldCheck />} />
+        {player ? <PlayerSectionHero badge="Mi cuenta" title="Preferencias" description="Todo lo importante de tu perfil y tu experiencia de juego." icon={<ShieldCheck />} backHref="/mi-cuenta" />
           : <PageHeader backHref="/mis-datos" title="Preferencias" description="Opciones de tu cuenta administrativa." />}
 
         <section className="playerPreferenceIdentity">
@@ -239,7 +238,7 @@ export default function PlayerAccountHub({ view }: { view: HubView }) {
 
   return (
     <main className="playerAccountHub">
-      <PlayerSectionHero badge="Tu recorrido" title="Mi actividad" description="Inscripciones y novedades que importan para tu juego." icon={<Activity />} />
+      <PlayerSectionHero badge="Tu recorrido" title="Mi actividad" description="Inscripciones y novedades que importan para tu juego." icon={<Activity />} backHref="/mi-cuenta" />
 
       {loading ? <PlayerStatePanel kind="loading" title="Cargando actividad" message="Buscando tus últimos movimientos" compact /> : null}
       {error ? <PlayerStatePanel kind="error" title="No pudimos cargar tu actividad" message="Probá de nuevo en unos segundos." action={{ label: 'Ir a Mis torneos', href: '/player/torneos' }} compact /> : null}

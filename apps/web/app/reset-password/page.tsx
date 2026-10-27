@@ -9,10 +9,12 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import AuthAlert from '@/components/AuthAlert'
 import { BRAND } from '@/lib/branding'
+import {useSession} from '@/components/session/SessionProvider'
 
 type AlertState = { variant: 'success' | 'warning' | 'error' | 'info'; title: string; message?: string } | null
 
 export default function ResetPasswordPage() {
+  const session=useSession()
   const write = useWriteGuard()
   const [email, setEmail] = useState('')
   const [alert, setAlert] = useState<AlertState>(null)
@@ -101,12 +103,12 @@ export default function ResetPasswordPage() {
           {alert ? <AuthAlert variant={alert.variant} title={alert.title} message={alert.message} /> : null}
 
           <div className="px-authRow px-loginLinks">
-            <Link className="px-loginLinkBlock" href="/login">
-              <strong>Volver <b>→</b></strong>
+            <Link className="px-loginLinkBlock" href={session.user?'/mi-cuenta':'/login'}>
+              <strong>{session.user?'Volver a Mi cuenta':'Volver'} <b>→</b></strong>
             </Link>
-            <Link className="px-loginLinkBlock" href="/register">
+            {!session.user?<Link className="px-loginLinkBlock" href="/register">
               <strong>Crear cuenta <b>→</b></strong>
-            </Link>
+            </Link>:null}
           </div>
         </form>
       </div>

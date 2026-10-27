@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-27",
+  "baseCommit": "8e0b9c83733f4c74ee2e9dd681440f4f69415f05",
+  "branch": "codex/selpa-mobile-experience-20261025",
+  "runtime": "http://10.4.21.30:3000/",
+  "typescript": "PASS",
+  "build": "PASS after permission retry for generated Windows path",
+  "contracts": {
+    "files": 36,
+    "tests": 531,
+    "pass": 531,
+    "fail": 0,
+    "skipped": 0
+  },
+  "dateTimezones": [
+    "UTC",
+    "America/Argentina/Buenos_Aires",
+    "America/Los_Angeles"
+  ],
+  "lint": {
+    "files": 28,
+    "inheritedErrors": 9,
+    "inheritedWarnings": 16,
+    "introduced": 0
+  },
+  "browser": [
+    {
+      "report": "browser-report.json",
+      "checks": 38,
+      "errors": 0,
+      "failure": null
+    },
+    {
+      "report": "forms-report.json",
+      "checks": 25,
+      "errors": 0,
+      "failure": null
+    },
+    {
+      "report": "personal-report.json",
+      "checks": 2,
+      "errors": 0,
+      "failure": null
+    },
+    {
+      "report": "journeys-report.json",
+      "checks": 47,
+      "errors": 0,
+      "failure": null
+    },
+    {
+      "report": "extra-report.json",
+      "checks": 11,
+      "errors": 0,
+      "failure": null
+    }
+  ],
+  "viewports": [
+    320,
+    375,
+    390,
+    430,
+    768,
+    1280
+  ],
+  "sharedSqlExecuted": false,
+  "sharedDataChanged": false,
+  "physicalIphoneValidation": "PENDING",
+  "push": false,
+  "deployment": false,
+  "browserTotalChecks": 123
+}

@@ -1,0 +1,15 @@
+{
+  "engine": "PGlite / PostgreSQL; metadata column types",
+  "financialRowsCreated": 0,
+  "checks": [
+    "F1D reads empty canonical tables; F1C denies PLAYER, PLANILLERO and foreign club",
+    "absent identity and direct anonymous RPC denied",
+    "read repair candidate reapplies without changing function contracts or ACL",
+    "saved function definitions and grants restore the prior read contract",
+    "proposed catalog preflight parses and executes read-only in isolation",
+    "no financial entities, balances, movements, provider state or F2 rows created or changed"
+  ],
+  "baselineHash": "80cce65621b5aa369c6566dae7ca03714f1bc60ef655c4cb7876c1c83ad112c5",
+  "finalHash": "80cce65621b5aa369c6566dae7ca03714f1bc60ef655c4cb7876c1c83ad112c5",
+  "status": "PASS"
+}

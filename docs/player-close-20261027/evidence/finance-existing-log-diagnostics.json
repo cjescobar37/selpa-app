@@ -1,0 +1,27 @@
+[
+  {
+    "source": "D:/SELPA/output/selpa-local-dev-error.log",
+    "lastWrite": "2026-10-27T12:21:55.675Z",
+    "issues": [
+      {
+        "operation": "get_player_finance_overview_f1d",
+        "code": "PGRST202"
+      }
+    ],
+    "financeHttp": []
+  },
+  {
+    "source": "D:/SELPA/output/selpa-local-dev.log",
+    "lastWrite": "2026-10-27T12:21:55.675Z",
+    "issues": [],
+    "financeHttp": [
+      "503"
+    ]
+  },
+  {
+    "source": "D:/SELPA/output/pwa-universal-preview-20261015/apps/web/.next/dev/logs/next-development.log",
+    "lastWrite": "2026-10-27T12:21:55.788Z",
+    "issues": [],
+    "financeHttp": []
+  }
+]

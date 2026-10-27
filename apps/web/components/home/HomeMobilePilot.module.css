@@ -41,8 +41,6 @@
     padding: 0;
   }
 
-  .playerHome :global(.homeModePane),
-  .playerHome :global(.homeModePane.is-community),
   .playerHome :global(.modePublicHomeEmbed) {
     display: contents;
     animation: none;

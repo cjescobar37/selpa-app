@@ -4,6 +4,7 @@ export default function PlayerMensajesPage() {
   return (
     <PampraxInbox
       scope="player"
+      backHref="/player"
       title="Mis mensajes"
       subtitle="Conversaciones con clubes por inscripciones, pagos, bajas y consultas deportivas."
     />

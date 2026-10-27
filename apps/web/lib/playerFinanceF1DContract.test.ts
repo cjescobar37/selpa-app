@@ -124,7 +124,7 @@ test('O: server-side batch reads, restricted page sizes and club grouping avoid 
 })
 
 test('P: player navigation and copy have no technical IDs or payment actions', () => {
-  assert.equal((navbar.match(/href="\/player\/pagos"/g) ?? []).length, 2)
+  assert.equal((navbar.match(/href="\/player\/pagos"/g) ?? []).length, 1)
   assert.match(gate, /'\/player\/pagos'/)
   assert.match(page, /Mis pagos/)
   // F1E adds a server-gated provider CTA; F1D still has no legacy money-reporting actions.

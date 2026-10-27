@@ -88,3 +88,10 @@ export function getTournamentFlyerUrl(tournament: unknown) {
 
   return null
 }
+
+/** Actual published poster only; a configured background is not a full flyer. */
+export function getTournamentPosterUrl(tournament:unknown) {
+  const item=asObject(tournament)
+  const rules={...asObject(item.rules_json),...asObject(item.rules)}
+  return getTournamentFlyerUrl({...item,rules:{...rules,flyer_background:undefined},flyerUrl:asUrl(rules.flyer_manual_url) ?? item.flyerUrl})
+}

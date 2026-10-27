@@ -1,0 +1,226 @@
+[
+  {
+    "file": "apps/web/app/(app)/notificaciones/page.tsx",
+    "baselineErrors": 1,
+    "baselineWarnings": 0,
+    "errors": 1,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/app/(app)/player/mensajes/page.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/app/(app)/player/page.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 2,
+    "errors": 0,
+    "warnings": 2,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/app/(app)/player/torneos/TournamentsPlayerView.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 1,
+    "errors": 0,
+    "warnings": 1,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/app/completar-perfil/page.tsx",
+    "baselineErrors": 8,
+    "baselineWarnings": 3,
+    "errors": 8,
+    "warnings": 3,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/app/reset-password/page.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 1,
+    "errors": 0,
+    "warnings": 1,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/components/navbar/AppNavbarClient.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 8,
+    "errors": 0,
+    "warnings": 8,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/components/player/CareerExperience.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/components/player/CareerIdentityHero.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/components/player/PlayerAccountCenter.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/components/player/PlayerAccountHub.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 1,
+    "errors": 0,
+    "warnings": 1,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/components/player/PlayerAgendaCard.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/components/player/PlayerSectionHero.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/components/ui/ActionFeedbackNotice.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/lib/playerAgenda.ts",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/lib/playerFinanceF1DContract.test.ts",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/lib/productCompletionPass1Contract.test.ts",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/lib/testHelpers/sportsPrivacyFixture.mjs",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/lib/tournamentFlyers.ts",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/scripts/qa/block1-fixture.mjs",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/components/home/PlayerModeSurface.tsx",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/lib/playerCloseContract.test.ts",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/lib/profileEditNavigation.ts",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/lib/sportsDate.ts",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/lib/useUnsavedProfileGuard.ts",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/scripts/qa/player-close-finance-rehearsal.mjs",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/scripts/qa/player-close-schema.mjs",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  },
+  {
+    "file": "apps/web/scripts/qa/player-close-sports-rehearsal.mjs",
+    "baselineErrors": 0,
+    "baselineWarnings": 0,
+    "errors": 0,
+    "warnings": 0,
+    "introduced": []
+  }
+]

@@ -1,3 +1,4 @@
+import { sportsDateKey } from './sportsDate'
 export type AgendaTournament = { id: string; status: string | null; starts_on: string | null; start_date: string | null; ends_on: string | null; end_date: string | null }
 export type AgendaRegistration = { id: string; tournament_id: string; status: string | null; created_at: string }
 export type AgendaGroup = 'upcoming' | 'pending' | 'history'
@@ -15,7 +16,7 @@ export function latestAgendaRegistrations<T extends AgendaRegistration>(rows: T[
   return result
 }
 
-function dateKey(value: string | null) { return value && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0,10) : null }
+const dateKey=sportsDateKey
 export function agendaDay(now: Date) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year:'numeric', month:'2-digit', day:'2-digit' }).format(now)
 }

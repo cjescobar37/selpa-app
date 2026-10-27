@@ -1,0 +1,22 @@
+[
+  {
+    "file": "20261009100429_player_career_read_models.sql",
+    "sha256": "4ff4faa506f49e88631947a4c2dc51b968f79400769fe05b80b85866bca03540",
+    "normalization": "UTF-8, LF"
+  },
+  {
+    "file": "20261022135243_public_sports_visibility_reads.sql",
+    "sha256": "912699c87824f52a2bf5b6026de34c96636705efaba090e6c9f77e0b2d1afa2f",
+    "normalization": "UTF-8, LF"
+  },
+  {
+    "file": "20261006114657_20261002170000_club_finance_f1c_read_model.sql",
+    "sha256": "8da16eb6c2279d0009c089a03e2016e6a9026cf2938aef4e9865b508ed4b095a",
+    "normalization": "UTF-8, LF"
+  },
+  {
+    "file": "20261006165334_20261006152334_player_finance_f1d_read_model.sql",
+    "sha256": "43deb8e33aa4a8e86f86a5c38e5cc817ed818b6e631796c9e741ff92fd3f74ea",
+    "normalization": "UTF-8, LF"
+  }
+]

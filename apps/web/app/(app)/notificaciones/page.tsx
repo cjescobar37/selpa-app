@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCheck } from 'lucide-react'
+import PageHeader from '@/components/navigation/PageHeader'
+import controls from '@/components/product/ProductFlow.module.css'
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import { getClubTheme } from '@/lib/clubThemes'
@@ -194,6 +196,7 @@ export default function NotificacionesPage() {
   return (
     <main className="px-notificationsPage" style={themeStyle}>
       <section className="px-notificationsCard">
+      {role==='player'?<PageHeader title={<span style={{fontSize:'clamp(20px, 6vw, 24px)'}}>{pageTitle}</span>} eyebrow="Novedades" description={unread?String(unread)+' sin leer':'Novedades de tus clubes y torneos.'} backHref="/player" tone="dark" fullBleedMobile={false} compactActions actions={<button className={controls.link} type="button" title="Marcar todas como leídas" aria-label="Marcar todas como leídas" onClick={markAllRead} disabled={unread===0}><CheckCheck size={18}/></button>} />:<>
       <div className="px-notificationsHead">
         <div>
           <span>Centro de novedades</span>
@@ -209,6 +212,8 @@ export default function NotificacionesPage() {
           </button>
         </div>
       </div>
+
+      </>}
 
       <div className="px-notificationsList">
         {msg ? (

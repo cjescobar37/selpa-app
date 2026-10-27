@@ -1,0 +1,29 @@
+[
+  {
+    "TZ": "UTC",
+    "status": 0,
+    "summary": [
+      "ℹ tests 8",
+      "ℹ pass 8",
+      "ℹ fail 0"
+    ]
+  },
+  {
+    "TZ": "America/Argentina/Buenos_Aires",
+    "status": 0,
+    "summary": [
+      "ℹ tests 8",
+      "ℹ pass 8",
+      "ℹ fail 0"
+    ]
+  },
+  {
+    "TZ": "America/Los_Angeles",
+    "status": 0,
+    "summary": [
+      "ℹ tests 8",
+      "ℹ pass 8",
+      "ℹ fail 0"
+    ]
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "engine": "PGlite / PostgreSQL; isolated synthetic sports data",
+  "metadataTables": 26,
+  "checks": [
+    "exact migration pair leaves base rows unchanged",
+    "own category and points; private club and STAFF isolation",
+    "backend grant works; direct anon/authenticated reads denied",
+    "rollback restores absent objects and identical base data",
+    "re-enable restores identical official position and points"
+  ],
+  "baselineHash": "cb65b401fe6e61b991a0348976c38828e6fcf1a92e5f1010cc51baadd8cff788",
+  "rollbackHash": "cb65b401fe6e61b991a0348976c38828e6fcf1a92e5f1010cc51baadd8cff788",
+  "status": "PASS"
+}

@@ -729,9 +729,9 @@ export default function AppNavbarClient() {
               {playerIdentityMeta ? <em>{playerIdentityMeta}</em> : null}
             </div>
           </Link>
+          <Link className="px-ddItem" role="menuitem" href="/mi-cuenta" onClick={closeAllMenus}><Settings size={18} />Mi cuenta</Link>
           <Link className="px-ddItem" role="menuitem" href="/actividad" onClick={closeAllMenus}><Activity size={18} />Mi actividad</Link>
           <Link className="px-ddItem" role="menuitem" href="/player/pagos" onClick={closeAllMenus}><WalletCards size={18} />Mis pagos</Link>
-          <Link className="px-ddItem" role="menuitem" href="/mi-cuenta" onClick={closeAllMenus}><Settings size={18} />Mi cuenta</Link>
           <div className="px-ddSep" />
           <button className="px-ddItem px-ddItem--danger" role="menuitem" disabled={loggingOut} onClick={() => void logout()}><LogOut size={18} />{loggingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
         </div>

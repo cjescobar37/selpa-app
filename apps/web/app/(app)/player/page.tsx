@@ -25,6 +25,7 @@ import CareerRecentResults from '@/components/player/CareerRecentResults'
 import { HomeInstallSlot } from '@/components/pwa/HomeInstallPlacement'
 import { useHomeMobileLayout } from '@/lib/useHomeMobileLayout'
 import PlayerHomeName from '@/components/home/PlayerHomeName'
+import PlayerModeSurface from '@/components/home/PlayerModeSurface'
 import productControls from '@/components/product/ProductFlow.module.css'
 
 type ClubPlayerRow = {
@@ -475,7 +476,7 @@ export default function PlayerHomePage() {
   return (
     <div className="playerHomeShell">
       <div className="playerHomeTopControls">{homeControls}</div>
-      <div className={`homeModePane${homeMode === 'community' ? ' is-community' : ''}`}>
+      <PlayerModeSurface mode={homeMode}>
       {homeMode === 'community' ? (
         <PublicHomeEmbed userName={canonicalPlayerName} afterHero={<HomeInstallSlot />} />
       ) : (
@@ -787,7 +788,7 @@ export default function PlayerHomePage() {
       <Link href="/noticias" className={productControls.link}><Newspaper size={17} aria-hidden="true" /> Ver noticias de la comunidad</Link>
       </>
       )}
-      </div>
+      </PlayerModeSurface>
 
       <style>{`
         .playerHomeShell { background:

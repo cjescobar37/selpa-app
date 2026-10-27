@@ -187,13 +187,15 @@ function PlayerTournamentAgenda({ tournaments, registrations, clubs }: { tournam
     { key:'history' as const, title:'Historial', empty:'Tus torneos anteriores aparecerán acá.' },
   ]
   return <div className={agendaStyles.sections}>
-    {tournaments.length ? <div className={agendaStyles.summary} aria-label="Resumen de tu agenda">
+    {groups.upcoming.length || groups.pending.length ? <div className={agendaStyles.summary} aria-label="Resumen de tu agenda">
       <span><strong>{groups.upcoming.length}</strong> próximos</span><span><strong>{groups.pending.length}</strong> pendientes de confirmación</span>
     </div> : null}
-    {!tournaments.length ? <PlayerStatePanel kind="empty" title="Tu agenda empieza en la cancha" message="Tus inscripciones aparecerán acá, ordenadas por fecha y confirmación." action={{label:'Explorar torneos',href:'/player/torneos/explorar'}} compact /> : sections.map(section => <section key={section.key} className={agendaStyles.section} aria-label={section.title}>
-      <header className={agendaStyles.head}><h2>{section.title}</h2><span>{groups[section.key].length} torneos</span></header>
+    {tournaments.length && !groups.upcoming.length && !groups.pending.length ? <p className={agendaStyles.empty}>Sin próximos torneos ni confirmaciones pendientes. Podés revisar tu historial.</p> : null}
+    {!tournaments.length ? <PlayerStatePanel kind="empty" title="Tu agenda empieza en la cancha" message="Tus inscripciones aparecerán acá, ordenadas por fecha y confirmación." action={{label:'Explorar torneos',href:'/player/torneos/explorar'}} compact /> : sections.filter(section => groups[section.key].length).map(section => <section key={section.key} className={agendaStyles.section} aria-label={section.title}>
+      <header className={agendaStyles.head}><h2>{section.title}</h2><span>{groups[section.key].length} {groups[section.key].length===1?'torneo':'torneos'}</span></header>
       {groups[section.key].length ? <div className={agendaStyles.cards}>{groups[section.key].map(tournament => <PlayerAgendaCard key={tournament.id} tournament={tournament} club={clubs[tournament.club_id]} registrationStatus={latest.get(tournament.id)?.status} />)}</div> : <p className={agendaStyles.empty}>{section.empty}</p>}
     </section>)}
+    {tournaments.length ? <p className={agendaStyles.empty}>La confirmación corresponde al cupo. Consultá los pagos acreditados en <Link href="/player/pagos">Mis pagos</Link>.</p> : null}
   </div>
 }
 
@@ -487,7 +489,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         title={copy.title}
         description={copy.body}
         icon={<Icon />}
-        action={<Link className="playerTournamentsBack" href="/player">← Volver</Link>}
+        action={mode==='mine'?undefined:<Link className="playerTournamentsBack" href="/player">← Volver</Link>}
       />
 
       {mode === 'rules' ? (

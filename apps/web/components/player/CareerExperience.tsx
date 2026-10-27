@@ -44,7 +44,7 @@ export default function CareerExperience(props:{identity:CareerIdentity;own?:boo
 }
 function GlobalCareerExperience({identity,own=false}:{identity:CareerIdentity;own?:boolean}) {
   const [message,setMessage]=useState('')
-  return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} aria-label="Carrera deportiva"><CareerIdentityHero identity={identity} own={own} editorHref="/completar-perfil?edit=sports" onShare={()=>void shareIdentity(identity,setMessage)}/>
+  return <section className={`${styles.shell} ${own?'':styles.publicProfile}`} aria-label="Carrera deportiva"><CareerIdentityHero identity={identity} own={own} editorHref="/completar-perfil?edit=sports&returnTo=%2Fperfil" onShare={()=>void shareIdentity(identity,setMessage)}/>
     <p role="status" className={styles.shareMessage}>{message}</p><CareerPerformance available={false}/><section className={styles.panel} id="perfil-carrera"><h2>Tu próximo capítulo</h2><p>Tu identidad ya está lista. Cuando participes en un club con resultados publicados, vas a encontrar acá tu rendimiento y trayectoria.</p><Link className={styles.link} href="/clubes">Explorar clubes</Link></section></section>
 }
 async function shareIdentity(identity:CareerIdentity,setMessage:(message:string)=>void) {

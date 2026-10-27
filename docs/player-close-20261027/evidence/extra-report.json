@@ -1,0 +1,36 @@
+{
+  "checks": [
+    "standalone-safe-area-390",
+    "bottom-route-Torneos",
+    "bottom-route-Mi ranking",
+    "bottom-profile-real-route",
+    "personal-editor-existing-route",
+    "account-existing-personal-editor",
+    "sports-editor-existing-route",
+    "account-existing-sports-editor",
+    "header-Mensajes",
+    "header-Notificaciones",
+    "desktop-compact-menu"
+  ],
+  "errors": [],
+  "interceptedWrites": [
+    "/rest/v1/messages",
+    "/rest/v1/notifications",
+    "/rest/v1/messages",
+    "/rest/v1/notifications",
+    "/rest/v1/messages",
+    "/rest/v1/notifications",
+    "/rest/v1/messages",
+    "/rest/v1/notifications",
+    "/rest/v1/messages",
+    "/rest/v1/notifications",
+    "/rest/v1/messages",
+    "/rest/v1/notifications"
+  ],
+  "captures": [
+    "after-home-safe-area-390",
+    "preserved-profile-390",
+    "after-menu-desktop"
+  ],
+  "memberships": 1
+}

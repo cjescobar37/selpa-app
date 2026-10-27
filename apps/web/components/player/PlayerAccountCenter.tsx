@@ -15,6 +15,7 @@ const groups = [
   { title: 'Preferencias', links: [
     { href: '/ajustes', title: 'Preferencias de mi cuenta', detail: 'Opciones disponibles de tu experiencia', icon: Settings },
     { href: '/seleccionar-club', title: 'Mis clubes', detail: 'Elegir o cambiar el club activo', icon: UsersRound },
+    { href: '/player#pareja-activa', title: 'Pareja e invitaciones', detail: 'Tus vínculos deportivos y solicitudes', icon: UsersRound },
     { href: '/notificaciones', title: 'Notificaciones', detail: 'Avisos de clubes y torneos', icon: Bell },
   ] },
   { title: 'Privacidad y seguridad', links: [
@@ -26,7 +27,7 @@ const groups = [
 export default function PlayerAccountCenter() {
   const session = useSession()
   return <PlayerSpaceLayout><main className={styles.shell}>
-    <PlayerSectionHero title="Mi cuenta" badge="Área privada" description={session.user?.name ?? 'Datos, preferencias y seguridad'} icon={<Settings />} />
+    <PlayerSectionHero title="Mi cuenta" badge="Área privada" description={session.user?.name ?? 'Datos, preferencias y seguridad'} icon={<Settings />} backHref="/player" />
     {groups.map(group => <section className={styles.group} key={group.title} aria-label={group.title}>
       <h2>{group.title}</h2>
       {group.links.map(({ href, title, detail, icon: Icon }) => <Link href={href} key={href} className={styles.row}>

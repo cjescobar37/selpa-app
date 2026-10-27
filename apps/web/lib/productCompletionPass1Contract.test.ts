@@ -130,7 +130,7 @@ test('search read failure never reports a valid empty result', async () => {
 
 test('primary Platform navigation uses canonical Billing and exposes configuration/audit', () => {
   const nav = read('./navConfig.ts')
-  const platform = nav.split('platform:')[1]?.split('player:')[0] ?? nav
+  const platform = nav.split('export const NAV_CONFIG')[1]?.split('  platform:')[1] ?? ''
   assert.match(platform, /\/platform\/facturacion/)
   assert.match(platform, /\/platform\/configuracion/)
   assert.match(platform, /\/platform\/logs/)
@@ -147,10 +147,11 @@ test('operational club report does not query or total legacy payments; finance l
 
 test('profile/club selection fail distinctly from legitimate no-membership state and offer retry', () => {
   const profile = read('../app/(app)/perfil/page.tsx')
-  assert.match(profile, /if \(!response.ok\) throw new Error\('READ'\)/)
+  assert.match(profile, /readPlayerProfile<[\s\S]*?controller.signal\)/)
+  assert.match(profile, /if \(!Array.isArray\(result.memberships\)\) throw new Error\('READ'\)/)
   assert.match(profile, /if \(loadError\) return <PlayerStatePanel kind="error"/)
   assert.match(profile, /onRetry=\{/)
-  assert.match(profile, /finally \{ if \(alive\) setLoadingMemberships\(false\) \}/)
+  assert.match(profile, /finally \{ if \(!controller.signal.aborted\) setLoadingMemberships\(false\) \}/)
   const select = read('../app/(app)/seleccionar-club/page.tsx')
   assert.match(select, /readFailed \? <button[\s\S]*Reintentar/)
   assert.match(select, /finally \{ if \(!cancelled\) setLoading\(false\) \}/)

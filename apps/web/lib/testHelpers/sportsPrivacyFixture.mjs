@@ -1,8 +1,8 @@
 /** Local-only additions to the existing synthetic PostgreSQL fixture. */
 import {readFileSync} from 'node:fs'
 import {id,CLUB,SEASON} from '../../scripts/qa/block1-fixture.mjs'
-export async function addSportsPrivacyFixture(db){
-  await db.exec(`
+export async function addSportsPrivacyFixture(db,{installReadModels=true,schemaReady=false}={}){
+  if(!schemaReady)await db.exec(`
     alter table competition_seasons add column is_public boolean not null default true;
     alter table competition_divisions add column is_visible boolean not null default true;
     alter table competition_branches add column is_visible boolean not null default true;
@@ -23,6 +23,6 @@ export async function addSportsPrivacyFixture(db){
     await db.query('insert into competition_series_event_divisions(id,club_id,series_division_id,event_id,status) values($1,$2,$3,$4,$5)',[id(99000+n),CLUB,id(90),id(13000+n),'COMPLETED'])
     await db.query('update competition_event_homologations set event_division_id=$1 where event_id=$2',[id(99000+n),id(13000+n)])
   }
-  await db.exec(readFileSync(new URL('../../supabase/migrations/20261022135243_public_sports_visibility_reads.sql',import.meta.url),'utf8'))
+  if(installReadModels)await db.exec(readFileSync(new URL('../../supabase/migrations/20261022135243_public_sports_visibility_reads.sql',import.meta.url),'utf8'))
   await db.exec('grant select on all tables in schema public to service_role')
 }

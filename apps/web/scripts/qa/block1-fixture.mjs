@@ -13,10 +13,10 @@ export const QA_ACTORS=['OWNER','ADMIN','OPERADOR','PLANILLERO','PLATFORM'].map(
   const token=[{alg:'HS256',typ:'JWT'},{sub:userId,role:'authenticated',aud:'authenticated',exp:4102444800},'QA_ONLY'].map(v=>Buffer.from(typeof v==='string'?v:JSON.stringify(v)).toString('base64url')).join('.')
   return {role,userId,token}
 })
-export async function createFixture() {
+export async function createFixture({installReadModels=true,schemaSql=null}={}) {
   const {PGlite}=qaRequire('@electric-sql/pglite')
   const db=new PGlite()
-  await db.exec(`
+  await db.exec(schemaSql ?? `
     create role anon;create role authenticated;create role service_role;
     create table clubs(id uuid primary key,name text,is_active boolean,owner_user_id uuid,logo_url text,theme_key text,city text,province text,country text,status text default 'ACTIVE');
     create table profiles(user_id uuid primary key,id uuid,display_name text,first_name text,last_name text,avatar_url text,cover_url text,email text,birth_date date,phone_e164 text,phone_number text,gender text,country_code text,country text,province_id text,province text,city_id text,city text,height_cm integer,dominant_hand text,preferred_position text,phone_country_code text,phone_area_code text);
@@ -101,7 +101,7 @@ export async function createFixture() {
   if (pairStart<0 || pairEnd<0) throw new Error('Canonical PAIRS fixture source not found')
   await db.exec(currentPair.slice(pairStart,pairEnd))
   const migration=await readFile(path.join(root,'apps/web/supabase/migrations/20261009100429_player_career_read_models.sql'),'utf8')
-  await db.exec(migration)
+  if(installReadModels)await db.exec(migration)
   for(const [index,actor] of QA_ACTORS.entries()) {
     await insert('profiles',{user_id:actor.userId,id:actor.userId,first_name:'Cuenta',last_name:actor.role,display_name:'Cuenta '+actor.role,email:'qa-staff@invalid.test'})
     await insert('user_settings',{user_id:actor.userId,active_club_id:CLUB})
