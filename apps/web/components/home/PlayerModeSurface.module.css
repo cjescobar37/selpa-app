@@ -1,1 +1,87 @@
-.pane.pane{--frame-start:var(--club-primary,#0891b2);--frame-end:var(--club-secondary,#a32485);position:relative;isolation:isolate;display:grid;gap:10px;min-width:0;animation:none}.pane[data-player-mode=community]{--frame-start:#22d3ee;--frame-end:#ec4899}.rails{pointer-events:none;position:absolute;z-index:1;inset:4px -5px -4px;border-left:2px solid color-mix(in srgb,var(--frame-start) 55%,transparent);border-right:2px solid color-mix(in srgb,var(--frame-end) 55%,transparent);border-radius:0 0 15px 15px;mask-image:linear-gradient(#000 0%,#000 93%,transparent);-webkit-mask-image:linear-gradient(#000 0%,#000 93%,transparent)}.connector{position:absolute;z-index:2;pointer-events:none;inset:-4px -5px auto;width:calc(100% + 10px);height:8px;overflow:visible;animation:connect .18s ease-out both}.start{stop-color:var(--frame-start)}.end{stop-color:var(--frame-end)}@keyframes connect{from{opacity:.25;transform:translateY(-2px)}to{opacity:.8;transform:none}}@media(prefers-reduced-motion:reduce){.connector{animation:none}}
+.surface {
+  --sheet-fill: color-mix(in srgb, var(--club-primary, #0891b2) 13%, transparent);
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  width: 100%;
+}
+
+.surface[data-player-mode='community'] {
+  --sheet-fill: color-mix(in srgb, color-mix(in srgb, #22d3ee 55%, #ec4899) 15%, transparent);
+}
+
+.controls { padding: 0 8px; }
+
+/* A filled neck, not a stroked outline: the selected half opens into the sheet.
+   Its 12px inner curve matches the gap between tab and content at every width. */
+.connection {
+  position: relative;
+  height: 12px;
+  pointer-events: none;
+  animation: connect 250ms ease-out both;
+}
+
+.stem,
+.curve {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.stem {
+  left: 0;
+  right: calc(50% + 2px);
+  background: var(--sheet-fill);
+  border-top-left-radius: 8px;
+}
+
+.curve {
+  left: calc(50% - 2px);
+  width: 12px;
+  background: radial-gradient(circle at top right, transparent 11.5px, var(--sheet-fill) 12px);
+}
+
+.surface[data-player-mode='community'] .stem {
+  left: calc(50% + 2px);
+  right: 0;
+  border-radius: 0 8px 0 0;
+}
+
+.surface[data-player-mode='community'] .curve {
+  left: auto;
+  right: calc(50% - 2px);
+  background: radial-gradient(circle at top left, transparent 11.5px, var(--sheet-fill) 12px);
+}
+
+.pane.pane {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px;
+  background: var(--sheet-fill);
+  border-radius: 0 16px 20px 20px;
+  animation: none;
+}
+
+.surface[data-player-mode='community'] .pane {
+  border-top-left-radius: 16px;
+  border-top-right-radius: 0;
+}
+
+@keyframes connect {
+  from { opacity: .4; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 980px) {
+  .surface {
+    margin-inline: -8px;
+    width: calc(100% + 16px);
+  }
+  .controls { padding-top: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connection { animation: none; }
+}

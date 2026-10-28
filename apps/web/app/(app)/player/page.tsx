@@ -470,13 +470,12 @@ export default function PlayerHomePage() {
   }
 
   const homeControls = <>
-    <ModeSegmentedControl value={homeMode} onChange={changeHomeMode} rootRef={attachControls} asButtons={integratedMobile} />
+    <ModeSegmentedControl value={homeMode} onChange={changeHomeMode} rootRef={attachControls} asButtons={integratedMobile} connected />
   </>
 
   return (
     <div className="playerHomeShell">
-      <div className="playerHomeTopControls">{homeControls}</div>
-      <PlayerModeSurface mode={homeMode}>
+      <PlayerModeSurface mode={homeMode} controls={<div className="playerHomeTopControls">{homeControls}</div>}>
       {homeMode === 'community' ? (
         <PublicHomeEmbed userName={canonicalPlayerName} afterHero={<HomeInstallSlot />} />
       ) : (
@@ -791,10 +790,7 @@ export default function PlayerHomePage() {
       </PlayerModeSurface>
 
       <style>{`
-        .playerHomeShell { background:
-          radial-gradient(circle at 8% 0%, var(--club-soft, rgba(34,211,238,.16)), transparent 34%),
-          radial-gradient(circle at 94% 8%, color-mix(in srgb, var(--club-secondary, #ec4899) 12%, transparent), transparent 30%),
-          #f3f7fb;
+        .playerHomeShell { background: #f3f7fb;
           color: #061b3a;
           display: grid;
           gap: 16px;
@@ -814,18 +810,11 @@ export default function PlayerHomePage() {
         .playerHomePanel--empty h1 { font-size: 28px; margin: 0; }
         .playerHomePanel--empty p { color: #64748b; font-weight: 750; margin: 0; }
         .playerHomePanel--empty a { background: #0ea5e9; border-radius: 999px; color: #fff; font-weight: 900; padding: 10px 14px; text-decoration: none; }
-        .homeModePane {
-          animation: modeFadeIn .22s ease both;
-          display: grid;
-          gap: 16px;
-          min-width: 0;
-        }
-        .homeModePane.is-community {
-          display: block;
-        }
         .modePublicHomeEmbed {
-          animation: modeFadeIn .22s ease both;
-          margin: 0 -18px;
+          display: grid;
+          gap: 10px;
+          min-width: 0;
+          margin: 0;
         }
         .modeEmbedState {
           background: rgba(255,255,255,.86);
@@ -834,10 +823,6 @@ export default function PlayerHomePage() {
           color: #475569;
           font-weight: 850;
           padding: 18px;
-        }
-        @keyframes modeFadeIn {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
         }
         .playerHomeHero {
           align-items: center;
@@ -1094,12 +1079,6 @@ export default function PlayerHomePage() {
           .playerHomeShell {
             gap: 10px;
             padding: 0;
-          }
-          .homeModePane {
-            gap: 10px;
-          }
-          .modePublicHomeEmbed {
-            margin: 0;
           }
           .playerHomePanel, .playerHomeHero, .playerSection, .playerQuickGrid {
             border-radius: 16px;

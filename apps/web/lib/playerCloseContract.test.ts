@@ -28,12 +28,12 @@ test('profile return destinations reject external, API, authentication and recur
   for(const path of [null,'https://example.com','//example.com','/api/auth/signout','/login','/completar-perfil?edit=sports','/\\evil'])assert.equal(profileEditReturn(path),'/mi-cuenta')
   for(const path of ['/mi-cuenta','/mis-datos','/perfil','/player'])assert.equal(profileEditReturn(path),path)
 })
-test('mode framing is shared, decorative and respects reduced motion without changing the approved segments',()=>{
+test('connected mode sheet shares its tab and content, remains decorative and respects reduced motion',()=>{
   const component=source('components/home/PlayerModeSurface.tsx'),css=source('components/home/PlayerModeSurface.module.css')
   assert.match(component,/aria-hidden="true"/);assert.match(component,/data-player-mode=\{mode\}/)
-  assert.match(css,/pointer-events:none/);assert.match(css,/prefers-reduced-motion/)
+  assert.match(css,/pointer-events:\s*none/);assert.match(css,/prefers-reduced-motion/)
   assert.doesNotMatch(css,/height:\s*100vh|transition:all|animation:.*infinite/)
-  assert.match(source('app/(app)/player/page.tsx'),/<PlayerModeSurface mode=\{homeMode\}>/)
+  assert.match(source('app/(app)/player/page.tsx'),/<PlayerModeSurface mode=\{homeMode\} controls=/)
 })
 test('secondary navigation stays out of the four main tab headers and preserves partner access',()=>{
   assert.match(source('components/player/PlayerAccountCenter.tsx'),/href: '\/player#pareja-activa'/)

@@ -9,15 +9,17 @@ export default function ModeSegmentedControl({
   onChange,
   rootRef,
   asButtons = false,
+  connected = false,
 }: {
   value: HomeMode
   onChange: (value: HomeMode) => void
   rootRef?: Ref<HTMLDivElement>
   asButtons?: boolean
+  connected?: boolean
 }) {
   return (
     <>
-      <div ref={rootRef} className="homeModeSwitch" role={asButtons ? 'group' : 'tablist'} aria-label="Modo de inicio">
+      <div ref={rootRef} className="homeModeSwitch" data-connected={connected || undefined} role={asButtons ? 'group' : 'tablist'} aria-label="Modo de inicio">
         <button
           type="button"
           role={asButtons ? undefined : 'tab'}
@@ -93,6 +95,9 @@ export default function ModeSegmentedControl({
             font-size: 11px;
           }
         }
+        .homeModeSwitch[data-connected] { background: transparent; padding: 0; gap: 4px; }
+        .homeModeSwitch[data-connected] button:not(.is-active) { background: #0a1f3b; }
+        .homeModeSwitch[data-connected] button.is-active { border-bottom-left-radius: 0; border-bottom-right-radius: 0; box-shadow: none; }
         .homeModeSwitch button:focus-visible { outline: 2px solid #0896ad; outline-offset: -2px; }
         @media (prefers-reduced-motion: reduce) { .homeModeSwitch button { transition: none; } }
       `}</style>

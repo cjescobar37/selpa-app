@@ -105,6 +105,9 @@ export default function PublicHomeEmbed({ userName, afterHero }: { userName?: st
       />
       <style>{`
         .modeCommunityHero {
+          box-sizing: border-box;
+          width: 100%;
+          min-width: 0;
           background:
             radial-gradient(circle at 12% 0%, rgba(34,211,238,.18), transparent 34%),
             linear-gradient(135deg, #07152f, #0b1734 52%, #17162f);
@@ -114,7 +117,7 @@ export default function PublicHomeEmbed({ userName, afterHero }: { userName?: st
           color: #fff;
           display: grid;
           gap: 8px;
-          margin: 0 auto 16px;
+          margin: 0;
           max-width: 1180px;
           overflow: hidden;
           padding: 18px 20px;
@@ -179,7 +182,6 @@ export default function PublicHomeEmbed({ userName, afterHero }: { userName?: st
           .modeCommunityHero {
             border-radius: 16px;
             gap: 5px;
-            margin-bottom: 8px;
             padding: 10px 11px;
           }
           .modeCommunityHero::after {
