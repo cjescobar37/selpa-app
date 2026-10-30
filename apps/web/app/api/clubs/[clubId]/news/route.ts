@@ -78,7 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ clu
         .eq('club_id', clubId)
         .filter('metadata->>featured_rank', 'eq', String(featuredRank))
 
-      await Promise.all((rankedRows ?? []).map((row: any) => supabaseAdmin
+      await Promise.all((rankedRows ?? []).map((row) => supabaseAdmin
         .from('platform_news')
         .update({ metadata: { ...(row.metadata ?? {}), featured_rank: null } })
         .eq('id', row.id)))
@@ -98,7 +98,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ clu
     }
 
     return NextResponse.json({ ok: true, row: data })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: error?.message ?? 'No pude crear la noticia.' }, { status: 500 })
   }
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
+import ts from 'typescript'
 import {
   buildBracketSlots,
   buildCanonicalSeedLine,
@@ -246,7 +247,14 @@ test('cupos resueltos 3+2+2+2+2+2 producen 13 clasificados y 3 BYEs sin mejores 
 
 test('la UI de torneo consume la preview pura y mantiene la sección sin escrituras ni overflow horizontal', () => {
   const source = readFileSync(join(process.cwd(), 'app/(app)/club/torneos/[id]/page.tsx'), 'utf8')
-  const previewRenderer = source.slice(source.indexOf('function renderOpenPlayoffPreview()'), source.indexOf('function renderFourTeamGroupDraw'))
+  const file = ts.createSourceFile('page.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  let previewRenderer = ''
+  function visit(node: ts.Node) {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === 'renderOpenPlayoffPreview') previewRenderer = node.getText(file)
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  assert.ok(previewRenderer, 'the preview renderer must exist')
 
   assert.match(source, /buildOpenPlayoffPreview\(groups\)/)
   assert.match(source, /Grupo .* todavía no tiene posiciones finales\. Completá A-03 y A-04\./)

@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises'
 import {fileURLToPath} from 'node:url'
 import path from 'node:path'
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../../..')
-const qaRequire=createRequire(path.join(process.env.SELPA_QA_MODULES ?? path.join(root,'output/block1-qa'),'package.json'))
+const qaRequire=createRequire(path.join(process.env.SELPA_QA_MODULES ?? path.join(root,'apps/web'),'package.json'))
 export const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`
 export const PLAYER=id(1006), CLUB=id(1), CLUB_PLAYER=id(2006), SEASON=id(10), DIVISION=id(20)
 export const QA_TOKEN=[{alg:'HS256',typ:'JWT'},{sub:PLAYER,role:'authenticated',aud:'authenticated',exp:4102444800},'QA_ONLY'].map(v=>Buffer.from(typeof v==='string'?v:JSON.stringify(v)).toString('base64url')).join('.')

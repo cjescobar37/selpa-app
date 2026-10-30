@@ -1,4 +1,5 @@
-/** Registration and payment have independent authorities. */
+/** Registration and payment have independent authorities. A provider return,
+ * payment approval or requested cash method alone never confirms a place. */
 export function registrationPresentation(registration?:string|null,payment?:string|null) {
   const status=String(registration ?? '').toUpperCase(),paid=['PAID','APPROVED'].includes(String(payment ?? '').toUpperCase())
   if(status==='CONFIRMED') return {confirmed:true,title:'INSCRIPCIÓN CONFIRMADA',description:'El club confirmó tu inscripción.',withdrawal:'Solicitar baja del torneo'}

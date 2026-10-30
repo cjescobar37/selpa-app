@@ -226,7 +226,7 @@ export async function POST(req: Request) {
       .from('platform_admins')
       .select('user_id')
 
-    const adminIds = Array.from(new Set((platformAdmins ?? []).map((row: any) => row.user_id).filter(Boolean)))
+    const adminIds = Array.from(new Set((platformAdmins ?? []).map((row) => row.user_id).filter(Boolean)))
     if (adminIds.length > 0) {
       await supabaseAdmin.from('notifications').insert(
         adminIds.map((userId: string) => ({

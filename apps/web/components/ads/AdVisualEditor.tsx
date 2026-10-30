@@ -1,7 +1,7 @@
 'use client'
 
 import type { CSSProperties, ReactNode } from 'react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   getPlatformAdResponsiveConfig,
   normalizePlatformAdRenderConfig,
@@ -142,7 +142,11 @@ function RangeField({
   )
 }
 
-export default function AdVisualEditor({
+export default function AdVisualEditor(props: AdVisualEditorProps) {
+  return <AdVisualEditorBody key={props.slotLabel} {...props} />
+}
+
+function AdVisualEditorBody({
   title,
   description,
   linkUrl,
@@ -162,7 +166,7 @@ export default function AdVisualEditor({
   savingLabel = 'Guardando...',
   submitMode = false,
 }: AdVisualEditorProps) {
-  const [activeSection, setActiveSection] = useState<EditorSection>('general')
+  const [requestedSection, setActiveSection] = useState<EditorSection>('general')
   const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop')
   const [previewZoom, setPreviewZoom] = useState<PreviewZoom>(1)
   const config = normalizePlatformAdRenderConfig(renderConfig)
@@ -175,16 +179,7 @@ export default function AdVisualEditor({
       return true
     })
 
-  useEffect(() => {
-    setActiveSection('general')
-    setPreviewMode('desktop')
-    setPreviewZoom(1)
-  }, [slotLabel])
-
-  useEffect(() => {
-    if (!config.enabled && activeSection !== 'general') setActiveSection('general')
-    if (config.enabled && !visibleSections.some((section) => section.id === activeSection)) setActiveSection('general')
-  }, [activeSection, config.enabled, visibleSections])
+  const activeSection = visibleSections.some(section => section.id === requestedSection) ? requestedSection : 'general'
 
   function updateConfig(patch: Partial<PlatformAdRenderConfig>) {
     onRenderConfigChange(normalizePlatformAdRenderConfig({ ...config, ...patch }))

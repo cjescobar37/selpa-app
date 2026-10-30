@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
       notifications: notificationsCount ?? 0,
       messages: messagesCount ?? 0,
     })
-  } catch (e: any) {
+  } catch (caughtError: unknown) {
+    const e = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: e?.message ?? 'Error' }, { status: 500 })
   }
 }

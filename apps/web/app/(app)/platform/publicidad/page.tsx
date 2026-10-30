@@ -229,26 +229,20 @@ export default function PlatformPublicidadPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [])
 
   useEffect(() => {
-    if (!campaignFile) {
-      setCampaignPreviewUrl(null)
-      return
-    }
-    const url = URL.createObjectURL(campaignFile)
-    setCampaignPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
+    const url = campaignFile ? URL.createObjectURL(campaignFile) : null
+    let active = true
+    queueMicrotask(() => { if (active) setCampaignPreviewUrl(url) })
+    return () => { active = false; if (url) URL.revokeObjectURL(url) }
   }, [campaignFile])
 
   useEffect(() => {
-    if (!sponsorFile) {
-      setSponsorPreviewUrl(null)
-      return
-    }
-    const url = URL.createObjectURL(sponsorFile)
-    setSponsorPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
+    const url = sponsorFile ? URL.createObjectURL(sponsorFile) : null
+    let active = true
+    queueMicrotask(() => { if (active) setSponsorPreviewUrl(url) })
+    return () => { active = false; if (url) URL.revokeObjectURL(url) }
   }, [sponsorFile])
 
   useEffect(() => {

@@ -7,7 +7,8 @@
     "build": "next build",
     "update:argentina-locations": "node scripts/update-argentina-locations.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node scripts/qa/run-tests.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.91.0",
@@ -19,6 +20,7 @@
     "write-excel-file": "4.1.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^20",
     "@types/react": "^19",

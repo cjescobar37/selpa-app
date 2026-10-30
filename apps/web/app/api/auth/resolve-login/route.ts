@@ -64,7 +64,9 @@ export async function POST(req: Request) {
       email: resolvedEmail,
       matchType: row.slug === identifier ? 'slug' : row.cuit === digits ? 'cuit' : 'email',
     })
-  } catch (e: any) {
+  } catch (caughtError: unknown) {
+    const e = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: e?.message ?? 'Error' }, { status: 500 })
   }
 }

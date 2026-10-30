@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const rows = data ?? []
-  const actorIds = Array.from(new Set(rows.map((row: any) => row.actor_user_id).filter(Boolean)))
+  const actorIds = Array.from(new Set(rows.map((row) => row.actor_user_id).filter(Boolean)))
   const profilesRes = actorIds.length
     ? await supabaseAdmin
         .from('profiles')
@@ -56,8 +56,8 @@ export async function GET(req: NextRequest) {
 
   if (profilesRes.error) return NextResponse.json({ error: profilesRes.error.message }, { status: 500 })
 
-  const profiles = new Map((profilesRes.data ?? []).map((profile: any) => [profile.user_id, profile]))
-  const enriched = rows.map((row: any) => {
+  const profiles = new Map((profilesRes.data ?? []).map((profile) => [profile.user_id, profile]))
+  const enriched = rows.map((row) => {
     const profile = profiles.get(row.actor_user_id)
     const actorName = profile?.display_name || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() || profile?.email || 'Sistema'
     return {
@@ -69,14 +69,14 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     rows: enriched,
-    actions: Array.from(new Set(enriched.map((row: any) => row.action).filter(Boolean))).sort(),
-    entities: Array.from(new Set(enriched.map((row: any) => row.entity_type).filter(Boolean))).sort(),
+    actions: Array.from(new Set(enriched.map((row) => row.action).filter(Boolean))).sort(),
+    entities: Array.from(new Set(enriched.map((row) => row.entity_type).filter(Boolean))).sort(),
     actors: Array.from(
       new Map(
         enriched
-          .filter((row: any) => row.actor_user_id)
-          .map((row: any) => [row.actor_user_id, { id: row.actor_user_id, name: row.actor_name, email: row.actor_email }]),
+          .filter((row) => row.actor_user_id)
+          .map((row) => [row.actor_user_id, { id: row.actor_user_id, name: row.actor_name, email: row.actor_email }]),
       ).values(),
-    ).sort((a: any, b: any) => String(a.name).localeCompare(String(b.name))),
+    ).sort((a, b) => String(a.name).localeCompare(String(b.name))),
   })
 }

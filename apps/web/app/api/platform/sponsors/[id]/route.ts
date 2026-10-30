@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     let logoUrl: string | null | undefined = undefined
     if (file instanceof File && file.size > 0) logoUrl = await uploadPlatformAsset(file, 'sponsors')
     else if (keepLogo === '0') logoUrl = null
-    const payload: Record<string, any> = { name, website_url: websiteUrl || null, tier, status, sort_order: sortOrder, updated_by: auth.user!.id }
+    const payload: Record<string, unknown> = { name, website_url: websiteUrl || null, tier, status, sort_order: sortOrder, updated_by: auth.user!.id }
     if (logoUrl !== undefined) payload.logo_url = logoUrl
     const { data, error } = await supabaseAdmin.from('platform_sponsors').update(payload).eq('id', id).select('*').maybeSingle()
     if (error) {
@@ -50,7 +50,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       req,
     })
     return NextResponse.json({ ok: true, row: data })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: error?.message ?? 'No pude actualizar el sponsor.' }, { status: 500 })
   }
 }

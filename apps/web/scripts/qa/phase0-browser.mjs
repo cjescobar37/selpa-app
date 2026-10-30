@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url'
 import {PLAYER,CLUB,id,QA_TOKEN,QA_ACTORS} from './block1-fixture.mjs'
 const require=createRequire(process.env.SELPA_PLAYWRIGHT_PACKAGE??'C:/Users/CESCOBAR/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/package.json')
 const {chromium}=require('playwright')
-const base='http://127.0.0.1:3011',fixture='http://127.0.0.1:45432'
+const base=(process.env.SELPA_QA_BASE_URL??'http://127.0.0.1:3000'),fixture='http://127.0.0.1:45432'
 const folder=fileURLToPath(new URL('../../../../output/block1-qa/phase0/',import.meta.url));await mkdir(folder,{recursive:true})
 const browser=await chromium.launch({headless:true,executablePath:process.env.SELPA_QA_BROWSER??'C:/Program Files/Google/Chrome/Application/chrome.exe'})
 const errors=[],external=[],writes=[],measures=[],permissions=[]
@@ -38,7 +38,7 @@ async function measure(page,name,width) {
       shellPadding:wrap?getComputedStyle(wrap).paddingInlineStart:null,pagePadding:root?getComputedStyle(root).paddingInlineStart:null}
   })
   assert.ok(data.document<=width,`${name} ${JSON.stringify(data)}`)
-  if(width<=430){assert.equal(data.root.x,8);assert.equal(data.root.width,width-16);assert.equal(data.header.x,8);assert.equal(data.pagePadding,'0px');assert.equal(data.shellPadding,'8px')}
+  if(width<=430){assert.equal(data.root.x,8);assert.equal(data.root.width,width-16);assert.equal(data.header.x,0);assert.equal(data.header.width,width);assert.equal(data.pagePadding,'0px');assert.equal(data.shellPadding,'8px')}
   measures.push({route:name,...data})
   await page.screenshot({path:folder+`${name}-${width}.png`,fullPage:true})
 }
@@ -123,11 +123,11 @@ try {
     assert.equal(r.status,503);assert.doesNotMatch(JSON.stringify(r.body),/PGRST|Synthetic|subscription/)
     await owner.page.goto(base+'/club/facturacion',{waitUntil:'networkidle'})
     if(failed.startsWith('list_'))await owner.page.getByRole('button',{name:'Pagos',exact:true}).click()
-    await owner.page.getByRole('alert').filter({hasText:'No pudimos cargar Facturación.'}).waitFor()
+    await owner.page.getByRole('alert').filter({hasText:'La lectura financiera requerida no está instalada en este entorno.'}).waitFor()
     assert.equal(await owner.page.getByText('No hay registros en esta vista.',{exact:true}).count(),0)
     await measure(owner.page,'facturacion-error-'+failed,390)
     await scenario('empty');await owner.page.getByRole('button',{name:'Reintentar'}).click()
-    await owner.page.getByRole('alert').filter({hasText:'No pudimos cargar Facturación.'}).waitFor({state:'hidden'})
+    await owner.page.getByRole('alert').filter({hasText:'La lectura financiera requerida no está instalada en este entorno.'}).waitFor({state:'hidden'})
   }
   for(const actor of QA_ACTORS) {
     const {ctx,page}=await context(actor)

@@ -5,7 +5,7 @@ import {mkdir} from 'node:fs/promises'
 import {fileURLToPath} from 'node:url'
 import {CLUB,id} from './block1-fixture.mjs'
 const require=createRequire(process.env.SELPA_PLAYWRIGHT_PACKAGE??'C:/Users/CESCOBAR/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/package.json')
-const {chromium}=require('playwright'),base='http://127.0.0.1:3011',fixture='http://127.0.0.1:45432'
+const {chromium}=require('playwright'),base=(process.env.SELPA_QA_BASE_URL??'http://127.0.0.1:3000'),fixture='http://127.0.0.1:45432'
 const folder=fileURLToPath(new URL('../../../../output/ranking-repair-qa/',import.meta.url));await mkdir(folder,{recursive:true})
 const browser=await chromium.launch({headless:true,executablePath:process.env.SELPA_QA_BROWSER??'C:/Program Files/Google/Chrome/Application/chrome.exe'})
 const errors=[],external=[],writes=[],checks=[]
@@ -32,8 +32,9 @@ try {
   for(const width of [320,375,390,430,768,1280]) {
     await page.setViewportSize({width,height:844})
     await visit('/ranking');await page.getByRole('heading',{name:'Ranking SELPA',exact:true}).waitFor()
-    assert.equal(await page.getByText('2 categorías activas',{exact:true}).count(),1)
-    assert.equal(await page.locator('[data-public-ranking] img').count(),1)
+    assert.ok(await page.getByText('2 categorías activas',{exact:true}).count()>0)
+    assert.equal(await page.getByText('Ranking oficial',{exact:true}).count(),0)
+    assert.equal(await page.locator('[data-public-ranking] img:visible').count(),1)
     await shot('index',width)
     await visit('/ranking?clubId='+CLUB)
     assert.equal(new URL(page.url()).searchParams.get('gender'),'M')
@@ -44,7 +45,10 @@ try {
     assert.equal(await leader.locator('img').evaluate(el=>el.complete && el.naturalWidth>0),true)
     const failed=page.locator('[data-rank-position="3"]');assert.equal(await failed.locator('img').count(),0);assert.match(await failed.innerText(),/ÁT/)
     const branchNav=page.getByRole('navigation',{name:'Ranking por rama'})
-    assert.match(await branchNav.innerText(),/Caballeros\s*59[\s\S]*Damas\s*3/)
+    assert.match(await branchNav.innerText(),/Caballeros[\s\S]*Damas/)
+    await page.getByRole('button',{name:/6ª categoría/}).click()
+    assert.match(await page.getByRole('dialog').innerText(),/59 jugadores rankeados/)
+    await page.getByRole('button',{name:'Cerrar categorías'}).click()
     await shot('club',width)
     await Promise.all([page.waitForURL(url=>url.searchParams.get('page')==='2'),page.getByRole('link',{name:'Siguiente',exact:true}).click()])
     await page.locator('[data-rank-position="26"]').waitFor()

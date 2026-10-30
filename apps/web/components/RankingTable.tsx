@@ -1,6 +1,6 @@
 type Row = { tournament: string; category: string; date: string; round: string; points: number }
 
-export default function RankingTable({ rows }: any) {
+export default function RankingTable({ rows }: { rows: Row[] }) {
   return (
     <section className="tableWrap">
       <div className="tableTitle">Points breakdown</div>
@@ -16,7 +16,7 @@ export default function RankingTable({ rows }: any) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r: any, i: number) => (
+          {rows.map((r, i: number) => (
             <tr key={i}>
               <td style={{ fontWeight: 900 }}>{r.tournament}</td>
               <td>{r.category}</td>

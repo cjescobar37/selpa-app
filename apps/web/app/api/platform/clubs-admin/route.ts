@@ -326,7 +326,7 @@ export async function PATCH(req: NextRequest) {
       .from('platform_admins')
       .select('user_id')
 
-    const adminIds = Array.from(new Set((platformAdmins ?? []).map((row: any) => row.user_id).filter(Boolean)))
+    const adminIds = Array.from(new Set((platformAdmins ?? []).map((row) => row.user_id).filter(Boolean)))
     if (adminIds.length > 0) {
       const notificationByAction: Record<ClubAction, { type: string; title: string; message: string }> = {
         approve: {

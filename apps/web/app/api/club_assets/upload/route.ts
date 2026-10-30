@@ -134,7 +134,9 @@ export async function POST(req: Request) {
       assetType,
       targetColumn,
     })
-  } catch (e: any) {
+  } catch (caughtError: unknown) {
+    const e = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: e?.message ?? 'Error subiendo archivo' }, { status: 500 })
   }
 }

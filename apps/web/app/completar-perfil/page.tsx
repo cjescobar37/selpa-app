@@ -80,7 +80,8 @@ function CompleteProfilePageClient() {
   const isEditMode = editSection === 'personal' || editSection === 'sports'
   const returnTo=profileEditReturn(searchParams.get('returnTo'))
   const [touched,setTouched]=useState(false)
-  const [step, setStep] = useState<Step>(1)
+  const [onboardingStep, setStep] = useState<Step>(1)
+  const step: Step = isEditMode ? (editSection === 'sports' ? 2 : 1) : onboardingStep
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [fullName, setFullName] = useState('')
@@ -116,6 +117,7 @@ function CompleteProfilePageClient() {
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
   const onboardingStartedRef = useRef(false)
+  const [onboardingStarted, setOnboardingStarted] = useState(false)
   const clubsRequestStartedRef = useRef(false)
   const years = useMemo(() => birthYears(), [])
   const savedName=splitFullName([profile?.first_name,profile?.last_name].filter(Boolean).join(' ')) ?? splitFullName(profile?.display_name) ?? splitFullName(session.user?.name)
@@ -126,10 +128,6 @@ function CompleteProfilePageClient() {
   function leaveEdit(){requestLeave(returnTo)}
 
   useEffect(() => {
-    if (editSection === 'sports') setStep(2)
-  }, [editSection])
-
-  useEffect(() => {
     const profileName = splitFullName([profile?.first_name, profile?.last_name].filter(Boolean).join(' '))
       ?? splitFullName(profile?.display_name)
       ?? splitFullName(session.user?.name)
@@ -138,23 +136,23 @@ function CompleteProfilePageClient() {
       setLastName((value) => value || profileName?.lastName || '')
       setFullName((value) => value || [profileName?.firstName, profileName?.lastName].filter(Boolean).join(' '))
       setNeedsFullName(!profileName)
+      if (!profile) return
+      setPhoneAreaCode((value) => value || profile.phone_area_code || '')
+      setPhoneNumber((value) => value || profile.phone_number || '')
+      if (profile.birth_date) {
+        const [year, month, day] = profile.birth_date.split('-')
+        setBirthYear((value) => value || year || '')
+        setBirthMonth((value) => value || String(Number(month) || ''))
+        setBirthDay((value) => value || String(Number(day) || ''))
+      }
+      setGender((value) => value || profile.gender || '')
+      setCountryCode(profile.country_code || 'AR')
+      setProvinceId((value) => value || profile.province_id || '')
+      setCityId((value) => value || profile.city_id || '')
+      setHeightCm((value) => value || (profile.height_cm ? String(profile.height_cm) : ''))
+      setDominantHand((value) => value || profile.dominant_hand || '')
+      setPreferredPosition((value) => value || profile.preferred_position || '')
     }, 0)
-    if (!profile) return () => window.clearTimeout(nameHydrationTimer)
-    setPhoneAreaCode((value) => value || profile.phone_area_code || '')
-    setPhoneNumber((value) => value || profile.phone_number || '')
-    if (profile.birth_date) {
-      const [year, month, day] = profile.birth_date.split('-')
-      setBirthYear((value) => value || year || '')
-      setBirthMonth((value) => value || String(Number(month) || ''))
-      setBirthDay((value) => value || String(Number(day) || ''))
-    }
-    setGender((value) => value || profile.gender || '')
-    setCountryCode(profile.country_code || 'AR')
-    setProvinceId((value) => value || profile.province_id || '')
-    setCityId((value) => value || profile.city_id || '')
-    setHeightCm((value) => value || (profile.height_cm ? String(profile.height_cm) : ''))
-    setDominantHand((value) => value || profile.dominant_hand || '')
-    setPreferredPosition((value) => value || profile.preferred_position || '')
     return () => window.clearTimeout(nameHydrationTimer)
   }, [profile, session.user?.name])
 
@@ -271,6 +269,7 @@ function CompleteProfilePageClient() {
         return
       }
       onboardingStartedRef.current = true
+      setOnboardingStarted(true)
       await session.refresh({ silent: true })
       if (isEditMode) {setTouched(false);setAlert({variant:'success',title:'Cambios guardados',message:'Tus datos personales se actualizaron correctamente.'})}
       else setStep(2)
@@ -389,7 +388,7 @@ function CompleteProfilePageClient() {
   }
 
   if (session.status === 'loading') return <div className="px-auth px-authModern px-auth--bridge"><SelpaLoader title="Preparando tu perfil..." subtitle="Cargando tus datos" /></div>
-  if (!session.user || (!isEditMode && !onboardingStartedRef.current && isGlobalProfileComplete(session.globalProfile))) return null
+  if (!session.user || (!isEditMode && !onboardingStarted && isGlobalProfileComplete(session.globalProfile))) return null
 
   return (
     <div className={`px-auth px-authModern px-registerAuth px-completeProfileAuth ${editStyles.responsive}${isEditMode?' '+editStyles.edit:''}`} data-profile-dirty={isEditMode && touched && (editSection==='sports'?sportsDirty:personalDirty)} onChange={()=>setTouched(true)}>

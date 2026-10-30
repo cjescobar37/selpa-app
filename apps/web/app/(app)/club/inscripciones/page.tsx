@@ -442,9 +442,37 @@ export default function ClubInscripcionesPage() {
   useEffect(() => {
     if (!requestedTournamentId || tournaments.length === 0) return
     if (tournaments.some((tournament) => tournament.id === requestedTournamentId)) {
-      setSelectedTournamentId(requestedTournamentId)
+      void Promise.resolve().then(() => setSelectedTournamentId(requestedTournamentId))
     }
   }, [requestedTournamentId, tournaments])
+
+  async function searchManualPlayers(field: ManualPlayerField, query: string) {
+    if (!activeClub?.id || !selectedTournamentId || query.trim().length < 1) {
+      setPlayerSuggestions((current) => ({ ...current, [field]: [] }))
+      return
+    }
+
+    setSearchingPlayers((current) => ({ ...current, [field]: true }))
+
+    const token = await getToken()
+    if (!token) {
+      setSearchingPlayers((current) => ({ ...current, [field]: false }))
+      return
+    }
+
+    const res = await fetch(
+      `/api/clubs/${activeClub.id}/tournaments/${selectedTournamentId}/registrations/manual?q=${encodeURIComponent(query.trim())}`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
+    )
+    const json = await res.json().catch(() => ({})) as { players?: PlayerSuggestion[] }
+    const otherPlayerId = manualSelectedPlayers[otherManualField(field)]?.user_id ?? null
+
+    setPlayerSuggestions((current) => ({
+      ...current,
+      [field]: res.ok ? (json.players ?? []).filter((player) => player.user_id !== otherPlayerId) : [],
+    }))
+    setSearchingPlayers((current) => ({ ...current, [field]: false }))
+  }
 
   useEffect(() => {
     if (!manualModalOpen) return
@@ -470,9 +498,11 @@ export default function ClubInscripcionesPage() {
 
   useEffect(() => {
     if (manualModalOpen && !canAddPair) {
-      setManualModalOpen(false)
-      setManualError('')
-      setMessage('')
+      void Promise.resolve().then(() => {
+        setManualModalOpen(false)
+        setManualError('')
+        setMessage('')
+      })
     }
   }, [canAddPair, manualModalOpen])
 
@@ -547,33 +577,7 @@ export default function ClubInscripcionesPage() {
     setManualError('')
   }
 
-  async function searchManualPlayers(field: ManualPlayerField, query: string) {
-    if (!activeClub?.id || !selectedTournamentId || query.trim().length < 1) {
-      setPlayerSuggestions((current) => ({ ...current, [field]: [] }))
-      return
-    }
 
-    setSearchingPlayers((current) => ({ ...current, [field]: true }))
-
-    const token = await getToken()
-    if (!token) {
-      setSearchingPlayers((current) => ({ ...current, [field]: false }))
-      return
-    }
-
-    const res = await fetch(
-      `/api/clubs/${activeClub.id}/tournaments/${selectedTournamentId}/registrations/manual?q=${encodeURIComponent(query.trim())}`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
-    )
-    const json = await res.json().catch(() => ({})) as { players?: PlayerSuggestion[] }
-    const otherPlayerId = manualSelectedPlayers[otherManualField(field)]?.user_id ?? null
-
-    setPlayerSuggestions((current) => ({
-      ...current,
-      [field]: res.ok ? (json.players ?? []).filter((player) => player.user_id !== otherPlayerId) : [],
-    }))
-    setSearchingPlayers((current) => ({ ...current, [field]: false }))
-  }
 
   async function submitManualRegistration(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

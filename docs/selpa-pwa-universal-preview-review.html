@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SELPA · Preview PWA aislada · comparación</title>
+<style>
+body{margin:20px;font:15px/1.5 system-ui,sans-serif;color:#17253f;background:#f4f7fb}h1{font-size:22px}p{max-width:1050px}select{font:inherit;min-height:44px;padding:8px}label{display:inline-block;margin:0 20px 18px 0}main{display:grid;grid-template-columns:repeat(2,minmax(0,412px));gap:20px}figure{margin:0;padding:10px;background:white;border:1px solid #c7d2df;border-radius:8px}figcaption{font-weight:600;margin-bottom:8px}img{display:block;width:100%;height:auto}@media(max-width:650px){main{grid-template-columns:1fr}}
+</style>
+<h1>SELPA · commit base / Preview PWA aislada</h1>
+<p>ANTES: 2fb0628 sin cambios locales pendientes. DESPUÉS: ese mismo commit con sólo ocho archivos PWA. No comparar estas pantallas deportivas con la recuperación aún sin commit de localhost: fue excluida a pedido. Este visor es documentación, no una pantalla nueva del producto.</p>
+<p>Seis pares con geometría/estilos medidos iguales. Ranking y perfil idénticos píxel a píxel; login tiene diferencias raster (antes dev / después producción), no se declara igualdad perfecta global. Chrome automatizado, fixtures locales; ninguna prueba física ni publicación HTTPS.</p>
+<label>Recorrido <select id="scenario"><option value="login">Login</option><option value="ranking" selected>Ranking</option><option value="profile">Perfil público</option></select></label>
+<label>Ancho <select id="width"><option value="390">390 px</option><option value="1280">1280 px</option></select></label>
+<main><figure><figcaption>ANTES · commit base</figcaption><a id="beforeLink" target="_blank" rel="noopener"><img id="before" alt="Antes: base Git"></a></figure><figure><figcaption>DESPUÉS · PWA aislada</figcaption><a id="afterLink" target="_blank" rel="noopener"><img id="after" alt="Después: sólo PWA"></a></figure></main>
+<script>
+const scenario=document.getElementById('scenario'),width=document.getElementById('width');function update(){for(const side of ['before','after']){const src=`../output/pwa-universal-20261015/${scenario.value}-${width.value}-${side}.png`;document.getElementById(side).src=src;document.getElementById(side+'Link').href=src}}scenario.addEventListener('change',update);width.addEventListener('change',update);update();
+</script>
+</html>

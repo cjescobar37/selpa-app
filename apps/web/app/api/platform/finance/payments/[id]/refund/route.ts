@@ -39,7 +39,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     })
 
     return NextResponse.json({ ok: true, ...result })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: error?.message ?? 'No pude registrar el reembolso.' }, { status: 500 })
   }
 }

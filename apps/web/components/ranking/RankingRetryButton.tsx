@@ -1,10 +1,13 @@
 'use client'
 
-import { useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 export default function RankingRetryButton({className}:{className:string}) {
-  const router=useRouter(),[pending,startTransition]=useTransition()
+  const [pending,setPending]=useState(false)
   return <button className={className} type="button" disabled={pending} aria-busy={pending}
-    onClick={()=>startTransition(()=>router.refresh())}>{pending?'Reintentando…':'Reintentar'}</button>
+    onClick={()=>{
+      setPending(true)
+      // Re-fetch the server-rendered read at this exact URL, preserving filters.
+      window.location.reload()
+    }}>{pending?'Reintentando…':'Reintentar'}</button>
 }

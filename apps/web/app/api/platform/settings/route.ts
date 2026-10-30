@@ -33,7 +33,7 @@ function isMissingSettingsTable(error?: { message?: string } | null) {
   )
 }
 
-function normalizeSettings(input: any): PlatformSettings {
+function normalizeSettings(input: Record<string, unknown> | null | undefined): PlatformSettings {
   const defaultCommissionBps = Number(input?.default_commission_bps)
   if (!Number.isInteger(defaultCommissionBps) || defaultCommissionBps < 0 || defaultCommissionBps > 10000) {
     throw new Error('La comisión default debe estar entre 0 y 10000 bps.')
@@ -62,7 +62,7 @@ function normalizeSettings(input: any): PlatformSettings {
   }
 }
 
-function rowsToSettings(rows: Array<{ key: string; value: any }>) {
+function rowsToSettings(rows: Array<{ key: string; value: unknown }>) {
   return rows.reduce<PlatformSettings>((acc, row) => {
     if (row.key in acc) {
       return { ...acc, [row.key]: row.value }
@@ -142,7 +142,9 @@ export async function PATCH(req: NextRequest) {
     })
 
     return NextResponse.json({ ok: true, settings: rowsToSettings(data ?? []) })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: error?.message ?? 'No pude actualizar configuración.' }, { status: 400 })
   }
 }

@@ -1,3 +1,4 @@
+type MessageProfile = { user_id?: string; display_name?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null; avatar_url?: string | null }
 import { randomUUID } from 'node:crypto'
 import { insertMessageOnce, afterMessageCommit } from '@/lib/messageWriteServer'
 import { writeErrorResponse } from '@/lib/writeFlowServer'
@@ -6,6 +7,8 @@ import { userHasClubCapability, ensureValidActiveClubForUser, getApprovedMembers
 import { createOperationalNotification, getClubAdminUserIds, notifyClubAdmins } from '@/lib/operationalNotifications'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
+type ThreadMessage = { id: string; thread_id: string; sender_user_id: string | null; recipient_user_id: string | null; subject: string | null; body: string; read: boolean; read_at: string | null; created_at: string }
+type MessageClub = { id: string; name: string; logo_url: string | null; city: string | null; province: string | null; theme_key: string | null }
 type ThreadScope = 'player' | 'club' | 'platform'
 
 function getBearerToken(req: NextRequest) {
@@ -35,7 +38,7 @@ function isMissingSchemaObjectError(error: { code?: string; message?: string } |
   return error?.code === '42703' || error?.code === '42P01' || error?.code === 'PGRST205' || message.includes('does not exist') || message.includes('schema cache')
 }
 
-function fullName(profile: any) {
+function fullName(profile: MessageProfile | null | undefined) {
   return (
     profile?.display_name ||
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
@@ -45,21 +48,21 @@ function fullName(profile: any) {
 }
 
 async function getProfilesMap(userIds: string[]) {
-  if (!userIds.length) return new Map<string, any>()
+  if (!userIds.length) return new Map<string, MessageProfile>()
   const { data } = await supabaseAdmin
     .from('profiles')
     .select('user_id,email,first_name,last_name,display_name,avatar_url')
     .in('user_id', Array.from(new Set(userIds)))
-  return new Map((data ?? []).map((profile: any) => [String(profile.user_id), profile]))
+  return new Map((data ?? []).map((profile) => [String(profile.user_id), profile]))
 }
 
 async function getClubsMap(clubIds: string[]) {
-  if (!clubIds.length) return new Map<string, any>()
+  if (!clubIds.length) return new Map<string, MessageClub>()
   const { data } = await supabaseAdmin
     .from('clubs')
     .select('id,name,logo_url,city,province,theme_key')
     .in('id', Array.from(new Set(clubIds)))
-  return new Map((data ?? []).map((club: any) => [String(club.id), club]))
+  return new Map((data ?? []).map((club) => [String(club.id), club]))
 }
 
 async function resolveClubScope(userId: string) {
@@ -77,7 +80,7 @@ async function getApprovedPlayerUserIds(clubId: string) {
     .not('approved_at', 'is', null)
 
   if (error) throw error
-  return new Set((data ?? []).map((row: any) => String(row.user_id)).filter(Boolean))
+  return new Set((data ?? []).map((row) => String(row.user_id)).filter(Boolean))
 }
 
 async function getOrCreateOpenThread(input: {
@@ -162,11 +165,11 @@ export async function GET(req: NextRequest) {
   if (threadsError) return NextResponse.json({ error: threadsError.message }, { status: 500 })
 
   const threads = threadRows ?? []
-  const threadIds = threads.map((thread: any) => String(thread.id))
-  const userIds = threads.map((thread: any) => String(thread.player_user_id)).filter(Boolean)
-  const clubIds = threads.map((thread: any) => String(thread.club_id)).filter(Boolean)
+  const threadIds = threads.map((thread) => String(thread.id))
+  const userIds = threads.map((thread) => String(thread.player_user_id)).filter(Boolean)
+  const clubIds = threads.map((thread) => String(thread.club_id)).filter(Boolean)
 
-  let messages: any[] = []
+  let messages: ThreadMessage[] = []
   if (threadIds.length) {
     const { data: messageRows, error: messagesError } = await supabaseAdmin
       .from('messages')
@@ -181,7 +184,7 @@ export async function GET(req: NextRequest) {
 
   const [profiles, clubs] = await Promise.all([getProfilesMap(userIds), getClubsMap(clubIds)])
 
-  const latestByThread = new Map<string, any>()
+  const latestByThread = new Map<string, ThreadMessage>()
   const unreadByThread = new Map<string, number>()
   for (const message of messages) {
     const threadId = String(message.thread_id)
@@ -193,7 +196,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     scope,
-    threads: threads.map((thread: any) => {
+    threads: threads.map((thread) => {
       const latest = latestByThread.get(String(thread.id)) ?? null
       const playerProfile = profiles.get(String(thread.player_user_id)) ?? null
       const club = clubs.get(String(thread.club_id)) ?? null
@@ -344,7 +347,9 @@ export async function POST(req: NextRequest) {
     })
 
   return NextResponse.json({ ok: true, threadId: thread.id, messageId: inserted.id })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     if (isMissingSchemaObjectError(error)) {
       return NextResponse.json({ error: 'Falta aplicar la migración de message_threads/messages.' }, { status: 503 })
     }

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SELPA · revisión comparativa PWA</title>
+<style>
+  body{margin:20px;font:15px/1.5 system-ui,sans-serif;color:#17253f;background:#f4f7fb}
+  h1{font-size:22px;margin-bottom:8px}p{max-width:1000px}label{display:inline-block;margin:0 16px 16px 0}
+  select{font:inherit;padding:8px;min-height:44px;border:1px solid #a9b7c7;border-radius:6px}
+  main{display:grid;grid-template-columns:repeat(2,minmax(0,412px));gap:20px;max-width:1100px}
+  figure{margin:0;background:white;border:1px solid #c7d2df;padding:10px;border-radius:8px}
+  figcaption{font-weight:600;margin-bottom:8px}img{display:block;width:100%;height:auto}a{color:#174d80}
+  @media(max-width:650px){main{grid-template-columns:1fr}}
+</style>
+<h1>SELPA · antes / después de la capa PWA</h1>
+<p><strong>Antes reconstruido:</strong> HEAD más los cambios locales recuperados, retirando sólo PWA en una copia aislada. No son capturas históricas de esas pantallas. Después: checkout actual. Datos sintéticos; no iPhone real. Este visor es documentación, no navegación de SELPA.</p>
+<p>18 pares: misma geometría y estilos medidos; 13 pares idénticos píxel a píxel. Cinco tienen variaciones raster puntuales, detalladas en el informe. No equivale a aprobación visual global del producto ni del usuario.</p>
+<label>Recorrido <select id="scenario">
+  <option value="home">Inicio</option><option value="login">Login</option><option value="ranking" selected>Ranking público</option>
+  <option value="public-profile">Perfil público</option><option value="my-ranking">Mi ranking</option>
+  <option value="player-account">Menú PLAYER</option><option value="player-club">Club del PLAYER</option>
+  <option value="owner-account">Mi cuenta OWNER</option><option value="owner-club">Club del OWNER</option>
+  <option value="tournament">Detalle de torneo</option><option value="registration-pending">Inscripción pendiente</option>
+  <option value="wizard-1">Inscripción · paso 1</option><option value="wizard-2">Inscripción · paso 2</option>
+  <option value="wizard-3">Inscripción · paso 3</option><option value="wizard-4">Inscripción · paso 4</option>
+</select></label>
+<label>Ancho <select id="width"><option value="390">390 px</option><option value="1280">1280 px (login, ranking y perfil)</option></select></label>
+<main>
+  <figure><figcaption>ANTES · reconstrucción controlada</figcaption><a id="beforeLink" target="_blank"><img id="before" alt="Antes reconstruido"></a></figure>
+  <figure><figcaption>DESPUÉS · PWA actual</figcaption><a id="afterLink" target="_blank"><img id="after" alt="Después PWA"></a></figure>
+</main>
+<script>
+  const scenario=document.getElementById('scenario'),width=document.getElementById('width');
+  function update(){
+    if(width.value==='1280'&&!['login','ranking','public-profile'].includes(scenario.value))width.value='390';
+    for(const side of ['before','after']){
+      const src=`../output/pwa-visual-control-20261014/${scenario.value}-${width.value}-${side}.png`;
+      document.getElementById(side).src=src;document.getElementById(side+'Link').href=src;
+    }
+  }
+  scenario.addEventListener('change',update);width.addEventListener('change',update);update();
+</script>
+</html>

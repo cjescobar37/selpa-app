@@ -48,9 +48,9 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const rows = data ?? []
-  const clubIds = Array.from(new Set(rows.map((row: any) => row.club_id).filter(Boolean)))
-  const userIds = Array.from(new Set(rows.map((row: any) => row.user_id).filter(Boolean)))
-  const tournamentIds = Array.from(new Set(rows.map((row: any) => row.tournament_id).filter(Boolean)))
+  const clubIds = Array.from(new Set(rows.map((row) => row.club_id).filter(Boolean)))
+  const userIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean)))
+  const tournamentIds = Array.from(new Set(rows.map((row) => row.tournament_id).filter(Boolean)))
 
   const [clubsRes, profilesRes, tournamentsRes] = await Promise.all([
     clubIds.length ? supabaseAdmin.from('clubs').select('id,name').in('id', clubIds) : Promise.resolve({ data: [], error: null }),
@@ -62,11 +62,11 @@ export async function GET(req: NextRequest) {
   if (profilesRes.error) return NextResponse.json({ error: profilesRes.error.message }, { status: 500 })
   if (tournamentsRes.error) return NextResponse.json({ error: tournamentsRes.error.message }, { status: 500 })
 
-  const clubs = new Map((clubsRes.data ?? []).map((club: any) => [club.id, club]))
-  const profiles = new Map((profilesRes.data ?? []).map((profile: any) => [profile.user_id, profile]))
-  const tournaments = new Map((tournamentsRes.data ?? []).map((tournament: any) => [tournament.id, tournament]))
+  const clubs = new Map((clubsRes.data ?? []).map((club) => [club.id, club]))
+  const profiles = new Map((profilesRes.data ?? []).map((profile) => [profile.user_id, profile]))
+  const tournaments = new Map((tournamentsRes.data ?? []).map((tournament) => [tournament.id, tournament]))
 
-  const enriched = rows.map((row: any) => {
+  const enriched = rows.map((row) => {
     const profile = profiles.get(row.user_id)
     const userName = profile?.display_name || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() || profile?.email || 'Usuario'
     return {
@@ -138,7 +138,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, ...result })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: error?.message ?? 'No pude registrar el pago.' }, { status: 500 })
   }
 }

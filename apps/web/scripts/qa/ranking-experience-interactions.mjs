@@ -4,7 +4,7 @@ import {createRequire} from 'node:module'
 import {fileURLToPath} from 'node:url'
 import {CLUB,id} from './block1-fixture.mjs'
 const require=createRequire(process.env.SELPA_PLAYWRIGHT_PACKAGE??'C:/Users/CESCOBAR/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/package.json')
-const {chromium}=require('playwright'),base='http://127.0.0.1:3011',fixture='http://127.0.0.1:45432'
+const {chromium}=require('playwright'),base=(process.env.SELPA_QA_BASE_URL??'http://127.0.0.1:3000'),fixture='http://127.0.0.1:45432'
 const folder=fileURLToPath(new URL('../../../../output/ranking-repair-qa/',import.meta.url))
 const browser=await chromium.launch({headless:true,executablePath:process.env.SELPA_QA_BROWSER??'C:/Program Files/Google/Chrome/Application/chrome.exe'})
 const context=await browser.newContext(),errors=[],blocked=[],writes=[],checks=[]
@@ -20,6 +20,7 @@ try {
     await page.setViewportSize({width,height:844})
     await page.goto(base+'/ranking?clubId='+CLUB,{waitUntil:'networkidle'})
     if(width===390 && await page.locator('[data-rank-tier=leader] img').count()) await page.screenshot({path:folder+'club-mobile-first-viewport.png'})
+    await page.getByRole('button',{name:'Buscar jugador',exact:true}).click()
     await page.locator('input[name=q]').fill('Nombre quinto')
     await Promise.all([page.waitForURL(url=>url.searchParams.get('q')==='Nombre quinto'),page.getByRole('button',{name:'Buscar',exact:true}).click()])
     await page.locator('[data-rank-position="5"]').waitFor()
@@ -30,8 +31,7 @@ try {
     await page.screenshot({path:folder+'search-'+width+'.png',fullPage:true})
     await Promise.all([page.waitForURL(url=>!url.searchParams.has('q')),page.getByRole('link',{name:'Quitar búsqueda',exact:true}).click()])
     await page.locator('[data-rank-tier=leader]').waitFor()
-    await page.locator('select[name=modality]').selectOption('PAIRS')
-    await Promise.all([page.waitForURL(url=>url.searchParams.get('modality')==='PAIRS'),page.getByRole('button',{name:'Buscar',exact:true}).click()])
+    await Promise.all([page.waitForURL(url=>url.searchParams.get('modality')==='PAIRS'),page.getByRole('navigation',{name:'Modalidad'}).getByRole('link',{name:'Parejas',exact:true}).click()])
     await page.waitForFunction(()=>document.querySelector('[data-rank-tier=leader]')?.textContent.includes(' / '))
     assert.equal(new URL(page.url()).searchParams.get('division'),id(21))
     assert.equal(await page.locator('[data-rank-position]').count(),1)
@@ -46,7 +46,7 @@ try {
     assert.equal(await page.locator('[data-ranking-state=error]').count(),1)
     await fetch(fixture+'/qa/ranking-read?value=ready')
     await page.getByRole('button',{name:'Reintentar',exact:true}).click()
-    await page.locator('[class*=clubCard]').first().waitFor()
+    await page.locator('[class*=restoredCard]').first().waitFor()
     assert.equal(await page.locator('[data-ranking-state=error]').count(),0)
     checks.push({width,submittedSearchPosition:5,pairDivision:id(21),indexRetry:'recovered'})
   }

@@ -114,7 +114,7 @@ function pointValue(sources: Array<Record<string, unknown>>, ...keys: string[]) 
   return 0
 }
 
-function getFullName(profile?: Record<string, any> | null, fallback?: string | null) {
+function getFullName(profile?: Record<string, unknown> | null, fallback?: string | null) {
   const fullName = [profile?.first_name, profile?.last_name].map(asText).filter(Boolean).join(' ')
   return fullName || asText(profile?.display_name) || fallback || 'Jugador'
 }
@@ -203,7 +203,7 @@ async function getRegisteredTeamsCount(tournamentId: string, clubId: string) {
 
 async function getProfilesByUserId(userIds: string[]) {
   const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)))
-  if (!uniqueUserIds.length) return new Map<string, Record<string, any>>()
+  if (!uniqueUserIds.length) return new Map<string, Record<string, unknown>>()
 
   const { data, error } = await supabaseAdmin
     .from('profiles')
@@ -212,10 +212,10 @@ async function getProfilesByUserId(userIds: string[]) {
 
   if (error) {
     console.warn('[public-detail] profiles lookup failed', error.message)
-    return new Map<string, Record<string, any>>()
+    return new Map<string, Record<string, unknown>>()
   }
 
-  return new Map((data ?? []).map((profile) => [String(profile.user_id), profile as Record<string, any>]))
+  return new Map((data ?? []).map((profile) => [String(profile.user_id), profile as Record<string, unknown>]))
 }
 
 async function getViewerContext(tournamentId: string, clubId: string, req: NextRequest) {
@@ -272,7 +272,7 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
     .or(`player1_user_id.eq.${user.id},player2_user_id.eq.${user.id}`)
 
   const teamIds = (teams ?? []).map((team) => String(team.id))
-  let registrations: any[] = []
+  let registrations: Array<{id:string;team_id:string;status:string;created_at:string;preferred_slots?:unknown;availability_score?:number|null;flexibility_level?:string|null}> = []
   let registrationsError: { code?: string; message?: string } | null = null
 
   if (teamIds.length) {
@@ -309,11 +309,11 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
 
   const profileMap = team
     ? await getProfilesByUserId([String(team.player1_user_id ?? ''), String(team.player2_user_id ?? '')])
-    : new Map<string, Record<string, any>>()
+    : new Map<string, Record<string, unknown>>()
 
-  let payment: Record<string, any> | null = null
+  let payment: Record<string, unknown> | null = null
   let paymentLookupUnavailable = false
-  let changeRequest: Record<string, any> | null = null
+  let changeRequest: Record<string, unknown> | null = null
 
   if (registration?.id) {
     const { data: paymentRow, error: paymentError } = await supabaseAdmin
@@ -337,7 +337,7 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
       console.warn('[public-detail] payment lookup failed', paymentError.message)
     }
 
-    let changeRequestResult: any = await supabaseAdmin
+    let changeRequestResult: {data:Record<string,unknown>|null;error:{code?:string;message?:string}|null} = await supabaseAdmin
       .from('tournament_registration_change_requests')
       .select('id,type,status,reason,refund_percent,refund_policy_label,refund_metadata,created_at,resolved_at')
       .eq('tournament_id', tournamentId)
@@ -509,7 +509,7 @@ export async function GET(req: NextRequest, context: PublicDetailContext) {
     return NextResponse.json({ error: tournamentError.message }, { status: 500 })
   }
 
-  const tournament = toTournamentView(tournamentRow as any)
+  const tournament = toTournamentView(tournamentRow)
   if (!tournament) return NextResponse.json({ error: 'Torneo no encontrado' }, { status: 404 })
 
   const { data: clubRow, error: clubError } = await supabaseAdmin

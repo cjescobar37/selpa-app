@@ -36,22 +36,22 @@ export async function GET(req: NextRequest, context: Context) {
   ])
   if (tournamentsError || registrationsError) return NextResponse.json({ error: tournamentsError?.message ?? registrationsError?.message ?? 'No pudimos cargar las solicitudes.' }, { status: 500 })
 
-  const tournaments = new Map((tournamentRows ?? []).map((row: any) => [row.id, row]))
-  const registrations = new Map((registrationRows ?? []).map((row: any) => [row.id, row]))
+  const tournaments = new Map((tournamentRows ?? []).map((row) => [row.id, row]))
+  const registrations = new Map((registrationRows ?? []).map((row) => [row.id, row]))
   const registrationIds = Array.from(registrations.keys())
-  const teamIds = Array.from(new Set(Array.from(registrations.values()).map((row: any) => row.team_id).filter(Boolean)))
+  const teamIds = Array.from(new Set(Array.from(registrations.values()).map((row) => row.team_id).filter(Boolean)))
 
   const { data: teamRows, error: teamsError } = teamIds.length
     ? await supabaseAdmin.from('tournament_teams').select('id,player1_user_id,player2_user_id').in('id', teamIds)
     : { data: [], error: null }
   if (teamsError) return NextResponse.json({ error: teamsError.message }, { status: 500 })
-  const teams = new Map((teamRows ?? []).map((row: any) => [row.id, row]))
-  const playerIds = Array.from(new Set((teamRows ?? []).flatMap((row: any) => [row.player1_user_id, row.player2_user_id]).filter(Boolean)))
+  const teams = new Map((teamRows ?? []).map((row) => [row.id, row]))
+  const playerIds = Array.from(new Set((teamRows ?? []).flatMap((row) => [row.player1_user_id, row.player2_user_id]).filter(Boolean)))
   const { data: profileRows, error: profilesError } = playerIds.length
     ? await supabaseAdmin.from('profiles').select('user_id,first_name,last_name,display_name,email').in('user_id', playerIds)
     : { data: [], error: null }
   if (profilesError) return NextResponse.json({ error: profilesError.message }, { status: 500 })
-  const profiles = new Map((profileRows ?? []).map((row: any) => [row.user_id, row]))
+  const profiles = new Map((profileRows ?? []).map((row) => [row.user_id, row]))
   const teamLabel = (registrationId: string | null) => {
     const registration = registrationId ? registrations.get(registrationId) : null
     const team = registration ? teams.get(registration.team_id) : null
@@ -68,12 +68,12 @@ export async function GET(req: NextRequest, context: Context) {
       .eq('status', 'PENDING')
       .order('created_at', { ascending: false })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    const userIds = (data ?? []).map((row: any) => row.user_id)
+    const userIds = (data ?? []).map((row) => row.user_id)
     const { data: membersProfiles } = userIds.length
       ? await supabaseAdmin.from('profiles').select('user_id,first_name,last_name,display_name,email').in('user_id', userIds)
       : { data: [] }
-    const membershipProfiles = new Map((membersProfiles ?? []).map((row: any) => [row.user_id, row]))
-    membershipRequests = (data ?? []).map((row: any) => ({ id: row.id, name: fullName(membershipProfiles.get(row.user_id)), email: membershipProfiles.get(row.user_id)?.email ?? null, created_at: row.created_at }))
+    const membershipProfiles = new Map((membersProfiles ?? []).map((row) => [row.user_id, row]))
+    membershipRequests = (data ?? []).map((row) => ({ id: row.id, name: fullName(membershipProfiles.get(row.user_id)), email: membershipProfiles.get(row.user_id)?.email ?? null, created_at: row.created_at }))
   }
 
   let cancellationRequests: Array<Record<string, unknown>> = []
@@ -85,8 +85,8 @@ export async function GET(req: NextRequest, context: Context) {
     ])
     if (changesResult.error && !isMissingSchemaObjectError(changesResult.error)) return NextResponse.json({ error: changesResult.error.message }, { status: 500 })
     if (paymentsResult.error && !isMissingSchemaObjectError(paymentsResult.error)) return NextResponse.json({ error: paymentsResult.error.message }, { status: 500 })
-    cancellationRequests = (changesResult.data ?? []).map((row: any) => ({ ...row, team_name: teamLabel(row.registration_id), tournament_name: tournaments.get(row.tournament_id)?.name ?? 'Torneo' }))
-    paymentRequests = (paymentsResult.data ?? []).map((row: any) => {
+    cancellationRequests = (changesResult.data ?? []).map((row) => ({ ...row, team_name: teamLabel(row.registration_id), tournament_name: tournaments.get(row.tournament_id)?.name ?? 'Torneo' }))
+    paymentRequests = (paymentsResult.data ?? []).map((row) => {
       const registration = registrations.get(row.registration_id)
       return { ...row, team_name: teamLabel(row.registration_id), tournament_id: registration?.tournament_id ?? null, tournament_name: registration ? tournaments.get(registration.tournament_id)?.name ?? 'Torneo' : 'Torneo' }
     })

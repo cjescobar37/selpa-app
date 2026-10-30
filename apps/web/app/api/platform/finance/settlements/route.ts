@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const rows = data ?? []
-  const clubIds = Array.from(new Set(rows.map((row: any) => row.club_id).filter(Boolean)))
+  const clubIds = Array.from(new Set(rows.map((row) => row.club_id).filter(Boolean)))
   const [rowClubsRes, allClubsRes] = await Promise.all([
     clubIds.length ? supabaseAdmin.from('clubs').select('id,name').in('id', clubIds) : Promise.resolve({ data: [], error: null }),
     supabaseAdmin.from('clubs').select('id,name,status').order('name', { ascending: true }),
@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
   if (rowClubsRes.error) return NextResponse.json({ error: rowClubsRes.error.message }, { status: 500 })
   if (allClubsRes.error) return NextResponse.json({ error: allClubsRes.error.message }, { status: 500 })
 
-  const clubsMap = new Map((rowClubsRes.data ?? []).map((club: any) => [club.id, club]))
-  const enriched = rows.map((row: any) => ({
+  const clubsMap = new Map((rowClubsRes.data ?? []).map((club) => [club.id, club]))
+  const enriched = rows.map((row) => ({
     ...row,
     club_name: clubsMap.get(row.club_id)?.name ?? 'Club',
   }))

@@ -48,7 +48,7 @@ export default function ClubsPage() {
   }
 
   useEffect(() => {
-    loadClubs()
+    void Promise.resolve().then(() => loadClubs())
   }, [])
 
   const ordered = useMemo(() => {

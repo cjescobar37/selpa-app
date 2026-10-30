@@ -1,3 +1,4 @@
+type MessageProfile = { user_id?: string; display_name?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null; avatar_url?: string | null }
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { ensureValidActiveClubForUser, getApprovedMembership } from '@/lib/clubMembershipServer'
@@ -23,7 +24,7 @@ async function getUserFromRequest(req: NextRequest) {
   return { user: data.user }
 }
 
-function fullName(profile: any) {
+function fullName(profile: MessageProfile | null | undefined) {
   return (
     profile?.display_name ||
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
@@ -57,14 +58,14 @@ async function getRole(userId: string, activeClubId: string | null) {
 }
 
 async function getProfilesMap(userIds: string[]) {
-  if (!userIds.length) return new Map<string, any>()
+  if (!userIds.length) return new Map<string, MessageProfile>()
 
   const { data } = await supabaseAdmin
     .from('profiles')
     .select('user_id, email, first_name, last_name, display_name, avatar_url')
     .in('user_id', userIds)
 
-  return new Map((data ?? []).map((p: any) => [p.user_id, p]))
+  return new Map((data ?? []).map((p) => [p.user_id, p]))
 }
 
 async function getContactsForPlayer(activeClubId: string | null) {
@@ -78,8 +79,8 @@ async function getContactsForPlayer(activeClubId: string | null) {
       .eq('status', 'APPROVED')
 
     const adminIds = (clubAdmins ?? [])
-      .filter((m: any) => isApprovedMembership(m) && isClubStaffRole(m.role))
-      .map((m: any) => m.user_id)
+      .filter((m) => isApprovedMembership(m) && isClubStaffRole(m.role))
+      .map((m) => m.user_id)
 
     const adminProfiles = await getProfilesMap(adminIds)
 
@@ -99,7 +100,7 @@ async function getContactsForPlayer(activeClubId: string | null) {
     .from('platform_admins')
     .select('user_id')
 
-  const platformIds = (platformAdmins ?? []).map((p: any) => p.user_id)
+  const platformIds = (platformAdmins ?? []).map((p) => p.user_id)
   const platformProfiles = await getProfilesMap(platformIds)
 
   platformIds.forEach((id) => {
@@ -127,8 +128,8 @@ async function getContactsForClub(activeClubId: string | null) {
       .eq('status', 'APPROVED')
 
     const playerIds = (members ?? [])
-      .filter((m: any) => isApprovedMembership(m) && m.role === 'PLAYER')
-      .map((m: any) => m.user_id)
+      .filter((m) => isApprovedMembership(m) && m.role === 'PLAYER')
+      .map((m) => m.user_id)
 
     const playerProfiles = await getProfilesMap(playerIds)
 
@@ -148,7 +149,7 @@ async function getContactsForClub(activeClubId: string | null) {
     .from('platform_admins')
     .select('user_id')
 
-  const platformIds = (platformAdmins ?? []).map((p: any) => p.user_id)
+  const platformIds = (platformAdmins ?? []).map((p) => p.user_id)
   const platformProfiles = await getProfilesMap(platformIds)
 
   platformIds.forEach((id) => {
@@ -188,13 +189,13 @@ export async function GET(req: NextRequest) {
 
     const userIds = Array.from(
       new Set(
-        (inbox ?? []).flatMap((m: any) => [m.sender_user_id, m.recipient_user_id]).filter(Boolean)
+        (inbox ?? []).flatMap((m) => [m.sender_user_id, m.recipient_user_id]).filter(Boolean)
       )
     )
 
     const profilesMap = await getProfilesMap(userIds)
 
-    const messages = (inbox ?? []).map((m: any) => ({
+    const messages = (inbox ?? []).map((m) => ({
       ...m,
       sender_profile: profilesMap.get(m.sender_user_id) ?? null,
       recipient_profile: profilesMap.get(m.recipient_user_id) ?? null,
@@ -210,7 +211,9 @@ export async function GET(req: NextRequest) {
       contacts,
       messages,
     })
-  } catch (e: any) {
+  } catch (caughtError: unknown) {
+    const e = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: e?.message ?? 'Error cargando mensajes' }, { status: 500 })
   }
 }

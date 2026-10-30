@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
       }
 
       membershipMap = new Map(
-        (memberships ?? []).map((m: any) => [
+        (memberships ?? []).map((m) => [
           m.club_id,
           {
             role: String(m.role),
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const payload = (clubs ?? []).map((club: any) => {
+    const payload = (clubs ?? []).map((club) => {
       const membership = membershipMap.get(club.id)
       return {
         id: club.id,
@@ -65,7 +65,9 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json({ clubs: payload })
-  } catch (e: any) {
+  } catch (caughtError: unknown) {
+    const e = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: e?.message ?? 'Error cargando clubes' }, { status: 500 })
   }
 }

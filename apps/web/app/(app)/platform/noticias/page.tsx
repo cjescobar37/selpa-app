@@ -122,7 +122,7 @@ export default function PlatformNewsPage() {
     return data.session?.access_token || null
   }
 
-  function buildErrorAlert(status: number, fallbackTitle: string, fallbackMessage: string, payload?: any) {
+  function buildErrorAlert(status: number, fallbackTitle: string, fallbackMessage: string, payload?: { error?: string }) {
     if (status === 401) {
       return {
         variant: 'warning' as const,
@@ -177,7 +177,9 @@ export default function PlatformNewsPage() {
       setSelectedId((current) => current ?? nextRows[0]?.id ?? null)
       setPage(1)
       setSetupRequired(false)
-    } catch (error: any) {
+    } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string; status?: number; payload?: { error?: string } }
+
       const nextAlert = buildErrorAlert(
         Number(error?.status || 500),
         'No pude cargar noticias',
@@ -191,7 +193,7 @@ export default function PlatformNewsPage() {
   }
 
   useEffect(() => {
-    loadRows()
+    void Promise.resolve().then(() => loadRows())
   }, [])
 
   useEffect(() => {
@@ -241,23 +243,17 @@ export default function PlatformNewsPage() {
   }, [])
 
   useEffect(() => {
-    if (!coverFile) {
-      setCoverPreviewUrl(null)
-      return
-    }
-    const url = URL.createObjectURL(coverFile)
-    setCoverPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
+    const url = coverFile ? URL.createObjectURL(coverFile) : null
+    let active = true
+    queueMicrotask(() => { if (active) setCoverPreviewUrl(url) })
+    return () => { active = false; if (url) URL.revokeObjectURL(url) }
   }, [coverFile])
 
   useEffect(() => {
-    if (!galleryFiles.length) {
-      setGalleryPreviewUrls([])
-      return
-    }
     const urls = galleryFiles.map((file) => URL.createObjectURL(file))
-    setGalleryPreviewUrls(urls)
-    return () => urls.forEach((url) => URL.revokeObjectURL(url))
+    let active = true
+    queueMicrotask(() => { if (active) setGalleryPreviewUrls(urls) })
+    return () => { active = false; urls.forEach((url) => URL.revokeObjectURL(url)) }
   }, [galleryFiles])
 
   useEffect(() => {
@@ -434,7 +430,9 @@ export default function PlatformNewsPage() {
       await loadRows()
       closeEditor()
       setAlert({ variant: 'success', title: editingId ? 'Noticia actualizada' : 'Noticia creada', message: 'Los cambios quedaron guardados correctamente.' })
-    } catch (error: any) {
+    } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
       setAlert({ variant: 'error', title: 'No pude guardar la noticia', message: error?.message || 'Revisá los datos e intentá de nuevo.' })
     } finally {
       setSaving(false)
@@ -473,7 +471,9 @@ export default function PlatformNewsPage() {
       if (selectedId === row.id) setSelectedId(null)
       await loadRows()
       setAlert({ variant: 'success', title: 'Noticia eliminada' })
-    } catch (error: any) {
+    } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
       setAlert({ variant: 'error', title: 'No pude eliminar la noticia', message: error?.message || 'Intentá de nuevo en unos segundos.' })
     }
   }

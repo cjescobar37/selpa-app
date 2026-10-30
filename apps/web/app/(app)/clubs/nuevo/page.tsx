@@ -125,6 +125,10 @@ export default function CreateClubPage() {
   const enabledHours = useMemo(() => hours.filter((day) => day.enabled), [hours])
 
   useEffect(() => {
+    let cancelled = false
+    void Promise.resolve().then(() => {
+      if (cancelled) return
+
     try {
       const saved = window.localStorage.getItem(draftKey)
       if (saved) {
@@ -150,6 +154,8 @@ export default function CreateClubPage() {
     } finally {
       setDraftReady(true)
     }
+    })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {

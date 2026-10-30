@@ -78,7 +78,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ cl
         .neq('id', newsId)
         .filter('metadata->>featured_rank', 'eq', String(featuredRank))
 
-      await Promise.all((rankedRows ?? []).map((row: any) => supabaseAdmin
+      await Promise.all((rankedRows ?? []).map((row) => supabaseAdmin
         .from('platform_news')
         .update({ metadata: { ...(row.metadata ?? {}), featured_rank: null } })
         .eq('id', row.id)))
@@ -111,7 +111,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ cl
     }
 
     return NextResponse.json({ ok: true, row: data })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: error?.message ?? 'No pude actualizar la noticia.' }, { status: 500 })
   }
 }

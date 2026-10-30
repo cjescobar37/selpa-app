@@ -19,6 +19,7 @@ import { formatHomeNewsDate as formatDate } from '@/lib/publicHomeDatePresentati
 import { HomeInstallSlot } from '@/components/pwa/HomeInstallPlacement'
 
 type NewsItem = {
+  club_name?: string | null; clubName?: string | null; source?: string | null; theme_key?: string | null; themeKey?: string | null; club_theme_key?: string | null
   id: string
   title: string
   slug: string
@@ -104,7 +105,7 @@ function placementLabel(placement: NewsItem['placement']) {
 }
 
 function newsSourceLabel(item: NewsItem) {
-  return String((item as any).club_name ?? (item as any).clubName ?? (item as any).source ?? BRAND.name).toUpperCase()
+  return String(item.club_name ?? item.clubName ?? item.source ?? BRAND.name).toUpperCase()
 }
 
 const NEWS_THEME_COLORS: Record<string, { accent: string; accent2: string; glow: string }> = {
@@ -124,7 +125,7 @@ const NEWS_THEME_COLORS: Record<string, { accent: string; accent2: string; glow:
 }
 
 function newsThemeStyle(item: NewsItem): CSSProperties {
-  const themeKey = String((item as any).theme_key ?? (item as any).themeKey ?? (item as any).club_theme_key ?? 'cyan')
+  const themeKey = String(item.theme_key ?? item.themeKey ?? item.club_theme_key ?? 'cyan')
   const theme = NEWS_THEME_COLORS[themeKey] ?? NEWS_THEME_COLORS.cyan
   return {
     ['--news-accent' as string]: theme.accent,
@@ -384,8 +385,9 @@ export default function PublicHomeExperience({
 
     return [...sponsorItems, ...adItems].slice(0, 8)
   }, [ads, sponsors])
+  const [adEvaluationTime] = useState(Date.now)
   const adsByHomeSlot = useMemo(() => {
-    const now = Date.now()
+    const now = adEvaluationTime
     const activeAds = ads.filter((item) => {
       if (!hasMeaningfulSponsorText(item.title)) return false
       if (item.status && String(item.status).toUpperCase() !== 'ACTIVE') return false
@@ -415,7 +417,7 @@ export default function PublicHomeExperience({
         .filter((item) => item.slot === 'HOME_AFTER_NEWS_HERO' || item.slot === 'HOME_INLINE' || item.slot === 'HOME_HERO')
         .map(normalize),
     }
-  }, [ads])
+  }, [ads, adEvaluationTime])
 
   useEffect(() => {
     if (!brandPartners.length || isSponsorCarouselPaused) return

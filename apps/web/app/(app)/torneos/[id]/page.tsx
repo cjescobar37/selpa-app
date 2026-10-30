@@ -598,7 +598,7 @@ export default function TorneoDetallePage() {
                 ) : null}
                 {withdrawalPending ? (
                   <div className="tournamentPublicDetail__withdrawPending">
-                    <b>Baja enviada</b>
+                    <b>{registrationView.confirmed?'Baja solicitada':'Cancelación solicitada'}</b>
                     <small>
                       {detail.viewer.myTeam?.registrationChangeRequest?.refundPercent !== null &&
                       detail.viewer.myTeam?.registrationChangeRequest?.refundPercent !== undefined
@@ -615,7 +615,7 @@ export default function TorneoDetallePage() {
                       setWithdrawalOpen(true)
                     }}
                   >
-                    Solicitar baja del torneo
+                    {registrationView.withdrawal}
                   </button>
                 )}
               </div>
@@ -833,7 +833,8 @@ export default function TorneoDetallePage() {
               <span>Baja del torneo</span>
               <button type="button" onClick={() => setWithdrawalOpen(false)} aria-label="Cerrar">×</button>
             </div>
-            <h3>Solicitar baja del torneo</h3>
+            <h3>{registrationView.withdrawal}</h3>
+            {!registrationView.confirmed?<p>Se enviará una solicitud de cancelación al club. No cancela automáticamente la inscripción ni registra un reintegro.</p>:null}
             <p>Si solicitás la baja, el club revisará tu pedido. El reintegro dependerá del tiempo restante hasta el inicio del torneo.</p>
             <div className="tournamentPublicDetail__refundSummary">
               <span>Reintegro estimado</span>

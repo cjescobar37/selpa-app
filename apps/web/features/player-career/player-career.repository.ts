@@ -111,7 +111,7 @@ async function readCurrentPartner(clubPlayerId: string, clubId: string) {
   if (result.error || result.data?.length!==1) return null
   const pair=result.data[0]
   const other=pair.player1_club_player_id===clubPlayerId ? pair.player2_club_player_id : pair.player1_club_player_id
-  const identity=await readCareerIdentity(other)
+  const identity=await readCareerIdentity(other,clubId)
   return identity ? {name:identity.name,publicPath:identity.publicPath} : null
 }
 

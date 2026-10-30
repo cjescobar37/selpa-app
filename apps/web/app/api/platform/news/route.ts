@@ -98,7 +98,9 @@ export async function POST(req: NextRequest) {
       req,
     })
     return NextResponse.json({ ok: true, row: data })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: error?.message ?? 'No pude crear la noticia.' }, { status: 500 })
   }
 }

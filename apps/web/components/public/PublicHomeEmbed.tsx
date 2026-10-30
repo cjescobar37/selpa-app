@@ -1,26 +1,13 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode, type ComponentProps } from 'react'
 import SelpaLoader from '@/components/SelpaLoader'
 import CommunityTournamentCalendar from '@/components/public/CommunityTournamentCalendar'
 import PublicHomeExperience from '@/components/public/PublicHomeExperience'
 
-type PublicHomeData = {
-  slides: any[]
-  newsArchive: any[]
-  tournaments: any[]
-  ads: any[]
-  sponsors: any[]
-  metrics?: {
-    clubs: number
-    players: number
-    tournaments: number
-    matches?: number | null
-  }
-  clubs: any[]
-}
+type PublicHomeData = Pick<ComponentProps<typeof PublicHomeExperience>, 'slides' | 'newsArchive' | 'tournaments' | 'ads' | 'sponsors' | 'clubs' | 'metrics'>
 
-function getOpenRegistrationCount(tournaments: any[]) {
+function getOpenRegistrationCount(tournaments: PublicHomeData['tournaments']) {
   return tournaments.filter((item) => {
     const status = String(item?.status ?? '').toUpperCase()
     return status.includes('INSCRIP') || status.includes('OPEN') || status.includes('REGISTRATION')

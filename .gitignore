@@ -23,3 +23,6 @@ Thumbs.db
 .idea/
 .vercel
 .env*
+
+# Local QA evidence and temporary build artifacts
+/output/

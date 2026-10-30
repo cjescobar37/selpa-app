@@ -1,9 +1,11 @@
 /** Local-only mock Data API backed by the actual read projections in PGlite. */
 import http from 'node:http'
-import {createFixture,PLAYER,QA_TOKEN,QA_ACTORS} from './block1-fixture.mjs'
+import {createFixture,PLAYER,SEASON,QA_TOKEN,QA_ACTORS} from './block1-fixture.mjs'
 import {financeReadRpcs,financeRpcResult} from './phase0-finance-fixture.mjs'
 import {addRankingExperienceFixture} from './ranking-experience-fixture.mjs'
+import {addSportsPrivacyFixture} from '../../lib/testHelpers/sportsPrivacyFixture.mjs'
 const db=await createFixture()
+if(process.env.SELPA_QA_PUBLIC_SPORTS==='true') await addSportsPrivacyFixture(db)
 if(process.env.SELPA_QA_RANKING==='true') await addRankingExperienceFixture(db)
 let unavailable=false
 let rankingRead='ready'
@@ -26,6 +28,12 @@ const server=http.createServer(async(request,response)=>{
   if(request.method==='OPTIONS') return send(200,{})
   const url=new URL(request.url,'http://127.0.0.1:45432')
   if(url.pathname==='/qa/health') return send(200,{ready:true})
+  if(url.pathname==='/qa/sports-privacy' && process.env.SELPA_QA_PUBLIC_SPORTS==='true') {
+    const mode=url.searchParams.get('value')
+    if(!['public','private'].includes(mode)) return send(400,{message:'Invalid synthetic visibility scenario'})
+    await db.query('update competition_seasons set is_public=$1 where id=$2',[mode==='public',SEASON])
+    return send(200,{mode,synthetic:true})
+  }
   if(url.pathname==='/qa/unavailable') {unavailable=url.searchParams.get('value')==='true';return send(200,{unavailable})}
   if(url.pathname==='/qa/ranking-read') {
     const mode=url.searchParams.get('value')??'ready'
@@ -50,7 +58,7 @@ const server=http.createServer(async(request,response)=>{
   }
   // Reject mutations even in the synthetic store. Explicit read-only RPC allowlist.
   const rpcName=url.pathname.startsWith('/rest/v1/rpc/')?url.pathname.split('/').at(-1):null
-  if(!['GET','HEAD'].includes(request.method) && rpcName!=='read_player_career_summary' && !financeReadRpcs.has(rpcName)) return send(405,{message:'READ_ONLY_QA'})
+  if(!['GET','HEAD'].includes(request.method) && !['read_player_career_summary','read_public_player_career_summary'].includes(rpcName) && !financeReadRpcs.has(rpcName)) return send(405,{message:'READ_ONLY_QA'})
   try {
     if(url.pathname.startsWith('/rest/v1/rpc/')) {
       let body='';for await(const chunk of request) body+=chunk
@@ -60,7 +68,7 @@ const server=http.createServer(async(request,response)=>{
         return send(200,financeRpcResult(rpcName,args,financeScenario))
       }
       if(unavailable) return send(503,{message:'QA unavailable'})
-      const result=await db.query('select * from read_player_career_summary($1,$2)',[args.p_club_player_id,args.p_season_id])
+      const result=await db.query('select * from '+identifier(rpcName)+'($1,$2)',[args.p_club_player_id,args.p_season_id])
       return send(200,result.rows)
     }
     const table=url.pathname.split('/').at(-1)

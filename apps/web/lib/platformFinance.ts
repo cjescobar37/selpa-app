@@ -339,7 +339,7 @@ export async function generateSettlement(input: GenerateSettlementInput) {
   if (commissionsError) throw new Error(`No pude buscar comisiones pendientes: ${commissionsError.message}`)
   if (!commissions?.length) throw new Error('No hay comisiones pendientes para liquidar.')
 
-  const paymentIds = commissions.map((commission: any) => commission.payment_id).filter(Boolean)
+  const paymentIds = commissions.map((commission) => commission.payment_id).filter(Boolean)
   const { data: payments, error: paymentsError } = await supabaseAdmin
     .from('payments')
     .select('id,status,paid_at')
@@ -349,22 +349,22 @@ export async function generateSettlement(input: GenerateSettlementInput) {
 
   const paidPayments = new Map(
     (payments ?? [])
-      .filter((payment: any) => {
+      .filter((payment) => {
         const paidAt = payment.paid_at ? String(payment.paid_at).slice(0, 10) : null
         return payment.status === 'paid' && paidAt && paidAt >= periodStart && paidAt <= periodEnd
       })
-      .map((payment: any) => [payment.id, payment])
+      .map((payment) => [payment.id, payment])
   )
 
-  const includedCommissions = commissions.filter((commission: any) => paidPayments.has(commission.payment_id))
+  const includedCommissions = commissions.filter((commission) => paidPayments.has(commission.payment_id))
   if (!includedCommissions.length) throw new Error('No hay pagos paid dentro del período indicado.')
 
-  const currencies = new Set(includedCommissions.map((commission: any) => commission.currency || 'ARS'))
+  const currencies = new Set(includedCommissions.map((commission) => commission.currency || 'ARS'))
   if (currencies.size > 1) throw new Error('No se puede generar una liquidación con múltiples monedas.')
   const currency = Array.from(currencies)[0] || 'ARS'
 
   const totals = includedCommissions.reduce(
-    (acc, commission: any) => {
+    (acc, commission) => {
       acc.grossAmount += Number(commission.base_amount)
       acc.commissionAmount += Number(commission.commission_amount)
       acc.netAmount += Number(commission.club_net_amount)
@@ -394,7 +394,7 @@ export async function generateSettlement(input: GenerateSettlementInput) {
   if (settlementError) throw new Error(`No pude generar la liquidación: ${settlementError.message}`)
   if (!settlement?.id) throw new Error('No pude generar la liquidación.')
 
-  const itemPayload = includedCommissions.map((commission: any) => ({
+  const itemPayload = includedCommissions.map((commission) => ({
     settlement_id: settlement.id,
     payment_id: commission.payment_id,
     commission_id: commission.id,
@@ -420,7 +420,7 @@ export async function generateSettlement(input: GenerateSettlementInput) {
       settlement_id: settlement.id,
       status: 'settled' satisfies CommissionStatus,
     })
-    .in('id', includedCommissions.map((commission: any) => commission.id))
+    .in('id', includedCommissions.map((commission) => commission.id))
 
   if (updateError) {
     await supabaseAdmin.from('settlements').delete().eq('id', settlement.id)

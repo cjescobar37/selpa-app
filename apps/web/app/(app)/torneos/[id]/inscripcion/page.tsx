@@ -957,8 +957,8 @@ export default function TorneoInscripcionPage() {
                     Enviar mensaje
                   </button>
                 ) : null}
-                <button type="button" onClick={() => setWithdrawalModalOpen(true)}>
-                  {detail.viewer.myTeam?.registrationChangeRequest?.status === 'PENDING' ? 'Baja solicitada' : 'Solicitar baja'}
+                <button type="button" disabled={detail.viewer.myTeam?.registrationChangeRequest?.status === 'PENDING'} onClick={() => setWithdrawalModalOpen(true)}>
+                  {detail.viewer.myTeam?.registrationChangeRequest?.status === 'PENDING' ? 'Cancelación solicitada' : registrationView.withdrawal}
                 </button>
               </div>
             </div>
@@ -973,7 +973,7 @@ export default function TorneoInscripcionPage() {
 
           {detail.viewer.myTeam?.registrationChangeRequest?.status === 'PENDING' ? (
             <div className="tournamentSignupPage__confirmNote">
-              Solicitud de baja pendiente de revisión por el club.
+              {registrationView.confirmed?'Solicitud de baja':'Solicitud de cancelación'} pendiente de revisión por el club.
             </div>
           ) : null}
         </section>
@@ -990,10 +990,12 @@ export default function TorneoInscripcionPage() {
                 type="button"
                 className={`${isComplete ? 'is-complete' : ''} ${isCurrent ? 'is-current' : ''}`}
                 disabled={isDisabled}
+                aria-label={`Paso ${step.id}: ${step.label}`}
                 onClick={() => goToStep(step.id)}
               >
                 <b>{isComplete ? '✓' : step.id}</b>
-                {step.label}
+                <span className="tournamentSignupPage__stepFullLabel">{step.label}</span>
+                <span className="tournamentSignupPage__stepShortLabel">{['Pareja','Horarios','Pago','Revisión'][step.id-1]}</span>
               </button>
             )
           })}
@@ -1355,16 +1357,16 @@ export default function TorneoInscripcionPage() {
 
       {withdrawalModalOpen ? (
         <div className="tournamentSignupPage__modalBackdrop" role="presentation">
-          <div className="tournamentSignupPage__modal tournamentSignupPage__modal--compact" role="dialog" aria-modal="true" aria-label="Solicitar baja del torneo">
+          <div className="tournamentSignupPage__modal tournamentSignupPage__modal--compact" role="dialog" aria-modal="true" aria-label={registrationView.withdrawal}>
             <div className="tournamentSignupPage__modalHeader">
               <div>
-                <span>Baja del torneo</span>
-                <h3>Solicitud pendiente de club</h3>
+                <span>{registrationView.withdrawal}</span>
+                <h3>Revisión del club requerida</h3>
               </div>
               <button type="button" onClick={() => setWithdrawalModalOpen(false)} aria-label="Cerrar">×</button>
             </div>
             <p className="tournamentSignupPage__modalText">
-              La baja del torneo debe ser revisada y aprobada por el club. Escribí un motivo breve para enviar la solicitud.
+              El club debe revisar esta solicitud. Enviarla no cancela automáticamente la inscripción ni confirma un reintegro. Escribí un motivo breve.
             </p>
             <label className="tournamentSignupPage__withdrawalReason">
               <span>Motivo</span>
@@ -1462,6 +1464,8 @@ export default function TorneoInscripcionPage() {
           margin-top: 16px;
           font-weight: 850;
         }
+
+        .tournamentSignupPage__stepShortLabel { display: none; }
 
         .tournamentSignupPage__steps {
           display: grid;
@@ -2885,9 +2889,17 @@ export default function TorneoInscripcionPage() {
           background: rgba(255,228,230,.76);
         }
 
+        @media (max-width: 640px) {
+          .tournamentSignupPage__steps { gap: 4px; margin-top: 10px; }
+          .tournamentSignupPage__steps button { display: grid; justify-items: center; gap: 4px; min-height: 56px; padding: 7px 3px; text-align: center; border-radius: 12px; font-size: 11px; }
+          .tournamentSignupPage__stepFullLabel { display: none; }
+          .tournamentSignupPage__stepShortLabel { display: block; }
+          .tournamentSignupPage__steps button span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; line-height: 1.2; }
+        }
+
         @media (max-width: 860px) {
           .tournamentSignupPage {
-            width: min(100% - 22px, 1180px);
+            width: 100%;
           }
 
           .tournamentSignupPage.is-guest-signup {
@@ -2931,7 +2943,6 @@ export default function TorneoInscripcionPage() {
             grid-column: auto;
           }
 
-          .tournamentSignupPage__steps,
           .tournamentSignupPage__partnerGrid,
           .tournamentSignupPage__paymentGrid,
           .tournamentSignupPage__paymentMethods,

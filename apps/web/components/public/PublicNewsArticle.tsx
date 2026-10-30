@@ -30,7 +30,8 @@ export default function PublicNewsArticle({
   clubHref,
 }: PublicNewsArticleProps) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
-  const [resolvedClubHref, setResolvedClubHref] = useState<string | null>(clubHref ?? null)
+  const [referrerClubHref, setReferrerClubHref] = useState<string | null>(null)
+  const resolvedClubHref = clubHref ?? referrerClubHref
   const backLabel = resolvedClubHref ? 'Volver al club' : 'Volver a noticias'
 
   useEffect(() => {
@@ -47,20 +48,15 @@ export default function PublicNewsArticle({
   }, [lightboxUrl])
 
   useEffect(() => {
-    if (clubHref) {
-      setResolvedClubHref(clubHref)
-      return
-    }
-
-    try {
-      const referrer = document.referrer ? new URL(document.referrer) : null
-      const match = referrer?.origin === window.location.origin ? referrer.pathname.match(/^\/clubs\/[^/?#]+/) : null
-      if (match?.[0]) {
-        setResolvedClubHref(match[0])
-      }
-    } catch {
-      setResolvedClubHref(null)
-    }
+    if (clubHref) return
+    const timer = window.setTimeout(() => {
+      try {
+        const referrer = document.referrer ? new URL(document.referrer) : null
+        const match = referrer?.origin === window.location.origin ? referrer.pathname.match(/^\/clubs\/[^/?#]+/) : null
+        setReferrerClubHref(match?.[0] ?? null)
+      } catch { setReferrerClubHref(null) }
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [clubHref])
 
   function imageButton(url: string, alt: string, className: string) {

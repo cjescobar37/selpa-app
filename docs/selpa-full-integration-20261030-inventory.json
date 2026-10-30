@@ -1,0 +1,786 @@
+{
+  "date": "2026-10-30",
+  "branch": "codex/selpa-full-integration-20261030",
+  "base": "8d919e6709d676da25f83834d3b390fe0209f7dc",
+  "sources": [
+    {
+      "source": "legacy",
+      "path": "apps/web/app/(app)/player/ranking/page.tsx",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/(app)/torneos/[id]/inscripcion/page.tsx",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/(app)/torneos/[id]/page.tsx",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/api/player/finance/route.ts",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/api/player/my-ranking/route.ts",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/api/players/[playerId]/career/route.ts",
+      "disposition": "already-in-base",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/jugadores/[id]/loading.tsx",
+      "disposition": "already-in-base",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/jugadores/[id]/page.tsx",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/layout.tsx",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/ranking/page.tsx",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/styles/navbar.css",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/components/player/CareerExperience.module.css",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/components/player/CareerExperience.tsx",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/components/public/PublicRankingExperience.module.css",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/components/public/PublicRankingExperience.tsx",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/features/player-career/player-career.repository.ts",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/features/player-career/player-career.types.ts",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/features/player-career/public-ranking.presentation.ts",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/lib/competitionEventEditorContract.test.ts",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/lib/platformBillingF2Contract.test.ts",
+      "disposition": "already-in-base",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/lib/platformBillingF2Server.ts",
+      "disposition": "already-in-base",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/lib/productCompletionPass2Contract.test.ts",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/lib/publicRankingExperienceContract.test.mjs",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/next-env.d.ts",
+      "disposition": "apply-local",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/block1-browser.mjs",
+      "disposition": "apply-local",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/phase0-browser.mjs",
+      "disposition": "apply-local",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/ranking-experience-browser.mjs",
+      "disposition": "apply-local",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/ranking-experience-fixture.mjs",
+      "disposition": "apply-local",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/ranking-experience-interactions.mjs",
+      "disposition": "apply-local",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/(app)/club/qa-e2e-open-octubre/page.tsx",
+      "disposition": "exclude-dangerous-qa",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/api/dev/qa-e2e-players/route.ts",
+      "disposition": "exclude-dangerous-qa",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/manifest.ts",
+      "disposition": "already-in-base",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/pwa.css",
+      "disposition": "three-way",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/pwa/icon-192/route.tsx",
+      "disposition": "already-in-base",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/app/pwa/startup/[screen]/route.tsx",
+      "disposition": "three-way",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/components/player/CareerIdentityHero.tsx",
+      "disposition": "three-way",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/components/public/PublishedRankingClubCard.tsx",
+      "disposition": "three-way",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/components/ranking/RankingDiscovery.module.css",
+      "disposition": "three-way",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/components/ranking/RankingDiscovery.tsx",
+      "disposition": "three-way",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/lib/financeReadError.ts",
+      "disposition": "already-in-base",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/lib/pwa.ts",
+      "disposition": "three-way",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/lib/pwaContract.test.ts",
+      "disposition": "three-way",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/lib/registrationPresentation.ts",
+      "disposition": "three-way",
+      "baseExists": false,
+      "latestExists": true
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/career-migration-preflight.mjs",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/career-read-plan.mjs",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/lint-head-comparison.mjs",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/premium-recovery-browser.mjs",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/pwa-browser.mjs",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/pwa-build.mjs",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/pwa-installability.mjs",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/pwa-visual-compare.mjs",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/pwa-visual-web.mjs",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/scripts/qa/pwa-web.mjs",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/.temp/cli-latest",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/.temp/gotrue-version",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/.temp/linked-project.json",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/.temp/pooler-url",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/.temp/postgres-version",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/.temp/project-ref",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/.temp/rest-version",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/.temp/storage-migration",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/.temp/storage-version",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/migrations.zip",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "apps/web/supabase/qa/qa.zip",
+      "disposition": "exclude-generated-artifact",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "docs/selpa-premium-recovery.md",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "docs/selpa-pwa-phase1.md",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "docs/selpa-pwa-real-device-checklist.md",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "docs/selpa-pwa-universal-preview-review.html",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "docs/selpa-pwa-universal-preview.md",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "docs/selpa-pwa-visual-control.md",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "docs/selpa-pwa-visual-review.html",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "docs/selpa-ranking-production-readiness.md",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "legacy",
+      "path": "docs/selpa-real-integration-closure.md",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "mobile",
+      "path": "Start-SELPA.ps1",
+      "disposition": "apply-local",
+      "baseExists": true,
+      "latestExists": true
+    },
+    {
+      "source": "mobile",
+      "path": "docs/selpa-mobile-sprint2a.md",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "mobile",
+      "path": "docs/selpa-mobile-sprint2b-cierre.md",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    },
+    {
+      "source": "mobile",
+      "path": "docs/selpa-mobile-sprint2b.md",
+      "disposition": "apply-local",
+      "baseExists": false,
+      "latestExists": false
+    }
+  ],
+  "conflictResolutions": [
+    {
+      "path": "apps/web/app/(app)/player/ranking/page.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/app/(app)/torneos/[id]/inscripcion/page.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/app/(app)/torneos/[id]/page.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/app/api/player/finance/route.ts",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/app/api/player/my-ranking/route.ts",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve explicit access checks, public/private projections and pagination"
+    },
+    {
+      "path": "apps/web/app/layout.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved iPhone startup and safe-area behavior"
+    },
+    {
+      "path": "apps/web/app/ranking/page.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/components/player/CareerExperience.module.css",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/components/player/CareerExperience.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/components/public/PublicRankingExperience.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/features/player-career/player-career.repository.ts",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve explicit access checks, public/private projections and pagination"
+    },
+    {
+      "path": "apps/web/features/player-career/player-career.types.ts",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/lib/competitionEventEditorContract.test.ts",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/lib/productCompletionPass2Contract.test.ts",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/lib/publicRankingExperienceContract.test.mjs",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/app/pwa.css",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved iPhone startup and safe-area behavior"
+    },
+    {
+      "path": "apps/web/app/pwa/startup/[screen]/route.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved iPhone startup and safe-area behavior"
+    },
+    {
+      "path": "apps/web/components/player/CareerIdentityHero.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/components/public/PublishedRankingClubCard.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/components/ranking/RankingDiscovery.module.css",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/components/ranking/RankingDiscovery.tsx",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    },
+    {
+      "path": "apps/web/lib/pwa.ts",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved iPhone startup and safe-area behavior"
+    },
+    {
+      "path": "apps/web/lib/pwaContract.test.ts",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved iPhone startup and safe-area behavior"
+    },
+    {
+      "path": "apps/web/lib/registrationPresentation.ts",
+      "decision": "preserve-mobile-base",
+      "reason": "Preserve approved mobile composition and current contracts; apply reviewed pending improvements separately"
+    }
+  ],
+  "finalCandidateFiles": [
+    ".gitignore",
+    "Start-SELPA.ps1",
+    "apps/web/app/(app)/AppNavbarClient.tsx",
+    "apps/web/app/(app)/club/inscripciones/page.tsx",
+    "apps/web/app/(app)/clubs/nuevo/page.tsx",
+    "apps/web/app/(app)/clubs/page.tsx",
+    "apps/web/app/(app)/notificaciones/page.tsx",
+    "apps/web/app/(app)/platform/noticias/page.tsx",
+    "apps/web/app/(app)/platform/publicidad/page.tsx",
+    "apps/web/app/(app)/torneos/[id]/inscripcion/page.tsx",
+    "apps/web/app/(app)/torneos/[id]/page.tsx",
+    "apps/web/app/api/auth/resolve-login/route.ts",
+    "apps/web/app/api/club-branding/route.ts",
+    "apps/web/app/api/club_assets/upload/route.ts",
+    "apps/web/app/api/clubs/[clubId]/news/[newsId]/route.ts",
+    "apps/web/app/api/clubs/[clubId]/news/route.ts",
+    "apps/web/app/api/clubs/[clubId]/requests/route.ts",
+    "apps/web/app/api/clubs/available/route.ts",
+    "apps/web/app/api/inbox-summary/route.ts",
+    "apps/web/app/api/message-threads/[threadId]/messages/route.ts",
+    "apps/web/app/api/message-threads/route.ts",
+    "apps/web/app/api/messages/route.ts",
+    "apps/web/app/api/platform/ads/[id]/route.ts",
+    "apps/web/app/api/platform/ads/route.ts",
+    "apps/web/app/api/platform/clubs-admin/route.ts",
+    "apps/web/app/api/platform/create-club/route.ts",
+    "apps/web/app/api/platform/finance/commissions/calculate/route.ts",
+    "apps/web/app/api/platform/finance/payments/[id]/refund/route.ts",
+    "apps/web/app/api/platform/finance/payments/route.ts",
+    "apps/web/app/api/platform/finance/settlements/[id]/approve/route.ts",
+    "apps/web/app/api/platform/finance/settlements/[id]/mark-paid/route.ts",
+    "apps/web/app/api/platform/finance/settlements/generate/route.ts",
+    "apps/web/app/api/platform/finance/settlements/route.ts",
+    "apps/web/app/api/platform/logs/route.ts",
+    "apps/web/app/api/platform/news/[id]/route.ts",
+    "apps/web/app/api/platform/news/route.ts",
+    "apps/web/app/api/platform/settings/route.ts",
+    "apps/web/app/api/platform/sponsors/[id]/route.ts",
+    "apps/web/app/api/platform/sponsors/route.ts",
+    "apps/web/app/api/public/content/route.ts",
+    "apps/web/app/api/public/home/route.ts",
+    "apps/web/app/api/tournaments/[tournamentId]/public-detail/route.ts",
+    "apps/web/app/completar-perfil/page.tsx",
+    "apps/web/app/noticias/page.tsx",
+    "apps/web/app/page.tsx",
+    "apps/web/components/RankingTable.tsx",
+    "apps/web/components/StatsRow.tsx",
+    "apps/web/components/ads/AdVisualEditor.tsx",
+    "apps/web/components/player/PlayerProfileEdit.module.css",
+    "apps/web/components/public/PublicHomeEmbed.tsx",
+    "apps/web/components/public/PublicHomeExperience.tsx",
+    "apps/web/components/public/PublicNewsArticle.tsx",
+    "apps/web/components/ranking/RankingRetryButton.tsx",
+    "apps/web/features/player-career/player-career.repository.ts",
+    "apps/web/lib/integrationSafety.test.mjs",
+    "apps/web/lib/operationalNotifications.ts",
+    "apps/web/lib/platformFinance.ts",
+    "apps/web/lib/publicHomeData.ts",
+    "apps/web/lib/registrationPresentation.ts",
+    "apps/web/lib/tournamentOpen/generalEngine.test.ts",
+    "apps/web/package-lock.json",
+    "apps/web/package.json",
+    "apps/web/scripts/qa/block1-browser.mjs",
+    "apps/web/scripts/qa/block1-fixture.mjs",
+    "apps/web/scripts/qa/block1-server.mjs",
+    "apps/web/scripts/qa/block1-web.mjs",
+    "apps/web/scripts/qa/career-migration-preflight.mjs",
+    "apps/web/scripts/qa/career-read-plan.mjs",
+    "apps/web/scripts/qa/integration-admin-browser.mjs",
+    "apps/web/scripts/qa/integration-browser.mjs",
+    "apps/web/scripts/qa/integration-web.mjs",
+    "apps/web/scripts/qa/lint-head-comparison.mjs",
+    "apps/web/scripts/qa/phase0-browser.mjs",
+    "apps/web/scripts/qa/premium-recovery-browser.mjs",
+    "apps/web/scripts/qa/pwa-browser.mjs",
+    "apps/web/scripts/qa/pwa-build.mjs",
+    "apps/web/scripts/qa/pwa-installability.mjs",
+    "apps/web/scripts/qa/pwa-visual-compare.mjs",
+    "apps/web/scripts/qa/pwa-visual-web.mjs",
+    "apps/web/scripts/qa/pwa-web.mjs",
+    "apps/web/scripts/qa/ranking-experience-browser.mjs",
+    "apps/web/scripts/qa/ranking-experience-fixture.mjs",
+    "apps/web/scripts/qa/ranking-experience-interactions.mjs",
+    "apps/web/scripts/qa/resolve-typescript.mjs",
+    "apps/web/scripts/qa/run-tests.mjs",
+    "apps/web/scripts/qa/setup-tests.mjs",
+    "docs/selpa-full-integration-20261030-inventory.json",
+    "docs/selpa-full-integration-20261030.md",
+    "docs/selpa-mobile-sprint2a.md",
+    "docs/selpa-mobile-sprint2b-cierre.md",
+    "docs/selpa-mobile-sprint2b.md",
+    "docs/selpa-premium-recovery.md",
+    "docs/selpa-pwa-phase1.md",
+    "docs/selpa-pwa-real-device-checklist.md",
+    "docs/selpa-pwa-universal-preview-review.html",
+    "docs/selpa-pwa-universal-preview.md",
+    "docs/selpa-pwa-visual-control.md",
+    "docs/selpa-pwa-visual-review.html",
+    "docs/selpa-ranking-production-readiness.md",
+    "docs/selpa-real-integration-closure.md"
+  ],
+  "originalsPreserved": [
+    {
+      "root": "D:/SELPA",
+      "headUnchanged": true,
+      "statusUnchanged": true,
+      "trackedPatchUnchanged": true,
+      "manifestCount": 73
+    },
+    {
+      "root": "D:/SELPA/output/pwa-universal-preview-20261015",
+      "headUnchanged": true,
+      "statusUnchanged": true,
+      "trackedPatchUnchanged": true,
+      "manifestCount": 4
+    }
+  ]
+}

@@ -1,6 +1,6 @@
-type Stats = { matches: number; wins: number; winRate: number }
+type Stats = { matches: number; wins: number; winRate: number; losses?: number; titles?: number; bestRank?: number }
 
-export default function StatsRow({ stats }: any) {
+export default function StatsRow({ stats }: { stats: Stats }) {
   return (
     <section className="statsStrip">
   <div className="tableTitle">

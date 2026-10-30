@@ -2,6 +2,8 @@
 import {CLUB,SEASON,id} from './block1-fixture.mjs'
 
 export async function addRankingExperienceFixture(db) {
+  await db.query('update profiles set avatar_url=$1,cover_url=$2 where user_id=$3',['/mock/player.jpg','/mock/avatar.jpg',id(1006)])
+  await db.query('insert into profiles(user_id,id,display_name,avatar_url,cover_url) values($1,$1,$2,$3,$4)',[id(90000),'Jugador sin club','/mock/player.jpg','/mock/avatar.jpg'])
   await db.query('update clubs set logo_url=$1 where id=$2',['/brand/selpa-isotipo.png',CLUB])
   await db.query('update profiles set avatar_url=$1 where user_id=$2',['/mock/avatar.jpg',id(1001)])
   await db.query('update profiles set avatar_url=$1 where user_id=$2',['/mock/player.jpg',id(1003)])

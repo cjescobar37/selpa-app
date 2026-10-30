@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
 import { BRAND } from '@/lib/branding'
 
+function normalizeBrandText(value: string): string
+function normalizeBrandText(value: unknown): unknown
 function normalizeBrandText(value: unknown) {
   return typeof value === 'string'
     ? value.replace(/PAMPRAX|PAMPrax|Pamprax|pamprax/g, BRAND.name.toUpperCase())
@@ -130,7 +132,7 @@ export async function getPublicHomeData() {
       const club = view ? clubsById.get(view.club_id) : null
       return view ? { ...view, name: normalizeBrandText(view.name), registeredPairs: featuredRegistrationsByTournamentId.get(view.id) ?? 0, clubName: club?.name ?? null, clubLogoUrl: club?.logo_url ?? null, clubThemeKey: club?.theme_key ?? null } : null
     })
-    .filter(Boolean)
+    .filter((item): item is NonNullable<typeof item> => item !== null)
 
   return {
     slides: prioritizedSlides,

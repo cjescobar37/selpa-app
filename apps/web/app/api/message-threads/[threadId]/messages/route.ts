@@ -1,3 +1,4 @@
+type MessageProfile = { user_id?: string; display_name?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null; avatar_url?: string | null }
 import { randomUUID } from 'node:crypto'
 import { insertMessageOnce, afterMessageCommit } from '@/lib/messageWriteServer'
 import { writeErrorResponse } from '@/lib/writeFlowServer'
@@ -32,7 +33,7 @@ async function isPlatformAdmin(userId: string) {
   return Boolean(data?.user_id)
 }
 
-function fullName(profile: any) {
+function fullName(profile: MessageProfile | null | undefined) {
   return (
     profile?.display_name ||
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
@@ -42,12 +43,12 @@ function fullName(profile: any) {
 }
 
 async function getProfilesMap(userIds: string[]) {
-  if (!userIds.length) return new Map<string, any>()
+  if (!userIds.length) return new Map<string, MessageProfile>()
   const { data } = await supabaseAdmin
     .from('profiles')
     .select('user_id,email,first_name,last_name,display_name,avatar_url')
     .in('user_id', Array.from(new Set(userIds)))
-  return new Map((data ?? []).map((profile: any) => [String(profile.user_id), profile]))
+  return new Map((data ?? []).map((profile) => [String(profile.user_id), profile]))
 }
 
 function isMissingColumnError(error: { code?: string; message?: string } | null | undefined) {
@@ -105,11 +106,11 @@ export async function GET(req: NextRequest, context: Context) {
       .eq('read', false)
   }
 
-  const profiles = await getProfilesMap((messages ?? []).flatMap((message: any) => [message.sender_user_id, message.recipient_user_id]).filter(Boolean).map(String))
+  const profiles = await getProfilesMap((messages ?? []).flatMap((message) => [message.sender_user_id, message.recipient_user_id]).filter(Boolean).map(String))
 
   return NextResponse.json({
     thread,
-    messages: (messages ?? []).map((message: any) => ({
+    messages: (messages ?? []).map((message) => ({
       ...message,
       read: message.recipient_user_id === user.id ? true : message.read,
       read_at: message.recipient_user_id === user.id ? (message.read_at ?? now) : message.read_at,

@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     let imageUrl: string | null | undefined = undefined
     if (file instanceof File && file.size > 0) imageUrl = await uploadPlatformAsset(file, 'ads')
     else if (keepImage === '0') imageUrl = null
-    const payload: Record<string, any> = { title, description: description || null, link_url: linkUrl || null, slot, status, sort_order: sortOrder, updated_by: auth.user!.id }
+    const payload: Record<string, unknown> = { title, description: description || null, link_url: linkUrl || null, slot, status, sort_order: sortOrder, updated_by: auth.user!.id }
     if (renderConfigRaw) payload.render_config = normalizePlatformAdRenderConfig(JSON.parse(renderConfigRaw))
     if (imageUrl !== undefined) payload.image_url = imageUrl
     const { data, error } = await supabaseAdmin.from('platform_ad_campaigns').update(payload).eq('id', id).select('*').maybeSingle()
@@ -59,7 +59,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       req,
     })
     return NextResponse.json({ ok: true, row: data })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: error?.message ?? 'No pude actualizar la campaña.' }, { status: 500 })
   }
 }

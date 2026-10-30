@@ -52,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       : []
     const galleryUrls = [...existingGalleryUrls, ...uploadedGalleryUrls]
 
-    const payload: Record<string, any> = {
+    const payload: Record<string, unknown> = {
       title,
       slug: slugify(slugInput || title),
       excerpt: excerpt || null,
@@ -84,7 +84,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       req,
     })
     return NextResponse.json({ ok: true, row: data })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: error?.message ?? 'No pude actualizar la noticia.' }, { status: 500 })
   }
 }

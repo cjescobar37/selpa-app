@@ -165,7 +165,7 @@ export default function NotificacionesPage() {
   }
 
   useEffect(() => {
-    load()
+    void Promise.resolve().then(() => load())
   }, [role])
 
   useEffect(() => {

@@ -47,7 +47,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, ...result })
-  } catch (error: any) {
+  } catch (caughtError: unknown) {
+    const error = caughtError as Error & { code?: string }
+
     return NextResponse.json({ error: error?.message ?? 'No pude generar la liquidación.' }, { status: 500 })
   }
 }

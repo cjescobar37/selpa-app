@@ -31,8 +31,8 @@ export async function getClubAdminUserIds(clubId: string) {
   }
 
   return Array.from(new Set((data ?? [])
-    .filter((membership: any) => isApprovedMembership(membership) && isClubStaffRole(membership.role))
-    .map((membership: any) => String(membership.user_id))
+    .filter((membership) => isApprovedMembership(membership) && isClubStaffRole(membership.role))
+    .map((membership) => String(membership.user_id))
     .filter(Boolean)))
 }
 
