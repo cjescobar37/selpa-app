@@ -39,8 +39,8 @@ export default function PublicRankingExperience({clubs,clubsCount,contexts,ranki
       <RankingDiscovery contexts={contexts} current={context} params={params} seasons={seasons}/>
       {context?<p className={styles.context}><span className={styles.scopeDot}/>{context.categoryName} · Ranking anual {modality==='PAIRS'?'de parejas':'individual'}</p>:null}
       {error?<ReadError issue={error} clubName={selectedClub?.name ?? 'este club'} clubId={selectedClub?.id}/>:!context?
-        <EmptyState title="Esta categoría todavía no tiene ranking" detail="Probá otra categoría o rama para explorar la competencia del club."/>:
-        !entries.length?<EmptyState title={search?'No encontramos ese nombre':ranking.page>1?'No hay resultados en esta página':'El próximo nombre puede ser el tuyo'}
+        <EmptyState title="Sin ranking público disponible" detail="Este club todavía no publicó un ranking para esta categoría y temporada. Probá otra categoría o temporada."/>:
+        !entries.length?<EmptyState title={search?'No encontramos ese nombre':ranking.page>1?'No hay resultados en esta página':'Sin ranking público disponible'}
           detail={search?'Probá otro nombre. La búsqueda conserva los puestos oficiales.':ranking.page>1?'Volvé a la primera página para ver la clasificación.':'Todavía no hay jugadores rankeados en esta categoría. Los resultados aparecerán cuando estén disponibles.'}
           href={search?rankingHref(params,{q:undefined,page:undefined}):ranking.page>1?href(1):undefined} action={search?'Ver ranking completo':'Primera página'}/>:
         <>
