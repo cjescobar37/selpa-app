@@ -28,6 +28,20 @@ El resumen operativo del esquema está en:
 
 `docs/schema-summary.md`
 
+## Continuidad obligatoria entre computadoras
+
+El repositorio canónico es `cjescobar37/selpa-app`. La rama de integración vigente al 01/11/2026 es `codex/selpa-full-integration-20261030`; verificar su vigencia al iniciar, sin cambiar de rama automáticamente.
+
+Leer `docs/SELPA_CONTINUIDAD.md` al comenzar cada sesión, antes de planificar o modificar archivos: revisar estado, pendientes y decisiones pertinentes. Consultarlo también al retomar una tarea, cambiar de equipo o intervenir en un área con decisiones previas. No asumir que los chats o archivos locales se transfieren entre computadoras.
+
+Antes de editar, revisar Git (rama, HEAD, diferencias, archivos no versionados y stashes) y preservar trabajo pendiente. Distinguir referencias locales de `origin` de una consulta actual al remoto; si no se puede verificar, dejarlo explícito. No hacer pull, cambiar de rama ni sobrescribir archivos con trabajo pendiente sin resolver primero su protección.
+
+Después de cada tarea importante (producto, arquitectura, auditoría, implementación o documentación), actualizar estado y pendientes en `docs/SELPA_CONTINUIDAD.md` antes del informe final. Registrar fecha, alcance, rama/HEAD base, archivos locales, pruebas realmente ejecutadas, resultados, limitaciones y siguiente paso. Mantener las decisiones estables y agregar un registro fechado al historial; no borrar antecedentes ni reabrir decisiones cerradas sin evidencia concreta o nueva instrucción del usuario. Si se sustituye una decisión, conservar la anterior con motivo y evidencia.
+
+Separar siempre código local sin commit, commit local, push comprobado, Preview, Production, QA automatizada, revisión visual en navegador/emulación y validación física en dispositivo. Un build exitoso o una Preview READY no certifican los demás niveles. Los resultados históricos no son pruebas ejecutadas en la sesión actual.
+
+La continuidad compartida depende de versionar y sincronizar estos documentos junto con el trabajo autorizado. Commit, push, merge y deployment requieren autorización explícita; documentar como pendiente lo que todavía sea solo local. El procedimiento entre equipos y la plantilla de cierre están en el documento de continuidad.
+
 
 # 1. REGLAS GENERALES DE TRABAJO
 
@@ -207,7 +221,7 @@ Estas medidas son referencias, no valores rígidos.
 
 Preferir aproximadamente:
 
-- margen lateral: 14–16 px;
+- gutter exterior móvil: aproximadamente 8 px por lado en 320–430 px, administrado una sola vez por el shell;
 - gap normal: 8–14 px;
 - controles táctiles: mínimo 44 px;
 - inputs: normalmente 44–52 px;
@@ -215,6 +229,8 @@ Preferir aproximadamente:
 - títulos principales: normalmente 24–30 px;
 - títulos de sección: normalmente 18–22 px;
 - texto normal: normalmente 14–16 px.
+
+No sumar otro gutter exterior en page/layout/wrapper. Mantener el padding interno de cards y controles; no confundirlo con el margen exterior. Preservar headers/heroes full bleed cuando correspondan al diseño aprobado. Esta decisión sustituye la referencia anterior de margen exterior de 14–16 px.
 
 Evitar títulos de 36–48 px en interfaces administrativas mobile salvo que exista una razón excepcional.
 
