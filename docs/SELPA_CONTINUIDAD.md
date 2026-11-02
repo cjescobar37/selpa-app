@@ -1,6 +1,6 @@
 # SELPA — Contexto compartido y continuidad operativa
 
-**Última revisión documental:** 01/11/2026 (Argentina). Los apartados históricos conservan sus fechas originales.
+**Última revisión documental:** 02/11/2026 (Argentina). Los apartados históricos conservan sus fechas originales.
 **Naturaleza:** fuente de continuidad para Codex en ambas computadoras. Contiene decisiones estables y un estado de trabajo que **debe verificarse** contra el repositorio antes de actuar. No es un reemplazo del código ni de los tests.
 
 ## 1. Visión innegociable
@@ -30,7 +30,15 @@ Identidad: navy, cian y magenta, logo SELPA, terminología **Damas/Caballeros**.
 
 ## 3. Estado Git e infraestructura
 
-### Verificación actual: 01/11/2026, checkout `C:\SELPA`
+### Estado verificado: 02/11/2026, PC del trabajo
+
+- Checkout canónico: `D:\SELPA\output\selpa-full-integration-20261030`; rama `codex/selpa-full-integration-20261030`; remoto `origin`: `https://github.com/cjescobar37/selpa-app.git`.
+- Inicio limpio en `7d5e8d431d8dcb0eaeb05cdfa49c8b20c0ea4b90`. Consulta remota y `git pull --ff-only` autorizado: avance a `aa9cfac315a7ec568853a5dca0d12191ab231322`, sin divergencia ni commit de merge. Esa es la base del cierre documental de esta sesión.
+- Se unificó el protocolo mediante un parche puntual, sin reemplazar documentos completos. La documentación canónica es la de esta rama; los documentos locales del checkout histórico `D:\SELPA` permanecen preservados y no deben publicarse como una segunda versión del protocolo.
+- Commit/push autorizados exclusivamente para `AGENTS.md` y `docs/SELPA_CONTINUIDAD.md`, con mensaje `docs: finalize SELPA cross-device synchronization protocol`. El hash resultante y la comprobación final de GitHub se entregan en el informe de cierre, sin intentar registrar dentro del commit su propio hash.
+- Próximo traspaso: sincronizar la segunda computadora con el commit publicado, después de verificar rama y trabajo pendiente. Su estado local no fue comprobado en esta sesión. No se consultó ni operó Vercel; no inferir un deployment de esta actualización documental.
+
+### Verificación anterior: 01/11/2026, checkout `C:\SELPA`
 
 - Remoto `origin`: `https://github.com/cjescobar37/selpa-app.git`; rama activa `codex/selpa-full-integration-20261030`.
 - HEAD local y remoto consultado con `git ls-remote origin refs/heads/codex/selpa-full-integration-20261030`: `7d5e8d431d8dcb0eaeb05cdfa49c8b20c0ea4b90`. Coincidían al consultar; esto no sincroniza cambios locales sin commit.
@@ -79,7 +87,7 @@ Respetar navbar superior navy opaco, barra inferior con safe area, foco, teclado
 El repositorio es la memoria **compartida**; los chats de un equipo no se asumen transferidos a otro. `AGENTS.md` en raíz define reglas; este archivo (`docs/SELPA_CONTINUIDAD.md`) guarda visión, estado y pendientes. **No duplicar ni contradecir instrucciones existentes**: ante contradicción, identificar la decisión más reciente sustentada y proponer corrección explícita.
 
 ### Al iniciar una tarea
-1. Leer `AGENTS.md`, confirmar repositorio, rama, HEAD, `git status`, diferencias versionadas/no versionadas y stashes. Git no detecta buffers sin guardar del editor. No sobrescribirlos ni asumir que están guardados.
+1. Leer `AGENTS.md`, confirmar repositorio, carpeta y worktree efectivos, rama, HEAD, upstream, `git status`, diferencias versionadas/no versionadas y stashes. Git no detecta buffers sin guardar del editor. No sobrescribirlos ni asumir que están guardados.
 2. Leer estado, pendientes y decisiones pertinentes de este documento en cada sesión y al retomar/cambiar de equipo; contrastarlos con los archivos relevantes. No recitar ni releer todo para cambios triviales.
 3. Distinguir: implementado/commiteado, observado en QA, desplegado en Preview, publicado en Production, validado físicamente.
 4. Proponer cambio mínimo coherente con el recorrido completo, junto con riesgos y plan de QA.
@@ -88,7 +96,7 @@ El repositorio es la memoria **compartida**; los chats de un equipo no se asumen
 1. Actualizar en este documento **solo** los apartados de estado y pendientes afectados, con fecha, rama, commit, evidencias y observaciones; conservar decisiones estables salvo autorización del usuario.
 2. Documentar qué pruebas se ejecutaron y cuáles quedaron pendientes. No marcar como PASS pruebas heredadas, no ejecutadas, de fixture o físicas sin evidencia.
 3. Mostrar archivos modificados y `git diff --check`; no cambiar un archivo ya modificado por otro proceso sin revisión.
-4. **No hacer commit, push, merge ni deploy automáticamente**: actuar solo con autorización explícita. Si no existe, informar que la continuidad todavía es local y dejar la sincronización pendiente. La sincronización entre equipos ocurre al `push` autorizado y posterior `pull --ff-only` en el otro equipo.
+4. **No hacer commit, push, merge ni deploy automáticamente**: actuar solo con autorización explícita. Si no existe y corresponde publicar, preparar primero el diff y las validaciones para revisión y solicitar autorización específica para commit/push. Si la tarea prohíbe publicar, no solicitarlo en ese cierre. Informar siempre qué continuidad sigue local y dejar su sincronización pendiente. La sincronización entre equipos ocurre al `push` autorizado y posterior `pull --ff-only` en el otro equipo.
 5. No incluir secrets, `.env`, dumps, tokens, logs sensibles ni datos personales de jugadores en documentación o commits.
 
 ### Comandos de uso habitual (Windows / PowerShell)
@@ -119,7 +127,7 @@ git status -sb
 git diff --check
 ```
 
-Estos comandos de sincronización son **para la rama activa correcta** y solamente si no hay cambios locales incompatibles. El mismo flujo aplica en la PC del trabajo desde su worktree correcto, nunca desde un checkout ambiguo.
+Estos comandos de sincronización son **para la rama activa correcta**, con árbol e índice limpios, upstream confirmado y sin una prohibición vigente de sincronizar. El mismo flujo aplica en la PC del trabajo desde su worktree correcto, nunca desde un checkout ambiguo.
 
 Si hay cambios pendientes, revisar y preservar su contenido antes de sincronizar: no resetear, limpiar, sobrescribir ni alterar stashes. Si hay divergencia, detener la integración y documentarla; no resolverla mediante force push o reset automático. No copiar `.env`, credenciales o `node_modules` entre equipos como mecanismo de continuidad. Un fetch fallido deja referencias locales potencialmente antiguas: registrarlo.
 
@@ -136,6 +144,20 @@ Actualizar el estado vigente y los pendientes afectados tras cada tarea importan
 - Datos reales creados/modificados, si los hubo; autorizaciones pendientes. No incorporar secretos ni datos personales.
 
 Después del commit/push autorizado, verificar su hash y presencia remota para el traspaso. No intentar escribir dentro de un commit su propio hash: el documento puede registrar el HEAD base y el informe de traspaso, el hash resultante. En el equipo receptor verificar ese hash y volver a leer estos documentos antes de continuar. GitHub comparte únicamente archivos versionados y enviados; no transfiere chats, buffers, borradores locales ni entornos.
+
+### Informe final para la conversación central de ChatGPT
+
+El informe debe ser breve, autónomo y listo para copiar manualmente; no enviarlo automáticamente a otros servicios. Debe terminar siempre con este bloque, completando los siete puntos y sin texto posterior:
+
+**ESTADO PARA CHATGPT**
+
+- Qué se completó: avances y decisiones de la tarea.
+- Qué archivos cambiaron: rutas de los archivos propios; distinguir trabajo preexistente preservado.
+- Qué pruebas pasaron o fallaron: resultados, alcance y validaciones no ejecutadas.
+- Qué quedó pendiente: limitaciones, autorizaciones y validaciones físicas pendientes.
+- Rama y último commit: rama, SHA y distinción entre HEAD y cambios sin commit.
+- Estado de sincronización con GitHub: solo local, con commit o publicado; indicar la comprobación del remoto y el deployment por separado, si corresponde.
+- Próximo paso recomendado: una acción concreta y la autorización necesaria, cuando corresponda.
 
 ## 7. Próximo objetivo: continuar auditoría sin reiniciar el proyecto
 
@@ -161,3 +183,12 @@ Consolidado a partir de los documentos aportados `SELPA_Contexto_Maestro_2026-10
 - TypeScript, ESLint y build: no ejecutados en esta tarea documental. QA UX en navegador y validación física: no realizadas. No se certifica experiencia actual de iPhone ni se crean datos reales.
 - Pendientes de continuidad: autorizar commit/push de estos dos documentos; luego sincronizar el checkout correcto de la PC del trabajo y comprobar el hash recibido. Hasta entonces este cambio solo está disponible en este equipo.
 - Pendientes de producto: se mantienen los de las secciones 4, 5 y 7; no se cerraron auditorías funcionales, cobros ni validaciones físicas con esta tarea.
+
+### 02/11/2026 — Unificación final del protocolo entre computadoras
+
+- Se trabajó exclusivamente en el checkout canónico de integración. Se recibió por avance rápido la documentación publicada desde el otro equipo y se aplicó el parche preparado sobre `aa9cfac`, después de comprobar su compatibilidad.
+- Cambios propios limitados a `AGENTS.md` y este documento: confirmación de carpeta/worktree/upstream, sincronización con árbol e índice limpios, preparación de diff y validaciones antes de solicitar publicación, y cierre obligatorio con los siete puntos de **ESTADO PARA CHATGPT**.
+- Se preservaron las decisiones históricas, la separación entre QA histórica y actual, y el gutter mobile de 8 px. No se copiaron completos los documentos antiguos sobre los vigentes.
+- QA documental: compatibilidad del parche, revisión del diff, alcance exclusivo de dos archivos, conservación de decisiones y revisión de información sensible. `git diff --check`: PASS. Sin credenciales nuevas ni datos personales en los cambios. No se ejecutaron tests de aplicación, TypeScript, ESLint, build ni QA UX por tratarse de documentación; no se crearon datos reales.
+- El checkout histórico no se modificó. Stash compartido preservado; sin cambios de código, Supabase, `main`, Production ni operaciones de deployment.
+- Publicación autorizada solo en esta rama y para estos dos documentos. El siguiente paso entre equipos es verificar el hash publicado y actualizar el checkout receptor de forma segura; los pendientes de producto históricos no se dan por resueltos mediante esta tarea.

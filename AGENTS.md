@@ -34,7 +34,7 @@ El repositorio canónico es `cjescobar37/selpa-app`. La rama de integración vig
 
 Leer `docs/SELPA_CONTINUIDAD.md` al comenzar cada sesión, antes de planificar o modificar archivos: revisar estado, pendientes y decisiones pertinentes. Consultarlo también al retomar una tarea, cambiar de equipo o intervenir en un área con decisiones previas. No asumir que los chats o archivos locales se transfieren entre computadoras.
 
-Antes de editar, revisar Git (rama, HEAD, diferencias, archivos no versionados y stashes) y preservar trabajo pendiente. Distinguir referencias locales de `origin` de una consulta actual al remoto; si no se puede verificar, dejarlo explícito. No hacer pull, cambiar de rama ni sobrescribir archivos con trabajo pendiente sin resolver primero su protección.
+Antes de editar, confirmar la carpeta y el worktree efectivos, y revisar Git (rama, HEAD, upstream, diferencias, archivos no versionados y stashes) y preservar trabajo pendiente. Distinguir referencias locales de `origin` de una consulta actual al remoto; si no se puede verificar, dejarlo explícito. No hacer pull, cambiar de rama ni sobrescribir archivos con trabajo pendiente sin resolver primero su protección.
 
 Después de cada tarea importante (producto, arquitectura, auditoría, implementación o documentación), actualizar estado y pendientes en `docs/SELPA_CONTINUIDAD.md` antes del informe final. Registrar fecha, alcance, rama/HEAD base, archivos locales, pruebas realmente ejecutadas, resultados, limitaciones y siguiente paso. Mantener las decisiones estables y agregar un registro fechado al historial; no borrar antecedentes ni reabrir decisiones cerradas sin evidencia concreta o nueva instrucción del usuario. Si se sustituye una decisión, conservar la anterior con motivo y evidencia.
 
@@ -759,6 +759,10 @@ Al finalizar una tarea relevante informar de forma concreta:
 No afirmar "sin problemas reales" solamente porque las pruebas automáticas pasaron.
 
 Si visualmente existe una deficiencia, reportarla.
+
+Preparar un informe breve, autónomo y listo para copiar manualmente en la conversación central de ChatGPT. Debe terminar siempre con el bloque obligatorio «ESTADO PARA CHATGPT» definido en `docs/SELPA_CONTINUIDAD.md`, completando sus siete puntos y sin texto posterior.
+
+Para commit/push, comprobar la autorización explícita vigente para esta tarea. Si falta y corresponde publicar, preparar primero el diff y las validaciones para revisión y después solicitarla. Si la tarea prohíbe commit/push, conservar el trabajo local sin solicitar publicación en ese cierre.
 
 
 # 32. PRINCIPIO FINAL
