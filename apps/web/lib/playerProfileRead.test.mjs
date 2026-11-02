@@ -11,27 +11,58 @@ function moduleFrom(file, globals) {
   return exports
 }
 function setup(statuses, options={}) {
-  let reads=0,refreshes=0
-  const attempts=[]
+  let reads=0,refreshes=0,sessionReads=0
+  const attempts=[],delays=[],diagnostics=[]
   const session=()=>({user:{id:options.otherUser?'other':'player'},access_token:refreshes?'renewed':'initial'})
-  const auth={getCurrentSession:async()=>({data:{session:session()}}),supabase:{auth:{refreshSession:async()=>{refreshes++;return {data:{session:session()},error:options.refreshError?new Error('EXPIRED'):null}}}}}
+  const auth={getCurrentSession:async()=>({data:{session:options.sessions ? options.sessions[Math.min(sessionReads++,options.sessions.length-1)] : session()}}),supabase:{auth:{refreshSession:async()=>{refreshes++;return {data:{session:session()},error:options.refreshError?new Error('EXPIRED'):null}}}}}
   const api=moduleFrom('./playerProfileRead.ts',{require:()=>auth,fetch:async(url,init)=>{
     attempts.push({url,token:init.headers.Authorization,signal:init.signal})
     const value=statuses[Math.min(reads++,statuses.length-1)]
     if(value==='network')throw new TypeError('Failed to fetch')
-    return {status:value,ok:value===200,json:async()=>({memberships:[]})}
-  }})
-  return {read:api.readPlayerProfile,attempts,counts:()=>({reads,refreshes})}
+    return {status:value,ok:value===200,json:async()=>{if(options.invalidJson)throw new SyntaxError('Invalid JSON');return {memberships:[]}}}
+  },setTimeout:(callback,delay)=>{delays.push(delay);if(!options.holdBackoff)queueMicrotask(callback);return delays.length},clearTimeout:()=>{},console:{warn:(...args)=>diagnostics.push(args)}})
+  return {read:api.readPlayerProfile,attempts,delays,diagnostics,counts:()=>({reads,refreshes})}
 }
 test('profile GET waits for session and recovers an expired JWT once',async()=>{
  const app=setup([401,200]);await app.read('/api/profile','player',new AbortController().signal)
  assert.deepEqual(app.counts(),{reads:2,refreshes:1});assert.deepEqual(app.attempts.map(x=>x.token),['Bearer initial','Bearer renewed'])
 })
-for(const status of ['network',502,503,504])test(`profile GET recovers one transient ${status} failure`,async()=>{
- const app=setup([status,200]);await app.read('/api/profile','player',new AbortController().signal);assert.equal(app.counts().reads,2)
+for(const status of ['network',500,502,503,504])test(`profile GET recovers a transient ${status} failure with backoff`,async()=>{
+ const app=setup([status,200]);await app.read('/api/profile','player',new AbortController().signal);assert.equal(app.counts().reads,2);assert.deepEqual(app.delays,[300])
 })
 for(const status of [401,403,500,503])test(`persistent ${status} stays an error with bounded requests`,async()=>{
- const app=setup([status]);await assert.rejects(app.read('/api/profile','player',new AbortController().signal));assert.equal(app.counts().reads,[401,503].includes(status)?2:1)
+ const app=setup([status]);await assert.rejects(app.read('/api/profile','player',new AbortController().signal));assert.equal(app.counts().reads,status===401?2:[500,503].includes(status)?3:1)
+})
+
+test('two transient failures share a bounded backoff budget, including mixed network and API failures',async()=>{
+ const app=setup(['network',500,200]);await app.read('/api/profile','player',new AbortController().signal)
+ assert.equal(app.counts().reads,3);assert.deepEqual(app.delays,[300,900])
+ assert.doesNotMatch(JSON.stringify(app.diagnostics),/Bearer|initial|renewed|\/api\/profile|userId/)
+})
+
+test('profile waits for a matching session before issuing any private request',async()=>{
+ const session={user:{id:'player'},access_token:'initial'}
+ const app=setup([200],{sessions:[null,session]});await app.read('/api/profile','player',new AbortController().signal)
+ assert.equal(app.counts().reads,1);assert.deepEqual(app.delays,[300])
+ const missing=setup([200],{sessions:[null]});await assert.rejects(missing.read('/api/profile','player',new AbortController().signal));assert.equal(missing.counts().reads,0);assert.deepEqual(missing.delays,[300,900])
+})
+
+test('account changes during retry never send the previous profile request with the next account token',async()=>{
+ const app=setup([503,200],{sessions:[{user:{id:'player'},access_token:'initial'},{user:{id:'other'},access_token:'other-token'}]})
+ await assert.rejects(app.read('/api/profile','player',new AbortController().signal),/PROFILE_ACCOUNT_CHANGED/)
+ assert.equal(app.counts().reads,1)
+})
+
+test('aborting a navigation cancels retry backoff without a second request',async()=>{
+ const app=setup([503,200],{holdBackoff:true}),controller=new AbortController()
+ const pending=app.read('/api/profile','player',controller.signal)
+ await new Promise(resolve=>setImmediate(resolve));controller.abort()
+ await assert.rejects(pending);assert.equal(app.counts().reads,1)
+})
+
+test('invalid response contracts and missing identity do not trigger retries',async()=>{
+ const app=setup([200],{invalidJson:true});await assert.rejects(app.read('/api/profile','player',new AbortController().signal));assert.equal(app.counts().reads,1);assert.deepEqual(app.delays,[])
+ const empty=setup([200]);await assert.rejects(empty.read('/api/profile','',new AbortController().signal));assert.equal(empty.counts().reads,0)
 })
 test('changed account and aborted navigation never issue a private request',async()=>{
  const app=setup([200],{otherUser:true});await assert.rejects(app.read('/api/profile','player',new AbortController().signal));assert.equal(app.counts().reads,0)

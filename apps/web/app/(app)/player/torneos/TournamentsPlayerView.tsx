@@ -2,14 +2,11 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Compass, FileText, Search, Trophy, UsersRound } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Compass, FileText, Search, Trophy } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import PlayerSectionHero from '@/components/player/PlayerSectionHero'
 import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
-import TournamentPublicCard from '@/components/public/TournamentPublicCard'
-import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
-import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
 import { BRAND } from '@/lib/branding'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
@@ -79,54 +76,6 @@ function normalizeGender(value?: string | null) {
   return normalized || 'UNKNOWN'
 }
 
-function formatGender(value?: string | null) {
-  const normalized = normalizeGender(value)
-  if (normalized === 'M') return 'Caballeros'
-  if (normalized === 'F') return 'Damas'
-  if (normalized === 'MIXED' || normalized === 'MIXTO') return 'Mixto'
-  return 'Sin rama'
-}
-
-function formatCategory(value?: number | null) {
-  return value ? `${value}ta` : 'Sin categoría'
-}
-
-function statusLabel(value?: string | null) {
-  const status = String(value ?? '').toUpperCase()
-  if (status === 'CONFIRMED') return 'Confirmado'
-  if (status === 'PENDING') return 'Pendiente'
-  if (status === 'CANCELLED') return 'Cancelado'
-  if (status === 'OPEN' || status === 'PUBLISHED' || status === 'REGISTRATION_OPEN') return 'Inscripción abierta'
-  if (status === 'DRAFT') return 'Borrador'
-  if (status === 'PAUSED') return 'Torneo pausado'
-  if (status === 'FINISHED' || status === 'COMPLETED') return 'Finalizado'
-  return value || 'Por definirse'
-}
-
-function statusTone(tournament: TournamentRow) {
-  const displayStatus = getTournamentDisplayStatus(tournament)
-  if (displayStatus.key === 'live') return 'live'
-  if (displayStatus.key === 'finished') return 'finished'
-  if (displayStatus.key === 'registration_open') return 'open'
-  return 'neutral'
-}
-
-function formatMoney(value?: number | null) {
-  if (!value) return null
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value)
-}
-
-function dateParts(value?: string | null) {
-  if (!value) return { day: '--', month: 'Fecha', year: 'a definir' }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return { day: '--', month: 'Fecha', year: 'a definir' }
-  return {
-    day: new Intl.DateTimeFormat('es-AR', { day: '2-digit' }).format(date),
-    month: new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(date).replace('.', ''),
-    year: new Intl.DateTimeFormat('es-AR', { year: 'numeric' }).format(date),
-  }
-}
-
 function parseCalendarDate(value?: string | null) {
   if (!value) return null
   const date = new Date(`${value.slice(0, 10)}T12:00:00`)
@@ -182,18 +131,17 @@ function PlayerTournamentAgenda({ tournaments, registrations, clubs }: { tournam
   const groups = groupPlayerAgenda(tournaments, registrations, new Date())
   const latest = latestAgendaRegistrations(registrations)
   const sections = [
-    { key:'upcoming' as const, title:'Próximos', empty:'Sin torneos próximos con cupo confirmado.' },
-    { key:'pending' as const, title:'Pendientes', empty:'No tenés confirmaciones pendientes.' },
-    { key:'history' as const, title:'Historial', empty:'Tus torneos anteriores aparecerán acá.' },
+    { key:'upcoming' as const, title:'Próximos' },
+    { key:'pending' as const, title:'Pendientes' },
+    { key:'history' as const, title:'Historial' },
   ]
   return <div className={agendaStyles.sections}>
     {groups.upcoming.length || groups.pending.length ? <div className={agendaStyles.summary} aria-label="Resumen de tu agenda">
       <span><strong>{groups.upcoming.length}</strong> próximos</span><span><strong>{groups.pending.length}</strong> pendientes de confirmación</span>
     </div> : null}
-    {tournaments.length && !groups.upcoming.length && !groups.pending.length ? <p className={agendaStyles.empty}>Sin próximos torneos ni confirmaciones pendientes. Podés revisar tu historial.</p> : null}
-    {!tournaments.length ? <PlayerStatePanel kind="empty" title="Tu agenda empieza en la cancha" message="Tus inscripciones aparecerán acá, ordenadas por fecha y confirmación." action={{label:'Explorar torneos',href:'/player/torneos/explorar'}} compact /> : sections.filter(section => groups[section.key].length).map(section => <section key={section.key} className={agendaStyles.section} aria-label={section.title}>
+    {!tournaments.length ? <p className={agendaStyles.empty}>Sin torneos en esta sección</p> : sections.filter(section => groups[section.key].length).map(section => <section key={section.key} className={agendaStyles.section} aria-label={section.title}>
       <header className={agendaStyles.head}><h2>{section.title}</h2><span>{groups[section.key].length} {groups[section.key].length===1?'torneo':'torneos'}</span></header>
-      {groups[section.key].length ? <div className={agendaStyles.cards}>{groups[section.key].map(tournament => <PlayerAgendaCard key={tournament.id} tournament={tournament} club={clubs[tournament.club_id]} registrationStatus={latest.get(tournament.id)?.status} />)}</div> : <p className={agendaStyles.empty}>{section.empty}</p>}
+      <div className={`${agendaStyles.cards} clubPublicTournamentGrid`}>{groups[section.key].map(tournament => <PlayerAgendaCard key={tournament.id} tournament={tournament} club={clubs[tournament.club_id]} registrationStatus={latest.get(tournament.id)?.status} />)}</div>
     </section>)}
     {tournaments.length ? <p className={agendaStyles.empty}>La confirmación corresponde al cupo. Consultá los pagos acreditados en <Link href="/player/pagos">Mis pagos</Link>.</p> : null}
   </div>
@@ -323,10 +271,6 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
     }
   }, [loadAttempt, mode, session.activeClubId, session.clubs, session.status, session.user?.id])
 
-  const registrationByTournament = useMemo(
-    () => latestAgendaRegistrations(registrations),
-    [registrations],
-  )
 
   const visibleTournaments = useMemo(() => {
     const search = query.trim().toLowerCase()
@@ -408,78 +352,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
   }, [calendarEvents, calendarEventsByDay, calendarMonth, selectedCalendarDay])
 
   function renderTournamentCard(tournament: TournamentRow) {
-    const club = clubs[tournament.club_id]
-
-    if (mode === 'explore' || mode === 'calendar') {
-      return (
-        <TournamentPublicCard
-          key={tournament.id}
-          compactAgenda
-          showClub
-          tournament={{
-            id: tournament.id,
-            name: tournament.name,
-            status: tournament.status ?? 'DRAFT',
-            type: tournament.type,
-            tournament_type: tournament.tournament_type,
-            gender: tournament.gender ?? 'UNKNOWN',
-            segment: tournament.segment,
-            category: tournament.category,
-            startDate: tournament.starts_on ?? tournament.start_date,
-            endDate: tournament.ends_on ?? tournament.end_date,
-            registrationDeadline: tournament.registration_deadline,
-            pricePerPlayer: tournament.price_per_player,
-            maxPairs: tournament.max_pairs,
-            clubName: club?.name ?? `Club ${BRAND.name}`,
-            clubLogoUrl: club?.logo_url ?? null,
-            clubThemeKey: club?.theme_key ?? null,
-            rules: tournament.rules ?? tournament.rules_json,
-          }}
-        />
-      )
-    }
-
-    const clubTheme = getClubTheme(club?.theme_key ?? null)
-    const registration = registrationByTournament.get(tournament.id)
-    const parts = dateParts(tournament.starts_on ?? tournament.start_date)
-    const money = formatMoney(tournament.price_per_player)
-    const tone = statusTone(tournament)
-    const logoUrl = buildAssetProxyUrl(club?.logo_url ?? null)
-
-    return (
-      <Link
-        className="playerTournamentCard"
-        key={tournament.id}
-        href={`/torneos/${tournament.id}`}
-        style={{
-          ['--card-accent' as string]: clubTheme.vars.accent,
-          ['--card-accent-2' as string]: clubTheme.vars.accent2,
-          ['--card-glow' as string]: clubTheme.vars.glow,
-          ['--card-soft' as string]: clubTheme.vars.soft,
-        }}
-      >
-        <div className="playerTournamentCard__date">
-          <strong>{parts.day}</strong>
-          <span>{parts.month}</span>
-          <small>{parts.year}</small>
-        </div>
-        <div className="playerTournamentCard__main">
-          <div className="playerTournamentCard__club">
-            <span className="playerTournamentClubMark">
-              {logoUrl ? <img src={logoUrl} alt="" /> : getClubInitials(club?.name)}
-            </span>
-            <b>{club?.name ?? `Club ${BRAND.name}`}</b>
-          </div>
-          <strong>{tournament.name}</strong>
-          <p>{formatCategory(tournament.category)} · {formatGender(tournament.gender)}{money ? ` · ${money}` : ''}</p>
-          <div className="playerTournamentCard__meta">
-            <span className={`playerTournamentStatus playerTournamentStatus--${tone}`}>{registration ? statusLabel(registration.status) : statusLabel(tournament.status)}</span>
-            {tournament.max_pairs ? <span><UsersRound size={12} /> Hasta {tournament.max_pairs} parejas</span> : null}
-          </div>
-        </div>
-        <span className="playerTournamentCard__arrow" aria-hidden="true">→</span>
-      </Link>
-    )
+    return <PlayerAgendaCard key={tournament.id} tournament={tournament} club={clubs[tournament.club_id]} />
   }
 
   return (
@@ -509,10 +382,12 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
       ) : (
         <>
           {mode === 'explore' ? (
-            <section className="playerTournamentFilters">
-              <label><span>Categoría</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : `${item}ta`}</option>)}</select></label>
-              <label><span>Género</span><select value={gender} onChange={(event) => setGender(event.target.value)}>{genders.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-              <label className="playerTournamentSearch"><span>Buscar</span><div><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Torneo o club" /></div></label>
+            <section className="playerTournamentFilters" aria-label="Buscar y filtrar torneos">
+              <label className="playerTournamentSearch"><Search size={17} aria-hidden="true" /><input type="search" aria-label="Torneo o club" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Torneo o club" /></label>
+              <div className="playerTournamentQuickFilters">
+                <select aria-label="Categoría" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Categoría' : item+'ª categoría'}</option>)}</select>
+                <select aria-label="Género" value={gender} onChange={(event) => setGender(event.target.value)}>{genders.map((item) => <option key={item.value} value={item.value}>{item.value === 'all' ? 'Género' : item.label}</option>)}</select>
+              </div>
             </section>
           ) : null}
 
@@ -535,9 +410,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
                       <div className="playerTournamentList clubPublicTournamentGrid">{section.items.map(renderTournamentCard)}</div>
                     ) : (
                       <div className="playerTournamentEmpty playerTournamentEmpty--section">
-                        <Trophy size={18} />
                         <strong>Sin torneos en esta sección</strong>
-                        <p>No hay eventos que coincidan con los filtros actuales.</p>
                       </div>
                     )}
                   </div>
@@ -563,7 +436,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
                   </div>
                   <div className="playerClubCalendar__agenda">
                     <div className="playerClubCalendar__agendaHead"><strong>{selectedCalendarEvents.length ? 'Actividades del día' : 'Sin actividades este día'}</strong><span>{selectedCalendarEvents.length ? `${selectedCalendarEvents.length} torneo${selectedCalendarEvents.length === 1 ? '' : 's'}` : 'Elegí otro día'}</span></div>
-                    {selectedCalendarEvents.length ? <div className="clubPublicTournamentGrid">{selectedCalendarEvents.map(renderTournamentCard)}</div> : <div className="playerTournamentEmpty playerTournamentEmpty--section"><CalendarDays size={18} /><strong>No hay torneos programados</strong><p>Usá las flechas para recorrer los meses del club.</p></div>}
+                    {selectedCalendarEvents.length ? <div className="clubPublicTournamentGrid">{selectedCalendarEvents.map(renderTournamentCard)}</div> : <div className="playerTournamentEmpty playerTournamentEmpty--section"><strong>Sin torneos en esta sección</strong></div>}
                   </div>
                 </div>
               </section>
@@ -571,9 +444,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
               <section className="playerTournamentList">
                 {visibleTournaments.length ? visibleTournaments.map(renderTournamentCard) : (
                 <div className="playerTournamentEmpty">
-                  <Trophy size={20} />
-                  <strong>Sin torneos para mostrar</strong>
-                  <p>{mode === 'mine' ? 'Cuando te inscribas a un torneo, va a aparecer acá.' : 'No hay torneos disponibles con estos criterios.'}</p>
+                  <strong>Sin torneos en esta sección</strong>
                 </div>
                 )}
               </section>
@@ -584,19 +455,23 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
 
       <style>{`
         .playerTournamentsShell { color: #061b3a; display: grid; gap: 16px; width: 100%; }
-        .playerTournamentsHero, .playerTournamentFilters, .playerTournamentCard, .playerTournamentEmpty, .playerRulesGrid article { background:#fff; border:1px solid var(--player-card-border); border-radius:var(--player-card-radius); box-shadow:var(--player-card-shadow); }
+        .playerTournamentsHero, .playerTournamentEmpty, .playerRulesGrid article { background:#fff; border:1px solid var(--player-card-border); border-radius:var(--player-card-radius); box-shadow:var(--player-card-shadow); }
         .playerTournamentsHero { align-items: center; background: radial-gradient(circle at 12% 0%, var(--club-soft), transparent 34%), linear-gradient(135deg, #fff, #f8fbff); display: flex; justify-content: space-between; gap: 14px; padding: 16px 18px; position: relative; overflow: hidden; }
         .playerTournamentsHero::before { background: var(--club-gradient); content: ""; height: 4px; left: 22px; position: absolute; right: 22px; top: 0; }
-        .playerTournamentsHero span, .playerTournamentFilters span, .playerRulesGrid span { color: var(--club-primary); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
+        .playerTournamentsHero span, .playerRulesGrid span { color: var(--club-primary); font-size: 11px; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
         .playerTournamentsHero h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 950; letter-spacing: -.04em; line-height: .98; margin: 4px 0 5px; }
         .playerTournamentsHero p { color: #64748b; font-size: 13px; font-weight: 800; margin: 0; }
         .playerTournamentsBack { color:var(--club-primary); font-size:12px; font-weight:900; text-decoration:none; white-space:nowrap; }
         .playerTournamentsHero i { align-items: center; background: color-mix(in srgb, var(--club-primary) 12%, white); border: 1px solid color-mix(in srgb, var(--club-primary) 30%, white); border-radius: 16px; color: var(--club-primary); display: flex; flex: 0 0 auto; height: 48px; justify-content: center; width: 48px; }
-        .playerTournamentFilters { display: grid; gap: 12px; grid-template-columns: 160px 160px minmax(0, 1fr); padding: 13px; }
-        .playerTournamentFilters label { display: grid; gap: 6px; min-width: 0; }
-        .playerTournamentFilters select, .playerTournamentFilters input { background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; color: #061b3a; font: inherit; font-weight: 850; min-width: 0; padding: 10px 11px; }
-        .playerTournamentSearch div { align-items: center; background: #f8fafc; border: 1px solid #dbe6f0; border-radius: 12px; display: flex; gap: 8px; padding-left: 10px; }
-        .playerTournamentSearch input { background: transparent; border: 0; flex: 1; }
+        .playerTournamentFilters { background:transparent; border:0; box-shadow:none; display:grid; gap:8px; grid-template-columns:minmax(0,1fr) minmax(280px,.65fr); padding:0; }
+        .playerTournamentSearch { align-items:center; background:#fff; border:1px solid #d5e2eb; border-radius:12px; color:#61748b; display:flex; gap:8px; min-width:0; padding:0 12px; }
+        .playerTournamentSearch input { background:transparent; border:0; color:#061b3a; flex:1; font:inherit; font-size:16px; min-height:44px; min-width:0; padding:8px 0; width:100%; }
+        .playerTournamentSearch input:focus { outline:0; }
+        .playerTournamentSearch:focus-within { border-color:#0891b2; outline:2px solid #0891b2; outline-offset:2px; }
+        .playerTournamentSearch svg { flex-shrink:0; }
+        .playerTournamentQuickFilters { display:flex; gap:8px; min-width:0; }
+        .playerTournamentQuickFilters select { background:#fff; border:1px solid #d5e2eb; border-radius:10px; color:#40566f; flex:1; font:inherit; font-size:16px; min-height:44px; min-width:0; padding:6px 9px; width:0; }
+        .playerTournamentQuickFilters select:focus-visible { outline:2px solid #0891b2; outline-offset:2px; }
         .playerExploreSections { display: grid; gap: 18px; }
         .playerExploreSection { display: grid; gap: 10px; }
         .playerExploreSection > header { align-items: end; display: flex; justify-content: space-between; gap: 12px; padding: 0 2px; }
@@ -627,33 +502,10 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         .playerClubCalendar__agendaHead strong { font-size:14px; }
         .playerClubCalendar__agendaHead span { color:#64748b; font-size:11px; font-weight:800; }
         .playerClubCalendar__agenda .clubPublicTournamentGrid { display:grid; gap:8px; grid-template-columns:1fr; }
-        .playerClubCalendar__agenda .TournamentPublicCard { height:180px; min-height:180px; }
-        .playerTournamentCard { align-items: stretch; background: radial-gradient(circle at 0% 0%, var(--card-soft), transparent 32%), rgba(255,255,255,.94); border-color: color-mix(in srgb, var(--card-accent) 20%, #e2e8f0); color:inherit; display: grid; gap: 15px; grid-template-columns: 108px minmax(0, 1fr) 28px; overflow: hidden; padding: 14px; position: relative; text-decoration:none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
-        .playerTournamentCard::before { background: linear-gradient(180deg, var(--card-accent), var(--card-accent-2)); bottom: 14px; content: ""; left: 0; position: absolute; top: 14px; width: 4px; }
-        .playerTournamentCard:hover { border-color: color-mix(in srgb, var(--card-accent) 42%, #e2e8f0); box-shadow: 0 22px 58px rgba(15,23,42,.1), 0 0 0 5px var(--card-glow); transform: translateY(-1px); }
-        .playerTournamentCard__date { align-content: center; background: linear-gradient(180deg, #fff, #f8fbff); border: 1px solid color-mix(in srgb, var(--card-accent) 24%, #e2e8f0); border-radius: 18px; color: #061b3a; display: grid; justify-items: center; min-height: 104px; padding: 10px; text-align: center; }
-        .playerTournamentCard__date strong { font-size: 34px; font-weight: 950; letter-spacing: -.06em; line-height: .9; }
-        .playerTournamentCard__date span { color: var(--card-accent); font-size: 13px; font-weight: 950; text-transform: uppercase; }
-        .playerTournamentCard__date small { color: #64748b; font-size: 11px; font-weight: 900; }
-        .playerTournamentCard__main { min-width: 0; padding-right:96px; }
-        .playerTournamentCard__club { align-items: center; display: flex; gap: 8px; margin-bottom: 7px; min-width: 0; }
-        .playerTournamentClubMark { align-items: center; background: #061b3a; border: 1px solid color-mix(in srgb, var(--card-accent) 34%, white); border-radius: 12px; color: #fff; display: inline-flex; flex: 0 0 auto; font-size: 10px; font-weight: 950; height: 34px; justify-content: center; overflow: hidden; width: 34px; }
-        .playerTournamentClubMark img { height: 100%; object-fit: cover; width: 100%; }
-        .playerTournamentCard__club b { color: #475569; font-size: 12px; font-weight: 950; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-        .playerTournamentCard__main > strong { color: #061b3a; display: block; font-size: clamp(20px, 2.4vw, 28px); font-weight: 950; letter-spacing: -.035em; line-height: 1.02; overflow-wrap: anywhere; }
-        .playerTournamentCard__main p { color: #64748b; font-size: 13px; font-weight: 850; margin: 6px 0 10px; }
-        .playerTournamentCard__meta { display: flex; flex-wrap: wrap; gap: 7px; }
-        .playerTournamentCard__meta span { align-items: center; background: color-mix(in srgb, var(--card-accent) 8%, white); border: 1px solid color-mix(in srgb, var(--card-accent) 22%, white); border-radius: 999px; color: #075985; display: inline-flex; gap: 5px; font-size: 11px; font-weight: 950; padding: 5px 8px; }
-        .playerTournamentStatus--live { background: rgba(34,197,94,.12) !important; border-color: rgba(34,197,94,.28) !important; color: #047857 !important; }
-        .playerTournamentStatus--open { background: color-mix(in srgb, var(--card-accent) 12%, white) !important; color: #075985 !important; }
-        .playerTournamentStatus--finished { background: #f1f5f9 !important; border-color: #e2e8f0 !important; color: #64748b !important; }
-        .playerTournamentStatus--neutral { background: #fff7ed !important; border-color: #fed7aa !important; color: #9a3412 !important; }
-        .playerTournamentCard__meta .playerTournamentStatus { position:absolute; right:14px; top:14px; }
-        .playerTournamentCard__arrow { align-self:end; color:var(--card-accent); font-size:25px; font-weight:900; padding-bottom:4px; text-align:right; }
         .playerRulesGrid a { background: linear-gradient(135deg, var(--card-accent, var(--club-primary)), var(--card-accent-2, var(--club-secondary))); border-radius: 999px; color: #fff; font-size: 12px; font-weight: 950; padding: 10px 13px; text-decoration: none; white-space: nowrap; }
-        .playerTournamentEmpty { color: #64748b; display: grid; gap: 6px; justify-items: start; padding: 18px; }
+        .playerTournamentEmpty { color:#61748b; display:grid; justify-items:start; padding:12px; }
         .playerTournamentEmpty--section { background: rgba(255,255,255,.64); border-style: dashed; box-shadow: none; }
-        .playerTournamentEmpty strong { color: #061b3a; font-weight: 950; }
+        .playerTournamentEmpty strong { color:#526780; font-size:13px; font-weight:600; }
         .playerTournamentEmpty p { margin: 0; }
         .playerTournamentEmpty--danger { color: #be123c; }
         .playerRulesGrid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -679,32 +531,11 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
           .playerClubCalendar__grid > span { font-size:9px; }
           .playerClubCalendar__grid > button, .playerClubCalendar__blank { min-height:40px; }
           .playerClubCalendar__grid > button { border-radius:9px; }
-          .playerClubCalendar__agenda .TournamentPublicCard { height:154px !important; min-height:154px !important; }
-          .playerTournamentCard { align-items:start; border-radius:16px; gap:9px; grid-template-columns:62px minmax(0,1fr) 21px; min-height:126px; padding:10px; }
-          .playerTournamentCard::before { bottom:10px; top:10px; width:3px; }
-          .playerTournamentCard__date { border-radius:13px; min-height:66px; padding:6px; }
-          .playerTournamentCard__date strong { font-size:27px; }
-          .playerTournamentCard__date span { font-size:10px; }
-          .playerTournamentCard__date small { font-size:9px; }
-          .playerTournamentCard__club { gap:6px; margin-bottom:4px; }
-          .playerTournamentClubMark { border-radius:9px; height:24px; width:24px; }
-          .playerTournamentCard__club b { font-size:10px; }
-          .playerTournamentCard__main > strong { font-size:18px; letter-spacing:0; line-height:1.08; }
-          .playerTournamentCard__main { padding-right:84px; }
-          .playerTournamentCard__main p { font-size:11px; margin:4px 0 7px; }
-          .playerTournamentCard__meta { gap:5px; }
-          .playerTournamentCard__meta span { font-size:10px; padding:4px 7px; }
-          .playerTournamentCard__meta .playerTournamentStatus { right:10px; top:10px; }
-          .playerTournamentCard__arrow { font-size:22px; }
           .playerRulesGrid a { border-radius:10px; font-size:11px; padding:8px 10px; }
-          .playerTournamentCard__main strong { white-space:normal; }
         }
         @media (max-width: 390px) {
           .playerTournamentsHero h1 { font-size:23px; }
           .playerTournamentsHero p { font-size:11px; }
-          .playerTournamentCard { grid-template-columns:58px minmax(0,1fr) 20px; padding:9px; }
-          .playerTournamentCard__date { min-height:62px; }
-          .playerTournamentCard__main > strong { font-size:17px; }
         }
       `}</style>
     </main></PlayerSpaceLayout>

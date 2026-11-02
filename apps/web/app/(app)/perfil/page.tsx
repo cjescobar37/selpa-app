@@ -27,27 +27,26 @@ export default function PerfilPage() {
   const router = useRouter()
   const session = useSession()
   const profile = session.globalProfile
-  const [memberships, setMemberships] = useState<Membership[]>([])
-  const [loadingMemberships, setLoadingMemberships] = useState(true)
-  const [loadError, setLoadError] = useState(false)
+  const [result, setResult] = useState<{ userId: string; attempt: number; signal: AbortSignal; memberships?: Membership[]; error?: boolean }>()
   const [retry, setRetry] = useState(0)
   const userId = session.user?.id
+  const currentResult = session.status === 'ready' && result?.userId === userId && result?.attempt === retry && !result.signal.aborted ? result : undefined
+  const memberships = currentResult?.memberships ?? []
+  const loadingMemberships = !currentResult
+  const loadError = currentResult?.error === true
 
   useEffect(() => {
     if (session.status !== 'ready' || !userId) return
     const controller = new AbortController()
     async function loadMemberships() {
-      setLoadingMemberships(true)
-      setLoadError(false)
       try {
         const result = await readPlayerProfile<{ memberships: Membership[] }>('/api/clubs/my-memberships', userId!, controller.signal)
         if (!Array.isArray(result.memberships)) throw new Error('READ')
-        if (!controller.signal.aborted) setMemberships(result.memberships)
-      } catch { if (!controller.signal.aborted) setLoadError(true) }
-      finally { if (!controller.signal.aborted) setLoadingMemberships(false) }
+        if (!controller.signal.aborted) setResult({ userId: userId!, attempt: retry, signal: controller.signal, memberships: result.memberships })
+      } catch { if (!controller.signal.aborted) setResult({ userId: userId!, attempt: retry, signal: controller.signal, error: true }) }
     }
-    const timer = window.setTimeout(() => { void loadMemberships() }, 0)
-    return () => { controller.abort(); window.clearTimeout(timer) }
+    void loadMemberships()
+    return () => { controller.abort() }
   }, [session.status, userId, retry])
 
   const approved = memberships.filter((item) => item.status === 'APPROVED' && item.approved_at && item.club)

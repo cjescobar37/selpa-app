@@ -7,9 +7,10 @@ import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
-import { getTournamentFlyerUrl } from '@/lib/tournamentFlyers'
+import { getTournamentFlyerUrl, getTournamentPosterUrl } from '@/lib/tournamentFlyers'
 import { formatCategoryLabel, formatGenderLabel, formatSegmentLabel } from '@/lib/tournamentLabels'
 import { formatHomeAgendaDeadline as formatAgendaDeadline } from '@/lib/publicHomeDatePresentation'
+import { agendaRegistrationLabel } from '@/lib/playerAgenda'
 
 export type TournamentPublicCardData = {
   id: string
@@ -133,16 +134,18 @@ export default function TournamentPublicCard({
   tournament,
   showClub = false,
   compactAgenda = false,
+  registrationStatus,
 }: {
   tournament: TournamentPublicCardData
   showClub?: boolean
   compactAgenda?: boolean
+  registrationStatus?: string | null
   showRegisterAction?: boolean
 }) {
   const theme = getClubTheme(tournament.clubThemeKey)
   const parts = dateParts(tournament.startDate)
   const displayStatus = getTournamentDisplayStatus(tournament)
-  const flyer = resolveFlyerUrl(tournament.flyerUrl ?? getTournamentFlyerUrl(tournament))
+  const flyer = resolveFlyerUrl(tournament.flyerUrl ?? getTournamentPosterUrl(tournament) ?? getTournamentFlyerUrl(tournament))
   const manualFlyer = isManualFlyer(tournament)
   const logo = buildAssetProxyUrl(tournament.clubLogoUrl)
   const price = formatMoney(tournament.pricePerPlayer)
@@ -161,7 +164,7 @@ export default function TournamentPublicCard({
     minHeight: 'var(--tournament-card-height)',
   } as CSSProperties
 
-  return (
+  const card = (
     <article className={`TournamentPublicCard ${flyer ? 'has-flyer' : ''}${manualFlyer ? ' is-manual-flyer' : ''}${circuitPosition ? ' has-circuit' : ''}${compactAgenda ? ' is-agendaCompact' : ''}${displayStatus.key === 'finished' ? ' is-finished' : ''}`} style={style}>
       <Link className="TournamentPublicCard__hitArea" href={`/torneos/${tournament.id}`} aria-label={`Entrar al torneo ${tournament.name}`} />
       <div className="TournamentPublicCard__poster">
@@ -209,6 +212,7 @@ export default function TournamentPublicCard({
             <div>
               <span>{formatAgendaRange(tournament.startDate, endDate ?? tournament.endDate ?? tournament.startDate)}</span>
               {tournament.registrationDeadline ? <small>Cierra el {formatAgendaDeadline(tournament.registrationDeadline).replace(/^El /, '')}</small> : null}
+              {registrationStatus && displayStatus.key !== 'cancelled' ? <small className="TournamentPublicCard__registration" data-status={registrationStatus}>{agendaRegistrationLabel(registrationStatus)}</small> : null}
             </div>
             <ArrowRight aria-hidden="true" size={21} />
           </div>
@@ -230,4 +234,5 @@ export default function TournamentPublicCard({
       </div>
     </article>
   )
+  return <div className="TournamentPublicCardFrame">{card}</div>
 }
