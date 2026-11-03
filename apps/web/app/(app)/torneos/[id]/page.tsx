@@ -12,6 +12,8 @@ import { supabase } from '@/lib/supabaseClient'
 import { BRAND } from '@/lib/branding'
 import { isTournamentRegistrationClosed } from '@/lib/tournamentDisplayStatus'
 import { registrationPresentation } from '@/lib/registrationPresentation'
+import { tournamentRegistrationAvailability } from '@/lib/tournamentRegistrationAvailability'
+import detailStyles from './TournamentDetail.module.css'
 
 type PublicTournamentDetail = {
   tournament: {
@@ -62,7 +64,7 @@ type PublicTournamentDetail = {
     themeKey: string | null
   } | null
   status: {
-    key: 'live' | 'registration_open' | 'upcoming' | 'finished' | 'draft' | 'paused' | 'cancelled'
+    key: 'live' | 'registration_open' | 'registration_closed' | 'upcoming' | 'finished' | 'draft' | 'paused' | 'cancelled'
     label: string
     priority: number
     className: string
@@ -103,6 +105,7 @@ type PublicTournamentDetail = {
         flexibilityLevel: string | null
       }
       paymentStatus?: string | null
+      paymentLookupUnavailable?: boolean
       paymentMethod?: string | null
       registrationChangeRequest?: null | {
         id: string
@@ -167,7 +170,12 @@ function formatSystem(value?: string | null) {
   return labels[normalized] ?? value ?? 'A definir por la organización'
 }
 
-function getPostRegistrationPaymentView(status?: string | null, method?: string | null, registration?: string | null) {
+function getPostRegistrationPaymentView(status?: string | null, method?: string | null, registration?: string | null, unavailable = false) {
+  if (unavailable) return {
+    tone: 'warning', badge: 'PAGO SIN VERIFICAR', title: 'No pudimos consultar tu pago',
+    text: 'Tu inscripción se conserva. Reintentá la consulta o contactá al club para verificar el pago.', secondaryText: null,
+    registrationLabel: 'Sin cambios', paymentLabel: 'No disponible', action: 'retry' as const,
+  }
   const normalizedStatus = String(status ?? '').toUpperCase()
   const normalizedMethod = String(method ?? '').toUpperCase()
   if (['APPROVED', 'PAID'].includes(normalizedStatus) && registration !== 'CONFIRMED') return {
@@ -332,8 +340,8 @@ const loadingPageStyle: CSSProperties = {
   justifyItems: 'center',
   margin: '0 auto',
   minHeight: 'calc(100dvh - 96px)',
-  padding: '16px 11px 36px',
-  width: 'min(100% - 22px, 1180px)',
+  padding: '16px 0 36px',
+  width: '100%',
 }
 
 const loadingStateStyle: CSSProperties = {
@@ -355,6 +363,7 @@ export default function TorneoDetallePage() {
   const [detail, setDetail] = useState<PublicTournamentDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [clubMessageOpen, setClubMessageOpen] = useState(false)
   const [clubMessage, setClubMessage] = useState('')
   const [clubMessageFeedback, setClubMessageFeedback] = useState('')
@@ -396,7 +405,7 @@ export default function TorneoDetallePage() {
     return () => {
       alive = false
     }
-  }, [tournamentId])
+  }, [tournamentId, loadAttempt])
 
   useEffect(() => {
     if (!actionNotice) return
@@ -416,9 +425,11 @@ export default function TorneoDetallePage() {
 
   if (error || !detail) {
     return (
-      <main className="tournamentPublicDetail">
-        <div className="tournamentPublicDetail__empty">
-          <p>{error || 'Torneo no encontrado.'}</p>
+      <main className="tournamentPublicDetail" style={{ width: '100%' }}>
+        <div className={detailStyles.closed}>
+          <h1>Torneo no disponible</h1>
+          <p role="alert">No pudimos cargar este torneo. Puede no estar disponible o haber un problema de conexión.</p>
+          <button type="button" onClick={() => setLoadAttempt(value => value + 1)}>Reintentar</button>
           <Link href="/torneos">Volver a torneos</Link>
         </div>
       </main>
@@ -443,18 +454,18 @@ export default function TorneoDetallePage() {
     .filter(Boolean)
     .join(' · ')
   const pointItems = getPointDistribution(detail)
-  const availableSlots = detail.capacity.spotsLeft ?? Math.max((detail.capacity.maxPairs ?? 0) - detail.capacity.registeredTeamsCount, 0)
+  const availableSlots = detail.capacity.spotsLeft
   const progressMax = detail.capacity.maxPairs ?? 0
   const progressPercent = progressMax > 0 ? Math.min(100, Math.max(0, (detail.capacity.registeredTeamsCount / progressMax) * 100)) : 0
   const countdown = getCountdownParts(detail.dates.registrationDeadline)
   const registrationClosed = isTournamentRegistrationClosed({ registrationDeadline: detail.dates.registrationDeadline })
-  const tournamentPaused = String(detail.tournament.status ?? '').toUpperCase() === 'PAUSED'
+  const availability = tournamentRegistrationAvailability(detail.tournament, detail.capacity)
   const theme = getClubTheme(detail.club?.themeKey)
   const themeStyle = {
     ['--pamprax-hero-accent' as string]: theme.vars.accent,
     ['--pamprax-hero-accent-2' as string]: theme.vars.accent2,
   } as CSSProperties
-  const paymentView = getPostRegistrationPaymentView(detail.viewer.myTeam?.paymentStatus, detail.viewer.myTeam?.paymentMethod, detail.viewer.myTeam?.registrationStatus)
+  const paymentView = getPostRegistrationPaymentView(detail.viewer.myTeam?.paymentStatus, detail.viewer.myTeam?.paymentMethod, detail.viewer.myTeam?.registrationStatus, detail.viewer.myTeam?.paymentLookupUnavailable)
   const registrationView = registrationPresentation(detail.viewer.myTeam?.registrationStatus, detail.viewer.myTeam?.paymentStatus)
   const refundEstimate = getRefundEstimate(detail.dates.startDate, Number(detail.price.pricePerPlayer ?? 0) * 2)
   const withdrawalPending = withdrawalSubmitted || detail.viewer.myTeam?.registrationChangeRequest?.status === 'PENDING'
@@ -547,10 +558,8 @@ export default function TorneoDetallePage() {
         kicker={clubLocation || detail.club?.name || `Torneo ${BRAND.name}`}
         mobileKicker={detail.club?.name || `Torneo ${BRAND.name}`}
         title={detail.tournament.name}
-        subtitle={subtitle}
-        mobileSubtitle={`${subtitle} · ${formatSystem(detail.tournament.rulesSummary.competitionSystem ?? detail.tournament.format)}`}
-        statusBadge={tournamentPaused ? { label: 'Torneo pausado', tone: 'info' } : registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : detail.status.key === 'registration_open' ? { label: 'Inscripción abierta', tone: 'success' } : { label: detail.status.label, tone: 'info' }}
-        mobileStatusBadge={tournamentPaused ? { label: 'Torneo pausado', tone: 'info' } : registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : detail.status.key === 'registration_open' ? { label: 'Inscripción abierta', tone: 'success' } : { label: detail.status.label, tone: 'info' }}
+        subtitle={`${subtitle} · ${formatSystem(detail.tournament.rulesSummary.competitionSystem ?? detail.tournament.format)}`}
+        statusBadge={!availability.open ? { label: availability.title, tone: 'info' } : { label: detail.status.label, tone: 'success' }}
         mobilePrimaryAction={{ label: '← Volver', href: '/torneos' }}
         secondaryAction={detail.club ? { label: 'Ver club', href: `/clubs/${detail.club.id}` } : { label: 'Calendario', href: '/torneos' }}
         logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'SE' }}
@@ -579,6 +588,7 @@ export default function TorneoDetallePage() {
               <p>{paymentView.text}</p>
               {paymentView.secondaryText ? <p className="tournamentPublicDetail__registeredStatusNote">{paymentView.secondaryText}</p> : null}
               <div className="tournamentPublicDetail__registeredActions">
+                {paymentView.action === 'retry' ? <button type="button" onClick={() => setLoadAttempt(value => value + 1)}>Reintentar consulta</button> : null}
                 {paymentView.action === 'message' ? (
                   <button
                     type="button"
@@ -621,23 +631,24 @@ export default function TorneoDetallePage() {
               </div>
             </div>
           </div>
+        ) : !availability.open ? (
+          <div className={detailStyles.closed}>
+            <h2>{availability.title}</h2>
+            <p>{availability.message}</p>
+            <Link href={detail.club ? `/clubs/${detail.club.id}` : '/torneos'}>{detail.club ? 'Ver club organizador' : 'Ver otros torneos'} <span aria-hidden="true">→</span></Link>
+          </div>
         ) : (
           <div className="tournamentPublicDetail__pitchGrid">
             <div className="tournamentPublicDetail__pitchCopy">
-              <span className="tournamentPublicDetail__eyebrow">{tournamentPaused ? 'Torneo pausado' : registrationClosed ? 'Inscripción cerrada' : 'Inscripción'}</span>
-              <h2>{tournamentPaused ? 'Torneo pausado' : registrationClosed ? 'Inscripción cerrada' : 'No te quedes afuera'}</h2>
-              <p>{tournamentPaused ? 'El club pausó temporalmente las inscripciones.' : registrationClosed ? 'La inscripción para este torneo ya finalizó.' : 'Asegurá tu lugar y llegá listo para competir.'}</p>
+              <span className="tournamentPublicDetail__eyebrow">Inscripción</span>
+              <h2>{availability.title}</h2>
+              <p>{availability.message}</p>
             </div>
             <div className={`tournamentPublicDetail__signupCard${registrationClosed ? ' is-registrationClosed' : ''}`}>
-              {tournamentPaused ? (
+              {!availability.open ? (
                 <div className="tournamentPublicDetail__closedBox">
-                  <strong>TORNEO PAUSADO</strong>
-                  <span>El club reanudará las inscripciones cuando esté listo.</span>
-                </div>
-              ) : registrationClosed ? (
-                <div className="tournamentPublicDetail__closedBox">
-                  <strong>INSCRIPCIÓN CERRADA</strong>
-                  <span>Ya no se reciben nuevas parejas para este torneo.</span>
+                  <strong>{availability.title}</strong>
+                  <span>{availability.message}</span>
                 </div>
               ) : (
                 <div className="tournamentPublicDetail__countdown">
@@ -646,21 +657,21 @@ export default function TorneoDetallePage() {
                   <span>para cerrar inscripción</span>
                 </div>
               )}
-              {tournamentPaused || registrationClosed ? (
-                <Link href={detail.club ? `/clubs/${detail.club.id}` : `/torneos/${detail.tournament.id}`}>Ver club <span>→</span></Link>
+              {!availability.open ? (
+                <Link href={detail.club ? `/clubs/${detail.club.id}` : '/torneos'}>{detail.club ? 'Ver club' : 'Ver otros torneos'} <span>→</span></Link>
               ) : (
                 <Link href={`/torneos/${detail.tournament.id}/inscripcion`}>INSCRIBIRME AHORA <span>→</span></Link>
               )}
               <div className="tournamentPublicDetail__pitchFacts">
                 <span><b>{detail.capacity.registeredTeamsCount}/{detail.capacity.maxPairs ?? '—'}</b> parejas</span>
-                <span><b>{availableSlots}</b> lugares disponibles</span>
+                <span>{availableSlots === null ? 'Cupo a confirmar por el club' : <><b>{availableSlots}</b> lugares disponibles</>}</span>
               </div>
             </div>
           </div>
         )}
       </section> : null}
 
-      {!detail.viewer.isClubAdmin && !detail.viewer.isStaffAccount ? <section className="tournamentPublicDetail__personalBoard">
+      {detail.viewer.isRegisteredInTournament && !detail.viewer.isClubAdmin && !detail.viewer.isStaffAccount ? <section className="tournamentPublicDetail__personalBoard">
         <div className="tournamentPublicDetail__cardHeader">
           <span>Tu torneo</span>
           <Users size={18} />
@@ -874,7 +885,7 @@ export default function TorneoDetallePage() {
 
       <style>{`
         .tournamentPublicDetail {
-          width: min(1180px, calc(100vw - 32px));
+          width: min(1180px, 100%);
           margin: 0 auto;
           padding: 22px 0 56px;
           color: #061a3f;

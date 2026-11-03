@@ -4,24 +4,27 @@ import { useEffect, useState, type ReactNode, type ComponentProps } from 'react'
 import SelpaLoader from '@/components/SelpaLoader'
 import CommunityTournamentCalendar from '@/components/public/CommunityTournamentCalendar'
 import PublicHomeExperience from '@/components/public/PublicHomeExperience'
+import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
+import ReadFailure from '@/components/product/ReadFailure'
 
-type PublicHomeData = Pick<ComponentProps<typeof PublicHomeExperience>, 'slides' | 'newsArchive' | 'tournaments' | 'ads' | 'sponsors' | 'clubs' | 'metrics'>
+type PublicHomeData = Pick<ComponentProps<typeof PublicHomeExperience>, 'slides' | 'newsArchive' | 'tournaments' | 'ads' | 'sponsors' | 'clubs' | 'metrics' | 'unavailableSections'>
 
 function getOpenRegistrationCount(tournaments: PublicHomeData['tournaments']) {
   return tournaments.filter((item) => {
-    const status = String(item?.status ?? '').toUpperCase()
-    return status.includes('INSCRIP') || status.includes('OPEN') || status.includes('REGISTRATION')
+    return getTournamentDisplayStatus(item).key === 'registration_open'
   }).length
 }
 
 export default function PublicHomeEmbed({ userName, afterHero }: { userName?: string | null; afterHero?: ReactNode }) {
   const [data, setData] = useState<PublicHomeData | null>(null)
   const [error, setError] = useState('')
+  const [loadAttempt, setLoadAttempt] = useState(0)
 
   useEffect(() => {
     let alive = true
 
     async function load() {
+      setError('')
       try {
         const response = await fetch('/api/public/home', { cache: 'no-store' })
         const json = await response.json().catch(() => ({}))
@@ -37,10 +40,10 @@ export default function PublicHomeEmbed({ userName, afterHero }: { userName?: st
     return () => {
       alive = false
     }
-  }, [])
+  }, [loadAttempt])
 
   if (error) {
-    const state = <div className="modeEmbedState">{error}</div>
+    const state = <ReadFailure message="No pudimos cargar Comunidad SELPA. Intentá nuevamente." onRetry={() => setLoadAttempt(value => value + 1)} />
     return afterHero ? <div className="modePublicHomeEmbed">{null}{afterHero}{state}</div> : state
   }
   if (!data) {
@@ -80,6 +83,8 @@ export default function PublicHomeEmbed({ userName, afterHero }: { userName?: st
       </section>
       {afterHero}
       <PublicHomeExperience
+        unavailableSections={data.unavailableSections}
+        onRetry={() => setLoadAttempt(value => value + 1)}
         slides={data.slides}
         newsArchive={data.newsArchive}
         tournaments={data.tournaments}

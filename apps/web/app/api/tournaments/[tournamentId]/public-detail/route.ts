@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { nonPlayerAccountIds } from '@/lib/accountRoleServer'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
-import { getTournamentFlyerUrl } from '@/lib/tournamentFlyers'
+import { getTournamentFlyerUrl, getTournamentPosterUrl } from '@/lib/tournamentFlyers'
 import { TOURNAMENT_SELECT, toTournamentView } from '@/lib/tournamentHelpers'
 import { formatCategoryLabel, formatGenderLabel, formatSegmentLabel } from '@/lib/tournamentLabels'
 import {
@@ -11,6 +11,7 @@ import {
   normalizeGroupTiebreakerConfig,
 } from '@/lib/tournamentTiebreakers'
 import { isApprovedMembership, isClubAdminRole } from '@/lib/clubMembershipRules'
+import { userHasClubCapability } from '@/lib/clubMembershipServer'
 
 type PublicDetailContext = {
   params: Promise<{ tournamentId: string }>
@@ -187,8 +188,7 @@ async function getRegisteredTeamsCount(tournamentId: string, clubId: string) {
     .eq('club_id', clubId)
 
   if (error) {
-    console.warn('[public-detail] registrations count failed', error.message)
-    return 0
+    throw new Error('REGISTRATION_COUNT_UNAVAILABLE')
   }
 
   const activeTeamIds = new Set<string>()
@@ -231,7 +231,7 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
     }
   }
 
-  const [{ data: clubPlayer }, { data: membership }] = await Promise.all([
+  const [clubPlayerResult, membershipResult] = await Promise.all([
     supabaseAdmin
       .from('club_players')
       .select('id,user_id,display_name,category,gender,approved_at')
@@ -245,6 +245,9 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
       .eq('user_id', user.id)
       .maybeSingle(),
   ])
+  if (clubPlayerResult.error || membershipResult.error) throw new Error('VIEWER_CONTEXT_UNAVAILABLE')
+  const clubPlayer = clubPlayerResult.data
+  const membership = membershipResult.data
 
   const isClubAdmin = isApprovedMembership(membership) && isClubAdminRole(membership?.role)
   const isStaffAccount = (await nonPlayerAccountIds([user.id])).has(user.id)
@@ -264,12 +267,13 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
   const ownProfileMap = await getProfilesByUserId([user.id])
   const ownProfile = ownProfileMap.get(user.id)
 
-  const { data: teams } = await supabaseAdmin
+  const { data: teams, error: teamsError } = await supabaseAdmin
     .from('tournament_teams')
     .select('id,player1_user_id,player2_user_id,created_at')
     .eq('tournament_id', tournamentId)
     .eq('club_id', clubId)
     .or(`player1_user_id.eq.${user.id},player2_user_id.eq.${user.id}`)
+  if (teamsError) throw new Error('VIEWER_TEAMS_UNAVAILABLE')
 
   const teamIds = (teams ?? []).map((team) => String(team.id))
   let registrations: Array<{id:string;team_id:string;status:string;created_at:string;preferred_slots?:unknown;availability_score?:number|null;flexibility_level?:string|null}> = []
@@ -300,7 +304,7 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
   }
 
   if (registrationsError) {
-    console.warn('[public-detail] viewer registrations lookup failed', registrationsError.message)
+    throw new Error('VIEWER_REGISTRATIONS_UNAVAILABLE')
   }
 
   const registrationByTeam = new Map((registrations ?? []).map((registration) => [String(registration.team_id), registration]))
@@ -331,9 +335,10 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
     } else if (isMissingSchemaObjectError(paymentError)) {
       paymentLookupUnavailable = true
       if (process.env.NODE_ENV !== 'production') {
-        console.warn('[public-detail] payment infra unavailable; returning payment as not registered', paymentError.message)
+        console.warn('[public-detail] payment infra unavailable', paymentError.message)
       }
     } else {
+      paymentLookupUnavailable = true
       console.warn('[public-detail] payment lookup failed', paymentError.message)
     }
 
@@ -404,6 +409,7 @@ async function getViewerContext(tournamentId: string, clubId: string, req: NextR
             }
           : null,
         paymentStatus: payment?.status ?? null,
+        paymentLookupUnavailable,
         paymentMethod: payment?.method ?? null,
         paymentRequestedAt: payment?.requested_at ?? null,
         paymentApprovedAt: payment?.approved_at ?? null,
@@ -512,6 +518,18 @@ export async function GET(req: NextRequest, context: PublicDetailContext) {
   const tournament = toTournamentView(tournamentRow)
   if (!tournament) return NextResponse.json({ error: 'Torneo no encontrado' }, { status: 404 })
 
+  // The service-role read above bypasses RLS. Unpublished information must
+  // stay behind the existing club capability or platform-admin authorization.
+  if (String(tournament.status).toUpperCase() === 'DRAFT') {
+    const user = await getTokenUser(req)
+    if (!user) return NextResponse.json({ error: 'Torneo no encontrado' }, { status: 404 })
+    const [canViewClub, platform] = await Promise.all([
+      userHasClubCapability(user.id, tournament.club_id, 'tournaments:view'),
+      supabaseAdmin.from('platform_admins').select('user_id').eq('user_id', user.id).maybeSingle(),
+    ])
+    if (!canViewClub && !platform.data?.user_id) return NextResponse.json({ error: 'Torneo no encontrado' }, { status: 404 })
+  }
+
   const { data: clubRow, error: clubError } = await supabaseAdmin
     .from('clubs')
     .select('id,name,logo_url,city,province,address,theme_key')
@@ -522,8 +540,16 @@ export async function GET(req: NextRequest, context: PublicDetailContext) {
     return NextResponse.json({ error: clubError.message }, { status: 500 })
   }
 
-  const registeredTeamsCount = await getRegisteredTeamsCount(tournament.id, tournament.club_id)
-  const viewer = await getViewerContext(tournament.id, tournament.club_id, req)
+  let snapshot: [number, Awaited<ReturnType<typeof getViewerContext>>]
+  try {
+    snapshot = await Promise.all([
+      getRegisteredTeamsCount(tournament.id, tournament.club_id),
+      getViewerContext(tournament.id, tournament.club_id, req),
+    ])
+  } catch {
+    return NextResponse.json({ error: 'No pudimos verificar los cupos y tu inscripción. Intentá nuevamente.' }, { status: 503, headers: { 'Cache-Control': 'private, no-store' } })
+  }
+  const [registeredTeamsCount, viewer] = snapshot
   const status = getTournamentDisplayStatus(tournament)
 
   return NextResponse.json({
@@ -563,7 +589,7 @@ export async function GET(req: NextRequest, context: PublicDetailContext) {
         }
       : null,
     status,
-    flyerUrl: getTournamentFlyerUrl(tournament),
+    flyerUrl: getTournamentPosterUrl(tournament) ?? getTournamentFlyerUrl(tournament),
     labels: {
       category: formatCategoryLabel(tournament.category),
       gender: formatGenderLabel(tournament.gender),
@@ -585,5 +611,5 @@ export async function GET(req: NextRequest, context: PublicDetailContext) {
         typeof tournament.maxPairs === 'number' ? Math.max(tournament.maxPairs - registeredTeamsCount, 0) : null,
     },
     viewer,
-  })
+  }, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Authorization' } })
 }

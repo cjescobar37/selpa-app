@@ -1,0 +1,25 @@
+.facts{display:flex;flex-wrap:wrap;gap:2px 8px;margin:4px 0 0;color:#526577;font-size:12px;line-height:1.25;min-width:0;order:3}
+.facts span{overflow-wrap:anywhere}
+@media(max-width:640px){.facts{font-size:11px;gap:1px 7px;margin:3px 0 0}}
+.compact :global(.TournamentPublicCard__top){flex-direction:row;align-items:flex-start}
+.compact :global(.TournamentPublicCard__date){order:0}
+.compact :global(.TournamentPublicCard__status){margin-left:auto;flex-shrink:0}
+.compact :global(.TournamentPublicCard__body)>*{flex-shrink:0}
+.compact :global(.TournamentPublicCard__poster img){object-fit:contain!important}
+.compact :global(.TournamentPublicCard__agendaDates)>div{display:grid;gap:2px;min-width:0}
+@media(min-width:641px){
+  .compact:global(.TournamentPublicCard.is-agendaCompact){grid-template-columns:minmax(88px,30%) minmax(0,1fr)}
+  .compact :global(.TournamentPublicCard__body){display:flex;flex-direction:column;gap:6px}
+  .compact :global(.TournamentPublicCard__top){order:0}
+  .compact :global(.TournamentPublicCard__club){order:1}
+  .compact :global(.TournamentPublicCard__body h3){order:2}
+  .compact :global(.TournamentPublicCard__agendaDates){order:4}
+  .compact :global(.TournamentPublicCard__agendaDates span),.compact :global(.TournamentPublicCard__agendaDates small){white-space:normal;overflow-wrap:anywhere;text-align:left}
+}
+@media(max-width:640px){
+  .compact{--tournament-card-compact-height:148px;--tournament-card-compact-size:auto}
+  .compact :global(.TournamentPublicCard__body){gap:3px}
+  .compact :global(.TournamentPublicCard__body h3){flex-shrink:0;line-height:1.2;min-height:1.2em;max-height:none;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;margin:0}
+  .compact :global(.TournamentPublicCard__club){padding:0;margin:0;min-height:24px}
+  .compact :global(.TournamentPublicCard__agendaDates){margin-top:auto;padding-top:3px}
+}

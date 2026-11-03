@@ -6731,13 +6731,13 @@ a.clubPublicRankingFooter span{
 @media (max-width: 640px){
   .clubPublicTournamentGrid .TournamentPublicCard,
   .clubPublicTournamentGrid .TournamentPublicCard.is-manual-flyer{
-    height:126px !important;
-    min-height:126px !important;
+    height:var(--tournament-card-compact-size,126px) !important;
+    min-height:var(--tournament-card-compact-height,126px) !important;
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard.has-circuit{
-    height:126px !important;
-    min-height:126px !important;
+    height:var(--tournament-card-compact-size,126px) !important;
+    min-height:var(--tournament-card-compact-height,126px) !important;
   }
 
   .clubPublicTournamentGrid .TournamentPublicCard__body{
@@ -6875,8 +6875,8 @@ a.clubPublicRankingFooter span{
   /* Public calendar uses the same dense agenda treatment: poster-led, no empty lower track. */
   .publicTournamentGrid .TournamentPublicCard.is-agendaCompact,
   .publicTournamentGrid .TournamentPublicCard.is-agendaCompact.is-manual-flyer{
-    height:126px !important;
-    min-height:126px !important;
+    height:var(--tournament-card-compact-size,126px) !important;
+    min-height:var(--tournament-card-compact-height,126px) !important;
   }
 
   .publicTournamentGrid .TournamentPublicCard.is-agendaCompact .TournamentPublicCard__body{
@@ -6912,8 +6912,8 @@ a.clubPublicRankingFooter span{
 
   /* Player home uses the same compact agenda card as the club and community views. */
   .playerTournamentCards .TournamentPublicCard.is-agendaCompact{
-    height:138px !important;
-    min-height:138px !important;
+    height:var(--tournament-card-compact-size,138px) !important;
+    min-height:var(--tournament-card-compact-height,138px) !important;
   }
 
   .playerTournamentCards .TournamentPublicCard.is-agendaCompact .TournamentPublicCard__body{

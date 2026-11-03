@@ -22,8 +22,9 @@ function normalizeContentBrand<T extends Record<string, unknown>>(item: T): T {
 }
 
 export async function getPublicHomeData() {
-  const [content, tournamentResult] = await Promise.all([
-    listPublishedContent(),
+  const unavailableSections: string[] = []
+  const [contentResult, tournamentResult] = await Promise.all([
+    listPublishedContent().then(data => ({ data, failed: false })).catch(() => ({ data: { archiveNews: [], ads: [], sponsors: [] }, failed: true })),
     supabaseAdmin
       .from('tournaments')
       .select(TOURNAMENT_SELECT)
@@ -32,6 +33,9 @@ export async function getPublicHomeData() {
       .order('start_date', { ascending: true, nullsFirst: false })
       .limit(72),
   ])
+  if (contentResult.failed) unavailableSections.push('content')
+  if (tournamentResult.error) unavailableSections.push('tournaments')
+  const content = contentResult.data
   const { archiveNews, ads, sponsors } = content
   const normalizedArchiveNews = archiveNews.map(item => normalizeContentBrand(item))
   const normalizedAds = ads.map(item => normalizeContentBrand(item))
@@ -43,29 +47,35 @@ export async function getPublicHomeData() {
     .filter((item, index, list) => list.findIndex(entry => entry.id === item.id) === index)
     .slice(0, 3)
 
-  const { data: tournamentRows } = tournamentResult
+  const tournamentRows = tournamentResult.error ? [] : tournamentResult.data
 
   const tournamentViewsRaw = (tournamentRows ?? []).map(toTournamentView).filter(item => item !== null)
   const featuredTournamentIds = tournamentViewsRaw.map(item => item.id).filter(Boolean)
-  const { data: featuredRegistrationRows } = featuredTournamentIds.length
-    ? await supabaseAdmin
+  const [registrationResult, tournamentClubsResult] = await Promise.all([
+    featuredTournamentIds.length
+    ? supabaseAdmin
       .from('tournament_registrations')
-      .select('tournament_id,status')
+      .select('tournament_id,team_id,status')
       .in('tournament_id', featuredTournamentIds)
-    : { data: [] }
-  const featuredRegistrationsByTournamentId = new Map<string, number>()
-  for (const row of (featuredRegistrationRows ?? []) as Array<{ tournament_id: string | null; status: string | null }>) {
-    if (!row.tournament_id || String(row.status ?? '').toUpperCase() === 'CANCELLED') continue
-    featuredRegistrationsByTournamentId.set(row.tournament_id, (featuredRegistrationsByTournamentId.get(row.tournament_id) ?? 0) + 1)
+    : Promise.resolve({ data: [], error: null }),
+    tournamentViewsRaw.length ? supabaseAdmin.from('clubs').select('id,name,logo_url,theme_key').in('id', Array.from(new Set(tournamentViewsRaw.map(item => item.club_id)))) : Promise.resolve({ data: [], error: null }),
+  ])
+  if (registrationResult.error || tournamentClubsResult.error) unavailableSections.push('tournamentDetails')
+  const featuredRegistrationsByTournamentId = new Map<string, Set<string>>()
+  for (const row of registrationResult.data ?? []) {
+    if (!row.tournament_id || !row.team_id || ['CANCELLED', 'REJECTED'].includes(String(row.status ?? '').toUpperCase())) continue
+    const teams = featuredRegistrationsByTournamentId.get(row.tournament_id) ?? new Set<string>()
+    teams.add(row.team_id)
+    featuredRegistrationsByTournamentId.set(row.tournament_id, teams)
   }
 
   const [
-    { count: clubsCount },
-    { count: playersCount },
-    { count: tournamentsCount },
-    { data: clubRows },
-    { data: clubPlayerRows },
-    { data: tournamentStatRows },
+    clubsResult,
+    playersResult,
+    tournamentsResult,
+    clubResult,
+    clubPlayerResult,
+    tournamentStatResult,
   ] = await Promise.all([
     supabaseAdmin.from('clubs').select('id', { count: 'exact', head: true }).eq('is_active', true),
     supabaseAdmin.from('club_players').select('id', { count: 'exact', head: true }).not('approved_at', 'is', null),
@@ -85,8 +95,12 @@ export async function getPublicHomeData() {
       .select('club_id,category,category_id,gender,status')
       .neq('status', 'DRAFT'),
   ])
-
-  const clubsById = new Map((clubRows ?? []).map(club => [String(club.id), club]))
+  if (clubResult.error) unavailableSections.push('clubs')
+  if (clubPlayerResult.error || tournamentStatResult.error || clubsResult.error || playersResult.error || tournamentsResult.error) unavailableSections.push('statistics')
+  const clubRows = clubResult.error ? [] : clubResult.data
+  const clubPlayerRows = clubPlayerResult.error ? [] : clubPlayerResult.data
+  const tournamentStatRows = tournamentStatResult.error ? [] : tournamentStatResult.data
+  const clubsById = new Map((tournamentClubsResult.data ?? []).map(club => [String(club.id), club]))
   const playerStatsByClub = new Map<string, { players: number; categories: Set<number>; male: number; female: number }>()
   for (const row of clubPlayerRows ?? []) {
     const clubId = String(row.club_id ?? '')
@@ -94,7 +108,7 @@ export async function getPublicHomeData() {
     const current = playerStatsByClub.get(clubId) ?? { players: 0, categories: new Set<number>(), male: 0, female: 0 }
     current.players += 1
     const category = Number(row.category)
-    if (Number.isFinite(category)) current.categories.add(category)
+    if (row.category !== null && Number.isInteger(category) && category >= 1 && category <= 7) current.categories.add(category)
     const gender = String(row.gender ?? '').toUpperCase()
     if (gender === 'M' || gender === 'MALE') current.male += 1
     if (gender === 'F' || gender === 'FEMALE') current.female += 1
@@ -118,11 +132,11 @@ export async function getPublicHomeData() {
     const tournamentStats = tournamentStatsByClub.get(id)
     return {
       ...club,
-      players: playerStats?.players ?? 0,
+      players: clubPlayerResult.error ? undefined : playerStats?.players ?? 0,
       categories: playerStats ? Array.from(playerStats.categories).sort((a, b) => a - b) : [],
       malePlayers: playerStats?.male ?? 0,
       femalePlayers: playerStats?.female ?? 0,
-      tournaments: tournamentStats?.tournaments ?? 0,
+      tournaments: tournamentStatResult.error ? undefined : tournamentStats?.tournaments ?? 0,
       activeTournaments: tournamentStats?.active ?? 0,
     }
   })
@@ -130,20 +144,21 @@ export async function getPublicHomeData() {
   const tournaments = tournamentViewsRaw
     .map(view => {
       const club = view ? clubsById.get(view.club_id) : null
-      return view ? { ...view, name: normalizeBrandText(view.name), registeredPairs: featuredRegistrationsByTournamentId.get(view.id) ?? 0, clubName: club?.name ?? null, clubLogoUrl: club?.logo_url ?? null, clubThemeKey: club?.theme_key ?? null } : null
+      return view ? { ...view, name: normalizeBrandText(view.name), registeredPairs: registrationResult.error ? null : featuredRegistrationsByTournamentId.get(view.id)?.size ?? 0, clubName: club?.name ?? null, clubLogoUrl: club?.logo_url ?? null, clubThemeKey: club?.theme_key ?? null } : null
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
 
   return {
+    unavailableSections,
     slides: prioritizedSlides,
     newsArchive: normalizedArchiveNews,
     tournaments,
     ads: normalizedAds,
     sponsors: normalizedSponsors,
     metrics: {
-      clubs: clubsCount ?? 0,
-      players: playersCount ?? 0,
-      tournaments: tournamentsCount ?? tournaments.length,
+      clubs: clubsResult.error ? null : clubsResult.count,
+      players: playersResult.error ? null : playersResult.count,
+      tournaments: tournamentsResult.error ? null : tournamentsResult.count,
     },
     clubs: featuredClubs,
   }

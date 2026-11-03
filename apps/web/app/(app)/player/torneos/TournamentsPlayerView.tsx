@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Compass, FileText, Search, Trophy, UsersRound } from 'lucide-react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { CalendarDays, ChevronLeft, ChevronRight, Compass, FileText, Trophy, UsersRound } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
 import PlayerSectionHero from '@/components/player/PlayerSectionHero'
 import PlayerSpaceLayout from '@/components/player/PlayerSpaceLayout'
 import TournamentPublicCard from '@/components/public/TournamentPublicCard'
+import type { PublicTournamentItem } from '@/components/public/PublicTournamentsExperience'
 import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
@@ -16,10 +17,14 @@ import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { groupPlayerAgenda, latestAgendaRegistrations } from '@/lib/playerAgenda'
 import PlayerAgendaCard from '@/components/player/PlayerAgendaCard'
 import agendaStyles from '@/components/player/PlayerAgenda.module.css'
+import TournamentSearch from '@/components/public/TournamentSearch'
+import { useTournamentDiscoveryFilters } from '@/lib/useTournamentDiscoveryFilters'
+import { normalizeTournamentSearch } from '@/lib/publicTournamentDiscovery'
 
 type ViewMode = 'mine' | 'calendar' | 'explore' | 'rules'
 
 type TournamentRow = {
+  registeredPairs?: number | null
   id: string
   club_id: string
   name: string
@@ -63,14 +68,6 @@ type ClubRow = {
   logo_url?: string | null
   rules_pdf_url?: string | null
 }
-
-const categories = ['all', '1', '2', '3', '4', '5', '6', '7']
-const genders = [
-  { value: 'all', label: 'Todos' },
-  { value: 'M', label: 'Caballeros' },
-  { value: 'F', label: 'Damas' },
-  { value: 'MIXED', label: 'Mixto' },
-]
 
 function normalizeGender(value?: string | null) {
   const normalized = String(value ?? '').toUpperCase()
@@ -200,6 +197,10 @@ function PlayerTournamentAgenda({ tournaments, registrations, clubs }: { tournam
 }
 
 export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
+  return <Suspense fallback={<PlayerStatePanel kind="loading" title="Cargando torneos" message="Preparando tu agenda" compact />}><TournamentsPlayerContent mode={mode} /></Suspense>
+}
+
+function TournamentsPlayerContent({ mode }: { mode: ViewMode }) {
   const session = useSession()
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
   const [registrations, setRegistrations] = useState<RegistrationRow[]>([])
@@ -208,9 +209,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [loadAttempt, setLoadAttempt] = useState(0)
-  const [query, setQuery] = useState('')
-  const [category, setCategory] = useState('all')
-  const [gender, setGender] = useState('all')
+  const { query, category, gender, club: clubFilter, updateFilters } = useTournamentDiscoveryFilters()
   const [calendarMonthOverride, setCalendarMonth] = useState<Date | null>(null)
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null)
 
@@ -238,6 +237,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
 
         let tournamentRows: TournamentRow[] = []
         let registrationRows: RegistrationRow[] = []
+        let discoveredClubs: ClubRow[] = []
 
         if (mode === 'mine') {
           const clubIds = session.clubs.map((club) => club.id)
@@ -277,19 +277,23 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
               .from('tournaments')
               .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs,type,tournament_type,segment,rules,rules_json')
               .eq('club_id', activeClubId)
+              .not('status', 'in', '("DRAFT","CANCELLED","CANCELED","CANCELADO","ARCHIVED")')
               .order('starts_on', { ascending: true, nullsFirst: false })
             if (tournamentError) throw tournamentError
             tournamentRows = (tournamentData ?? []) as TournamentRow[]
           }
         } else if (mode === 'explore') {
-          const { data: tournamentData, error: tournamentError } = await supabase
-            .from('tournaments')
-            .select('id,club_id,name,status,starts_on,start_date,ends_on,end_date,registration_deadline,category,gender,price_per_player,max_pairs,type,tournament_type,segment,rules,rules_json')
-            .not('status', 'in', '("DRAFT","CANCELLED","ARCHIVED")')
-            .order('starts_on', { ascending: true, nullsFirst: false })
-            .limit(72)
-          if (tournamentError) throw tournamentError
-          tournamentRows = (tournamentData ?? []) as TournamentRow[]
+          const response = await fetch('/api/public/tournaments', { cache: 'no-store' })
+          if (!response.ok) throw new Error('No pudimos cargar los torneos públicos. Intentá nuevamente.')
+          const discovery = await response.json() as { tournaments: PublicTournamentItem[] }
+          tournamentRows = discovery.tournaments.map(item => ({
+            id: item.id, club_id: item.club_id, name: item.name, status: item.status,
+            starts_on: item.startDate, start_date: item.startDate, ends_on: item.endDate ?? null, end_date: item.endDate ?? null,
+            registration_deadline: item.registrationDeadline, category: item.category, gender: item.gender,
+            price_per_player: item.pricePerPlayer, max_pairs: item.maxPairs, type: item.type ?? null, tournament_type: item.type ?? null,
+            segment: item.segment ?? null, rules: item.rules ?? null, rules_json: item.rules ?? null, registeredPairs: item.registeredPairs,
+          }))
+          discoveredClubs = discovery.tournaments.map(item => ({ id: item.club_id, name: item.clubName, logo_url: item.clubLogoUrl, theme_key: item.clubThemeKey }))
         }
 
         const clubIds = Array.from(new Set([
@@ -307,7 +311,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         if (clubRowsResult.error) throw clubRowsResult.error
         if (!alive) return
         setActiveClubDetails((activeClubResult.data ?? null) as ClubRow | null)
-        setClubs(Object.fromEntries(((clubRowsResult.data ?? []) as ClubRow[]).map((club) => [club.id, club])))
+        setClubs(Object.fromEntries([...(clubRowsResult.data ?? []) as ClubRow[], ...discoveredClubs].map((club) => [club.id, club])))
         setTournaments(tournamentRows)
         setRegistrations(registrationRows)
       } catch (error: unknown) {
@@ -329,12 +333,13 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
   )
 
   const visibleTournaments = useMemo(() => {
-    const search = query.trim().toLowerCase()
+    const search = normalizeTournamentSearch(query)
     const homeCity = String(session.globalProfile?.city ?? '').trim().toLocaleLowerCase('es-AR')
     return tournaments
       .filter((tournament) => category === 'all' || String(tournament.category ?? '') === category)
       .filter((tournament) => gender === 'all' || normalizeGender(tournament.gender) === gender)
-      .filter((tournament) => !search || `${tournament.name} ${clubs[tournament.club_id]?.name ?? ''}`.toLowerCase().includes(search))
+      .filter((tournament) => clubFilter === 'all' || clubs[tournament.club_id]?.name === clubFilter)
+      .filter((tournament) => !search || normalizeTournamentSearch(`${tournament.name} ${clubs[tournament.club_id]?.name ?? ''}`).includes(search))
       .sort((a, b) => {
         if (mode === 'explore' && homeCity) {
           const aLocal = String(clubs[a.club_id]?.city ?? '').trim().toLocaleLowerCase('es-AR') === homeCity
@@ -345,7 +350,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         const right = new Date(b.starts_on ?? b.start_date ?? '2999-12-31').getTime()
         return left - right
       })
-  }, [category, clubs, gender, mode, query, session.globalProfile?.city, tournaments])
+  }, [category, clubFilter, clubs, gender, mode, query, session.globalProfile?.city, tournaments])
 
   const exploreSections = useMemo(() => {
     const live: TournamentRow[] = []
@@ -430,6 +435,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
             registrationDeadline: tournament.registration_deadline,
             pricePerPlayer: tournament.price_per_player,
             maxPairs: tournament.max_pairs,
+            registeredPairs: tournament.registeredPairs,
             clubName: club?.name ?? `Club ${BRAND.name}`,
             clubLogoUrl: club?.logo_url ?? null,
             clubThemeKey: club?.theme_key ?? null,
@@ -489,8 +495,12 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
         title={copy.title}
         description={copy.body}
         icon={<Icon />}
-        action={mode==='mine'?undefined:<Link className="playerTournamentsBack" href="/player">← Volver</Link>}
+        action={mode==='mine'?undefined:<Link className="playerTournamentsBack" href="/player/torneos">← Mi agenda</Link>}
       />
+
+      <nav className={agendaStyles.navigation} aria-label="Secciones de torneos">
+        {[{ mode: 'mine', href: '/player/torneos', label: 'Mi agenda' }, { mode: 'explore', href: '/player/torneos/explorar', label: 'Explorar' }, { mode: 'calendar', href: '/player/torneos/calendario', label: 'Calendario' }].map(item => <Link key={item.mode} href={item.href} aria-current={mode === item.mode ? 'page' : undefined}>{item.label}</Link>)}
+      </nav>
 
       {mode === 'rules' ? (
         <section className="playerRulesGrid">
@@ -509,11 +519,7 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
       ) : (
         <>
           {mode === 'explore' ? (
-            <section className="playerTournamentFilters">
-              <label><span>Categoría</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item} value={item}>{item === 'all' ? 'Todas' : `${item}ta`}</option>)}</select></label>
-              <label><span>Género</span><select value={gender} onChange={(event) => setGender(event.target.value)}>{genders.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-              <label className="playerTournamentSearch"><span>Buscar</span><div><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Torneo o club" /></div></label>
-            </section>
+            <TournamentSearch query={query} onQuery={value => updateFilters({ q: value })} category={category} onCategory={value => updateFilters({ categoria: value })} gender={gender} onGender={value => updateFilters({ rama: value })} club={clubFilter} onClub={value => updateFilters({ club: value })} onApplyFilters={filters => updateFilters({ categoria: filters.category, rama: filters.gender, club: filters.club })} clubs={Array.from(new Set(Object.values(clubs).map(club => club.name))).sort()} count={visibleTournaments.length} />
           ) : null}
 
           {loading ? <PlayerStatePanel kind="loading" title="Cargando torneos" message="Buscando la actividad de tu club" compact /> : null}
@@ -522,7 +528,8 @@ export default function TournamentsPlayerView({ mode }: { mode: ViewMode }) {
           {!loading && !message ? (
             mode === 'explore' ? (
               <section className="playerExploreSections">
-                {exploreSections.map((section) => (
+                {!visibleTournaments.length ? <PlayerStatePanel kind="empty" title="No encontramos torneos" message="Probá otra búsqueda o quitá los filtros." compact /> : null}
+                {exploreSections.filter(section => section.items.length).map((section) => (
                   <div className="playerExploreSection" key={section.key}>
                     <header>
                       <div>

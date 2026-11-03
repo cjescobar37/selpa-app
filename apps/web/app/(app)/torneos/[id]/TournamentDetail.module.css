@@ -1,0 +1,8 @@
+.closed{display:grid;gap:8px;padding:14px;min-width:0;background:#f5f9fc;border:1px solid #d9e5ed;border-radius:14px;color:#173b54}
+.closed h2{font-size:20px;line-height:1.2;font-weight:650;margin:0}
+.closed p{font-size:14px;line-height:1.45;margin:0;color:#49677d}
+.closed a{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;color:#08768e;font-size:14px;font-weight:600;text-decoration:none}
+.closed a:focus-visible{outline:2px solid #0891b2;outline-offset:3px;border-radius:4px}
+.closed h1{font-size:24px;font-weight:650;line-height:1.2;margin:0}
+.closed button{min-height:44px;padding:9px 12px;border:1px solid #abc7d7;border-radius:10px;background:#fff;color:#075c74;font:inherit;font-size:14px;cursor:pointer}
+.closed button:focus-visible{outline:2px solid #0891b2;outline-offset:3px}

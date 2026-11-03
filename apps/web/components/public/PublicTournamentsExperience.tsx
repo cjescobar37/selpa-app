@@ -8,6 +8,8 @@ import CommunityTournamentCalendar from '@/components/public/CommunityTournament
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
 import PageHeader from '@/components/navigation/PageHeader'
+import { useTournamentDiscoveryFilters } from '@/lib/useTournamentDiscoveryFilters'
+import { compareTournamentDates, normalizeTournamentSearch } from '@/lib/publicTournamentDiscovery'
 
 export type PublicTournamentItem = {
   id: string
@@ -43,20 +45,21 @@ function tournamentBucket(tournament: PublicTournamentItem) {
 }
 
 export default function PublicTournamentsExperience({ tournaments, clubs }: { tournaments: PublicTournamentItem[]; clubs: string[] }) {
-  const [query, setQuery] = useState('')
-  const [category, setCategory] = useState('all')
-  const [gender, setGender] = useState('all')
-  const [club, setClub] = useState('all')
+  const { query, category, gender, club, updateFilters: updateUrlFilters } = useTournamentDiscoveryFilters()
   const [pageSize, setPageSize] = useState({ live: 6, upcoming: 6, finished: 6 })
+  function updateFilters(changes: Record<string, string>) {
+    updateUrlFilters(changes)
+    setPageSize({ live: 6, upcoming: 6, finished: 6 })
+  }
 
   const visible = useMemo(() => {
-    const search = query.trim().toLowerCase()
+    const search = normalizeTournamentSearch(query)
     return tournaments
       .filter((item) => category === 'all' || String(item.category ?? '') === category)
       .filter((item) => gender === 'all' || normalizeGender(item.gender) === gender)
       .filter((item) => club === 'all' || item.clubName === club)
-      .filter((item) => !search || `${item.name} ${item.clubName}`.toLowerCase().includes(search))
-      .sort((a, b) => new Date(a.startDate ?? '2999-12-31').getTime() - new Date(b.startDate ?? '2999-12-31').getTime())
+      .filter((item) => !search || normalizeTournamentSearch(`${item.name} ${item.clubName}`).includes(search))
+      .sort(compareTournamentDates)
   }, [category, club, gender, query, tournaments])
 
   const sections = useMemo(() => {
@@ -66,14 +69,14 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
     const finished: PublicTournamentItem[] = []
     for (const item of visible) {
       const bucket = tournamentBucket(item)
+      if (bucket === 'draft' || bucket === 'cancelled') continue
       if (bucket === 'live') live.push(item)
       else if (bucket === 'registration_open') registrationOpen.push(item)
       else if (bucket === 'finished') finished.push(item)
       else upcoming.push(item)
     }
-    const dateValue = (item: PublicTournamentItem) => new Date(item.startDate ?? '2999-12-31').getTime()
-    const closestFirst = (items: PublicTournamentItem[]) => items.sort((a, b) => dateValue(a) - dateValue(b))
-    const mostRecentFirst = (items: PublicTournamentItem[]) => items.sort((a, b) => dateValue(b) - dateValue(a))
+    const closestFirst = (items: PublicTournamentItem[]) => items.sort(compareTournamentDates)
+    const mostRecentFirst = (items: PublicTournamentItem[]) => items.sort((a, b) => compareTournamentDates(a, b, true))
     const nextTournaments = closestFirst([...registrationOpen, ...upcoming])
     return [
       { key: 'live', title: 'En juego', subtitle: 'Torneos jugándose ahora', items: closestFirst(live) },
@@ -92,10 +95,11 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
     <main className="publicTournamentShell">
       <PageHeader title={`Torneos ${BRAND.name}`} eyebrow="Calendario público" legacyClassName="publicTournamentHero" />
 
-      <TournamentSearch query={query} onQuery={setQuery} category={category} onCategory={setCategory} gender={gender} onGender={setGender} club={club} onClub={setClub} clubs={clubs} count={visible.length} />
+      <TournamentSearch query={query} onQuery={value => updateFilters({ q: value })} category={category} onCategory={value => updateFilters({ categoria: value })} gender={gender} onGender={value => updateFilters({ rama: value })} club={club} onClub={value => updateFilters({ club: value })} onApplyFilters={filters => updateFilters({ categoria: filters.category, rama: filters.gender, club: filters.club })} clubs={clubs} count={visible.length} />
 
       <section className="publicTournamentSections">
-        {sections.map((section, index) => (
+        {!visible.length ? <div className="publicTournamentEmpty" role="status"><Trophy size={18} /><strong>{tournaments.length ? 'No encontramos torneos con estos filtros' : 'Todavía no hay torneos publicados'}</strong><p>{tournaments.length ? 'Probá otra búsqueda o quitá los filtros.' : 'Los próximos torneos aparecerán acá cuando los clubes los publiquen.'}</p>{tournaments.length ? <button type="button" onClick={() => updateFilters({ q: '', categoria: 'all', rama: 'all', club: 'all' })}>Limpiar búsqueda y filtros</button> : null}</div> : null}
+        {sections.filter(section => section.items.length).map((section) => (
           <Fragment key={section.key}>
           <div className="publicTournamentSection" key={section.key}>
             <header>
@@ -112,7 +116,7 @@ export default function PublicTournamentsExperience({ tournaments, clubs }: { to
             )}
             {section.items.length > pageSize[section.key] ? <button type="button" className="publicTournamentMore" onClick={() => setPageSize(current => ({ ...current, [section.key]: current[section.key] + 6 }))}>Ver más {section.title.toLowerCase()}</button> : null}
           </div>
-          {index === 1 ? <CommunityTournamentCalendar tournaments={visible} /> : null}
+          {section.key === 'upcoming' ? <CommunityTournamentCalendar tournaments={visible} /> : null}
           </Fragment>
         ))}
       </section>

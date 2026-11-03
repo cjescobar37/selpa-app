@@ -7,7 +7,8 @@ import { buildAssetProxyUrl, getClubInitials } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
-import { getTournamentFlyerUrl } from '@/lib/tournamentFlyers'
+import { getTournamentFlyerUrl, getTournamentPosterUrl } from '@/lib/tournamentFlyers'
+import styles from './TournamentPublicCard.module.css'
 import { formatCategoryLabel, formatGenderLabel, formatSegmentLabel } from '@/lib/tournamentLabels'
 import { formatHomeAgendaDeadline as formatAgendaDeadline } from '@/lib/publicHomeDatePresentation'
 
@@ -142,7 +143,7 @@ export default function TournamentPublicCard({
   const theme = getClubTheme(tournament.clubThemeKey)
   const parts = dateParts(tournament.startDate)
   const displayStatus = getTournamentDisplayStatus(tournament)
-  const flyer = resolveFlyerUrl(tournament.flyerUrl ?? getTournamentFlyerUrl(tournament))
+  const flyer = resolveFlyerUrl(getTournamentPosterUrl(tournament) ?? getTournamentFlyerUrl(tournament))
   const manualFlyer = isManualFlyer(tournament)
   const logo = buildAssetProxyUrl(tournament.clubLogoUrl)
   const price = formatMoney(tournament.pricePerPlayer)
@@ -162,10 +163,10 @@ export default function TournamentPublicCard({
   } as CSSProperties
 
   return (
-    <article className={`TournamentPublicCard ${flyer ? 'has-flyer' : ''}${manualFlyer ? ' is-manual-flyer' : ''}${circuitPosition ? ' has-circuit' : ''}${compactAgenda ? ' is-agendaCompact' : ''}${displayStatus.key === 'finished' ? ' is-finished' : ''}`} style={style}>
+    <article className={`TournamentPublicCard ${flyer ? 'has-flyer' : ''}${manualFlyer ? ' is-manual-flyer' : ''}${circuitPosition ? ' has-circuit' : ''}${compactAgenda ? ` is-agendaCompact ${styles.compact}` : ''}${displayStatus.key === 'finished' ? ' is-finished' : ''}`} style={style}>
       <Link className="TournamentPublicCard__hitArea" href={`/torneos/${tournament.id}`} aria-label={`Entrar al torneo ${tournament.name}`} />
       <div className="TournamentPublicCard__poster">
-        {flyer ? <img src={flyer} alt="" /> : null}
+        {flyer ? <img src={flyer} alt="" loading="lazy" decoding="async" /> : null}
         {!manualFlyer ? (
           <div className="TournamentPublicCard__posterMeta">
             <small>{formatTournamentType(tournamentType).toUpperCase()}</small>
@@ -200,6 +201,10 @@ export default function TournamentPublicCard({
           </div>
         ) : null}
         <h3>{tournament.name}</h3>
+        {compactAgenda ? <p className={styles.facts}>
+          <span>{categoryLabel} · {genderLabel}</span>
+          {typeof tournament.registeredPairs === 'number' ? <span>{tournament.registeredPairs}{typeof tournament.maxPairs === 'number' ? `/${tournament.maxPairs}` : ''} parejas inscriptas</span> : null}
+        </p> : null}
         {!flyer ? <p className="TournamentPublicCard__compactMeta">
           {[categoryLabel, genderLabel, price].filter(Boolean).join(' · ')}
         </p> : null}

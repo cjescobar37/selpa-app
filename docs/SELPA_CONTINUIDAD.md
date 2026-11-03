@@ -30,7 +30,17 @@ Identidad: navy, cian y magenta, logo SELPA, terminología **Damas/Caballeros**.
 
 ## 3. Estado Git e infraestructura
 
-### Verificación actual: 01/11/2026, checkout `C:\SELPA`
+### Estado actual: sprint Home + Torneos, 01/11/2026
+
+- La continuidad fue publicada en `aa9cfac315a7ec568853a5dca0d12191ab231322` con el mensaje `docs: establish shared SELPA context and Codex continuity`. Push y HEAD remoto comprobados en la sesión anterior.
+- Checkout notebook `C:\SELPA`, app `apps/web`, rama `codex/selpa-full-integration-20261030`. Al comenzar el sprint se consultó `origin` y se verificó 0/0 de divergencia; fast-forward sin cambios. No había trabajo local ajeno.
+- Implementación del sprint **solo local, sin commit ni push**. Detalle, archivos, evidencias y pendientes en `docs/SELPA_SPRINT_NOCTURNO.md`. Este estado sustituye las notas anteriores que indicaban que faltaba publicar la documentación inicial.
+- Home maneja errores parciales y resuelve todos los clubes de sus torneos; público y Explorar PLAYER comparten catálogo y filtros con URL; detalle/inscripción distinguen estados cerrados; Inicio PLAYER prioriza inscripciones reales y la agenda conserva torneos RUNNING sin fecha final. Borradores protegidos por autorización del backend y respuestas personalizadas sin caché compartida.
+- QA del sprint: 892/892 tests aislados aprobados, TypeScript sin errores, lint sin errores y 128 advertencias totales; build local optimizado aprobado (166 páginas estáticas). Mediciones responsive y revisión visual en navegador local; no equivalen a Safari/iPhone físico ni a Supabase live. El informe del sprint conserva el resultado HTTP y las limitaciones.
+- No se modificaron schema, RLS, migraciones, datos reales, visibilidad de temporadas, reglas deportivas ni integraciones de cobro. Sin deployment a Preview/Production y sin cambios en `main`.
+- Próxima acción: revisar los cambios locales y completar QA con cuentas/entorno autorizados e iPhone; luego, únicamente con autorización específica, versionar y sincronizar este sprint. La PC del trabajo todavía no recibió estos cambios locales.
+
+### Corte anterior a publicar la continuidad: 01/11/2026, checkout `C:\SELPA`
 
 - Remoto `origin`: `https://github.com/cjescobar37/selpa-app.git`; rama activa `codex/selpa-full-integration-20261030`.
 - HEAD local y remoto consultado con `git ls-remote origin refs/heads/codex/selpa-full-integration-20261030`: `7d5e8d431d8dcb0eaeb05cdfa49c8b20c0ea4b90`. Coincidían al consultar; esto no sincroniza cambios locales sin commit.
@@ -150,6 +160,15 @@ Consolidado a partir de los documentos aportados `SELPA_Contexto_Maestro_2026-10
 
 ## 9. Historial de decisiones y tareas
 
+### 01/11/2026 — Publicación de continuidad y sprint Home + Torneos
+
+- Continuidad inicial enviada a GitHub en `aa9cfac` tras autorización expresa. Identidad Git configurada solo en este repositorio con el nombre y correo noreply indicados por el usuario. El hash se verificó contra GitHub y el árbol quedó limpio antes del sprint.
+- Nuevo encargo autorizado: implementación y QA local de Bloque 2, sin commit/push/deployment ni escrituras en Supabase compartido. Registro en `docs/SELPA_SPRINT_NOCTURNO.md`; los pendientes originales de iPhone y servicios reales permanecen abiertos.
+- Se corrigieron regresiones demostradas: CTA abierto en finalizados sin deadline, errores de lectura convertidos en cero/vacíos, identidad de clubes truncada a cuatro destacados, historial desplazando próximos, filtros perdidos al volver, prioridad de Home confundida con descubrimiento, duplicados de inscripción y RUNNING pasado al historial sin fecha final. El detalle de borradores ahora comprueba autorización antes de devolver contenido.
+- Se conserva el gutter aprobado de unos 8 px y la navegación inferior por rol. No se reabrió Bloque 1 ni se alteraron puntos, rankings, settlement o pagos.
+- La falla de lectura de pagos del detalle/wizard ahora se presenta como «Pago sin verificar», conserva la inscripción y ofrece reintentar la consulta, en vez de inferir «Pago no registrado» y promover un nuevo pago. Se verificaron error de lectura, infraestructura ausente, ausencia real y aprobación sintética; no se ejecutaron cobros ni se cambió el estado financiero.
+- Este hito no certifica Bloque 2 completo en servicios reales: faltan recorrido integral de inscripción con cuentas/club autorizado, datos publicados de partidos/resultados, dispositivo físico y auditoría posterior de Club/Platform.
+
 ### 01/11/2026 — Continuidad entre equipos (solo documentación)
 
 - Se corrigió el nombre accidental `.md.md`, conservando todo el contexto anterior. Se vinculó este documento desde `AGENTS.md` y se estableció lectura inicial y actualización obligatoria al cierre de tareas importantes.
@@ -159,5 +178,12 @@ Consolidado a partir de los documentos aportados `SELPA_Contexto_Maestro_2026-10
 - QA actual: `npm.cmd test` desde `apps/web`, sobre código base `7d5e8d4`, finalizó con código 0: **874 tests aprobados, 0 fallidos, 0 omitidos** (72,7 s). Suite aislada de contratos/lógica, con PostgreSQL embebido para algunos casos; no certifica Supabase remoto, UI end-to-end, cobros operativos ni dispositivo físico. Node emitió advertencias por el loader experimental.
 - QA documental: revisión de rutas locales, conservación del contenido original y `git diff --check` sin errores en cambios versionados. El respaldo temporal se creó antes del renombre, pero no resultó accesible en comandos posteriores del sandbox; no se pudo realizar una comparación automática contra esa copia. El contenido histórico se preservó mediante renombre y ediciones puntuales. Estado final comprobado: `AGENTS.md` modificado y este documento no versionado, sin otros archivos de proyecto modificados.
 - TypeScript, ESLint y build: no ejecutados en esta tarea documental. QA UX en navegador y validación física: no realizadas. No se certifica experiencia actual de iPhone ni se crean datos reales.
-- Pendientes de continuidad: autorizar commit/push de estos dos documentos; luego sincronizar el checkout correcto de la PC del trabajo y comprobar el hash recibido. Hasta entonces este cambio solo está disponible en este equipo.
+- Pendientes al cerrar aquella tarea: autorizar commit/push de estos dos documentos y luego sincronizar el checkout correcto de la PC del trabajo. La publicación inicial quedó resuelta posteriormente en `aa9cfac`, como registra el hito superior; la recepción en el otro equipo debe comprobarse allí.
 - Pendientes de producto: se mantienen los de las secciones 4, 5 y 7; no se cerraron auditorías funcionales, cobros ni validaciones físicas con esta tarea.
+
+### 02/11/2026 — Recuperación segura del sprint de casa (fase 1)
+
+- Checkout `C:\SELPA`; base local `aa9cfac315a7ec568853a5dca0d12191ab231322`. Rama de respaldo `codex/home-block2-recovery-20261102`, creada desde ese HEAD conservando los 30 archivos del sprint (20 modificados y diez nuevos). Inventario contrastado con `SELPA_SPRINT_NOCTURNO.md`; sin archivos ajenos identificados, staging previo ni stashes.
+- Consulta actual a GitHub con `git ls-remote`: integración `9c28abcf79869a022b1cb745434246511cfc788e`; banco `e4161b2877f2aad15a277ce3f907590a5615398f`. Primer intento bloqueado por DNS del sandbox; consulta fuera del sandbox aprobada y exitosa.
+- Revisión de diferencias y archivos nuevos: solo app canónica y documentación del sprint. Sin archivos `.env`; búsqueda de patrones de claves privadas, GitHub, AWS, Supabase secret y JWT sin coincidencias. Credenciales del fixture son sintéticas, loopback y no se incluyen entornos reales. `git diff --check` aprobado; QA anterior permanece histórica, no repetida todavía en esta sesión.
+- Usuario autorizó exclusivamente commit/push del sprint a esta rama de recuperación. La confirmación remota del commit es requisito antes de crear la consolidada sobre PLAYER. Integración/main/Production y stashes no se modifican. No se crearon datos reales. Próximo paso: verificar respaldo remoto y consolidar localmente, preservando card canónica, buscador compacto, filtros de pagos y corrección de Perfil del banco.

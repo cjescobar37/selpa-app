@@ -27,6 +27,9 @@ import { useHomeMobileLayout } from '@/lib/useHomeMobileLayout'
 import PlayerHomeName from '@/components/home/PlayerHomeName'
 import PlayerModeSurface from '@/components/home/PlayerModeSurface'
 import productControls from '@/components/product/ProductFlow.module.css'
+import { latestAgendaRegistrations, playerHomeCommitment } from '@/lib/playerAgenda'
+import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
+import { compareTournamentDates } from '@/lib/publicTournamentDiscovery'
 
 type ClubPlayerRow = {
   ranking_position?: number | null
@@ -223,20 +226,9 @@ export default function PlayerHomePage() {
   }, [activeClub, partnerships, playerByClubId])
 
   const upcomingTournaments = useMemo(() => {
-    const now = new Date()
-    now.setHours(0, 0, 0, 0)
     return tournaments
-      .filter((tournament) => {
-        const dateValue = tournament.starts_on ?? tournament.start_date
-        if (!dateValue) return true
-        const date = new Date(dateValue)
-        return Number.isNaN(date.getTime()) || date >= now
-      })
-      .sort((a, b) => {
-        const left = new Date(a.starts_on ?? a.start_date ?? '2999-12-31').getTime()
-        const right = new Date(b.starts_on ?? b.start_date ?? '2999-12-31').getTime()
-        return left - right
-      })
+      .filter(tournament => !['draft', 'cancelled', 'finished'].includes(getTournamentDisplayStatus(tournament).key))
+      .sort((a, b) => compareTournamentDates({ startDate: a.starts_on ?? a.start_date }, { startDate: b.starts_on ?? b.start_date }))
       .slice(0, 8)
   }, [tournaments])
 
@@ -249,7 +241,9 @@ export default function PlayerHomePage() {
   }, [session.globalProfile?.first_name, session.globalProfile?.last_name, session.user?.name])
 
   const tournamentById = useMemo(() => new Map(tournaments.map((tournament) => [tournament.id, tournament])), [tournaments])
-  const nextTournament = upcomingTournaments[0]
+  const latestRegistrations = useMemo(() => latestAgendaRegistrations(registrations), [registrations])
+  const commitment = useMemo(() => playerHomeCommitment(tournaments.map(row => ({ ...row, ends_on: row.ends_on ?? null, end_date: row.end_date ?? null })), registrations, new Date()), [tournaments, registrations])
+  const nextTournament = commitment?.tournament
   const nextTournamentClub = nextTournament ? clubsById.get(nextTournament.club_id) : undefined
   const priorityInvite = pendingInvites[0]
   const priorityInviteClub = priorityInvite ? clubsById.get(priorityInvite.club_id) : undefined
@@ -268,7 +262,7 @@ export default function PlayerHomePage() {
     })
   }, [session.activeClubId, session.clubs])
   const myTournamentCards = useMemo(() => {
-    return registrations
+    return Array.from(latestRegistrations.values())
       .map((registration) => {
         const tournament = tournamentById.get(registration.tournament_id)
         if (!tournament) return null
@@ -281,7 +275,7 @@ export default function PlayerHomePage() {
         return right - left
       })
       .slice(0, 6)
-  }, [clubsById, registrations, tournamentById])
+  }, [clubsById, latestRegistrations, tournamentById])
 
   useEffect(() => {
     let alive = true
@@ -315,40 +309,44 @@ export default function PlayerHomePage() {
             .from('tournaments')
             .select('id,club_id,name,starts_on,start_date,ends_on,end_date,status,type,tournament_type,category,category_id,gender,segment,registration_deadline,signup_deadline,price_per_player,max_pairs,rules_json')
             .in('club_id', clubIds)
-            .in('status', ['OPEN', 'PUBLISHED'])
+            .in('status', ['OPEN', 'PUBLISHED', 'RUNNING', 'IN_PROGRESS', 'ACTIVE', 'PAUSED'])
             .or(`starts_on.gte.${today},start_date.gte.${today},starts_on.is.null,start_date.is.null`)
             .order('starts_on', { ascending: true, nullsFirst: false })
             .limit(12)
 
-          if (!tournamentError) tournamentRows = (tournamentData ?? []) as TournamentRow[]
+          if (tournamentError) throw new Error('No pudimos cargar la agenda de tus clubes. Reintentá.')
+          tournamentRows = (tournamentData ?? []) as TournamentRow[]
         }
 
         if (clubIds.length) {
-          const { data: teamData } = await supabase
+          const { data: teamData, error: teamError } = await supabase
             .from('tournament_teams')
             .select('id,club_id,tournament_id,player1_user_id,player2_user_id')
             .in('club_id', clubIds)
             .or(`player1_user_id.eq.${session.user.id},player2_user_id.eq.${session.user.id}`)
 
+          if (teamError) throw new Error('No pudimos verificar tus torneos. Reintentá.')
           teamRows = (teamData ?? []) as TeamRow[]
           const ids = teamRows.map((team) => team.id)
 
           if (ids.length) {
-            const { data: registrationData } = await supabase
+            const { data: registrationData, error: registrationError } = await supabase
               .from('tournament_registrations')
               .select('id,tournament_id,club_id,team_id,status,created_at')
               .in('team_id', ids)
               .order('created_at', { ascending: false })
 
+            if (registrationError) throw new Error('No pudimos verificar tus inscripciones. Reintentá.')
             registrationRows = (registrationData ?? []) as RegistrationRow[]
             const missingTournamentIds = Array.from(new Set(registrationRows.map((row) => row.tournament_id)))
               .filter((id) => !tournamentRows.some((tournament) => tournament.id === id))
 
             if (missingTournamentIds.length) {
-              const { data: registeredTournamentData } = await supabase
+              const { data: registeredTournamentData, error: registeredTournamentError } = await supabase
                 .from('tournaments')
                 .select('id,club_id,name,starts_on,start_date,ends_on,end_date,status,type,tournament_type,category,category_id,gender,segment,registration_deadline,signup_deadline,price_per_player,max_pairs,rules_json')
                 .in('id', missingTournamentIds)
+              if (registeredTournamentError) throw new Error('No pudimos cargar tus torneos inscriptos. Reintentá.')
               tournamentRows = [...tournamentRows, ...((registeredTournamentData ?? []) as TournamentRow[])]
             }
 
@@ -531,7 +529,7 @@ export default function PlayerHomePage() {
           </a>
         ) : nextTournament ? (
           <Link href={`/torneos/${nextTournament.id}`} className="playerPriorityCard">
-            <span>Próximo torneo</span>
+            <span>{commitment?.confirmed ? 'Próximo torneo confirmado' : 'Inscripción pendiente'}</span>
             <strong>{nextTournament.name}</strong>
             <small>{nextTournamentClub?.name ?? 'Club'} · {formatDate(nextTournament.starts_on ?? nextTournament.start_date)}</small>
             <b>Ver torneo <ChevronRight size={16} /></b>
@@ -549,7 +547,7 @@ export default function PlayerHomePage() {
           <a href="#mis-torneos">
             <Trophy size={16} />
             <span>Mis torneos</span>
-            <strong>{myTournamentCards.length}</strong>
+            <strong>{latestRegistrations.size}</strong>
           </a>
           <a href="#pareja-activa">
             <UsersRound size={16} />
