@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { userHasClubCapability } from '@/lib/clubMembershipServer'
+import { clubTournamentIsActive } from '@/lib/clubTournamentCatalog'
 
 type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
 
@@ -33,17 +34,7 @@ function getTournamentDate(row: TournamentRow) {
 }
 
 function isActiveOrUpcomingTournament(row: TournamentRow, today: string) {
-  const status = String(row.status ?? '').toUpperCase()
-  if (['CANCELLED', 'CANCELED', 'ARCHIVED', 'FINISHED', 'COMPLETED'].includes(status)) {
-    return false
-  }
-
-  if (['ACTIVE', 'OPEN', 'PUBLISHED', 'REGISTRATION_OPEN', 'IN_PROGRESS'].includes(status)) {
-    return true
-  }
-
-  const date = getTournamentDate(row)
-  return Boolean(date && date >= today && status !== 'DRAFT')
+  return row.status !== 'DRAFT' && clubTournamentIsActive({ status: row.status, start_date: getTournamentDate(row) }, today)
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -87,7 +78,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         .eq('status', 'PENDING'),
       supabaseAdmin
         .from('tournaments')
-        .select('id,name,status,starts_on,start_date,registration_deadline,signup_deadline')
+        .select('id,name,status,starts_on,start_date,registration_deadline,signup_deadline', { count: 'exact' })
+        .not('status', 'in', '("DRAFT","CANCELLED","CANCELED","ARCHIVED","FINISHED","FINALIZED","FINALIZADO","COMPLETED","CLOSED")')
         .eq('club_id', clubId)
         .order('start_date', { ascending: true })
         .limit(30),
@@ -97,6 +89,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
     if (playersRes.error) return NextResponse.json({ error: playersRes.error.message }, { status: 500 })
     if (pendingMembershipsRes.error) return NextResponse.json({ error: pendingMembershipsRes.error.message }, { status: 500 })
     if (tournamentsRes.error) return NextResponse.json({ error: tournamentsRes.error.message }, { status: 500 })
+    if (typeof tournamentsRes.count !== 'number') return NextResponse.json({ error: 'No pudimos verificar el total de torneos. Reintentá.' }, { status: 503 })
 
     if (!clubRes.data) {
       return NextResponse.json({ error: 'Club no encontrado.' }, { status: 404 })
@@ -156,7 +149,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clubId:
         active_players: playersRes.count ?? 0,
         pending_player_requests: pendingMembershipsRes.count ?? 0,
         internal_staff: staffRes.count ?? 0,
-        active_or_upcoming_tournaments: activeOrUpcomingTournaments.length,
+        active_or_upcoming_tournaments: tournamentsRes.count,
       },
       tournaments: activeOrUpcomingTournaments.map((row) => ({
         id: row.id,

@@ -334,8 +334,8 @@ export default function ClubPage() {
           </div>
           <span className={`club-mainBadge club-mainBadge--${statusCopy[club.status].tone}`}>{statusLabel(club.status)}</span>
           <div className="club-heroMetrics" aria-label="Estado del club">
-            <Link href="/club/jugadores"><strong>{summary.counts.active_players}</strong><span>Jugadores</span></Link>
-            <Link href="/club/torneos"><strong>{summary.counts.active_or_upcoming_tournaments}</strong><span>En agenda</span></Link>
+            {canViewPlayers ? <Link href="/club/jugadores"><strong>{summary.counts.active_players}</strong><span>Jugadores</span></Link> : null}
+            <Link href="/club/torneos"><strong>{summary.counts.active_or_upcoming_tournaments}</strong><span>Torneos activos</span></Link>
             {canViewRequests ? <Link href="/club/solicitudes"><strong>{summary.counts.pending_player_requests}</strong><span>Solicitudes</span></Link> : null}
           </div>
         </div>
