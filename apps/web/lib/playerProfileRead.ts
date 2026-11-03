@@ -1,4 +1,5 @@
 import { getCurrentSession, supabase } from './supabaseClient'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 
 const retryDelays = [300, 900]
 
@@ -30,7 +31,12 @@ export async function readPlayerProfile<T>(url: string, userId: string, signal: 
     const { data, error } = await getCurrentSession()
     signal.throwIfAborted()
     if (data.session && data.session.user.id !== userId) throw new Error('PROFILE_ACCOUNT_CHANGED')
-    if (error) throw new Error('PROFILE_SESSION_UNAVAILABLE')
+    if (error) {
+      // Auth may still be recovering its token after login. The SDK explicitly
+      // marks transport failures as retryable; denied/invalid sessions stay fatal.
+      if (isAuthRetryableFetchError(error) && await retry('session', error.status)) continue
+      throw new Error('PROFILE_SESSION_UNAVAILABLE')
+    }
     if (!data.session?.access_token) {
       if (await retry('session')) continue
       throw new Error('PROFILE_SESSION_UNAVAILABLE')

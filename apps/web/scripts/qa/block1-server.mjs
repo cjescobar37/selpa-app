@@ -9,6 +9,7 @@ if(process.env.SELPA_QA_PUBLIC_SPORTS==='true') await addSportsPrivacyFixture(db
 if(process.env.SELPA_QA_RANKING==='true') await addRankingExperienceFixture(db)
 let unavailable=false
 let rankingRead='ready'
+let profileReadFailures=0,profileReadAttempts=0
 let financeScenario='empty',financeFail=''
 const identifier=s=>{if(!/^[a-z_][a-z_0-9]*$/.test(s))throw Error('identifier');return '"'+s+'"'}
 function predicate(key,expression,values) {
@@ -28,6 +29,14 @@ const server=http.createServer(async(request,response)=>{
   if(request.method==='OPTIONS') return send(200,{})
   const url=new URL(request.url,'http://127.0.0.1:45432')
   if(url.pathname==='/qa/health') return send(200,{ready:true})
+  if(process.env.SELPA_QA_RANKING_V2==='true' && url.pathname==='/qa/profile-read') {
+    const failures=url.searchParams.get('failures')
+    if(failures!==null) {
+      if(!/^[0-3]$/.test(failures))return send(400,{message:'Invalid synthetic failure count'})
+      profileReadFailures=Number(failures);profileReadAttempts=0
+    }
+    return send(200,{synthetic:true,remainingFailures:profileReadFailures,attempts:profileReadAttempts})
+  }
   if(url.pathname==='/qa/sports-privacy' && process.env.SELPA_QA_PUBLIC_SPORTS==='true') {
     const mode=url.searchParams.get('value')
     if(!['public','private'].includes(mode)) return send(400,{message:'Invalid synthetic visibility scenario'})
@@ -56,6 +65,28 @@ const server=http.createServer(async(request,response)=>{
     if(!actor && request.headers.authorization!=='Bearer '+QA_TOKEN) return send(401,{message:'Invalid QA token'})
     return send(200,{id:actor?.userId??PLAYER,email:actor?'qa-staff@invalid.test':'private-6@invalid.test',aud:'authenticated',role:'authenticated',user_metadata:{},app_metadata:{},created_at:'2026-01-01T00:00:00Z'})
   }
+  if(process.env.SELPA_QA_RANKING_V2==='true' && url.pathname==='/auth/v1/token' && request.method==='POST') {
+    let body='';for await(const chunk of request)body+=chunk
+    const input=JSON.parse(body||'{}')
+    const actor=QA_ACTORS.find(a=>input.email==='qa-'+a.role.toLowerCase()+'@selpa.test')
+    if(input.password!=='qa-local-only' || (!actor && input.email!=='qa-player@selpa.test'))return send(400,{message:'Invalid synthetic credentials'})
+    return send(200,{access_token:actor?.token??QA_TOKEN,refresh_token:'qa-local-only',token_type:'bearer',expires_in:3600,user:{id:actor?.userId??PLAYER,email:input.email,aud:'authenticated',role:'authenticated',user_metadata:{},app_metadata:{},created_at:'2026-01-01T00:00:00Z'}})
+  }
+  if(process.env.SELPA_QA_RANKING_V2==='true' && url.pathname==='/auth/v1/logout')return send(200,{})
+  if(process.env.SELPA_QA_RANKING_V2==='true' && url.pathname==='/rest/v1/competition_branches' && request.method==='PATCH') {
+    // Only the exact publication mutation under test; this loopback fixture
+    // never forwards a request or accepts an application data mutation.
+    if(request.headers.authorization!=='Bearer qa-service-local-only')return send(403,{message:'Synthetic service only'})
+    let body='';for await(const chunk of request)body+=chunk
+    const input=JSON.parse(body||'{}')
+    if(Object.keys(input).join(',')!=='is_visible'||typeof input.is_visible!=='boolean')return send(405,{message:'READ_ONLY_QA'})
+    const values=[input.is_visible],where=[]
+    for(const [key,value]of url.searchParams)if(!['select','order'].includes(key))where.push(predicate(key,value,values))
+    if(!['id','club_id','updated_at'].every(key=>url.searchParams.has(key)))return send(400,{message:'Missing synthetic mutation scope'})
+    const result=await db.query('update competition_branches set is_visible=$1,updated_at=clock_timestamp() where '+where.join(' and ')+' returning id,name,slug,is_active,is_visible,updated_at',values)
+    const singular=request.headers.accept?.includes('application/vnd.pgrst.object')
+    return singular && !result.rows.length?send(406,{code:'PGRST116',details:'The result contains 0 rows'}):send(200,singular?result.rows[0]:result.rows)
+  }
   // Reject mutations even in the synthetic store. Explicit read-only RPC allowlist.
   const rpcName=url.pathname.startsWith('/rest/v1/rpc/')?url.pathname.split('/').at(-1):null
   if(!['GET','HEAD'].includes(request.method) && !['read_player_career_summary','read_public_player_career_summary'].includes(rpcName) && !financeReadRpcs.has(rpcName)) return send(405,{message:'READ_ONLY_QA'})
@@ -73,6 +104,10 @@ const server=http.createServer(async(request,response)=>{
     }
     const table=url.pathname.split('/').at(-1)
     if(!url.pathname.startsWith('/rest/v1/')) return send(404,{message:'QA route missing'})
+    if(process.env.SELPA_QA_RANKING_V2==='true' && table==='club_memberships' && url.searchParams.get('select')?.replaceAll(' ','')==='club_id,role,status,approved_at') {
+      profileReadAttempts++
+      if(profileReadFailures>0){profileReadFailures--;return send(500,{code:'QA_PROFILE_TRANSIENT',message:'Synthetic transient membership read'})}
+    }
     if(rankingRead==='missing' && /standings/.test(table))return send(404,{code:'PGRST205',message:'Synthetic missing read model'})
     if((rankingRead==='transport' && /standings/.test(table)) || (rankingRead==='context' && table==='competition_seasons') || (rankingRead==='directory' && table==='clubs'))return send(503,{code:'PGRST000',message:'Synthetic unavailable read'})
     if(unavailable && /career|standings/.test(table))return send(503,{message:'QA unavailable'})
@@ -89,10 +124,13 @@ const server=http.createServer(async(request,response)=>{
     const columns=url.searchParams.get('select') ?? '*'
     // Relationship select syntax belongs to unrelated existing endpoints; this
     // fixture deliberately does not pretend to implement the full Data API.
-    const select=columns==='*'?'*':columns.split(',').map(identifier).join(',')
+    const nested=columns.match(/club:clubs\(([^()]*)\)/)
+    const basic=nested?columns.replace(nested[0],'club_id').split(','):columns.split(',')
+    const select=columns==='*'?'*':[...new Set(basic)].map(identifier).join(',')
     const order=url.searchParams.get('order')?.split(',').map(part=>{const [field,dir,nulls]=part.split('.');return identifier(field)+' '+(dir==='desc'?'desc':'asc')+(nulls==='nullslast'?' nulls last':'')}).join(',')
     const offset=Math.max(0,Number(url.searchParams.get('offset'))||0),limit=Math.max(0,Number(url.searchParams.get('limit'))||1000)
     const result=await db.query('select '+select+' from '+identifier(table)+filter+(order?' order by '+order:'')+' limit '+limit+' offset '+offset,values)
+    if(nested && ['club_memberships','club_players'].includes(table))for(const row of result.rows)row.club=(await db.query('select '+nested[1].split(',').map(identifier).join(',')+' from clubs where id=$1',[row.club_id])).rows[0]??null
     const countHeader={'content-range':`${offset}-${Math.max(offset,offset+result.rows.length-1)}/${count}`}
     const single=request.headers.accept?.includes('application/vnd.pgrst.object')
     if(single && result.rows.length!==1) return send(406,{code:'PGRST116',details:`The result contains ${result.rows.length} rows`,message:'JSON object requested, multiple (or no) rows returned'},countHeader)

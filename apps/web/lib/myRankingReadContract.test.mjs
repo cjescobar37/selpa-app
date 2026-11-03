@@ -35,6 +35,7 @@ function reader(options={}) {
     'server-only':{},'@/lib/supabaseAdmin':{supabaseAdmin:db},'@/lib/accountRoleServer':{},
     './player-career.rules':rules,'./public-ranking.presentation':presentation,'./my-ranking.state':state,
     './player-career.access':{PUBLIC_CAREER:{kind:'public'},assertCareerAccess(){},CareerAccessError:class extends Error{}},
+    './club-ranking.access':{assertClubRankingRead(access){if(access)throw Error('UNEXPECTED_ADMIN_ACCESS');return false}},
   })
   return {read:page=>repository.readMyRanking(identity,{kind:'self',userId:'user'},page),calls}
 }

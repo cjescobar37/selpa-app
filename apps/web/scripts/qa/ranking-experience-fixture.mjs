@@ -1,5 +1,5 @@
 /** Opt-in, local-only additions. Existing Block 1 fixtures and live data untouched. */
-import {CLUB,SEASON,id} from './block1-fixture.mjs'
+import {CLUB,SEASON,DIVISION,id} from './block1-fixture.mjs'
 
 export async function addRankingExperienceFixture(db) {
   await db.query('update profiles set avatar_url=$1,cover_url=$2 where user_id=$3',['/mock/player.jpg','/mock/avatar.jpg',id(1006)])
@@ -20,4 +20,34 @@ export async function addRankingExperienceFixture(db) {
     await db.query('insert into competition_player_entries(id,club_id,club_player_id,division_id,status) values($1,$2,$3,$4,$5)',[id(24000+n),CLUB,id(22000+n),id(24),'ACTIVE'])
     await db.query('insert into competition_point_transactions(id,club_id,season_id,division_id,player_entry_id,club_player_id,points,metadata,source_concept) values($1,$2,$3,$4,$5,$6,$7,$8,$9)',[id(25000+n),CLUB,SEASON,id(24),id(24000+n),id(22000+n),n===1?500:400,{},'OPENING_BALANCE'])
   }
+  if(process.env.SELPA_QA_RANKING_V2==='true')await addPremiumRankingFixture(db)
+}
+
+/** Synthetic published awards, never a replacement for engine acceptance QA.
+ * The production projection computes every displayed position/point itself. */
+async function addPremiumRankingFixture(db) {
+  await db.query('update clubs set name=$1 where id=$2',['Club QA · Ranking',CLUB])
+  await db.query("update competition_branches set name=case slug when 'caballeros' then 'Caballeros' else 'Damas' end")
+  await db.query('insert into competition_segments(id,club_id,name,is_active,is_visible) values($1,$2,$3,true,true)',[id(35),CLUB,'Libres'])
+  await db.query('update competition_divisions set segment_id=$1 where id=$2',[id(35),id(21)])
+  await db.query('insert into competition_divisions(id,club_id,season_id,branch_id,category_id,modality,is_active) values($1,$2,$3,$4,$5,$6,true)',[id(23),CLUB,SEASON,id(31),id(41),'PAIRS'])
+  await db.query('insert into competition_branches(id,club_id,slug,name,sort_order) values($1,$2,$3,$4,30)',[id(34),CLUB,'mixto','Mixto'])
+  for(const [division,mode,segment] of [[26,'PAIRS',id(35)],[27,'INDIVIDUAL',null]]) {
+    await db.query('insert into competition_divisions(id,club_id,season_id,branch_id,category_id,modality,segment_id,is_active) values($1,$2,$3,$4,$5,$6,$7,true)',[id(division),CLUB,SEASON,id(34),id(41),mode,segment])
+  }
+  const numbers=Array.from({length:40},(_,n)=>n+1).filter(n=>![2,6,10,20].includes(n))
+  async function pair(n,players,division=DIVISION,pairsDivision=id(21)) {
+    const settlement=id(96000+n),team=id(96100+n),homologation=id(96200+n)
+    await db.query('insert into competition_event_settlements(id,club_id,homologation_id,event_division_id,status) values($1,$2,$3,$4,$5)',[settlement,CLUB,homologation,id(99006),'PUBLISHED'])
+    for(const [index,player] of players.entries()) {
+      const participant=id(96300+n*2+index),award=id(96400+n*2+index)
+      await db.query('insert into competition_event_homologation_participants(id,club_id,homologation_id,club_player_id,player_id,tournament_team_id) values($1,$2,$3,$4,$5,$6)',[participant,CLUB,homologation,player.clubPlayerId,player.userId,team])
+      await db.query('insert into competition_event_settlement_awards(id,club_id,player_id,settlement_id,homologation_participant_id) values($1,$2,$3,$4,$5)',[award,CLUB,player.userId,settlement,participant])
+      await db.query('insert into competition_point_transactions(id,club_id,season_id,division_id,player_entry_id,club_player_id,points,metadata,source_concept) values($1,$2,$3,$4,$5,$6,$7,$8,$9)',[id(96500+n*2+index),CLUB,SEASON,division,player.entryId,player.clubPlayerId,(19-n)*100,{award_id:award,pairs_division_id:pairsDivision},'COMPETITION_EVENT_SETTLEMENT'])
+    }
+  }
+  for(let n=0;n<18;n++)await pair(n,numbers.slice(n*2,n*2+2).map(value=>({userId:id(1000+value),clubPlayerId:id(2000+value),entryId:id(3000+value)})))
+  const mixed=[{userId:id(1020),clubPlayerId:id(2020),entryId:id(97800)},{userId:id(21001),clubPlayerId:id(22001),entryId:id(97801)}]
+  for(const player of mixed)await db.query('insert into competition_player_entries(id,club_id,club_player_id,division_id,status) values($1,$2,$3,$4,$5)',[player.entryId,CLUB,player.clubPlayerId,id(27),'ACTIVE'])
+  await pair(18,mixed,id(27),id(26))
 }

@@ -19,7 +19,7 @@ export default function PlayerClubRankingPage() {
     for(const key of ['gender','division','season','q','page']) {
       const value=params.get(key);if(value)query.set(key,value)
     }
-    query.set('modality',params.get('view')==='pairs' || params.get('modality')==='PAIRS'?'PAIRS':'INDIVIDUAL')
+    query.set('modality',params.get('view')==='individual' || params.get('modality')==='INDIVIDUAL'?'INDIVIDUAL':'PAIRS')
     router.replace('/ranking?'+query)
   },[params,router,session.activeClubId,session.status])
   return <PlayerStatePanel kind="loading" title="Abriendo ranking del club" message="La misma posición, también al buscar y paginar." compact/>

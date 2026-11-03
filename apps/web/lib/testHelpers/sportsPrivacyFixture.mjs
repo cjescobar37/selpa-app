@@ -4,12 +4,16 @@ import {id,CLUB,SEASON} from '../../scripts/qa/block1-fixture.mjs'
 export async function addSportsPrivacyFixture(db,{installReadModels=true,schemaReady=false}={}){
   if(!schemaReady)await db.exec(`
     alter table competition_seasons add column is_public boolean not null default true;
+    alter table competition_seasons add column starts_on date default '2026-01-01';
     alter table competition_divisions add column is_visible boolean not null default true;
     alter table competition_branches add column is_visible boolean not null default true;
     alter table competition_branches add column is_active boolean not null default true;
+    alter table competition_branches add column name text;
+    alter table competition_branches add column sort_order integer default 0;
+    alter table competition_branches add column updated_at timestamptz default now();
     alter table competition_categories add column is_visible boolean not null default true;
     alter table competition_categories add column is_active boolean not null default true;
-    create table competition_segments(id uuid,club_id uuid,is_active boolean,is_visible boolean);
+    create table competition_segments(id uuid,club_id uuid,name text,is_active boolean,is_visible boolean);
     create table competition_series(id uuid,club_id uuid,season_id uuid,is_public boolean,status text,archived_at timestamptz);
     create table competition_series_events(id uuid,club_id uuid,series_id uuid,season_id uuid,is_public boolean,status text,archived_at timestamptz);
     alter table competition_series_event_divisions add column event_id uuid;

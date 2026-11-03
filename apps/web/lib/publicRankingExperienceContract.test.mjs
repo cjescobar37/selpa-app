@@ -23,11 +23,11 @@ const standing=(position,points,id=position)=>({position,ranking_points:points,c
 test('presentation preserves official positions, points, privacy and tied leaders',()=>{
   const entries=rules.individualRankingEntries([standing(1,900,1),standing(1,900,2),standing(3,750),standing(5,600),standing(26,50)])
   const tiers=rules.rankingTiers(entries)
-  assert.deepEqual(Array.from(tiers.leaders,row=>row.position),[1,1])
-  assert.deepEqual(Array.from(tiers.challengers,row=>row.position),[3,5])
+  assert.deepEqual(Array.from(tiers.leaders,row=>row.position),[1,1,3])
+  assert.deepEqual(Array.from(tiers.challengers,row=>row.position),[5])
   assert.equal(tiers.rest[0].position,26)
-  assert.equal(tiers.challengers[1].points,600)
-  assert.equal(tiers.challengers[1].href,'/jugadores/user5?clubId=club')
+  assert.equal(tiers.challengers[0].points,600)
+  assert.equal(tiers.challengers[0].href,'/jugadores/user5?clubId=club')
   assert.doesNotMatch(JSON.stringify(entries),/email|phone|birth|role|finance/)
 })
 test('search at #5 is a challenger, never promoted to a fictitious leader',()=>{
@@ -46,17 +46,17 @@ test('gender and modality change match the same canonical category, not stale di
   assert.equal(rules.rankingContext(contexts,{},'INDIVIDUAL').gender,'M')
   assert.equal(rules.rankingContext([context('F')],{},'INDIVIDUAL').gender,'F')
 })
-test('published default uses greatest canonical population, not category number or M preference',()=>{
+test('default keeps Caballeros and chooses its populated category without changing official ranks',()=>{
   const all=[{...context('M','INDIVIDUAL',1),rankedCount:3},{...context('F','INDIVIDUAL',7),rankedCount:9},{...context('M','PAIRS',7),rankedCount:999}]
-  assert.equal(rules.rankingContext(all,{},'INDIVIDUAL').divisionId,'FINDIVIDUAL7')
+  assert.equal(rules.rankingContext(all,{},'INDIVIDUAL').divisionId,'MINDIVIDUAL1')
   assert.equal(rules.rankingContext(all,{gender:'M'},'INDIVIDUAL').divisionId,'MINDIVIDUAL1')
   assert.equal(rules.rankingContext(all,{category:'1'},'INDIVIDUAL').divisionId,'MINDIVIDUAL1')
   assert.equal(rules.rankingContext(all,{division:'MINDIVIDUAL1'},'INDIVIDUAL').divisionId,'MINDIVIDUAL1')
 })
-test('tied populations use UUID order; no published division is an honest empty',()=>{
+test('tied populations use UUID order; configured empty categories remain selectable',()=>{
   const a={...context(),divisionId:'a',rankedCount:8},b={...context('F'),divisionId:'b',rankedCount:8}
   assert.equal(rules.rankingContext([b,a],{},'INDIVIDUAL').divisionId,'a')
-  assert.equal(rules.rankingContext([{...a,rankedCount:0}],{},'INDIVIDUAL'),null)
+  assert.equal(rules.rankingContext([{...a,rankedCount:0}],{},'INDIVIDUAL').divisionId,'a')
   assert.equal(rules.rankingContext([{...a,rankedCount:0}],{category:'6'},'INDIVIDUAL').divisionId,'a')
 })
 test('registration never promotes payment evidence or checkout return into a confirmed place',()=>{
@@ -118,7 +118,7 @@ async function route(reads,params={clubId:'00000000-0000-4000-8000-000000000001'
   const club={id:params.clubId,name:'Club',logo_url:null,theme_key:null}
   const scope={...context(),clubId:club.id}
   const repo={readPublicClub:async()=>({clubs:[club],count:1}),readRankingDirectory:async()=>({clubs:[club],count:1}),
-    readRankingContexts:async()=>[scope],readPublicRankingSeasons:async()=>[],readPublishedRankingContexts:async contexts=>contexts.map(c=>({...c,rankedCount:0})),readRankingPage:async()=>({rows:[],count:0,page:1,pageSize:25,context:scope}),
+    readRankingContexts:async()=>[scope],readPublicRankingSeasons:async()=>[],readRankingBranches:async()=>['M','F'],readPublishedRankingContexts:async contexts=>contexts.map(c=>({...c,rankedCount:0})),readRankingPage:async()=>({rows:[],count:0,page:1,pageSize:25,context:scope}),
     readPairRankingPage:async()=>({rows:[],count:0}),readRankingPresentation:async()=>({counts:{M:0,F:0},leaderPoints:null}),...reads}
   const rankingView=()=>null
   const page=compile('../app/ranking/page.tsx',{

@@ -1,49 +1,63 @@
 'use client'
+
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
-import { Check, ChevronDown, Layers3, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import type { RankingContext } from '@/features/player-career/player-career.types'
 import { rankingBranchHref, rankingHref, type RankingSearch } from '@/features/player-career/public-ranking.presentation'
 import styles from './RankingDiscovery.module.css'
 
-export default function RankingDiscovery({contexts,current,params,seasons=[]}:{contexts:RankingContext[];current:RankingContext|null;params:RankingSearch;seasons?:Array<{id:string;name:string}>}) {
-  const router=useRouter()
-  const dialog=useRef<HTMLDialogElement>(null)
-  const [searchOpen,setSearchOpen]=useState(Boolean(params.q))
-  const modality=params.modality ?? 'INDIVIDUAL',gender=current?.gender ?? params.gender ?? 'M'
-  const categories=contexts.filter(c=>c.modality===modality && c.gender===gender)
-  const modalities=[...new Set(contexts.map(c=>c.modality))]
-  const searchRef=useRef<HTMLInputElement>(null)
+const categoryKey = (c: RankingContext) => c.categoryId ?? String(c.category ?? c.categoryName)
+
+export default function RankingDiscovery({ contexts, current, params, seasons = [], enabledBranches }: {
+  contexts: RankingContext[]; current: RankingContext | null; params: RankingSearch; seasons?: Array<{ id: string; name: string }>; enabledBranches?: Array<'M' | 'F' | 'MIXED'>;
+}) {
+  const router = useRouter()
+  const [searchOpen, setSearchOpen] = useState(Boolean(params.q))
+  const searchRef = useRef<HTMLInputElement>(null)
+  const modality = params.modality ?? 'PAIRS'
+  const gender = current?.gender ?? params.gender ?? 'M'
+  const available = contexts.filter(c => c.modality === modality && c.gender === gender)
+  const categories = [...new Map(available.map(c => [categoryKey(c), c])).values()]
+  const groups = current ? available.filter(c => categoryKey(c) === categoryKey(current)) : []
+  const branches = (enabledBranches ?? ['M', 'F', 'MIXED']).filter(branch => branch !== 'MIXED' || contexts.some(c => c.gender === 'MIXED'))
+  function categoryHref(category: RankingContext) {
+    const target = available.find(c => categoryKey(c) === categoryKey(category) && c.segmentId === current?.segmentId) ?? category
+    return rankingHref(params, { division: target.divisionId, category: target.category === null ? undefined : String(target.category), page: undefined })
+  }
+  function modeHref(mode: string) {
+    const target = current && contexts.find(c => c.modality === mode && c.gender === gender && categoryKey(c) === categoryKey(current) && c.segmentId === current.segmentId)
+    return rankingHref(params, { modality: mode, gender, division: target ? target.divisionId : undefined, category: target?.category == null ? undefined : String(target.category), page: undefined })
+  }
   return <div className={styles.discovery}>
-    <nav className={styles.branches} aria-label="Ranking por rama">{(['M','F',...(contexts.some(c=>c.gender==='MIXED')?['MIXED' as const]:[])] as const).map(branch=><Link key={branch} data-branch={branch} aria-current={gender===branch?'page':undefined}
-      href={rankingBranchHref(params,branch,current?.category,contexts)}>{branch==='M'?'Caballeros':branch==='F'?'Damas':'Mixto'}</Link>)}</nav>
-    {seasons.length ? <label className={styles.season}>Temporada<select aria-label="Temporada del ranking" value={params.season ?? current?.seasonId ?? ''} onChange={event=>router.push(rankingHref(params,{season:event.target.value || undefined,division:undefined,category:undefined,page:undefined}))}>
-      <option value="">Temporada activa</option>{seasons.map(season=><option key={season.id} value={season.id}>{season.name}</option>)}
-    </select></label> : null}
-    <div className={styles.tools}>
-      <button type="button" aria-haspopup="dialog" onClick={()=>dialog.current?.showModal()}>{current?.categoryName ?? 'Elegir categoría'}<ChevronDown size={17}/></button>
-      {modalities.length>1?<nav className={styles.modes} aria-label="Modalidad">{modalities.map(mode=><Link key={mode} aria-current={modality===mode?'page':undefined} href={rankingHref(params,{modality:mode,division:undefined,category:undefined,page:undefined})}>{mode==='PAIRS'?'Parejas':'Individual'}</Link>)}</nav>:null}
-      <button type="button" className={styles.searchToggle} aria-label="Buscar jugador" aria-expanded={searchOpen} onClick={()=>{setSearchOpen(v=>!v);requestAnimationFrame(()=>searchRef.current?.focus())}}><Search size={19}/></button>
+    <nav className={styles.modes} aria-label="Modalidad de ranking">
+      {['PAIRS', 'INDIVIDUAL'].map(mode => <Link key={mode} href={modeHref(mode)} aria-current={modality === mode ? 'page' : undefined}>{mode === 'PAIRS' ? 'Parejas' : 'Individual'}</Link>)}
+    </nav>
+    <nav className={styles.branches} aria-label="Ranking por rama">
+      {branches.map(branch => <Link key={branch} data-branch={branch} aria-current={gender === branch ? 'page' : undefined}
+        href={rankingBranchHref(params, branch, current?.category, contexts)}>{branch === 'M' ? 'Caballeros' : branch === 'F' ? 'Damas' : 'Mixto'}</Link>)}
+    </nav>
+    {categories.length ? <nav className={styles.categories} aria-label="Categorías del club">
+      {categories.map(category => <Link key={categoryKey(category)} href={categoryHref(category)} aria-current={current && categoryKey(current) === categoryKey(category) ? 'page' : undefined}>{category.categoryName}</Link>)}
+    </nav> : null}
+    <div className={styles.secondary}>
+      {seasons.length ? <label className={styles.season}><span>Temporada</span>
+        <select aria-label="Temporada del ranking" value={params.season ?? current?.seasonId ?? ''} onChange={event => router.push(rankingHref(params, { season: event.target.value, division: undefined, category: undefined, page: undefined }))}>
+          {!current && !params.season ? <option value="">Elegir</option> : null}
+          {seasons.map(season => <option key={season.id} value={season.id}>{season.name.replace(/^Temporada +/i, '')}</option>)}
+        </select>
+      </label> : <span />}
+      {groups.length > 1 ? <label className={styles.group}><span>Grupo</span><select aria-label="Grupo del ranking" value={current?.divisionId} onChange={event => router.push(rankingHref(params, { division: event.target.value, page: undefined }))}>
+        {groups.map(group => <option key={group.divisionId} value={group.divisionId}>{group.segmentName ?? 'General'}</option>)}
+      </select></label> : null}
+      <button type="button" className={styles.searchToggle} aria-label="Buscar en el ranking" aria-expanded={searchOpen} onClick={() => { setSearchOpen(v => !v); requestAnimationFrame(() => searchRef.current?.focus()) }}><Search size={18} aria-hidden="true" /></button>
     </div>
-    {searchOpen?<form className={styles.search} action={params.demo==='1'?'/preview/demo':'/ranking'} method="get">
-      {Object.entries(params).filter(([key,value])=>value && !['q','page','club'].includes(key)).map(([key,value])=><input key={key} type="hidden" name={key} value={value}/>)}
-      <label><span>Buscar {modality==='PAIRS'?'pareja':'jugador'}</span><input ref={searchRef} name="q" defaultValue={params.q ?? ''} maxLength={80} placeholder="Nombre" type="search"/></label>
-      <button type="submit" aria-label="Buscar"><Search size={18}/></button>
-      {params.q?<Link href={rankingHref(params,{q:undefined,page:undefined})} aria-label="Limpiar búsqueda"><X size={18}/></Link>:null}
-    </form>:null}
-    <dialog ref={dialog} className={styles.sheet} aria-labelledby="ranking-category-title" onClick={event=>{
-      const sheet=dialog.current
-      if(event.target!==sheet || !sheet)return
-      const box=sheet.getBoundingClientRect()
-      if(event.clientX<box.left || event.clientX>box.right || event.clientY<box.top || event.clientY>box.bottom)sheet.close()
-    }}>
-      <div className={styles.sheetHandle} aria-hidden="true"/>
-      <header><h2 id="ranking-category-title">Elegí categoría</h2><button type="button" autoFocus aria-label="Cerrar categorías" onClick={()=>dialog.current?.close()}><X size={20}/></button></header>
-      <p>{gender==='F'?'Damas':gender==='MIXED'?'Mixto':'Caballeros'} · {modality==='PAIRS'?'Parejas':'Individual'}</p>
-      <nav aria-label="Categorías">{categories.map(c=><Link key={c.divisionId} aria-current={current?.divisionId===c.divisionId?'page':undefined} onClick={()=>dialog.current?.close()}
-        href={rankingHref(params,{division:c.divisionId,category:c.category===null?undefined:String(c.category),page:undefined})}><strong>{c.categoryName}</strong><span>{c.rankedCount===undefined?'Lectura no disponible':c.rankedCount>0?`${c.rankedCount} ${modality==='PAIRS'?'parejas':'jugadores'} rankeados`:'Sin ranking publicado'}</span>{current?.divisionId===c.divisionId?<Check size={18} aria-hidden="true"/>:null}</Link>)}</nav>
-      {!categories.length?<div className={styles.sheetEmpty}><Layers3 size={24} aria-hidden="true"/><strong>Sin categorías disponibles</strong><p>No hay una categoría disponible para esta rama. Podés explorar los rankings de otros clubes.</p><Link href="/ranking" onClick={()=>dialog.current?.close()}>Ver clubes</Link></div>:null}
-    </dialog>
+    {searchOpen ? <form className={styles.search} action={params.demo === '1' ? '/preview/demo' : params.scope === 'club' ? '/club/ranking' : '/ranking'} method="get">
+      {Object.entries(params).filter(([key, value]) => value && !['q', 'page', 'club', 'scope'].includes(key)).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
+      <label><span className={styles.srOnly}>Buscar {modality === 'PAIRS' ? 'pareja' : 'jugador'}</span><input key={params.q ?? ''} ref={searchRef} name="q" defaultValue={params.q ?? ''} maxLength={80} placeholder="Buscar por nombre" type="search" /></label>
+      <button type="submit" aria-label="Buscar"><Search size={18} aria-hidden="true" /></button>
+      {params.q ? <Link href={rankingHref(params, { q: undefined, page: undefined })} aria-label="Limpiar búsqueda"><X size={18} aria-hidden="true" /></Link> : null}
+    </form> : null}
   </div>
 }

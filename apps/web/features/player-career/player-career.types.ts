@@ -28,5 +28,5 @@ export type CareerHistoryRow = {
   result_role: string; final_position: number | null; points: number | null;
 }
 export type CareerRecentRow = { id: string; tournament_name: string; tournament_id: string; sports_date: string | null; won: boolean }
-export type RankingContext = { clubId: string; seasonId: string; seasonName: string; divisionId: string; category: number | null; categoryName: string; gender: string; modality: string; rankedCount?: number }
+export type RankingContext = { clubId: string; seasonId: string; seasonName: string; divisionId: string; category: number | null; categoryName: string; gender: string; modality: string; rankedCount?: number; categoryId?: string | null; segmentId?: string | null; segmentName?: string | null }
 export type RankingPage = { rows: SportsStanding[]; count: number; page: number; pageSize: number; context: RankingContext | null }

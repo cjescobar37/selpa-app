@@ -5,6 +5,7 @@ import {createRequire} from 'node:module'
 import {runInNewContext} from 'node:vm'
 const require=createRequire(new URL('../package.json',import.meta.url))
 const ts=require('typescript')
+const sdk=require('@supabase/supabase-js')
 function moduleFrom(file, globals) {
   const exports={}
   runInNewContext(ts.transpileModule(readFileSync(new URL(file,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,URL,TypeError,...globals})
@@ -14,15 +15,36 @@ function setup(statuses, options={}) {
   let reads=0,refreshes=0,sessionReads=0
   const attempts=[],delays=[],diagnostics=[]
   const session=()=>({user:{id:options.otherUser?'other':'player'},access_token:refreshes?'renewed':'initial'})
-  const auth={getCurrentSession:async()=>({data:{session:options.sessions ? options.sessions[Math.min(sessionReads++,options.sessions.length-1)] : session()}}),supabase:{auth:{refreshSession:async()=>{refreshes++;return {data:{session:session()},error:options.refreshError?new Error('EXPIRED'):null}}}}}
-  const api=moduleFrom('./playerProfileRead.ts',{require:()=>auth,fetch:async(url,init)=>{
+  const auth={getCurrentSession:async()=>{const index=sessionReads++;return {data:{session:options.sessions ? options.sessions[Math.min(index,options.sessions.length-1)] : session()},error:options.sessionErrors?.[Math.min(index,options.sessionErrors.length-1)]??null}},supabase:{auth:{refreshSession:async()=>{refreshes++;return {data:{session:session()},error:options.refreshError?new Error('EXPIRED'):null}}}}}
+  const api=moduleFrom('./playerProfileRead.ts',{require:name=>name==='@supabase/supabase-js'?sdk:auth,fetch:async(url,init)=>{
     attempts.push({url,token:init.headers.Authorization,signal:init.signal})
     const value=statuses[Math.min(reads++,statuses.length-1)]
     if(value==='network')throw new TypeError('Failed to fetch')
     return {status:value,ok:value===200,json:async()=>{if(options.invalidJson)throw new SyntaxError('Invalid JSON');return {memberships:[]}}}
   },setTimeout:(callback,delay)=>{delays.push(delay);if(!options.holdBackoff)queueMicrotask(callback);return delays.length},clearTimeout:()=>{},console:{warn:(...args)=>diagnostics.push(args)}})
-  return {read:api.readPlayerProfile,attempts,delays,diagnostics,counts:()=>({reads,refreshes})}
+  return {read:api.readPlayerProfile,attempts,delays,diagnostics,counts:()=>({reads,refreshes}),sessionCounts:()=>sessionReads}
 }
+
+for(const status of [0,503])test(`session transport ${status} recovers before the first private GET`,async()=>{
+ const session={user:{id:'player'},access_token:'initial'}
+ const app=setup([200],{sessions:[null,session],sessionErrors:[new sdk.AuthRetryableFetchError('Synthetic auth transport failure',status),null]})
+ await app.read('/api/profile','player',new AbortController().signal)
+ assert.equal(app.sessionCounts(),2);assert.equal(app.counts().reads,1);assert.deepEqual(app.delays,[300])
+})
+test('session transport retries remain bounded and share the HTTP backoff budget',async()=>{
+ const session={user:{id:'player'},access_token:'initial'},failure=new sdk.AuthRetryableFetchError('Synthetic auth transport failure',503)
+ const app=setup([503,200],{sessions:[null,session],sessionErrors:[failure,null]})
+ await app.read('/api/profile','player',new AbortController().signal)
+ assert.equal(app.sessionCounts(),3);assert.equal(app.counts().reads,2);assert.deepEqual(app.delays,[300,900])
+ const persistent=setup([200],{sessions:[null],sessionErrors:[failure]})
+ await assert.rejects(persistent.read('/api/profile','player',new AbortController().signal))
+ assert.equal(persistent.sessionCounts(),3);assert.equal(persistent.counts().reads,0);assert.deepEqual(persistent.delays,[300,900])
+})
+test('non-transient SDK session denial never retries or issues a private GET',async()=>{
+ const app=setup([200],{sessions:[null],sessionErrors:[new sdk.AuthApiError('Synthetic denied session',403,'forbidden')]})
+ await assert.rejects(app.read('/api/profile','player',new AbortController().signal))
+ assert.equal(app.sessionCounts(),1);assert.equal(app.counts().reads,0);assert.deepEqual(app.delays,[])
+})
 test('profile GET waits for session and recovers an expired JWT once',async()=>{
  const app=setup([401,200]);await app.read('/api/profile','player',new AbortController().signal)
  assert.deepEqual(app.counts(),{reads:2,refreshes:1});assert.deepEqual(app.attempts.map(x=>x.token),['Bearer initial','Bearer renewed'])

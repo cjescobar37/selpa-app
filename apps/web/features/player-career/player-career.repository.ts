@@ -5,6 +5,7 @@ import { pageNumber, validId, winRate } from './player-career.rules'
 import { rankingReadIssue } from './public-ranking.presentation'
 import { myRankingState } from './my-ranking.state'
 import { PUBLIC_CAREER, CareerAccessError, assertCareerAccess, type CareerAccess } from './player-career.access'
+import { assertClubRankingRead, type ClubRankingAccess } from './club-ranking.access'
 import type { CareerHistoryRow, CareerIdentity, CareerRecentRow, CareerStats, CareerSummary, RankingContext, RankingPage, SportsStanding } from './player-career.types'
 
 const STANDING = 'club_player_id,club_id,user_id,player_entry_id,full_name,avatar_url,category,category_name,gender,season_id,season_name,division_id,modality,ranking_points,position,is_tied,ordinal'
@@ -135,32 +136,71 @@ export async function readCareerHistory(identity: CareerIdentity, page=1, recent
   return {rows:((result.data ?? []) as unknown as CareerHistoryRow[]).slice(0,10),hasMore:(result.data?.length ?? 0)>10,page}
 }
 
-export async function readRankingContexts(clubId: string, seasonId?: string | null): Promise<RankingContext[]> {
+export async function readRankingContexts(clubId: string, seasonId?: string | null, access?:ClubRankingAccess): Promise<RankingContext[]> {
   if (!validId(clubId)) return []
-  const season=await activeSeason(clubId,seasonId); if (!season) return []
-  const divisions=await catalog<{id:string;category_id:string;branch_id:string;modality:string}>((from,to)=>db.from('public_competition_contexts_read')
-    .select('id,category_id,branch_id,modality').eq('club_id',clubId).eq('season_id',season.id).eq('is_active',true)
-    .in('modality',['INDIVIDUAL','PAIRS']).is('segment_id',null).order('id').range(from,to))
-  const [categories,branches]=await Promise.all([
-    catalog<{id:string;legacy_category_id:number|null;name:string}>((from,to)=>db.from('competition_categories').select('id,legacy_category_id,name').eq('club_id',clubId).order('id').range(from,to)),
-    catalog<{id:string;slug:string}>((from,to)=>db.from('competition_branches').select('id,slug').eq('club_id',clubId).order('id').range(from,to)),
+  const internal=assertClubRankingRead(access,clubId)
+  const seasons=await readPublicRankingSeasons(clubId,access)
+  const season=seasonId ? seasons.find(s=>s.id===seasonId) : seasons.find(s=>s.status==='ACTIVE') ?? seasons[0]
+  if (!season) return []
+  const divisions=await catalog<{id:string;category_id:string|null;branch_id:string;segment_id:string|null;modality:string}>((from,to)=>{
+    const query=db.from(internal?'competition_divisions':'public_competition_contexts_read')
+      .select('id,category_id,branch_id,segment_id,modality').eq('club_id',clubId).eq('season_id',season.id).eq('is_active',true).in('modality',['INDIVIDUAL','PAIRS'])
+    if (!internal) query.eq('is_visible',true)
+    return query.order('id').range(from,to)
+  })
+  const offer=(table:string,fields:string,from:number,to:number)=>{
+    const query=db.from(table).select(fields).eq('club_id',clubId).eq('is_active',true)
+    if (!internal) query.eq('is_visible',true)
+    return query.order('id').range(from,to)
+  }
+  const [categories,branches,segments]=await Promise.all([
+    catalog<{id:string;legacy_category_id:number|null;name:string}>((from,to)=>offer('competition_categories','id,legacy_category_id,name',from,to)),
+    catalog<{id:string;slug:string}>((from,to)=>offer('competition_branches','id,slug',from,to)),
+    catalog<{id:string;name:string}>((from,to)=>offer('competition_segments','id,name',from,to)),
   ])
-  return divisions.map(d=>{const cat=categories.find(c=>c.id===d.category_id);const branch=branches.find(b=>b.id===d.branch_id)
-    return {clubId,seasonId:season.id,seasonName:season.name,divisionId:d.id,modality:d.modality,category:cat?.legacy_category_id ?? null,categoryName:cat?.name ?? 'Sin categoría',gender:branch?.slug==='damas'?'F':branch?.slug==='caballeros'?'M':'MIXED'}
-  }).filter(c=>c.modality==='PAIRS' || (c.gender!=='MIXED' && c.category!==null && c.category>=1 && c.category<=7))
+  return divisions.flatMap(d=>{const cat=categories.find(c=>c.id===d.category_id);const branch=branches.find(b=>b.id===d.branch_id);const segment=segments.find(s=>s.id===d.segment_id)
+    const gender=branch?.slug==='damas'?'F':branch?.slug==='caballeros'?'M':branch?.slug==='mixto'?'MIXED':null
+    if (!gender || (d.category_id && !cat) || (d.segment_id && !segment)) return []
+    return [{clubId,seasonId:season.id,seasonName:season.name,divisionId:d.id,modality:d.modality,category:cat?.legacy_category_id ?? null,categoryName:cat?.name ?? 'Sin categoría',gender,categoryId:d.category_id,segmentId:d.segment_id,segmentName:segment?.name ?? null}]
+  }).filter(c=>c.modality==='PAIRS' || (!c.segmentId && c.gender!=='MIXED' && c.category!==null && c.category>=1 && c.category<=7))
     .sort((a,b)=>(a.category ?? 99)-(b.category ?? 99)||a.gender.localeCompare(b.gender)||a.divisionId.localeCompare(b.divisionId))
 }
 
-export async function readPublicRankingSeasons(clubId:string) {
+export async function readPublicRankingSeasons(clubId:string,access?:ClubRankingAccess) {
   if (!validId(clubId)) return []
-  return catalog<{id:string;name:string;status:string}>((from,to)=>db.from('competition_seasons').select('id,name,status')
-    .eq('club_id',clubId).eq('is_public',true).in('status',['ACTIVE','CLOSED']).order('id',{ascending:false}).range(from,to))
+  const internal=assertClubRankingRead(access,clubId)
+  return catalog<{id:string;name:string;status:string;is_public:boolean}>((from,to)=>{
+    const query=db.from('competition_seasons').select('id,name,status,is_public').eq('club_id',clubId).in('status',['ACTIVE','CLOSED'])
+    if (!internal) query.eq('is_public',true)
+    return query.order('starts_on',{ascending:false}).order('id').range(from,to)
+  })
 }
 
-export async function readRankingPage(context: RankingContext | null, query='', page=1): Promise<RankingPage> {
+/** Hidden offer metadata requires the same verified club capability as standings. */
+export async function readRankingBranches(clubId:string,access?:ClubRankingAccess):Promise<Array<'M'|'F'|'MIXED'>> {
+  if (!validId(clubId)) return []
+  const internal=assertClubRankingRead(access,clubId)
+  const query=db.from('competition_branches').select('slug').eq('club_id',clubId).eq('is_active',true)
+  if (!internal) query.eq('is_visible',true)
+  const result=await query
+  assertRead(result.error)
+  const slugs=new Set((result.data ?? []).map(row=>row.slug))
+  return (['M','F','MIXED'] as const).filter(branch=>slugs.has(branch==='M'?'caballeros':branch==='F'?'damas':'mixto'))
+}
+
+export async function readRankingContextPublished(context:RankingContext|null) {
+  if (!context) return false
+  const result=await db.from('public_competition_contexts_read').select('id').eq('club_id',context.clubId)
+    .eq('season_id',context.seasonId).eq('id',context.divisionId).limit(1)
+  assertRead(result.error)
+  return Boolean(result.data?.length)
+}
+
+export async function readRankingPage(context: RankingContext | null, query='', page=1,access?:ClubRankingAccess): Promise<RankingPage> {
   if (!context) return {rows:[],count:0,page:1,pageSize:PAGE_SIZE,context:null}
   const current=pageNumber(String(page));const start=(current-1)*PAGE_SIZE
-  const request=db.from('public_player_standings_read').select(STANDING,{count:'exact'})
+  const internal=assertClubRankingRead(access,context.clubId)
+  const request=db.from(internal?'competition_player_standings_read':'public_player_standings_read').select(STANDING,{count:'exact'})
     .eq('club_id',context.clubId).eq('season_id',context.seasonId).eq('division_id',context.divisionId)
   const search=query.trim().slice(0,80).replace(/[%_,()]/g,' ')
   if (search) request.ilike('full_name',`%${search}%`)
@@ -172,11 +212,13 @@ export async function readRankingPage(context: RankingContext | null, query='', 
  * Bounded count reads in batches, at most one division UUID per query; no player
  * names, roster or ledger downloaded. GET preserves missing-object diagnostics
  * (the installed SDK maps an empty HEAD 404 to 204). */
-export async function readPublishedRankingContexts(contexts: RankingContext[]): Promise<RankingContext[]> {
+export async function readPublishedRankingContexts(contexts: RankingContext[],access?:ClubRankingAccess): Promise<RankingContext[]> {
   const result: RankingContext[]=[]
   for (let offset=0;offset<contexts.length;offset+=4) {
     result.push(...await Promise.all(contexts.slice(offset,offset+4).map(async context=>{
-      const read=await db.from(context.modality==='PAIRS'?'public_pair_standings_read':'public_player_standings_read')
+      const internal=assertClubRankingRead(access,context.clubId)
+      const table=context.modality==='PAIRS'?(internal?'competition_pair_standings_read':'public_pair_standings_read'):(internal?'competition_player_standings_read':'public_player_standings_read')
+      const read=await db.from(table)
         .select('division_id',{count:'exact'}).eq('club_id',context.clubId)
         .eq('season_id',context.seasonId).eq('division_id',context.divisionId).limit(1)
       assertRead(read.error)
@@ -284,13 +326,43 @@ export async function readPublicClub(clubId:string) {
   assertRead(result.error);return {clubs:result.data ? [result.data]:[],count:result.data?1:0}
 }
 
-export async function readPairRankingPage(context:RankingContext|null,query='',page=1) {
+export async function readPairRankingPage(context:RankingContext|null,query='',page=1,access?:ClubRankingAccess) {
   if (!context) return {rows:[],count:0}
-  const request=db.from('public_pair_standings_read').select('partnership_id,player1_user_id,player2_user_id,player1_name,player2_name,player1_avatar_url,player2_avatar_url,combined_points,position',{count:'exact'})
+  const internal=assertClubRankingRead(access,context.clubId)
+  const request=db.from(internal?'competition_pair_standings_read':'public_pair_standings_read').select('partnership_id,player1_user_id,player2_user_id,player1_name,player2_name,player1_avatar_url,player2_avatar_url,combined_points,position',{count:'exact'})
     .eq('club_id',context.clubId).eq('season_id',context.seasonId).eq('division_id',context.divisionId)
   const search=query.trim().slice(0,80).replace(/[%_,().]/g,' ')
   if (search) request.or(`player1_name.ilike.%${search}%,player2_name.ilike.%${search}%`)
   const result=await request.order('position').order('partnership_id').range((pageNumber(String(page))-1)*PAGE_SIZE,pageNumber(String(page))*PAGE_SIZE-1)
   assertRead(result.error)
   return {rows:(result.data ?? []).map(row=>({...row,player1_points:row.combined_points,player2_points:row.combined_points,category:context.category,gender:context.gender})),count:result.count ?? 0}
+}
+
+/** Own marker reads the published universe only, including when the player has
+ * a private career. Filtering/searching the displayed page cannot alter rank. */
+export async function readOwnPublishedRanking(context:RankingContext,access:CareerAccess) {
+  if (access.kind!=='self') throw new CareerAccessError(403)
+  assertCareerAccess(access,access.userId,context.clubId)
+  if (context.modality==='INDIVIDUAL') {
+    const read=await db.from('public_player_standings_read').select('club_player_id,full_name,position,ranking_points,ordinal')
+      .eq('club_id',context.clubId).eq('season_id',context.seasonId).eq('division_id',context.divisionId).eq('user_id',access.userId).order('ordinal').limit(1)
+    assertRead(read.error)
+    const row=read.data?.[0]
+    return row ? {id:row.club_player_id,name:row.full_name,position:row.position,points:row.ranking_points,page:Math.floor((row.ordinal-1)/PAGE_SIZE)+1} : null
+  }
+  const read=await db.from('public_pair_standings_read')
+    .select('partnership_id,player1_name,player2_name,position,combined_points')
+    .eq('club_id',context.clubId).eq('season_id',context.seasonId).eq('division_id',context.divisionId)
+    .or(`player1_user_id.eq.${access.userId},player2_user_id.eq.${access.userId}`).order('position').order('partnership_id').limit(1)
+  assertRead(read.error)
+  const row=read.data?.[0]
+  if (!row) return null
+  // Rank is not a row offset when there are ties. Count both preceding groups
+  // and preceding pair keys using the very same order as the paginated reader.
+  const before=()=>db.from('public_pair_standings_read').select('partnership_id',{count:'exact'})
+    .eq('club_id',context.clubId).eq('season_id',context.seasonId).eq('division_id',context.divisionId)
+  const [higher,tied]=await Promise.all([before().lt('position',row.position).limit(1),before().eq('position',row.position).lt('partnership_id',row.partnership_id).limit(1)])
+  assertRead(higher.error);assertRead(tied.error)
+  if (higher.count===null || tied.count===null) throw new Error('RANKING_COUNT_UNAVAILABLE')
+  return {id:row.partnership_id,name:`${row.player1_name} / ${row.player2_name}`,position:row.position,points:row.combined_points,page:Math.floor((higher.count+tied.count)/PAGE_SIZE)+1}
 }
