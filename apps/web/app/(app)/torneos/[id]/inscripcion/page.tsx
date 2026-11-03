@@ -13,8 +13,9 @@ import { ActionFeedbackNotice } from '@/components/ui/ActionFeedbackNotice'
 import { CreationSuccess } from '@/components/ui/CreationSuccess'
 import { getClubTheme } from '@/lib/clubThemes'
 import { supabase } from '@/lib/supabaseClient'
-import { isTournamentRegistrationClosed } from '@/lib/tournamentDisplayStatus'
 import { registrationPresentation } from '@/lib/registrationPresentation'
+import { isTournamentRegistrationClosed } from '@/lib/tournamentDisplayStatus'
+import { tournamentRegistrationAvailability } from '@/lib/tournamentRegistrationAvailability'
 
 type PublicTournamentDetail = {
   tournament: {
@@ -24,6 +25,7 @@ type PublicTournamentDetail = {
     gender: string
     category: number | null
     startDate?: string | null
+    endDate?: string | null
     registrationDeadline: string | null
     status?: string | null
     pricePerPlayer: number | null
@@ -43,6 +45,7 @@ type PublicTournamentDetail = {
       registrationId?: string | null
       registrationStatus: string | null
       paymentStatus?: string | null
+      paymentLookupUnavailable?: boolean
       paymentMethod?: string | null
       paymentRequestedAt?: string | null
       paymentApprovedAt?: string | null
@@ -169,7 +172,11 @@ function registrationStatusLabel(status?: string | null) {
   return status ?? 'Registrada'
 }
 
-function postPaymentView(status?: string | null, method?: string | null, registration?: string | null) {
+function postPaymentView(status?: string | null, method?: string | null, registration?: string | null, unavailable = false) {
+  if (unavailable) return {
+    tone: 'warning', title: 'No pudimos consultar tu pago', badge: 'Pago sin verificar',
+    text: 'Tu inscripción se conserva. Reintentá la consulta o contactá al club para verificar el pago.', action: 'retry' as const,
+  }
   const normalizedStatus = String(status ?? '').toUpperCase()
   const normalizedMethod = String(method ?? '').toUpperCase()
   if (['APPROVED', 'PAID'].includes(normalizedStatus) && registration !== 'CONFIRMED') return {
@@ -252,8 +259,8 @@ const loadingPageStyle: CSSProperties = {
   justifyItems: 'center',
   margin: '0 auto',
   minHeight: 'calc(100dvh - 96px)',
-  padding: '16px 11px 36px',
-  width: 'min(100% - 22px, 1180px)',
+  padding: '16px 0 36px',
+  width: '100%',
 }
 
 const loadingStateStyle: CSSProperties = {
@@ -278,6 +285,7 @@ export default function TorneoInscripcionPage() {
 
   const [detail, setDetail] = useState<PublicTournamentDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [message, setMessage] = useState('')
   const [actionFeedback, setActionFeedback] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(null)
   const [search, setSearch] = useState('')
@@ -331,7 +339,7 @@ export default function TorneoInscripcionPage() {
     return () => {
       alive = false
     }
-  }, [tournamentId])
+  }, [tournamentId, loadAttempt])
 
   useEffect(() => {
     let alive = true
@@ -402,8 +410,7 @@ export default function TorneoInscripcionPage() {
   }), [availability])
   const alreadyRegistered = Boolean(detail?.viewer.isRegisteredInTournament)
   const forcePaymentStep = requestedStep === 'pago'
-  const registrationClosed = isTournamentRegistrationClosed({ registrationDeadline: detail?.tournament.registrationDeadline })
-  const tournamentPaused = String(detail?.tournament.status ?? '').toUpperCase() === 'PAUSED'
+  const registrationAvailability = tournamentRegistrationAvailability(detail?.tournament ?? {}, detail?.capacity)
 
   useEffect(() => {
     if (!detail || restoredDraft) return
@@ -741,7 +748,7 @@ export default function TorneoInscripcionPage() {
     myTeamPlayers.find((player) => player.userId !== detail.viewer.clubPlayer?.userId)?.name ??
     myTeamPlayers[1]?.name ??
     'A confirmar'
-  const postPayment = postPaymentView(detail.viewer.myTeam?.paymentStatus, detail.viewer.myTeam?.paymentMethod, detail.viewer.myTeam?.registrationStatus)
+  const postPayment = postPaymentView(detail.viewer.myTeam?.paymentStatus, detail.viewer.myTeam?.paymentMethod, detail.viewer.myTeam?.registrationStatus, detail.viewer.myTeam?.paymentLookupUnavailable)
   const registrationView = registrationPresentation(detail.viewer.myTeam?.registrationStatus, detail.viewer.myTeam?.paymentStatus)
   const showPaymentOnly = alreadyRegistered && forcePaymentStep && postPayment.action === 'pay'
   const theme = getClubTheme(detail.club?.themeKey)
@@ -774,7 +781,7 @@ export default function TorneoInscripcionPage() {
         mobileKicker={detail.club?.name ?? 'Inscripción al torneo'}
         title={detail.tournament.name}
         subtitle={`${detail.club?.name ?? 'Club'} · ${detail.labels.category} · ${detail.labels.gender} · ${detail.labels.segment}`}
-        mobileStatusBadge={tournamentPaused ? { label: 'Torneo pausado', tone: 'info' } : registrationClosed ? { label: 'Inscripción cerrada', tone: 'info' } : { label: 'Inscripción abierta', tone: 'success' }}
+        mobileStatusBadge={registrationAvailability.open ? { label: detail.status.label, tone: 'success' } : { label: registrationAvailability.title, tone: 'info' }}
         primaryAction={{ label: 'Volver al torneo', href: `/torneos/${detail.tournament.id}` }}
         secondaryAction={detail.club ? { label: 'Ver club', href: `/clubs/${detail.club.id}` } : undefined}
         logo={{ src: detail.club?.logoUrl, alt: detail.club?.name ?? 'Club', fallback: detail.club?.name?.slice(0, 2).toUpperCase() ?? 'SE' }}
@@ -803,7 +810,7 @@ export default function TorneoInscripcionPage() {
       ) : null}
       {message ? <div className="tournamentSignupPage__message">{message}</div> : null}
 
-      {!detail.viewer.isAuthenticated ? (
+      {!detail.viewer.isAuthenticated && registrationAvailability.open ? (
         <section className="tournamentSignupPage__panel tournamentSignupPage__panel--center tournamentSignupPage__guestGate">
           <span>Cuenta SELPA</span>
           <strong className="tournamentSignupPage__guestTournament">{detail.tournament.name}</strong>
@@ -816,10 +823,10 @@ export default function TorneoInscripcionPage() {
             Volver al torneo
           </Link>
         </section>
-      ) : (tournamentPaused || registrationClosed) && !alreadyRegistered ? (
+      ) : !registrationAvailability.open && !alreadyRegistered ? (
         <section className="tournamentSignupPage__panel tournamentSignupPage__panel--center">
-          <h2>{tournamentPaused ? 'Torneo pausado' : 'Inscripción cerrada'}</h2>
-          <p>{tournamentPaused ? 'El club pausó temporalmente las inscripciones.' : 'La inscripción para este torneo ya finalizó.'}</p>
+          <h2>{registrationAvailability.title}</h2>
+          <p>{registrationAvailability.message}</p>
           <Link className="tournamentSignupPage__primary" href={`/torneos/${detail.tournament.id}`}>
             Ver torneo
           </Link>
@@ -945,6 +952,7 @@ export default function TorneoInscripcionPage() {
                 </Link>
               ) : null}
               <div className="tournamentSignupPage__pendingActions">
+                {postPayment.action === 'retry' ? <button type="button" onClick={() => setLoadAttempt(value => value + 1)}>Reintentar consulta</button> : null}
                 {postPayment.action === 'message' ? (
                   <button
                     type="button"

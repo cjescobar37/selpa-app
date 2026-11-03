@@ -5,9 +5,7 @@ export async function GET() {
   try {
     const data = await getPublicHomeData()
     return NextResponse.json(data)
-  } catch (caughtError: unknown) {
-    const error = caughtError as Error & { code?: string }
-
-    return NextResponse.json({ error: error?.message ?? 'No pude cargar el home público.' }, { status: 500 })
+  } catch {
+    return NextResponse.json({ error: 'No pudimos cargar Comunidad SELPA. Intentá nuevamente.' }, { status: 500 })
   }
 }

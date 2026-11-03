@@ -17,18 +17,20 @@ type Tournament = {
   type?: string | null
   tournament_type?: string | null
   price_per_player?: number | null
+  registeredPairs?: number | null
   max_pairs?: number | null
   rules?: Record<string, unknown> | null
   rules_json?: Record<string, unknown> | null
 }
 
 /** Data adapter only. Agenda and history share the public tournament card. */
-export default function PlayerAgendaCard({ tournament, club, registrationStatus }: {
+export default function PlayerAgendaCard({ tournament, club, registrationStatus, returnTo }: {
   tournament: Tournament
   club?: { name: string; logo_url?: string | null; theme_key?: string | null }
   registrationStatus?: string | null
+  returnTo?: string
 }) {
-  return <TournamentPublicCard compactAgenda showClub registrationStatus={registrationStatus} tournament={{
+  return <TournamentPublicCard returnTo={returnTo} compactAgenda showClub registrationStatus={registrationStatus} tournament={{
     id: tournament.id,
     name: tournament.name,
     status: tournament.status ?? 'DRAFT',
@@ -42,6 +44,7 @@ export default function PlayerAgendaCard({ tournament, club, registrationStatus 
     registrationDeadline: tournament.registration_deadline ?? tournament.signup_deadline,
     pricePerPlayer: tournament.price_per_player,
     maxPairs: tournament.max_pairs,
+    registeredPairs: tournament.registeredPairs,
     clubName: club?.name,
     clubLogoUrl: club?.logo_url,
     clubThemeKey: club?.theme_key,

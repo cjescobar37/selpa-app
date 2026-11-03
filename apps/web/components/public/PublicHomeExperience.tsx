@@ -17,6 +17,7 @@ import { useSession } from '@/components/session/SessionProvider'
 import { isClubAdminRole } from '@/lib/clubMembershipRules'
 import { formatHomeNewsDate as formatDate } from '@/lib/publicHomeDatePresentation'
 import { HomeInstallSlot } from '@/components/pwa/HomeInstallPlacement'
+import ReadFailure from '@/components/product/ReadFailure'
 
 type NewsItem = {
   club_name?: string | null; clubName?: string | null; source?: string | null; theme_key?: string | null; themeKey?: string | null; club_theme_key?: string | null
@@ -92,9 +93,9 @@ type ClubItem = {
 }
 
 type PublicMetrics = {
-  clubs: number
-  players: number
-  tournaments: number
+  clubs: number | null
+  players: number | null
+  tournaments: number | null
   matches?: number | null
 }
 
@@ -303,6 +304,8 @@ export default function PublicHomeExperience({
   clubs = [],
   hideHero = false,
   afterTournaments,
+  unavailableSections = [],
+  onRetry,
 }: {
   slides: NewsItem[]
   newsArchive: NewsItem[]
@@ -313,6 +316,8 @@ export default function PublicHomeExperience({
   clubs?: ClubItem[]
   hideHero?: boolean
   afterTournaments?: ReactNode
+  unavailableSections?: string[]
+  onRetry?: () => void
 }) {
   const router = useRouter()
   const session = useSession()
@@ -351,7 +356,7 @@ export default function PublicHomeExperience({
     .map(({ tournament }) => tournament)
     .slice(0, 3)
   const upcomingTournaments = communityTournaments
-    .filter(({ displayStatus }) => ['registration_open', 'upcoming'].includes(displayStatus.key))
+    .filter(({ displayStatus }) => ['registration_open', 'registration_closed', 'upcoming', 'paused'].includes(displayStatus.key))
     .map(({ tournament }) => tournament)
     .slice(0, 3)
   const featuredClubs = clubs.slice(0, 4)
@@ -454,6 +459,9 @@ export default function PublicHomeExperience({
 
       {!hideHero ? <HomeInstallSlot /> : null}
 
+      {unavailableSections.length ? <ReadFailure message="Parte de la información no está disponible. Podés seguir explorando y reintentar la carga." onRetry={onRetry} /> : null}
+      {!unavailableSections.includes('tournaments') && !activeTournaments.length && !upcomingTournaments.length ? <section className="px-homeEmpty"><strong>El próximo torneo está por llegar</strong><p>Consultá el calendario y los torneos anteriores.</p><Link href="/torneos">Explorar torneos</Link></section> : null}
+
       {activeTournaments.length ? (
         <section className="px-homeTournaments">
           <div className="px-homeSectionHead is-row">
@@ -476,7 +484,7 @@ export default function PublicHomeExperience({
           <div className="px-homeSectionHead is-row">
             <div>
               <span>Calendario Selpa</span>
-              <h2>Proximos Torneos</h2>
+            <h2>Próximos torneos</h2>
             </div>
             <Link href="/torneos" className="px-homePillButton">Ver más</Link>
           </div>
@@ -506,7 +514,7 @@ export default function PublicHomeExperience({
               logoUrl={club.logo_url}
               themeKey={club.clubThemeKey ?? club.theme_key}
               href={`/ranking?clubId=${club.id}`}
-              detail={`${new Intl.NumberFormat('es-AR').format(club.players ?? 0)} ${club.players === 1 ? 'jugador' : 'jugadores'}`}
+              detail={typeof club.players === 'number' ? `${new Intl.NumberFormat('es-AR').format(club.players)} ${club.players === 1 ? 'jugador' : 'jugadores'}` : 'Jugadores: información no disponible'}
             />
           )) : <div className="px-homeEmpty">Los rankings por club van a aparecer acá.</div>}
         </RankingClubCards>
@@ -564,8 +572,8 @@ export default function PublicHomeExperience({
                   />
                   <p style={{ lineHeight: 1.12, margin: '-4px 0 9px' }}>{location}</p>
                   <div className="publicClubStats">
-                    <span><b>{metricValue(club.players ?? 0, '0')}</b> jugadores</span>
-                    <span><b>{metricValue(club.tournaments ?? 0, '0')}</b> torneos</span>
+                    <span><b>{metricValue(club.players)}</b> jugadores</span>
+                    <span><b>{metricValue(club.tournaments)}</b> torneos</span>
                   </div>
                 </div>
                 <span className="publicClubAction">

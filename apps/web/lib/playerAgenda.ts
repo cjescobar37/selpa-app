@@ -5,7 +5,7 @@ export type AgendaGroup = 'upcoming' | 'pending' | 'history'
 
 const finished = new Set(['FINISHED', 'COMPLETED', 'CLOSED', 'ARCHIVED', 'CANCELLED', 'CANCELED'])
 const inactive = new Set(['CANCELLED', 'CANCELED', 'REJECTED'])
-const live = new Set(['LIVE', 'IN_PROGRESS', 'ONGOING', 'STARTED'])
+const live = new Set(['LIVE', 'IN_PROGRESS', 'ONGOING', 'STARTED', 'RUNNING', 'ACTIVE', 'PLAYING', 'GROUPS', 'PLAYOFF'])
 
 /** An old confirmation must never override a later cancellation. */
 export function latestAgendaRegistrations<T extends AgendaRegistration>(rows: T[]) {
@@ -45,6 +45,16 @@ export function groupPlayerAgenda<T extends AgendaTournament>(tournaments: T[], 
     return (group === 'history' ? right.localeCompare(left) : left.localeCompare(right)) || a.id.localeCompare(b.id)
   })
   return groups
+}
+
+/** Discovery is separate from the player's actual confirmed/pending commitments. */
+export function playerHomeCommitment<T extends AgendaTournament>(tournaments: T[], registrations: AgendaRegistration[], now: Date) {
+  const groups = groupPlayerAgenda(tournaments, registrations, now)
+  const registeredIds = new Set(registrations.map(row => row.tournament_id))
+  const confirmed = groups.upcoming.find(row => registeredIds.has(row.id))
+  if (confirmed) return { tournament: confirmed, confirmed: true }
+  const pending = groups.pending.find(row => registeredIds.has(row.id))
+  return pending ? { tournament: pending, confirmed: false } : null
 }
 /** These are sports registration states. Payment requires its own financial evidence. */
 export function agendaRegistrationLabel(status: string | null | undefined) {

@@ -22,6 +22,7 @@ async function PublicHomeContent() {
   return (
     <div className="px-wrap px-publicFrame">
       <PublicHomeExperience
+        unavailableSections={data.unavailableSections}
         slides={data.slides}
         newsArchive={data.newsArchive}
         tournaments={data.tournaments}

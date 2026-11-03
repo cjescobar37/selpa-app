@@ -8,6 +8,8 @@ import { getClubTheme } from '@/lib/clubThemes'
 import { getTournamentDisplayStatus } from '@/lib/tournamentDisplayStatus'
 import { BRAND } from '@/lib/branding'
 import { getTournamentFlyerUrl, getTournamentPosterUrl } from '@/lib/tournamentFlyers'
+import styles from './TournamentPublicCard.module.css'
+import { tournamentDetailHref } from '@/lib/tournamentNavigation'
 import { formatCategoryLabel, formatGenderLabel, formatSegmentLabel } from '@/lib/tournamentLabels'
 import { formatHomeAgendaDeadline as formatAgendaDeadline } from '@/lib/publicHomeDatePresentation'
 import { agendaRegistrationLabel } from '@/lib/playerAgenda'
@@ -135,11 +137,13 @@ export default function TournamentPublicCard({
   showClub = false,
   compactAgenda = false,
   registrationStatus,
+  returnTo,
 }: {
   tournament: TournamentPublicCardData
   showClub?: boolean
   compactAgenda?: boolean
   registrationStatus?: string | null
+  returnTo?: string
   showRegisterAction?: boolean
 }) {
   const theme = getClubTheme(tournament.clubThemeKey)
@@ -166,9 +170,9 @@ export default function TournamentPublicCard({
 
   const card = (
     <article className={`TournamentPublicCard ${flyer ? 'has-flyer' : ''}${manualFlyer ? ' is-manual-flyer' : ''}${circuitPosition ? ' has-circuit' : ''}${compactAgenda ? ' is-agendaCompact' : ''}${displayStatus.key === 'finished' ? ' is-finished' : ''}`} style={style}>
-      <Link className="TournamentPublicCard__hitArea" href={`/torneos/${tournament.id}`} aria-label={`Entrar al torneo ${tournament.name}`} />
+      <Link className="TournamentPublicCard__hitArea" href={tournamentDetailHref(tournament.id, returnTo)} aria-label={`Entrar al torneo ${tournament.name}`} />
       <div className="TournamentPublicCard__poster">
-        {flyer ? <img src={flyer} alt="" /> : null}
+        {flyer ? <img src={flyer} alt="" loading="lazy" decoding="async" /> : null}
         {!manualFlyer ? (
           <div className="TournamentPublicCard__posterMeta">
             <small>{formatTournamentType(tournamentType).toUpperCase()}</small>
@@ -203,7 +207,11 @@ export default function TournamentPublicCard({
           </div>
         ) : null}
         <h3>{tournament.name}</h3>
-        {!flyer ? <p className="TournamentPublicCard__compactMeta">
+        {compactAgenda ? <p className={styles.facts}>
+          <span>{categoryLabel} · {genderLabel}</span>
+          {typeof tournament.registeredPairs === 'number' ? <span>{tournament.registeredPairs}{typeof tournament.maxPairs === 'number' ? `/${tournament.maxPairs}` : ''} parejas inscriptas</span> : null}
+        </p> : null}
+        {!flyer && !compactAgenda ? <p className="TournamentPublicCard__compactMeta">
           {[categoryLabel, genderLabel, price].filter(Boolean).join(' · ')}
         </p> : null}
         {compactAgenda ? (

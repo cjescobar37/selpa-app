@@ -44,7 +44,10 @@ test('compact mobile cards and scoped grid do not add global overrides or motion
 test('card presentation neither fetches data nor changes ranking calculations', () => {
   assert.doesNotMatch(card, /fetch\(|supabase|useEffect|localStorage|useSession|ranking_points|combined_points/)
   assert.match(card, /getClubTheme\(themeKey\)/)
-  assert.match(source('components/public/PublicHomeExperience.tsx'), /format\(club\.players \?\? 0\)/)
+  const home = source('components/public/PublicHomeExperience.tsx')
+  assert.match(home, /typeof club\.players === 'number'/)
+  assert.match(home, /format\(club\.players\)/)
+  assert.match(home, /Jugadores: información no disponible/)
   assert.match(source('components/public/PublicRankingExperience.tsx'), /club\.categoryCount===1\?'categoría activa':'categorías activas'/)
 })
 

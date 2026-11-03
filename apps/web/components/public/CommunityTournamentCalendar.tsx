@@ -18,7 +18,7 @@ function formatMonth(date: Date) {
   return new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric' }).format(date)
 }
 
-export default function CommunityTournamentCalendar({ tournaments }: { tournaments: TournamentPublicCardData[] }) {
+export default function CommunityTournamentCalendar({ tournaments, returnTo }: { tournaments: TournamentPublicCardData[]; returnTo?: string }) {
   const [month, setMonth] = useState(() => {
     const today = new Date()
     return new Date(today.getFullYear(), today.getMonth(), 1)
@@ -55,7 +55,7 @@ export default function CommunityTournamentCalendar({ tournaments }: { tournamen
       </header>
       <div className="communityTournamentCalendar__content">
         <div className="communityTournamentCalendar__month"><strong>{formatMonth(month)}</strong><div className="communityTournamentCalendar__grid" role="grid" aria-label={formatMonth(month)}>{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((day) => <span key={day}>{day}</span>)}{dates.map((date, index) => date ? (() => { const key = calendarKey(date); const dayEvents = eventsByDay.get(key) ?? []; const selected = selectedDay === key || (!selectedDay && selectedEvents.some((event) => calendarKey(parseCalendarDate(event.startDate)!) === key)); return <button key={key} type="button" className={`${dayEvents.length ? 'has-events' : ''}${selected ? ' is-selected' : ''}`} disabled={!dayEvents.length} onClick={() => dayEvents.length ? setSelectedDay(key) : undefined}><b>{date.getDate()}</b>{dayEvents.length ? <i>{dayEvents.length}</i> : null}</button> })() : <span className="communityTournamentCalendar__blank" key={`blank-${index}`} />)}</div></div>
-        <div className="communityTournamentCalendar__agenda"><div><strong>{selectedEvents.length ? 'Torneos del día' : 'Sin torneos este día'}</strong><span>{selectedEvents.length ? `${selectedEvents.length} torneo${selectedEvents.length === 1 ? '' : 's'}` : 'Elegí otro día'}</span></div>{selectedEvents.length ? <div className="clubPublicTournamentGrid">{selectedEvents.map((tournament) => <TournamentPublicCard key={tournament.id} compactAgenda showClub tournament={tournament} />)}</div> : <p><CalendarDays size={18} /> No hay torneos públicos programados para esta fecha.</p>}</div>
+        <div className="communityTournamentCalendar__agenda"><div><strong>{selectedEvents.length ? 'Torneos del día' : 'Sin torneos este día'}</strong><span>{selectedEvents.length ? `${selectedEvents.length} torneo${selectedEvents.length === 1 ? '' : 's'}` : 'Elegí otro día'}</span></div>{selectedEvents.length ? <div className="clubPublicTournamentGrid">{selectedEvents.map((tournament) => <TournamentPublicCard key={tournament.id} compactAgenda showClub returnTo={returnTo} tournament={tournament} />)}</div> : <p><CalendarDays size={18} /> No hay torneos públicos programados para esta fecha.</p>}</div>
       </div>
       <style>{`
         .communityTournamentCalendar{box-sizing:border-box;width:100%;min-width:0;background:#fff;border:1px solid #dce6ef;border-radius:20px;box-shadow:0 16px 38px rgba(15,23,42,.07);color:#061b3a;display:grid;gap:13px;margin:0 auto 16px;max-width:1180px;padding:14px;}
