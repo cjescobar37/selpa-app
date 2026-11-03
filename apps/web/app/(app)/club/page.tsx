@@ -7,8 +7,9 @@ import { supabase } from '@/lib/supabaseClient'
 import { resolveStorageUrl } from '@/lib/clubAssets'
 import { getClubTheme } from '@/lib/clubThemes'
 import { BRAND } from '@/lib/branding'
-import { canUpdateTournament } from '@/lib/clubPermissions'
+import { canUpdateTournament, hasClubCapability } from '@/lib/clubPermissions'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
+import { clubDeadlineIsSoon, clubTournamentDate } from '@/lib/clubTournamentCatalog'
 
 type ClubStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
 
@@ -117,7 +118,7 @@ function getReviewDate(club: ClubData) {
 
 function formatDate(value?: string | null) {
   if (!value) return null
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value))
+  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(clubTournamentDate(value))
 }
 
 function StatusPanel({ club }: { club: ClubData }) {
@@ -306,11 +307,15 @@ export default function ClubPage() {
   const club = summary.club
   const isActive = club.status === 'ACTIVE'
   const greeting = user?.name?.trim() ? `Hola, ${user.name.trim().split(/\s+/)[0]} 👋` : 'Todo listo para hoy'
+  const canCreateTournament = hasClubCapability(clubRole, 'tournaments:create')
+  const canCreateCircuit = hasClubCapability(clubRole, 'competition:manage')
+  const canViewPlayers = hasClubCapability(clubRole, 'players:view')
+  const canViewRequests = hasClubCapability(clubRole, 'memberships:view')
   const operationalTournament = summary.tournaments.find((tournament) => tournament.has_generated_groups)
   const priorities = [
     ...(operationalTournament ? [{ href: `/club/torneos/${operationalTournament.id}`, title: operationalTournament.name, detail: 'Grupos generados · Cargá resultados para continuar.', badge: 'EN CURSO', tone: 'running' }] : []),
-    ...(summary.tournaments.slice(0, 2).filter((tournament) => tournament.id !== operationalTournament?.id && tournament.registration_deadline).map((tournament) => ({ href: '/club/torneos', title: tournament.name, detail: `Inscripciones cierran ${formatDate(tournament.registration_deadline!)}`, badge: 'URGENTE', tone: 'urgent' }))),
-    ...(summary.counts.pending_player_requests > 0 ? [{ href: '/club/solicitudes', title: `${summary.counts.pending_player_requests} solicitud${summary.counts.pending_player_requests === 1 ? '' : 'es'} pendiente${summary.counts.pending_player_requests === 1 ? '' : 's'}`, detail: 'Revisalas para mantener el padrón actualizado.', badge: 'PENDIENTE', tone: 'pending' }] : []),
+    ...(summary.tournaments.slice(0, 2).filter((tournament) => tournament.id !== operationalTournament?.id && tournament.registration_deadline && clubDeadlineIsSoon(tournament.registration_deadline)).map((tournament) => ({ href: '/club/torneos', title: tournament.name, detail: `Inscripciones cierran ${formatDate(tournament.registration_deadline!)}`, badge: 'URGENTE', tone: 'urgent' }))),
+    ...(canViewRequests && summary.counts.pending_player_requests > 0 ? [{ href: '/club/solicitudes', title: `${summary.counts.pending_player_requests} solicitud${summary.counts.pending_player_requests === 1 ? '' : 'es'} pendiente${summary.counts.pending_player_requests === 1 ? '' : 's'}`, detail: 'Revisalas para mantener el padrón actualizado.', badge: 'PENDIENTE', tone: 'pending' }] : []),
     ...(summary.counts.active_or_upcoming_tournaments > 0 ? [{ href: '/club/torneos', title: 'Torneos próximos', detail: 'Revisá sede, cupos y organización.', badge: 'PRÓXIMO', tone: 'upcoming' }] : []),
   ].slice(0, 3)
   const recommendedTournament = operationalTournament ?? summary.tournaments[0]
@@ -330,8 +335,8 @@ export default function ClubPage() {
           <span className={`club-mainBadge club-mainBadge--${statusCopy[club.status].tone}`}>{statusLabel(club.status)}</span>
           <div className="club-heroMetrics" aria-label="Estado del club">
             <Link href="/club/jugadores"><strong>{summary.counts.active_players}</strong><span>Jugadores</span></Link>
-            <Link href="/club/torneos"><strong>{summary.counts.active_or_upcoming_tournaments}</strong><span>Torneos activos</span></Link>
-            <Link href="/club/solicitudes"><strong>{summary.counts.pending_player_requests}</strong><span>Solicitudes</span></Link>
+            <Link href="/club/torneos"><strong>{summary.counts.active_or_upcoming_tournaments}</strong><span>En agenda</span></Link>
+            {canViewRequests ? <Link href="/club/solicitudes"><strong>{summary.counts.pending_player_requests}</strong><span>Solicitudes</span></Link> : null}
           </div>
         </div>
 
@@ -346,10 +351,10 @@ export default function ClubPage() {
           <div className="club-card">
             <div className="club-cardHead"><div><span className="club-kicker">Acciones principales</span><h2>{isActive ? '¿Qué querés hacer?' : 'Preparar aprobación'}</h2></div></div>
             <div className="club-actionsGrid">
-              <Link href="/club/torneos/nuevo" className={`club-action ${!isActive ? 'is-muted' : ''}`}><b>🏆</b><span><strong>Crear torneo</strong><small>Organizá una competencia independiente.</small></span><i>›</i></Link>
-              <Link href="/club/competition/series/new" className={`club-action ${!isActive ? 'is-muted' : ''}`}><b>🏅</b><span><strong>Crear circuito</strong><small>Administrá varias fechas con ranking.</small></span><i>›</i></Link>
+              {canCreateTournament ? <Link href="/club/torneos/nuevo" className={`club-action ${!isActive ? 'is-muted' : ''}`}><b>🏆</b><span><strong>Crear torneo</strong><small>Organizá una competencia independiente.</small></span><i>›</i></Link> : null}
+              {canCreateCircuit ? <Link href="/club/competition/series/new" className={`club-action ${!isActive ? 'is-muted' : ''}`}><b>🏅</b><span><strong>Crear circuito</strong><small>Administrá varias fechas con ranking.</small></span><i>›</i></Link> : null}
               <Link href="/club/torneos/calendario" className="club-action"><b>◷</b><span><strong>Ver agenda</strong><small>Consultá las próximas fechas del club.</small></span><i>›</i></Link>
-              <Link href="/club/jugadores" className="club-action"><b>◉</b><span><strong>Gestionar jugadores</strong><small>Revisá el padrón y solicitudes.</small></span><i>›</i></Link>
+              {canViewPlayers ? <Link href="/club/jugadores" className="club-action"><b>◉</b><span><strong>Gestionar jugadores</strong><small>Revisá el padrón y solicitudes.</small></span><i>›</i></Link> : null}
             </div>
           </div>
           <section className="club-card club-agendaCard">
@@ -366,8 +371,8 @@ export default function ClubPage() {
                 {summary.tournaments.map((tournament) => (
                   <Link key={tournament.id} href={canManageAgendaTournament ? `/club/torneos/${tournament.id}` : `/torneos/${tournament.id}`} className="club-listRow club-agendaRow">
                     <div className="club-agendaDate">
-                      <span className="club-agendaMonth">{tournament.date ? new Date(tournament.date).toLocaleDateString('es-AR', { month: 'short' }).replace('.', '').toUpperCase() : 'FECHA'}</span>
-                      <b>{tournament.date ? new Date(tournament.date).getDate() : '—'}</b>
+                      <span className="club-agendaMonth">{tournament.date ? clubTournamentDate(tournament.date).toLocaleDateString('es-AR', { month: 'short' }).replace('.', '').toUpperCase() : 'FECHA'}</span>
+                      <b>{tournament.date ? clubTournamentDate(tournament.date).getDate() : '—'}</b>
                     </div><div className="club-listMain">
                       <strong>{tournament.name}</strong>
                       <span>{tournament.has_generated_groups ? 'Grupos listos · Cargar resultados' : `Torneo · ${tournament.status ?? 'Sin estado'}`}</span>

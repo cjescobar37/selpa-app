@@ -25,6 +25,14 @@ tables.tournament_teams=registrations.map((r,index)=>({id:r.team_id,club_id:r.cl
 tables.tournament_registrations=registrations.map(r=>({...r,created_at:'2026-10-20T12:00:00Z'}))
 tables.player_active_partnerships=[];tables.player_partner_invites=[];tables.notifications=[];tables.messages=[]
 tables.tournament_payments=[];tables.tournament_registration_change_requests=[]
+// Explicit local-only staff persona for read-only Club Admin browser checks.
+const qaRole=process.env.SELPA_QA_CLUB_ROLE
+if(['OWNER','ADMIN','OPERADOR','PLANILLERO'].includes(qaRole)) {
+  tables.club_memberships[0].role=qaRole
+  tables.tournament_groups=[];tables.tournament_matches=[]
+  tables.competition_series_event_tournament_links=[];tables.competition_series=[]
+  tables.categories=[{id:6,name:'6ª categoría'},{id:5,name:'5ª categoría'}]
+}
 let failure=''
 let empty=false
 const matches=(row,key,expression)=>{

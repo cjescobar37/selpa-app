@@ -72,6 +72,11 @@ function periodLabel(from: string, to: string) {
 }
 
 export default function ClubAnalyticsPage() {
+  const { activeClub, user, clubRole } = useSession()
+  return <ClubAnalyticsPageContent key={`${user?.id ?? 'guest'}:${activeClub?.id ?? 'none'}:${clubRole ?? 'none'}`} />
+}
+
+function ClubAnalyticsPageContent() {
   const { activeClub } = useSession()
   const [section, setSection] = useState<Section>('summary')
   const [preset, setPreset] = useState<Preset>('month')
@@ -94,7 +99,7 @@ export default function ClubAnalyticsPage() {
       })
       const json = await response.json()
       if (!response.ok) throw new Error(json.error || 'No pudimos cargar las estadísticas.')
-      setData(json)
+      if (!signal?.aborted) setData(json)
     } catch (loadError) {
       if ((loadError as { name?: string }).name !== 'AbortError') setError(humanizeUiError(loadError instanceof Error ? loadError.message : null, 'No pudimos cargar las estadísticas. Reintentá.'))
     } finally { if (!signal?.aborted) setLoading(false) }

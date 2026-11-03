@@ -30,7 +30,11 @@ Identidad: navy, cian y magenta, logo SELPA, terminología **Damas/Caballeros**.
 
 ## 3. Estado Git e infraestructura
 
-### Estado vigente: revisión final local, 02/11/2026, notebook C:\SELPA
+### Estado vigente: sprint nocturno Club Admin, 02/11/2026, notebook C:\SELPA
+
+- Rama activa codex/club-admin-overnight-20261102 desde consolidada d1bbaf9, publicada y verificada. Checkpoint Club Admin y QA 904 tests/TS/lint/build documentados al final y en SELPA_SPRINT_CLUB_ADMIN_20261102.md. Sin merge/deployment. El estado siguiente describe el corte previo antes de publicación.
+
+#### Corte de revisión final antes de publicar
 
 - Casa respaldada y verificada directamente en GitHub: `codex/home-block2-recovery-20261102`, `a1eda932444077399a06ad7e971a0ed02e7e672b` (30 archivos). Base original `aa9cfac`. Sin modificaciones ajenas identificadas; no había stashes.
 - Banco confirmado por consulta remota: `origin/codex/player-ux-20261102`, `e4161b2877f2aad15a277ce3f907590a5615398f`. Integración remota confirmada `9c28abcf79869a022b1cb745434246511cfc788e`; rama local de integración preservada en `aa9cfac`, un commit detrás. No se cambió ni publicó integración.
@@ -311,3 +315,11 @@ Consolidado a partir de los documentos aportados `SELPA_Contexto_Maestro_2026-10
 
 - El pedido adjunto del sprint nocturno autoriza commit/push de los 34 archivos revisados exclusivamente a codex/player-block2-consolidated-20261102. Se reconfirmaron índice sin diferencias nuevas, diff check aprobado, ausencia de stashes y remoto sin esta rama; QA de la revisión inmediata anterior 900/900, TS/lint/build/HTTP/visual preservada sin cambios de código posteriores. El SHA y la verificación remota se registrarán en el primer checkpoint nocturno. No se autoriza merge ni deployment.
 
+
+### 02/11/2026 — Sprint nocturno Club Admin, primer checkpoint funcional
+
+- Consolidada publicada y verificada en GitHub: d1bbaf9016b830d07a5c6d8f5d867ea5fcb3b73f. Rama nocturna creada desde esa base; sustituye el estado local sin publicación del corte anterior. Preserva ambos respaldos y la corrección de Volver de PLAYER. Integración local aa9cfac y remota 9c28abc intactas.
+- Implementados catálogo completo cargado/búsqueda sin acentos, flyer manual canónico, RUNNING antiguo contabilizado activo, fechas de negocio sin desplazamiento de día/mes; prioridades urgentes sin vencidos, accesos rápidos según capacidades vigentes y estado aislado por club/usuario/rol en Torneos y Estadísticas. Sin ampliar permisos ni cambiar Engine, APIs financieras, schema/RLS o datos.
+- QA nueva: 904 tests PASS, TypeScript PASS, lint 0 errores/128 advertencias, build final PASS (166 páginas); seis lecturas HTTP sintéticas verifican guest401/ADMIN200/otroclub403. Navegador ADMIN ficticio, menú aprobado, búsqueda fuera de últimos cinco, fechas y urgencia corregidas. Responsive catálogo/dashboard 320/375/390/430 sin overflow; dashboard también 768/1280. Sin iPhone/Supabase/sesión real ni submits.
+- Documentación completa: docs/SELPA_SPRINT_CLUB_ADMIN_20261102.md. Archivos propios: tres páginas Club Admin, clubTournamentCatalog.ts y test, fixture block2-server, ambos documentos. Checkpoint autorizado solo rama nocturna; sin merge o deployment. Logs locales ignorados output/club-overnight-*.log. La verificación final del SHA se entrega en informe.
+- Pendientes concretos: summary de dashboard usa muestra30/lista5 y omite RUNNING en consulta actual; se etiqueta En agenda para no afirmar total exhaustivo. Catálogo API limitado100. Fase operativa de RUNNING sin partidos en fixture no está certificada; conservar contrato deportivo hasta ensayo con datos coherentes. Equipo/solicitudes/finanzas/facturación inspeccionados parcialmente, no certificados de extremo a extremo. Próximo hito: conteo/estado read-only del summary con tests, luego cambio rápido de club/rol y wizard sin submit, e iPhone físico.

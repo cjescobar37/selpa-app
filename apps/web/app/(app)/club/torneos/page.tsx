@@ -9,13 +9,14 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useSession } from '@/components/session/SessionProvider'
 import { buildAssetProxyUrl } from '@/lib/clubAssets'
-import { getTournamentFlyerUrl } from '@/lib/tournamentFlyers'
+import { getTournamentFlyerUrl, getTournamentPosterUrl } from '@/lib/tournamentFlyers'
 import {
   getTournamentOperationalStatus,
   type OperationalStage,
 } from '@/lib/tournamentDisplayStatus'
 import { getClubTheme } from '@/lib/clubThemes'
 import { formatBranchLabel } from '@/lib/tournamentLabels'
+import { clubTournamentDate, clubTournamentIsActive, clubTournamentSearch } from '@/lib/clubTournamentCatalog'
 
 type Tournament = {
   id: string
@@ -100,7 +101,8 @@ const monthLabels = [
 
 function formatDate(value?: string | null) {
   if (!value) return 'Sin fecha'
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value))
+  const date = clubTournamentDate(value)
+  return Number.isNaN(date.getTime()) ? 'Sin fecha' : new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(date)
 }
 
 function money(value?: number | null) {
@@ -123,12 +125,7 @@ function isHistoryTournament(tournament: Tournament, operationalStage?: Operatio
 }
 
 function isUpcomingOrActive(tournament: Tournament, operationalStage?: OperationalStage) {
-  const today = new Date().toISOString().slice(0, 10)
-  const normalized = tournament.status?.toUpperCase()
-  if (isHistoryTournament(tournament, operationalStage)) return false
-  if (['ACTIVE', 'OPEN', 'PUBLISHED', 'REGISTRATION_OPEN', 'IN_PROGRESS'].includes(normalized)) return true
-  if (normalized === 'DRAFT') return true
-  return Boolean(tournament.start_date && tournament.start_date >= today)
+  return !isHistoryTournament(tournament, operationalStage) && clubTournamentIsActive(tournament)
 }
 
 function getTournamentDateForCalendar(tournament: Tournament) {
@@ -136,7 +133,7 @@ function getTournamentDateForCalendar(tournament: Tournament) {
 }
 
 function getTournamentCalendarDate(tournament: Tournament) {
-  return new Date(getTournamentDateForCalendar(tournament))
+  return clubTournamentDate(getTournamentDateForCalendar(tournament))
 }
 
 function getMonthKey(tournament: Tournament) {
@@ -152,6 +149,11 @@ function getMonthLabel(tournament: Tournament) {
 }
 
 export default function ClubTorneosPage() {
+  const { activeClub, user, clubRole } = useSession()
+  return <ClubTorneosPageContent key={`${user?.id ?? 'guest'}:${activeClub?.id ?? 'none'}:${clubRole ?? 'none'}`} />
+}
+
+function ClubTorneosPageContent() {
   const router = useRouter()
   const { activeClub } = useSession()
   const currentYear = String(new Date().getFullYear())
@@ -185,7 +187,7 @@ export default function ClubTorneosPage() {
     [stagesByTournamentId, tournaments]
   )
   const latestTournaments = useMemo(
-    () => tournaments.slice(0, 5),
+    () => tournaments,
     [tournaments]
   )
   const draftTournaments = useMemo(
@@ -222,9 +224,9 @@ export default function ClubTorneosPage() {
       const year = Number.isNaN(date.getTime()) ? null : String(date.getFullYear())
       const month = Number.isNaN(date.getTime()) ? null : String(date.getMonth() + 1)
       const operationalStage = stagesByTournamentId[tournament.id]
-      const normalizedQuery = searchQuery.trim().toLocaleLowerCase('es')
+      const normalizedQuery = clubTournamentSearch(searchQuery)
 
-      if (normalizedQuery && !tournament.name.toLocaleLowerCase('es').includes(normalizedQuery)) return false
+      if (normalizedQuery && !clubTournamentSearch(tournament.name).includes(normalizedQuery)) return false
       if (selectedYear !== 'all' && year !== selectedYear) return false
       if (selectedMonth !== 'all' && month !== selectedMonth) return false
       if (selectedType !== 'all' && tournament.type?.trim() !== selectedType) return false
@@ -356,7 +358,7 @@ export default function ClubTorneosPage() {
 
   function renderTournamentRow(tournament: Tournament, compact = false) {
     const isHistorical = isHistoryTournament(tournament, stagesByTournamentId[tournament.id])
-    const configuredFlyerUrl = getTournamentFlyerUrl(tournament)
+    const configuredFlyerUrl = getTournamentPosterUrl(tournament) ?? getTournamentFlyerUrl(tournament)
     const resolvedFlyerUrl = configuredFlyerUrl ? buildAssetProxyUrl(configuredFlyerUrl) ?? configuredFlyerUrl : null
     const backdropStyle = resolvedFlyerUrl
       ? { backgroundImage: `url("${resolvedFlyerUrl}")` }
