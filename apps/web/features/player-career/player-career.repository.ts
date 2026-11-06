@@ -140,7 +140,7 @@ export async function readRankingContexts(clubId: string, seasonId?: string | nu
   if (!validId(clubId)) return []
   const internal=assertClubRankingRead(access,clubId)
   const seasons=await readPublicRankingSeasons(clubId,access)
-  const season=seasonId ? seasons.find(s=>s.id===seasonId) : seasons.find(s=>s.status==='ACTIVE') ?? seasons[0]
+  const season=seasonId ? seasons.find(s=>s.id===seasonId) : seasons[0]
   if (!season) return []
   const divisions=await catalog<{id:string;category_id:string|null;branch_id:string;segment_id:string|null;modality:string}>((from,to)=>{
     const query=db.from(internal?'competition_divisions':'public_competition_contexts_read')

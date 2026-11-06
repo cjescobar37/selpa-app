@@ -55,7 +55,7 @@ export default function RankingVisibilitySettings({ clubId, onChanged }: { clubI
   if (!allowed) return null
   const branches = result?.key === key ? result.branches : null
   return <div className={styles.settings}>
-    <button type="button" className={styles.opener} onClick={() => { dialog.current?.showModal(); setOpen(true) }}><Settings2 size={16} aria-hidden="true" />Ramas publicadas</button>
+    <button type="button" className={styles.opener} aria-label="Ramas publicadas" title="Ramas publicadas" onClick={() => { dialog.current?.showModal(); setOpen(true) }}><Settings2 size={16} aria-hidden="true" /></button>
     <dialog ref={dialog} className={styles.sheet} aria-labelledby="ranking-visibility-title" onClose={() => setOpen(false)}
       onClick={event => { if (event.target !== dialog.current) return; const box = dialog.current.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dialog.current.close() }}>
       <header><h2 id="ranking-visibility-title">Publicación deportiva</h2><button type="button" aria-label="Cerrar configuración" onClick={() => dialog.current?.close()}><X size={20} /></button></header>

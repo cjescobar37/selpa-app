@@ -1,5 +1,3 @@
-import { supabase } from '@/lib/supabaseClient'
-
 export const CLUB_LOGO_BUCKET_CANDIDATES = ['club-logos', 'club-assets', 'clubs'] as const
 export const CLUB_RULES_BUCKET_CANDIDATES = ['club-rules', 'club-assets', 'clubs'] as const
 export const PLAYER_PROFILE_BUCKET = 'player-assets'
@@ -73,6 +71,7 @@ async function uploadToFirstAvailableBucket(params: {
   objectPath: string
 }) {
   const { buckets, file, objectPath } = params
+  const { supabase } = await import('@/lib/supabaseClient')
 
   let sawBucketNotFound = false
   let sawPolicyIssue = false
@@ -200,6 +199,7 @@ export async function uploadPlayerProfileImage(params: {
   kind: 'avatar' | 'cover'
 }) {
   const { file, userId, kind } = params
+  const { supabase } = await import('@/lib/supabaseClient')
 
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type.toLowerCase())) {
     throw new Error('La imagen debe ser JPG, PNG o WEBP.')

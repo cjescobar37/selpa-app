@@ -35,18 +35,31 @@ test('search at #5 is a challenger, never promoted to a fictitious leader',()=>{
   assert.equal(tiers.leaders.length,0);assert.equal(tiers.challengers[0].position,5)
 })
 test('pairs show the canonical combined award once and both identities/photos',()=>{
-  const pair={partnership_id:'pair',position:1,combined_points:400,player1_points:400,player2_points:400,player1_name:'A',player2_name:'B',player1_avatar_url:'/a.jpg',player2_avatar_url:null}
+  const pair={partnership_id:'pair',position:1,combined_points:400,player1_points:400,player2_points:400,player1_user_id:'user-a',player2_user_id:'user-b',player1_name:'A',player2_name:'B',player1_avatar_url:'/a.jpg',player2_avatar_url:null}
   const entry=rules.pairRankingEntries([pair])[0]
   assert.equal(entry.points,400);assert.equal(entry.avatars.length,2);assert.equal(entry.avatars[0].url,'/a.jpg');assert.equal(entry.href,null)
+  assert.deepEqual(Array.from(entry.avatars,a=>[a.name,a.url]),[['A','/a.jpg'],['B',null]])
+  assert.deepEqual(Array.from(entry.userIds),['user-a','user-b'])
+})
+test('long pair names and missing photos preserve two identities without fabricating a pair destination',()=>{
+  const row={partnership_id:'long-pair',position:19,combined_points:1900,player1_user_id:'player-a',player2_user_id:'player-b',player1_name:'Alejandro Fernández de la Vega',player2_name:'Maximiliano Rodríguez de los Santos',player1_avatar_url:null,player2_avatar_url:null}
+  const entry=rules.pairRankingEntries([row])[0]
+  assert.deepEqual(Array.from(entry.avatars,a=>a.name),[row.player1_name,row.player2_name])
+  assert.ok(entry.avatars.every(a=>a.url===null));assert.equal(entry.points,1900);assert.equal(entry.position,19);assert.equal(entry.href,null)
+})
+test('two actual people with the same name remain distinct by identity, not deduplicated by display text',()=>{
+  const entry=rules.pairRankingEntries([{partnership_id:'same-name',position:2,combined_points:800,player1_user_id:'person-a',player2_user_id:'person-b',player1_name:'Alex Torres',player2_name:'Alex Torres',player1_avatar_url:'/a.jpg',player2_avatar_url:'/b.jpg'}])[0]
+  assert.deepEqual(Array.from(entry.userIds),['person-a','person-b'])
+  assert.deepEqual(Array.from(entry.avatars,a=>a.url),['/a.jpg','/b.jpg']);assert.equal(entry.avatars.length,2)
 })
 test('gender and modality change match the same canonical category, not stale division',()=>{
   assert.equal(rules.rankingContext(contexts,{division:'MINDIVIDUAL6',gender:'F'},'INDIVIDUAL').divisionId,'FINDIVIDUAL6')
   assert.equal(rules.rankingContext(contexts,{division:'MINDIVIDUAL6'},'PAIRS').divisionId,'MPAIRS6')
   assert.equal(rules.rankingContext(contexts,{division:'outside-scope'},'INDIVIDUAL'),null)
   assert.equal(rules.rankingContext(contexts,{},'INDIVIDUAL').gender,'M')
-  assert.equal(rules.rankingContext([context('F')],{},'INDIVIDUAL').gender,'F')
+  assert.equal(rules.rankingContext([context('F')],{},'INDIVIDUAL'),null)
 })
-test('default keeps Caballeros and chooses its populated category without changing official ranks',()=>{
+test('default keeps Caballeros and first category without changing official ranks',()=>{
   const all=[{...context('M','INDIVIDUAL',1),rankedCount:3},{...context('F','INDIVIDUAL',7),rankedCount:9},{...context('M','PAIRS',7),rankedCount:999}]
   assert.equal(rules.rankingContext(all,{},'INDIVIDUAL').divisionId,'MINDIVIDUAL1')
   assert.equal(rules.rankingContext(all,{gender:'M'},'INDIVIDUAL').divisionId,'MINDIVIDUAL1')
@@ -122,14 +135,15 @@ async function route(reads,params={clubId:'00000000-0000-4000-8000-000000000001'
     readPairRankingPage:async()=>({rows:[],count:0}),readRankingPresentation:async()=>({counts:{M:0,F:0},leaderPoints:null}),...reads}
   const rankingView=()=>null
   const page=compile('../app/ranking/page.tsx',{
-    '@/components/public/PublicRankingExperience':{default:rankingView},'@/features/player-career/player-career.repository':repo,
+    '@/components/public/PublicRankingExperience':{default:rankingView},'@/components/ranking/RankingDefaultBoundary':{default:({children})=>children},'@/features/player-career/player-career.repository':repo,
     '@/features/preview-sports-demo/demo-data':{sportsDemoEnabled:()=>false},
     '@/components/public/PreviewSportsNotice':{default:()=>null},
     '@/features/player-career/player-career.rules':{pageNumber:s=>Number(s)||1,validId:s=>Boolean(s?.startsWith('00000000'))},
     '@/features/player-career/public-ranking.presentation':rules,'next/navigation':{redirect:href=>{throw new Error('REDIRECT '+href)}}
   })
   const rendered=await page.default({searchParams:Promise.resolve(params)})
-  const ranking=rendered.props.children[1]
+  const outer=rendered.props.children[1]
+  const ranking=outer.props.board?outer.props.children:outer
   assert.equal(ranking.type,rankingView)
   return ranking.props
 }
@@ -157,4 +171,56 @@ test('errors have retry, contextual copy and no fake leaderboard/pagination; ava
   assert.match(ui,/!error && context/);assert.doesNotMatch(ui,/Ranking pendiente de lectura|No mostramos puntos legacy|club_players\.ranking_points/)
   const avatar=source('../components/ranking/RankingPlayerAvatar.tsx');assert.match(avatar,/onError/);assert.match(avatar,/getClubInitials\(name\)/)
   const css=source('../components/public/PublicRankingExperience.module.css');assert.doesNotMatch(css,/overflow-x:\s*hidden/);assert.match(css,/@media\(max-width:430px\).*padding-inline:0/)
+})
+
+function renderBoard(modality, rows) {
+  const React=require('react'), {renderToStaticMarkup}=require('react-dom/server')
+  const styles=new Proxy({}, {get:(_target,key)=>String(key)})
+  const component=compile('../components/public/PublicRankingExperience.tsx',{
+    'next/link':{default:({children,...props})=>React.createElement('a',props,children)},
+    '@/components/navigation/PageHeader':{default:()=>null},
+    '@/lib/clubThemes':{getClubTheme:()=>({key:'selpa'})},
+    '@/components/ranking/RankingPlayerAvatar':{default:({name,src})=>React.createElement('span',{'data-person':name,'data-photo':src??''})},
+    '@/components/ranking/RankingEntryFrame':{default:({children,position})=>React.createElement('article',{'data-rank-position':position},children)},
+    '@/components/ranking/OwnRankingPosition':{default:()=>null},
+    '@/components/ranking/RankingRetryButton':{default:()=>null},
+    '@/components/ranking/RankingDiscovery':{default:()=>null},
+    './PublishedRankingClubCard':{default:()=>null,RankingClubCards:({children})=>children},
+    '@/features/player-career/public-ranking.presentation':rules,
+    './PublicRankingExperience.module.css':{default:styles},
+  }).default
+  return renderToStaticMarkup(React.createElement(component,{
+    clubs:[{id:'club',name:'Club QA',logo_url:null,theme_key:null}],clubsCount:1,contexts:[],
+    ranking:{rows:modality==='INDIVIDUAL'?rows:[],count:rows.length,page:1,pageSize:25,context:context('M',modality)},
+    pairs:modality==='PAIRS'?rows:[],total:rows.length,params:{clubId:'club',modality},error:null,
+    presentation:{counts:{M:null,F:null},leaderPoints:null},
+  }))
+}
+test('pair render keeps each portrait/name in its own player row and shows only the official pair total',()=>{
+  const html=renderBoard('PAIRS',[{partnership_id:'duo',position:1,combined_points:1900,player1_user_id:'a',player2_user_id:'b',player1_name:'Primer Jugador',player2_name:'Segundo Jugador',player1_avatar_url:'/first.jpg',player2_avatar_url:'/second.jpg',player1_city:'NO_CITY_CONTRACT',player2_city:'NO_CITY_CONTRACT',player1_points:999999,player2_points:888888}])
+  assert.match(html,/data-pair-portrait="first"><span data-person="Primer Jugador" data-photo="\/first.jpg"/)
+  assert.match(html,/data-pair-portrait="second"><span data-person="Segundo Jugador" data-photo="\/second.jpg"/)
+  assert.ok(html.includes('data-pair-name="first">Primer Jugador</h3>'))
+  assert.ok(html.includes('data-pair-name="second">Segundo Jugador</h3>'))
+  assert.equal((html.match(/<strong>1\.900<\/strong>/g)??[]).length,1)
+  assert.match(html,/data-pair-member="first"/);assert.match(html,/data-pair-member="second"/)
+  assert.equal((html.match(/Total pareja/g)??[]).length,1)
+  assert.doesNotMatch(html,/NO_CITY_CONTRACT|999999|888888/)
+})
+test('individual render stays a single identity without inheriting pair decoration or unexposed city data',()=>{
+  const html=renderBoard('INDIVIDUAL',[{...standing(1,1900),avatar_url:'/single.jpg',city:'NO_CITY_CONTRACT'}])
+  assert.equal((html.match(/data-person=/g)??[]).length,1)
+  assert.match(html,/data-photo="\/single.jpg"/)
+  assert.doesNotMatch(html,/data-pair-name|data-pair-portrait|NO_CITY_CONTRACT/)
+  assert.equal((html.match(/<strong>1\.900<\/strong>/g)??[]).length,1)
+})
+
+test('pair render preserves tied official positions and marks both totals as shared without per-player points',()=>{
+  const rows=['a','b'].map(id=>({partnership_id:id,position:1,combined_points:1900,player1_user_id:id+'1',player2_user_id:id+'2',player1_name:'Jugador '+id+' uno',player2_name:'Jugador '+id+' dos',player1_avatar_url:null,player2_avatar_url:null,player1_points:999999,player2_points:888888}))
+  const html=renderBoard('PAIRS',rows)
+  assert.equal((html.match(/data-rank-position="1"/g)??[]).length,2)
+  assert.equal((html.match(/Puesto compartido/g)??[]).length,2)
+  assert.equal((html.match(/Total pareja/g)??[]).length,2)
+  assert.equal((html.match(/<strong>1\.900<\/strong>/g)??[]).length,2)
+  assert.doesNotMatch(html,/999999|888888/)
 })

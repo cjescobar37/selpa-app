@@ -64,7 +64,8 @@ test('branch changes preserve club, season, category and modality but discard in
 
 test('one session provider and persistent installation host preserve PLAYER and standalone protections', () => {
   const shell=readFileSync('components/AppShellClient.tsx','utf8')
-  assert.equal((shell.match(/<SessionProvider>/g)||[]).length,1)
+  assert.match(shell,/const Provider = isolatedPreview \? PreviewGuestSessionProvider : LiveSessionProvider/)
+  assert.equal((shell.match(/<Provider>/g)||[]).length,1)
   assert.equal((shell.match(/<MobileBottomNav /g)||[]).length,1)
   assert.equal((shell.match(/<HomeInstallHost /g)||[]).length,1)
   const player=readFileSync('app/(app)/player/page.tsx','utf8')

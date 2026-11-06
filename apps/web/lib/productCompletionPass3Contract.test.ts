@@ -235,12 +235,12 @@ for(const operation of ['SAVE_PLAN','ASSIGN_PLAN','GENERATE_PERIOD','REGISTER_PA
   })
 }
 
-function uiHandler(path:string,name:string,scope:Record<string,unknown>) {
+function uiHandler(path:string,name:string,scope:Record<string,unknown>,dependencies:(name:string)=>unknown=()=>({})) {
   const source=read(path),ast=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX)
   let declaration=''
   function visit(node:ts.Node){if(ts.isFunctionDeclaration(node)&&node.name?.text===name)declaration=node.getText(ast);ts.forEachChild(node,visit)}visit(ast)
   assert.ok(declaration,`actual handler ${name} must exist`)
-  return execute(declaration+`\nexports.handler=${name}`,()=>({}),{write:createWriteGuard(),humanizeUiError,...scope}).handler as (...args:unknown[])=>Promise<unknown>
+  return execute(declaration+`\nexports.handler=${name}`,dependencies,{write:createWriteGuard(),humanizeUiError,...scope}).handler as (...args:unknown[])=>Promise<unknown>
 }
 test('actual Staff handler: two submits dispatch once; failed network releases saving and retains email',async()=>{
   const barrier=deferred();let calls=0,saving=false,message='',email='admin@example.invalid'
@@ -310,9 +310,12 @@ test('notification write waits for owned row acknowledgement; failure never decr
   let unread=1,navigations=0,ack=false;const errors:string[]=[],filters:unknown[][]=[]
   const q={update:()=>q,eq:(...args:unknown[])=>{filters.push(args);return q},select:()=>q,maybeSingle:async()=>({data:ack?{id:club}:null,error:null})}
   const handler=uiHandler('../components/navbar/AppNavbarClient.tsx','openNotification',{
-    notificationWrite:createWriteGuard(),user:{id:human},supabase:{from:()=>q},setNotificationError:(s:string)=>errors.push(s),
+    notificationWrite:createWriteGuard(),user:{id:human},setNotificationError:(s:string)=>errors.push(s),
     setNotificationPreview:()=>{},setUnreadNotifications:(f:(n:number)=>number)=>{unread=f(unread)},setNavbarOverlay:()=>{},
     cancellationRequestDestination:()=>null,router:{push:()=>{navigations++}},setPreviewModal:()=>{},
+  },name=>{
+    assert.equal(name,'@/lib/supabaseClient')
+    return {supabase:{from:(table:string)=>{assert.equal(table,'notifications');return q}}}
   })
   const item={id:club,read:false,href:'/club/solicitudes',type:'fixture'}
   await handler(item);assert.equal(unread,1);assert.equal(navigations,0);assert.match(errors.filter(Boolean)[0],/Reintentá/)

@@ -1,9 +1,9 @@
 'use client'
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCurrentSession, supabase } from '@/lib/supabaseClient'
 import { buildAssetProxyUrl } from '@/lib/clubAssets'
-import { getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
+import { getClubTheme } from '@/lib/clubThemes'
 import { globalProfileFields, isGlobalProfileComplete, type GlobalProfile } from '@/lib/globalProfile'
 import {
   isApprovedMembership,
@@ -15,45 +15,9 @@ import { resolveFastAuthorization, type FastAuthorization, type SessionMembershi
 import { hasStaffAccountMembership } from '@/lib/accountRolePolicy'
 import { useWriteGuard } from '@/lib/useWriteGuard'
 
-export type AppRole = 'guest' | 'player' | 'club' | 'platform'
-export type PostLoginDestination = '/login' | '/completar-perfil' | '/seleccionar-club' | '/club' | '/player' | '/platform' | `/clubs/${string}`
-
-export type ClubMini = {
-  id: string
-  name: string
-  logoUrl?: string | null
-  themeKey: ClubThemeKey
-}
-
-export type SessionCtx = {
-  status: 'loading' | 'ready'
-  role: AppRole
-  isPlatformAdmin: boolean
-  user: {
-    id: string
-    name: string
-    email?: string
-    avatarUrl?: string | null
-  } | null
-  globalProfile: GlobalProfile | null
-  activeClub: ClubMini | null
-  activeClubId: string | null
-  clubs: ClubMini[]
-  isApprovedMember: boolean
-  clubRole: ClubRole | null
-  membershipStatus: MembershipStatus | null
-  membershipApprovedAt: string | null
-  postLoginDestination: PostLoginDestination
-  refresh: (options?: RefreshOptions) => Promise<void>
-  setActiveClub: (clubId: string) => Promise<void>
-  signOut: () => Promise<void>
-}
-
-const Ctx = createContext<SessionCtx | null>(null)
-
-type RefreshOptions = {
-  silent?: boolean
-}
+import { SessionContext as Ctx, type AppRole, type ClubMini, type SessionCtx, type PostLoginDestination, type RefreshOptions } from './SessionContext'
+export { useSession } from './SessionContext'
+export type { AppRole, ClubMini, SessionCtx, PostLoginDestination } from './SessionContext'
 
 type AuthUserLike = {
   id: string
@@ -526,10 +490,4 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
-}
-
-export function useSession() {
-  const v = useContext(Ctx)
-  if (!v) throw new Error('useSession must be used within <SessionProvider>')
-  return v
 }

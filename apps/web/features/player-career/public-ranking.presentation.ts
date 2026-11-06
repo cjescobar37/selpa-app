@@ -42,25 +42,31 @@ export function rankingHref(params:RankingSearch,overrides:Partial<Record<keyof 
 /** Keep the same category number, never reuse a division from another branch. */
 export function rankingBranchHref(params:RankingSearch,gender:'M'|'F'|'MIXED',currentCategory?:number|null,contexts?:RankingContext[]) {
   const requested=params.category ?? (currentCategory == null ? undefined : String(currentCategory))
-  const compatible=!contexts || contexts.some(c=>c.gender===gender && c.modality===(params.modality ?? 'PAIRS') && String(c.category)===requested)
+  const compatible=!contexts || contexts.some(c=>c.gender===gender && c.modality===(params.modality ?? 'INDIVIDUAL') && String(c.category)===requested)
   return rankingHref(params,{gender,division:undefined,category:compatible?requested:undefined,page:undefined})
 }
 export function rankingContext(contexts:RankingContext[],params:RankingSearch,modality:string) {
   const requested=contexts.find(c=>c.divisionId===params.division)
   if (params.division && !requested) return null
-  const gender=params.gender ?? requested?.gender ?? (contexts.some(c=>c.modality===modality && c.gender==='M')?'M':contexts.find(c=>c.modality===modality)?.gender ?? 'M')
+  const gender=params.gender ?? requested?.gender ?? 'M'
   const category=requested ? requested.category : params.category ? Number(params.category) : undefined
   const available=contexts.filter(c=>c.modality===modality && (!gender || c.gender===gender) && (category===undefined || c.category===category))
-  if (contexts.some(c=>c.rankedCount!==undefined)) {
-    // Prefer a populated category within the chosen branch. Configured empty
-    // divisions stay selectable; a default never switches Caballeros to Damas.
-    if (requested && requested.modality===modality && (!gender || requested.gender===gender)) return requested
-    return available
-      .sort((a,b)=>(b.rankedCount ?? 0)-(a.rankedCount ?? 0)||a.divisionId.localeCompare(b.divisionId))[0] ?? null
-  }
-  return (gender ? available[0] : available.find(c=>c.gender==='M') ?? available[0]) ?? null
+  if (requested && requested.modality===modality && requested.gender===gender) return requested
+  // The first offered category is deliberate, even when it has no standings.
+  return [...available].sort((a,b)=>(a.category ?? 99)-(b.category ?? 99)
+    || Number(isLibres(b.segmentName))-Number(isLibres(a.segmentName))
+    || a.divisionId.localeCompare(b.divisionId))[0] ?? null
 }
 export function rankingReadIssue(error:unknown):RankingReadIssue {
   const code=error && typeof error==='object' && 'code' in error ? String(error.code) : ''
   return ['PGRST205','PGRST202','42P01','42883','HTTP404'].includes(code)?'MODEL_UNAVAILABLE':'READ_UNAVAILABLE'
+}
+
+export function isLibres(name?:string|null) { return name?.trim().toLocaleLowerCase('es-AR')==='libres' }
+export function hasRankingSelection(params:RankingSearch) {
+  return ['category','gender','season','division','modality','q','page'].some(key=>Boolean(params[key as keyof RankingSearch]))
+}
+export function compactCategory(category:RankingContext) {
+  const endings:Record<number,string>={1:'ra',2:'da',3:'ra',4:'ta',5:'ta',6:'ta',7:'ma',8:'va',9:'na',10:'ma'}
+  return category.category===null ? category.categoryName : String(category.category)+(endings[category.category] ?? 'ª')
 }

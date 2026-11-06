@@ -17,10 +17,10 @@ const pageThemeRules = Object.values(CLUB_THEMES).map(theme =>
   `.${styles.shell}:has([data-mobile-club-theme="${theme.key}"]){--selpa-nav-accent:${theme.vars.accent};--selpa-nav-detail:${theme.vars.accent2}}`
 ).join('')
 
-export default function MobileBottomNav({ items, pathname, profileAvatarUrl }: { items: readonly MobileNavItem[]; pathname: string; profileAvatarUrl?: string | null }) {
+export default function MobileBottomNav({ items, pathname, profileAvatarUrl, disablePrefetch = false }: { disablePrefetch?: boolean; items: readonly MobileNavItem[]; pathname: string; profileAvatarUrl?: string | null }) {
   const activeHref = mobileActiveHref(items, pathname)
   return <><style>{pageThemeRules}</style><nav className={styles.nav} aria-label="Navegación principal móvil" data-mobile-bottom-nav>
-    {items.map(item => { const Icon = icons[item.icon], profile = item.icon === 'profile'; return <Link key={item.href} href={item.href} aria-current={item.href === activeHref ? 'page' : undefined}>
+    {items.map(item => { const Icon = icons[item.icon], profile = item.icon === 'profile'; return <Link prefetch={disablePrefetch ? false : undefined} key={item.href} href={item.href} aria-current={item.href === activeHref ? 'page' : undefined}>
       {profile ? <span className={styles.profileIcon} aria-hidden="true">{profileAvatarUrl ? <Image src={profileAvatarUrl} alt="" fill sizes="26px" unoptimized/> : <Icon size={20} strokeWidth={1.8}/>}</span> : <Icon size={22} strokeWidth={1.8} aria-hidden="true" />}
       <span className={styles.label}>{item.label}</span>
     </Link> })}

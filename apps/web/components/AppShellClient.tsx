@@ -1,11 +1,13 @@
 'use client'
 
 import { Suspense, type ReactNode } from 'react'
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import Footer from '@/components/Footer'
 import AppNavbarClient from '@/components/navbar/AppNavbarClient'
 import { ActiveClubThemeProvider } from '@/components/ActiveClubThemeProvider'
-import { SessionProvider, useSession } from '@/components/session/SessionProvider'
+import { PreviewGuestSessionProvider, useSession } from '@/components/session/SessionContext'
+const LiveSessionProvider = dynamic(() => import('@/components/session/SessionProvider').then(module => module.SessionProvider))
 import { ToastViewport } from '@/components/ui/ToastViewport'
 import { HomeInstallHost, HomeInstallProvider } from '@/components/pwa/HomeInstallPlacement'
 import { isHomeMobilePilotRoute } from '@/lib/homeMobilePilot'
@@ -20,11 +22,14 @@ import mobile from '@/components/navigation/MobileNavigation.module.css'
  * - ÚNICO layout visual: Navbar + Footer idénticos para todas las rutas.
  * - SessionProvider resuelve sesión/rol/club activo y se comparte a todo el árbol.
  */
-export default function AppShellClient({ children }: { children: ReactNode }) {
-  return <SessionProvider><ActiveClubThemeProvider><HomeInstallProvider><AppShellContent>{children}</AppShellContent></HomeInstallProvider></ActiveClubThemeProvider></SessionProvider>
+export default function AppShellClient({ children, previewDemoEnabled = false }: { children: ReactNode; previewDemoEnabled?: boolean }) {
+  const pathname = usePathname()
+  const isolatedPreview = previewDemoEnabled && pathname === '/preview/demo'
+  const Provider = isolatedPreview ? PreviewGuestSessionProvider : LiveSessionProvider
+  return <Provider><ActiveClubThemeProvider><HomeInstallProvider><AppShellContent isolatedPreview={isolatedPreview}>{children}</AppShellContent></HomeInstallProvider></ActiveClubThemeProvider></Provider>
 }
 
-function AppShellContent({ children }: { children: ReactNode }) {
+function AppShellContent({ children, isolatedPreview }: { children: ReactNode; isolatedPreview: boolean }) {
   const pathname = usePathname()
   const session = useSession()
   const keyboard = useMobileKeyboard()
@@ -40,9 +45,9 @@ function AppShellContent({ children }: { children: ReactNode }) {
 
   return (
     <>
-          <div data-mobile-nav={mobileVisible ? 'visible' : 'hidden'} data-mobile-context={clubNavigation ? 'club' : 'selpa'} className={`app-shell ${mobile.shell}${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}${isClubAdminRoute ? ' app-shell--club' : ''}${pilotClass}`}>
+          <div data-preview-isolated={isolatedPreview ? 'ranking-demo' : undefined} data-mobile-nav={mobileVisible ? 'visible' : 'hidden'} data-mobile-context={clubNavigation ? 'club' : 'selpa'} className={`app-shell ${mobile.shell}${isAuthRoute ? ' app-shell--auth' : ''}${pathname === '/register' ? ' app-shell--authRegister' : ''}${isClubAdminRoute ? ' app-shell--club' : ''}${pilotClass}`}>
             <Suspense fallback={null}>
-              <AppNavbarClient />
+              <AppNavbarClient isolatedPreview={isolatedPreview} />
             </Suspense>
 
             <main className="px-main">
@@ -51,7 +56,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
 
             <HomeInstallHost />
             {!privatePlayer ? <Footer compact={isAuthRoute} /> : null}
-            {mobileVisible && session.status === 'ready' ? <MobileBottomNav items={mobileItems} pathname={pathname} profileAvatarUrl={session.role === 'player' ? session.user?.avatarUrl : null} /> : null}
+            {mobileVisible && session.status === 'ready' ? <MobileBottomNav disablePrefetch={isolatedPreview} items={mobileItems} pathname={pathname} profileAvatarUrl={session.role === 'player' ? session.user?.avatarUrl : null} /> : null}
           </div>
           <ToastViewport />
     </>

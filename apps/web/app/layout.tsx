@@ -71,7 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <PwaOpening artwork={getPwaOpeningArtwork()} />
         {/* Único layout visual para TODA la app (Navbar + Footer consistentes). */}
-        <AppShellClient>{children}</AppShellClient>
+        <AppShellClient previewDemoEnabled={process.env.VERCEL_ENV === 'preview'}>{children}</AppShellClient>
       </body>
     </html>
   )

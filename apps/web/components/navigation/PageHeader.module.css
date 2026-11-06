@@ -56,3 +56,15 @@
   .mobileCanonical :global(.playerSectionHero__icon){flex:0 0 44px;width:44px;height:44px;margin:0}
 }
 @media(max-width:430px){.mobileCanonical.fullBleed{margin-inline:calc(-1 * var(--selpa-mobile-gutter));width:calc(100% + 2 * var(--selpa-mobile-gutter));max-width:none}}
+
+/* Dense screens can keep the canonical header without a hero-sized title block. */
+.compact[data-selpa-page-header] {
+  flex-wrap: nowrap;
+  min-height: 54px;
+  gap: 4px;
+  padding: 3px 8px 3px 12px;
+}
+.compact .identity { flex: 1 1 0; }
+.compact[data-selpa-page-header] h1 { font-size: 20px; margin: 0; }
+.compact[data-selpa-page-header] p { font-size: 12px; margin: 2px 0 0; }
+.compact .actions { flex: none; flex-wrap: nowrap; gap: 0; }

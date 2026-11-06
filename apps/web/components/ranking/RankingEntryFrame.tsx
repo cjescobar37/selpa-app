@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { useSession } from '@/components/session/SessionProvider'
+import { useSession } from '@/components/session/SessionContext'
 
 /** The ranking remains server-rendered. Only the personal marker depends on auth. */
 export default function RankingEntryFrame({ href, userIds, className, position, tier, id, label, children }: {

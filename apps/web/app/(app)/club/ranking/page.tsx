@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw } from 'lucide-react'
 import { useSession } from '@/components/session/SessionProvider'
 import PageHeader from '@/components/navigation/PageHeader'
 import PlayerStatePanel from '@/components/player/PlayerStatePanel'
@@ -10,7 +9,6 @@ import PublicRankingExperience, { type PublicRankingExperienceProps } from '@/co
 import RankingVisibilitySettings from '@/components/ranking/RankingVisibilitySettings'
 import { readPlayerProfile } from '@/lib/playerProfileRead'
 import { hasClubCapability } from '@/lib/clubPermissions'
-import styles from '@/components/ranking/RankingVisibilitySettings.module.css'
 
 /** Same board and official views as /ranking. Only the read authorization and
  * publication controls differ; private access is verified by the server. */
@@ -35,12 +33,9 @@ export default function ClubRankingPage() {
   }, [userId, clubId, query, key, version])
   function refresh() { setRefreshing(true); setVersion(n => n + 1) }
   const current = result?.key === key ? result : null
-  if (current?.data) return <PublicRankingExperience {...current.data} adminActions={<div className={styles.actions}>
-    <button type="button" className={styles.opener} aria-label="Recargar ranking" title="Recargar ranking" disabled={refreshing} onClick={refresh}><RefreshCw size={16} aria-hidden="true" /></button>
-    <RankingVisibilitySettings clubId={clubId!} onChanged={refresh} />
-  </div>} />
+  if (current?.data) return <PublicRankingExperience {...current.data} adminActions={<RankingVisibilitySettings clubId={clubId!} onChanged={refresh} />} />
   return <section>
-    <PageHeader title="Ranking" eyebrow="Competencia del club" description={session.activeClub?.name} backHref="/club" />
+    <PageHeader title="Ranking" tone="dark" compact description={session.activeClub?.name} backHref="/club" />
     {session.status === 'ready' && session.user && !canRead ? <PlayerStatePanel kind="error" title="Acceso no autorizado" message="Necesitás permiso de ranking en este club." compact /> : current?.error ? <><PlayerStatePanel kind="error" title="No pudimos cargar el ranking" message="Verificá tu permiso de ranking y volvé a intentar." compact />
       <button type="button" disabled={refreshing} onClick={refresh} className="selpa-button selpa-button--secondary">{refreshing ? 'Reintentando…' : 'Reintentar'}</button></> :
       <PlayerStatePanel kind="loading" title="Cargando ranking" message={session.status === 'ready' && !clubId ? 'Elegí un club para continuar.' : 'Leyendo la clasificación oficial.'} compact />}

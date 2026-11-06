@@ -2,3 +2,15 @@
 .notice strong{font-size:12px;letter-spacing:.02em}.notice p{margin:0;line-height:1.45}
 .notice nav{display:flex;flex-wrap:wrap;gap:4px 16px}.notice a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent,#087c96);text-decoration:underline}
 .notice a:focus-visible{outline:2px solid #087c96;outline-offset:3px;border-radius:4px}
+
+.badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid #67e8f961;
+  border-radius: 5px;
+  color: #a5f3fc;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.35;
+  white-space: nowrap;
+}

@@ -14,7 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ club
   try {
     const search: RankingSearch = { clubId, scope: 'club' }
     for (const key of ['category', 'gender', 'season', 'division', 'modality', 'q', 'page'] as const) search[key] = req.nextUrl.searchParams.get(key) ?? undefined
-    const modality = search.modality === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'PAIRS'
+    const modality = search.modality === 'PAIRS' ? 'PAIRS' : 'INDIVIDUAL'
     const [clubs, available, seasons, enabledBranches] = await Promise.all([
       readPublicClub(clubId), readRankingContexts(clubId, search.season, auth.access), readPublicRankingSeasons(clubId, auth.access), readRankingBranches(clubId, auth.access),
     ])

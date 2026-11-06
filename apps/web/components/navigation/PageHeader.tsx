@@ -4,15 +4,15 @@ import styles from './PageHeader.module.css'
 
 /** Back navigation shares the title row, never a separate strip above the page. */
 export default function PageHeader({ title, eyebrow, description, backHref, backLabel,
-  actions, meta, tone = 'light', legacyClassName, fullBleedMobile = true, compactActions = false }: {
+  actions, meta, tone = 'light', legacyClassName, fullBleedMobile = true, compactActions = false, compact = false }: {
   title: ReactNode; eyebrow?: ReactNode; description?: ReactNode; backHref?: string;
-  backLabel?: string; actions?: ReactNode; meta?: ReactNode; tone?: 'light' | 'dark'; legacyClassName?: string; fullBleedMobile?: boolean; compactActions?: boolean
+  backLabel?: string; actions?: ReactNode; meta?: ReactNode; tone?: 'light' | 'dark'; legacyClassName?: string; fullBleedMobile?: boolean; compactActions?: boolean; compact?: boolean
 }) {
-  return <header data-selpa-page-header className={`${legacyClassName ? `${legacyClassName} ${styles.legacy}` : `${styles.header} ${tone === 'dark' ? styles.dark : ''}`} ${styles.mobileCanonical} ${fullBleedMobile ? styles.fullBleed : ''} ${compactActions && actions ? styles.hasActions : ''} ${compactActions && backHref ? styles.hasBack : ''}`}>
+  return <header data-selpa-page-header className={`${legacyClassName ? `${legacyClassName} ${styles.legacy}` : `${styles.header} ${tone === 'dark' ? styles.dark : ''}`} ${styles.mobileCanonical} ${compact ? styles.compact : ''} ${fullBleedMobile ? styles.fullBleed : ''} ${compactActions && actions ? styles.hasActions : ''} ${compactActions && backHref ? styles.hasBack : ''}`}>
     <div className={styles.identity}>
       {backHref ? <PageBackAction href={backHref} label={backLabel} tone={tone} /> : null}
       <div className={styles.copy}>
-        {eyebrow ? <span className={styles.eyebrow}>{eyebrow}</span> : <span className={`${styles.eyebrow} ${styles.mobileOnly}`}>SELPA</span>}
+        {eyebrow ? <span className={styles.eyebrow}>{eyebrow}</span> : compact ? null : <span className={`${styles.eyebrow} ${styles.mobileOnly}`}>SELPA</span>}
         <h1>{title}</h1>
         {description ? <p>{description}</p> : null}
       </div>

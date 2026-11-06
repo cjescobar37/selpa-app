@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo, type CSSProperties, type ReactNode } from 'react'
 import { getClubTheme, type ClubThemeKey } from '@/lib/clubThemes'
-import { useSession } from '@/components/session/SessionProvider'
+import { useSession } from '@/components/session/SessionContext'
 
 type ActiveClubThemeContextValue = {
   themeKey: ClubThemeKey

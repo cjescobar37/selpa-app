@@ -1,0 +1,209 @@
+{
+  "synthetic": true,
+  "individualPairPoints": null,
+  "pairs": [
+    {
+      "position": 1,
+      "total": 1900,
+      "players": [
+        {
+          "name": "Mateo Ríos",
+          "photo": "avatar.jpg"
+        },
+        {
+          "name": "Nicolás Vidal",
+          "photo": "player.jpg"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "total": 1780,
+      "players": [
+        {
+          "name": "Alejandro Fernández de la Vega"
+        },
+        {
+          "name": "Maximiliano Rodríguez de los Santos"
+        }
+      ]
+    },
+    {
+      "position": 3,
+      "total": 1660,
+      "players": [
+        {
+          "name": "Tomás Acosta"
+        },
+        {
+          "name": "Bruno Ferreyra"
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "total": 1540,
+      "players": [
+        {
+          "name": "Luciano Benítez"
+        },
+        {
+          "name": "Santiago López"
+        }
+      ]
+    },
+    {
+      "position": 5,
+      "total": 1420,
+      "players": [
+        {
+          "name": "Álex Torres"
+        },
+        {
+          "name": "Joaquín Medina"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "total": 1310,
+      "players": [
+        {
+          "name": "Mateo Ríos",
+          "photo": "avatar.jpg"
+        },
+        {
+          "name": "Lucas Díaz"
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "total": 1200,
+      "players": [
+        {
+          "name": "Federico Álvarez del Castillo"
+        },
+        {
+          "name": "Juan Martín Sánchez Pereyra"
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "total": 1100,
+      "players": [
+        {
+          "name": "Tomás Acosta"
+        },
+        {
+          "name": "Nicolás Vidal",
+          "photo": "player.jpg"
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "total": 1000,
+      "players": [
+        {
+          "name": "Andrés Molina"
+        },
+        {
+          "name": "Pedro Suárez"
+        }
+      ]
+    },
+    {
+      "position": 10,
+      "total": 900,
+      "players": [
+        {
+          "name": "Agustín Vera"
+        },
+        {
+          "name": "Iván Romero"
+        }
+      ]
+    },
+    {
+      "position": 11,
+      "total": 800,
+      "players": [
+        {
+          "name": "Hernán Costa"
+        },
+        {
+          "name": "Marcos Paz"
+        }
+      ]
+    },
+    {
+      "position": 12,
+      "total": 700,
+      "players": [
+        {
+          "name": "Damián Luna"
+        },
+        {
+          "name": "Pablo Ruiz"
+        }
+      ]
+    }
+  ],
+  "individual": [
+    {
+      "position": 1,
+      "points": 11800,
+      "name": "Mateo Ríos",
+      "photo": "avatar.jpg"
+    },
+    {
+      "position": 2,
+      "points": 11600,
+      "name": "Nicolás Vidal",
+      "photo": "player.jpg"
+    },
+    {
+      "position": 3,
+      "points": 11400,
+      "name": "Alejandro Fernández de la Vega"
+    },
+    {
+      "position": 4,
+      "points": 11200,
+      "name": "Maximiliano Rodríguez de los Santos"
+    },
+    {
+      "position": 5,
+      "points": 11000,
+      "name": "Bruno Ferreyra"
+    },
+    {
+      "position": 6,
+      "points": 10900,
+      "name": "Tomás Acosta"
+    },
+    {
+      "position": 7,
+      "points": 10700,
+      "name": "Santiago López"
+    },
+    {
+      "position": 8,
+      "points": 10500,
+      "name": "Joaquín Medina"
+    },
+    {
+      "position": 9,
+      "points": 10300,
+      "name": "Luciano Benítez"
+    },
+    {
+      "position": 10,
+      "points": 10100,
+      "name": "Álex Torres"
+    }
+  ],
+  "photos": "Only consistent identities Mateo Ríos and Nicolás Vidal use the two illustrative photos, including different synthetic partnerships."
+}

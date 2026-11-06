@@ -32,7 +32,7 @@ test('pairs, search, summary and bounded histories use isolated deterministic fi
 })
 test('both page and API guard before loading fixture records; real ranking has no DEMO fallback',()=>{
   const page=readFileSync(new URL('../app/preview/demo/page.tsx',import.meta.url),'utf8'),api=readFileSync(new URL('../app/api/preview/sports-demo/[playerId]/route.ts',import.meta.url),'utf8')
-  assert.ok(page.indexOf('if(!sportsDemoEnabled())notFound()')<page.indexOf('const query=await searchParams'))
+  assert.ok(page.indexOf('if(!rankingDemoEnabled())notFound()')<page.indexOf('const query=await searchParams'))
   assert.ok(api.indexOf('if(!sportsDemoEnabled())')<api.indexOf('demoIdentity(playerId)'))
   assert.match(api,/'X-SELPA-Data-Mode':'DEMO'/);assert.match(api,/status:404/)
   const real=readFileSync(new URL('../app/ranking/page.tsx',import.meta.url),'utf8')

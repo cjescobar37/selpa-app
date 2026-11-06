@@ -21,12 +21,18 @@ export async function addRankingExperienceFixture(db) {
     await db.query('insert into competition_point_transactions(id,club_id,season_id,division_id,player_entry_id,club_player_id,points,metadata,source_concept) values($1,$2,$3,$4,$5,$6,$7,$8,$9)',[id(25000+n),CLUB,SEASON,id(24),id(24000+n),id(22000+n),n===1?500:400,{},'OPENING_BALANCE'])
   }
   if(process.env.SELPA_QA_RANKING_V2==='true')await addPremiumRankingFixture(db)
+  if(process.env.SELPA_QA_RANKING_V24==='true')await addRanking24Fixture(db)
 }
 
 /** Synthetic published awards, never a replacement for engine acceptance QA.
  * The production projection computes every displayed position/point itself. */
 async function addPremiumRankingFixture(db) {
   await db.query('update clubs set name=$1 where id=$2',['Club QA · Ranking',CLUB])
+  // Distinct synthetic identities and two deliberately long names for layout QA.
+  // Never rewrite a real player's name or deduplicate actual people by name.
+  for (const [userId,name] of [[id(1005),'Bruno Ferreyra'],[id(1006),'Alejandro Fernández de la Vega'],[id(1010),'Maximiliano Rodríguez de los Santos']]) {
+    await db.query('update profiles set display_name=$1 where user_id=$2',[name,userId])
+  }
   await db.query("update competition_branches set name=case slug when 'caballeros' then 'Caballeros' else 'Damas' end")
   await db.query('insert into competition_segments(id,club_id,name,is_active,is_visible) values($1,$2,$3,true,true)',[id(35),CLUB,'Libres'])
   await db.query('update competition_divisions set segment_id=$1 where id=$2',[id(35),id(21)])
@@ -50,4 +56,17 @@ async function addPremiumRankingFixture(db) {
   const mixed=[{userId:id(1020),clubPlayerId:id(2020),entryId:id(97800)},{userId:id(21001),clubPlayerId:id(22001),entryId:id(97801)}]
   for(const player of mixed)await db.query('insert into competition_player_entries(id,club_id,club_player_id,division_id,status) values($1,$2,$3,$4,$5)',[player.entryId,CLUB,player.clubPlayerId,id(27),'ACTIVE'])
   await pair(18,mixed,id(27),id(26))
+}
+
+/** Ranking 2.4 layout/default QA, strictly opt-in and synthetic. */
+async function addRanking24Fixture(db) {
+  for(let category=1;category<=12;category++){
+    if([6,7].includes(category))continue
+    await db.query('insert into competition_categories(id,club_id,legacy_category_id,name) values($1,$2,$3,$4)',[id(60000+category),CLUB,category,category+'ª categoría'])
+    for(const [mode,offset] of [['PAIRS',0],['INDIVIDUAL',20]])await db.query('insert into competition_divisions(id,club_id,season_id,branch_id,category_id,modality,segment_id,is_active) values($1,$2,$3,$4,$5,$6,$7,true)',[id(60100+category+offset),CLUB,SEASON,id(31),id(60000+category),mode,mode==='PAIRS'?id(35):null])
+  }
+  // The QA player has an unambiguous official Damas 7 / Parejas / Libres entry.
+  await db.query('insert into competition_divisions(id,club_id,season_id,branch_id,category_id,modality,segment_id,is_active) values($1,$2,$3,$4,$5,$6,$7,true)',[id(60200),CLUB,SEASON,id(33),id(47),'PAIRS',id(35)])
+  await db.query('insert into competition_player_entries(id,club_id,club_player_id,division_id,status) values($1,$2,$3,$4,$5)',[id(60300),CLUB,id(2006),id(60200),'ACTIVE'])
+  await db.query('update club_players set gender=$1,category=7 where id=$2',['F',id(2006)])
 }
